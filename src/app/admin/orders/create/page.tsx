@@ -38,11 +38,45 @@ import {
     UploadCloud
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import VariantModal from '@/components/VariantModal';
 
 function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
+
+    // Helpers to format inputs with thousands separator (.) and decimal (,)
+    const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
+        if (qtyStr === undefined || qtyStr === null) return '';
+        // Remove existing dots and convert comma to dot to check validity
+        const clean = qtyStr.toString().replace(/\./g, '').replace(',', '.');
+        const parsed = parseFloat(clean);
+        if (isNaN(parsed)) return qtyStr.toString();
+
+        // Split by decimal comma of the input
+        const parts = qtyStr.toString().replace(/\./g, '').split(',');
+        const integerPart = parts[0];
+        const decimalPart = parts[1];
+
+        // Format integer part with dot for thousands
+        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+    };
+
+    const formatPriceDisplay = (price: number | string | undefined | null): string => {
+        if (price === undefined || price === null || price === '') return '';
+        const clean = price.toString().replace(/\./g, '').replace(',', '.');
+        const parsed = parseFloat(clean);
+        if (isNaN(parsed)) return price.toString();
+
+        const parts = price.toString().replace(/\./g, '').split(',');
+        const integerPart = parts[0];
+        const decimalPart = parts[1];
+
+        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+    };
 
     // Data Sources
     const [clients, setClients] = useState<any[]>([]); // B2B Profiles
@@ -132,25 +166,19 @@ function CreateOrderContent() {
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
     const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
+    const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
     const [modalQuantity, setModalQuantity] = useState<string | number>(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
     const [modalUnit, setModalUnit] = useState('Kg');
     const [modalFactor, setModalFactor] = useState(1);
+    const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
+    const [editingStagedItemId, setEditingStagedItemId] = useState<string | null>(null);
+    const [editingStagedItemIdx, setEditingStagedItemIdx] = useState<number | null>(null);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
+    const productSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (selectedProductForModal) {
-            setModalQuantity('1');
-
-            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
-            if (hasWebUnit) {
-                setModalUnit(selectedProductForModal.web_unit);
-                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
-            } else {
-                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
-                setModalFactor(1);
-            }
-
             // Re-fetch latest conversions for this product to prevent stale cache
             supabase
                 .from('product_conversions')
@@ -177,8 +205,24 @@ function CreateOrderContent() {
                     }
                 }
             }, 80);
+
+            // Only reset modal states to defaults if we are NOT in editing mode or staging mode!
+            if (editingCartIndex !== null || editingStagedItemId !== null) {
+                return;
+            }
+
+            setModalQuantity('1');
+
+            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+            if (hasWebUnit) {
+                setModalUnit(selectedProductForModal.web_unit);
+                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
+            } else {
+                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
+                setModalFactor(1);
+            }
         }
-    }, [selectedProductForModal]);
+    }, [selectedProductForModal, editingCartIndex, editingStagedItemId]);
 
     // Cart Logic
     const [cart, setCart] = useState<{
@@ -191,6 +235,8 @@ function CreateOrderContent() {
         originalUnit?: string;
         conversion_factor?: number;
         nickname?: string;
+        picking_note?: string;
+        delivery_note?: string;
     }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
@@ -222,6 +268,8 @@ function CreateOrderContent() {
         isMatch: boolean,
         documentType: 'PDF' | 'EXCEL' | 'CSV' | null
     }>({ clientInDocument: '', isMatch: true, documentType: null });
+    const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
     useEffect(() => {
         loadData();
@@ -380,7 +428,7 @@ function CreateOrderContent() {
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
                 .from('products')
-                .select('id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
+                .select('id, accounting_id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
                 .eq('is_active', true)
                 .order('name');
 
@@ -614,15 +662,8 @@ function CreateOrderContent() {
         }
         setSelectedOptions(initialOptions);
 
-        // Check if product has variants
-        if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
-            setSelectedProductForModal(product);
-        } else {
-            const hasOptions = Object.keys(initialOptions).length > 0;
-            const optValues = Object.values(initialOptions).filter(v => v);
-            const variantLabel = optValues.length > 0 ? optValues.join(', ') : undefined;
-            addToCartDirectly(product, 1, variantLabel, initialOptions);
-        }
+        // Always open the product modal to specify quantity, unit, or options
+        setSelectedProductForModal(product);
         setProductSearch('');
         setFocusedProductIndex(-1);
     };
@@ -638,16 +679,6 @@ function CreateOrderContent() {
         const exc = clientExceptions.find(e => e.product_id === product.id);
         let finalLabel = variantLabel || '';
         let finalNickname = exc?.nickname || product.name;
-
-        // Append picking and delivery notes to variant label
-        const notes: string[] = [];
-        if (exc?.picking_note) notes.push(`Bodega: ${exc.picking_note}`);
-        if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
-        
-        if (notes.length > 0) {
-            const notesStr = notes.join(' | ');
-            finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
-        }
 
         const resolvedFactor = factor || 1;
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
@@ -678,10 +709,83 @@ function CreateOrderContent() {
                     conversion_factor: resolvedFactor,
                     variant_label: finalLabel || undefined, 
                     selected_options: optionsRaw || {},
-                    nickname: finalNickname
+                    nickname: finalNickname,
+                    picking_note: exc?.picking_note || undefined,
+                    delivery_note: exc?.delivery_note || undefined
                 }, ...prev];
             }
         });
+    };
+
+    const handleSaveVariantsFromOrder = async (productId: string, optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
+        try {
+            const { error: prodError } = await supabase
+                .from('products')
+                .update({
+                    options_config: optionsConfig,
+                    variants: variants,
+                    options: (optionsConfig || []).reduce((acc: any, opt: any) => {
+                        acc[opt.name] = opt.values;
+                        return acc;
+                    }, {})
+                })
+                .eq('id', productId);
+
+            if (prodError) throw prodError;
+
+            // Sincronizar tabla dedicada product_variants
+            if (variants && variants.length > 0) {
+                await supabase
+                    .from('product_variants')
+                    .delete()
+                    .eq('product_id', productId);
+
+                const formattedVariants = variants.map((v: any) => ({
+                    product_id: productId,
+                    sku: v.sku,
+                    options: v.options,
+                    image_url: v.image_url,
+                    price_adjustment_percent: v.price_adjustment_percent || 0,
+                    is_active: v.is_active ?? true
+                }));
+
+                const { error: variantError } = await supabase
+                    .from('product_variants')
+                    .insert(formattedVariants);
+
+                if (variantError) throw variantError;
+            }
+
+            return true;
+        } catch (err: any) {
+            console.error('Error al guardar variantes desde pedido:', err);
+            alert('Error al guardar variantes: ' + err.message);
+            return false;
+        }
+    };
+
+    const handleVariantImageUploadFromOrder = async (file: File): Promise<string | null> => {
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (err: any) {
+            console.error('Error subiendo imagen de variante:', err);
+            alert('Error al subir imagen de variante: ' + err.message);
+            return null;
+        }
     };
 
     const confirmModalAdd = () => {
@@ -689,16 +793,134 @@ function CreateOrderContent() {
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
+        const resolvedFactor = modalFactor || 1;
+        const resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
+        const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(2));
 
-        addToCartDirectly(
-            selectedProductForModal, 
-            qtyNum, 
-            variantLabel, 
-            selectedOptions,
-            modalUnit,
-            modalFactor
-        );
+        if (editingStagedItemId !== null) {
+            const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
+
+            setStagedItems(prev => prev.map(item => {
+                if (item.id === editingStagedItemId) {
+                    return {
+                        ...item,
+                        suggestedProduct: selectedProductForModal,
+                        quantity: baseQty,
+                        variant_label: variantLabel,
+                        selected_options: selectedOptions,
+                        originalQty: qtyNum,
+                        originalUnit: resolvedUnit,
+                        conversion_factor: resolvedFactor,
+                        status: 'MATCH',
+                        isConfirmed: true
+                    };
+                }
+                return item;
+            }));
+
+            // Close modal by resetting state
+            setSelectedProductForModal(null);
+            setEditingCartIndex(null);
+            setEditingStagedItemId(null);
+            setEditingStagedItemIdx(null);
+
+            // Shift focus to the next row's SKU input or to the Confirm button if it was the last row
+            if (nextIdx !== null) {
+                setTimeout(() => {
+                    const nextInput = document.getElementById(`sku-input-${nextIdx}`);
+                    if (nextInput) {
+                        (nextInput as HTMLElement).focus();
+                        (nextInput as HTMLInputElement).select();
+                    } else {
+                        // Focus the confirm and inject button!
+                        const confirmBtn = document.getElementById('confirm-inject-button');
+                        if (confirmBtn) {
+                            confirmBtn.focus();
+                        }
+                    }
+                }, 80);
+            }
+        } else if (editingCartIndex !== null) {
+            const finalLabel = variantLabel || '';
+
+            setCart(prev => prev.map((c, i) => i === editingCartIndex ? {
+                ...c,
+                qty: baseQty,
+                originalQty: qtyNum,
+                originalUnit: resolvedUnit,
+                conversion_factor: resolvedFactor,
+                variant_label: finalLabel || undefined,
+                selected_options: selectedOptions
+            } : c));
+            closeProductModal();
+        } else {
+            addToCartDirectly(
+                selectedProductForModal, 
+                qtyNum, 
+                variantLabel, 
+                selectedOptions,
+                modalUnit,
+                modalFactor
+            );
+            closeProductModal();
+        }
+    };
+
+    const openModalForStagedItem = (
+        stagedId: string, 
+        product: any, 
+        qty: number,
+        rowIdx: number,
+        selectedOptionsMap?: any,
+        originalQty?: number,
+        originalUnit?: string,
+        factor?: number
+    ) => {
+        setEditingStagedItemId(stagedId);
+        setEditingStagedItemIdx(rowIdx);
+        setSelectedProductForModal(product);
+        setSelectedOptions(selectedOptionsMap || {});
+        
+        if (originalQty !== undefined) {
+            setModalQuantity(originalQty);
+            setModalUnit(originalUnit || product.unit_of_measure || 'Kg');
+            setModalFactor(factor || 1);
+        } else {
+            const stagedItem = stagedItems.find(item => item.id === stagedId);
+            const defaultQty = stagedItem ? (stagedItem.originalQtyInFile || stagedItem.quantity) : qty;
+            setModalQuantity(defaultQty);
+            setModalUnit(product.unit_of_measure || 'Kg');
+            setModalFactor(1);
+        }
+    };
+
+    const closeProductModal = () => {
+        const currentStagedIdx = editingStagedItemIdx;
         setSelectedProductForModal(null);
+        setEditingCartIndex(null);
+        setEditingStagedItemId(null);
+        setEditingStagedItemIdx(null);
+        setTimeout(() => {
+            if (currentStagedIdx !== null) {
+                const currentInput = document.getElementById(`sku-input-${currentStagedIdx}`);
+                if (currentInput) {
+                    (currentInput as HTMLElement).focus();
+                    (currentInput as HTMLInputElement).select();
+                }
+            } else if (productSearchInputRef.current) {
+                productSearchInputRef.current.focus();
+            }
+        }, 80);
+    };
+
+    const startEditingCartItem = (idx: number) => {
+        const item = cart[idx];
+        setEditingCartIndex(idx);
+        setSelectedProductForModal(item.product);
+        setModalQuantity(item.originalQty || 1);
+        setModalUnit(item.originalUnit || item.product.unit_of_measure || 'Kg');
+        setModalFactor(item.conversion_factor || 1);
+        setSelectedOptions(item.selected_options || {});
     };
 
     const updateQty = (index: number, newQty: any) => {
@@ -776,6 +998,13 @@ function CreateOrderContent() {
     const parseOrderWithAI = async (file: File) => {
         setParsingFile(true);
         try {
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+            }
+            const url = URL.createObjectURL(file);
+            setUploadedFileUrl(url);
+            setUploadedFile(file);
+
             const formData = new FormData();
             formData.append('file', file);
 
@@ -802,6 +1031,7 @@ function CreateOrderContent() {
                     id: crypto.randomUUID(),
                     originalName: item.originalName,
                     quantity: item.quantity,
+                    originalQtyInFile: item.quantity,
                     suggestedProduct: match || null,
                     status: match ? 'MATCH' : 'PENDING'
                 };
@@ -841,13 +1071,20 @@ function CreateOrderContent() {
             .map(item => ({
                 product: item.suggestedProduct,
                 qty: item.quantity,
-                variant_label: undefined,
-                selected_options: undefined
+                variant_label: item.variant_label,
+                selected_options: item.selected_options,
+                originalQty: item.originalQty,
+                originalUnit: item.originalUnit,
+                conversion_factor: item.conversion_factor
             }));
 
         setCart(prev => [...itemsToInject, ...prev]);
         setIsStaging(false);
         setStagedItems([]);
+        if (uploadedFileUrl) {
+            URL.revokeObjectURL(uploadedFileUrl);
+            setUploadedFileUrl(null);
+        }
         showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
     };
 
@@ -855,9 +1092,9 @@ function CreateOrderContent() {
         setStagedItems(prev => prev.map(item => {
             if (item.id === id) {
                 if (field === 'product') {
-                    return { ...item, suggestedProduct: value, status: 'MATCH' };
+                    return { ...item, suggestedProduct: value, status: 'MATCH', isConfirmed: true };
                 }
-                return { ...item, [field]: value };
+                return { ...item, [field]: value, isConfirmed: true };
             }
             return item;
         }));
@@ -962,6 +1199,32 @@ function CreateOrderContent() {
 
         setLoading(true);
         try {
+            // Upload document to order-attachments bucket if present
+            let documentUrl = null;
+            if (uploadedFile) {
+                try {
+                    const fileExt = uploadedFile.name.split('.').pop();
+                    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+                    const filePath = `${fileName}`;
+
+                    const { data: uploadData, error: uploadError } = await supabase
+                        .storage
+                        .from('order-attachments')
+                        .upload(filePath, uploadedFile, { upsert: true });
+
+                    if (uploadError) {
+                        console.error('Error uploading order attachment:', uploadError);
+                    } else {
+                        const { data: publicUrlData } = supabase
+                            .storage
+                            .from('order-attachments')
+                            .getPublicUrl(filePath);
+                        documentUrl = publicUrlData?.publicUrl || null;
+                    }
+                } catch (uploadErr) {
+                    console.error('Upload catch error:', uploadErr);
+                }
+            }
 
             let finalProfileId = clientType === 'B2B' ? selectedClient : (b2cMode === 'search' ? selectedClientB2C : null);
             let finalAdminNotes = adminNotes;
@@ -1106,7 +1369,8 @@ function CreateOrderContent() {
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: logisticsOverride
+                    logistics_data: logisticsOverride,
+                    document_url: documentUrl
                 })
                 .select()
                 .single();
@@ -1196,6 +1460,11 @@ function CreateOrderContent() {
             }
 
             showToast('Pedido creado exitosamente ✅', 'success');
+            setUploadedFile(null);
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+                setUploadedFileUrl(null);
+            }
             router.push('/admin/orders/loading');
 
         } catch (e: any) {
@@ -1247,7 +1516,7 @@ function CreateOrderContent() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
-            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
+            <div style={{ maxWidth: '1700px', margin: '0 auto', padding: '1rem 2rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{
                         display: 'inline-flex',
@@ -1456,7 +1725,8 @@ function CreateOrderContent() {
                                                 <div style={{
                                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
                                                     backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
+                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
+                                                    maxHeight: '280px', overflowY: 'auto'
                                                 }}>
                                                     {filteredClients.map((c, idx) => (
                                                         <div
@@ -1944,7 +2214,7 @@ function CreateOrderContent() {
                                 {/* Global Datalist for SKUs to improve performance */}
                                 <datalist id="all-products-list">
                                     {products.map(p => (
-                                        <option key={p.id} value={`${p.name} (${p.sku})`} />
+                                        <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
                                     ))}
                                 </datalist>
 
@@ -2063,17 +2333,39 @@ function CreateOrderContent() {
                                                     <Trash2 size={14} /> Eliminar Seleccionados ({selectedStagedIds.length})
                                                 </button>
                                             )}
-                                            <span style={{ 
-                                                padding: '6px 12px', 
-                                                backgroundColor: 'white', 
-                                                borderRadius: '100px', 
-                                                fontSize: '0.75rem', 
-                                                fontWeight: '800', 
-                                                color: '#475569',
-                                                border: '1px solid rgba(0,0,0,0.05)'
-                                            }}>
-                                                DOCUMENTO {importValidation.documentType}
-                                            </span>
+                                            <button 
+                                                onClick={() => {
+                                                    if (uploadedFileUrl) {
+                                                        window.open(uploadedFileUrl, '_blank');
+                                                    }
+                                                }}
+                                                title="Click para ver documento original"
+                                                style={{ 
+                                                    padding: '6px 12px', 
+                                                    backgroundColor: '#EFF6FF', 
+                                                    borderRadius: '100px', 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '800', 
+                                                    color: '#1D4ED8',
+                                                    border: '1px solid #BFDBFE',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                    e.currentTarget.style.borderColor = '#93C5FD';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                    e.currentTarget.style.borderColor = '#BFDBFE';
+                                                }}
+                                            >
+                                                📄 VER {importValidation.documentType || 'DOCUMENTO'}
+                                            </button>
                                         </div>
                                     </div>
 
@@ -2096,9 +2388,9 @@ function CreateOrderContent() {
                                                             style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                         />
                                                     </th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left' }}>NOMBRE EN DOCUMENTO</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>TU PRODUCTO (SKU)</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>CANT.</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '25%' }}>CANT.</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2107,7 +2399,9 @@ function CreateOrderContent() {
                                                         key={item.id} 
                                                         style={{ 
                                                             borderBottom: '1px solid #F8FAFC',
-                                                            backgroundColor: item.suggestedProduct ? 'white' : '#FFF7ED',
+                                                            backgroundColor: item.isConfirmed 
+                                                                ? '#F0FDF4' 
+                                                                : (item.suggestedProduct ? 'white' : '#FFF7ED'),
                                                             transition: 'background-color 0.2s'
                                                         }}
                                                     >
@@ -2125,64 +2419,118 @@ function CreateOrderContent() {
                                                                 style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                             />
                                                         </td>
-                                                        <td style={{ padding: '1rem 2rem' }}>
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#475569' }}>{item.originalName}</div>
-                                                        </td>
-                                                        <td style={{ padding: '0.5rem 1rem', position: 'relative' }}>
-                                                            <input 
-                                                                type="text"
-                                                                placeholder="Buscar SKU..."
-                                                                defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.sku})` : ''}
-                                                                list="all-products-list"
-                                                                onFocus={(e) => e.target.select()}
-                                                                className="sku-search-input"
-                                                                id={`sku-input-${idx}`}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    const p = products.find(prod => `${prod.name} (${prod.sku})` === val);
-                                                                    if (p) {
-                                                                        updateStagedItem(item.id, 'product', p);
-                                                                    }
-                                                                }}
-                                                                style={{ 
-                                                                    width: '100%', 
-                                                                    padding: '10px 14px', 
-                                                                    borderRadius: '10px', 
-                                                                    border: item.suggestedProduct ? '2px solid #E2E8F0' : '2px solid #F97316',
-                                                                    fontSize: '1rem',
-                                                                    fontWeight: '700',
-                                                                    backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
-                                                                    outline: 'none',
-                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                }}
-                                                            />
-                                                        </td>
-                                                        <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
-                                                            <input 
-                                                                type="number"
-                                                                value={item.quantity}
-                                                                onFocus={(e) => e.target.select()}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') {
-                                                                        const nextInput = document.getElementById(`sku-input-${idx + 1}`);
-                                                                        if (nextInput) {
-                                                                            nextInput.focus();
-                                                                        }
-                                                                    }
-                                                                }}
-                                                                onChange={(e) => updateStagedItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                style={{ 
-                                                                    width: '80px', 
-                                                                    padding: '10px', 
-                                                                    borderRadius: '8px', 
-                                                                    border: '2px solid #E2E8F0', 
-                                                                    textAlign: 'center',
-                                                                    fontWeight: '800',
-                                                                    fontSize: '1.1rem',
-                                                                    backgroundColor: 'white'
-                                                                }}
-                                                            />
-                                                        </td>
+                                                        <td style={{ padding: '1rem 2rem', width: '30%' }}>
+                                                             <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
+                                                             <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
+                                                                 <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                     {item.originalQtyInFile || item.quantity} unidades detectadas
+                                                                 </span>
+                                                             </div>
+                                                         </td>
+                                                         <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '45%' }}>
+                                                             <input 
+                                                                 type="text"
+                                                                 placeholder="Buscar ID..."
+                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.accounting_id || item.suggestedProduct.id})` : ''}
+                                                                 list="all-products-list"
+                                                                 onFocus={(e) => e.target.select()}
+                                                                 className="sku-search-input"
+                                                                 id={`sku-input-${idx}`}
+                                                                 onKeyDown={(e) => {
+                                                                     if (e.key === 'Tab') {
+                                                                         const val = e.currentTarget.value;
+                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         if (p) {
+                                                                             e.preventDefault(); 
+                                                                             openModalForStagedItem(
+                                                                                 item.id, 
+                                                                                 p, 
+                                                                                 item.quantity, 
+                                                                                 idx, 
+                                                                                 item.selected_options, 
+                                                                                 item.originalQty, 
+                                                                                 item.originalUnit, 
+                                                                                 item.conversion_factor
+                                                                             );
+                                                                         }
+                                                                     } else if (e.key === 'Enter') {
+                                                                         e.preventDefault();
+                                                                         const val = e.currentTarget.value;
+                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         if (p) {
+                                                                             updateStagedItem(item.id, 'product', p);
+                                                                         }
+                                                                         updateStagedItem(item.id, 'isConfirmed', true);
+                                                                         const nextInput = document.getElementById(`sku-input-${idx + 1}`);
+                                                                         if (nextInput) {
+                                                                             (nextInput as HTMLElement).focus();
+                                                                             (nextInput as HTMLInputElement).select();
+                                                                         } else {
+                                                                             document.getElementById('confirm-inject-button')?.focus();
+                                                                         }
+                                                                     }
+                                                                 }}
+                                                                 onChange={(e) => {
+                                                                     const val = e.target.value;
+                                                                     const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                     if (p) {
+                                                                         updateStagedItem(item.id, 'product', p);
+                                                                     }
+                                                                 }}
+                                                                 style={{ 
+                                                                     width: '100%', 
+                                                                     padding: '10px 14px', 
+                                                                     borderRadius: '10px', 
+                                                                     border: item.suggestedProduct ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                                     fontSize: '1rem',
+                                                                     fontWeight: '700',
+                                                                     backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
+                                                                     outline: 'none',
+                                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                 }}
+                                                             />
+                                                         </td>
+                                                         <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '25%' }}>
+                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                                 <input 
+                                                                     type="number"
+                                                                     value={item.originalQty !== undefined ? item.originalQty : item.quantity}
+                                                                     onFocus={(e) => e.target.select()}
+                                                                     onKeyDown={(e) => {
+                                                                         if (e.key === 'Enter') {
+                                                                             const nextInput = document.getElementById(`sku-input-${idx + 1}`);
+                                                                             if (nextInput) {
+                                                                                 nextInput.focus();
+                                                                             } else {
+                                                                                 document.getElementById('confirm-inject-button')?.focus();
+                                                                             }
+                                                                         }
+                                                                     }}
+                                                                     onChange={(e) => {
+                                                                         const val = parseFloat(e.target.value) || 0;
+                                                                         if (item.originalQty !== undefined) {
+                                                                             updateStagedItem(item.id, 'originalQty', val);
+                                                                             updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(2)));
+                                                                         } else {
+                                                                             updateStagedItem(item.id, 'quantity', val);
+                                                                         }
+                                                                     }}
+                                                                     style={{ 
+                                                                         width: '80px', 
+                                                                         padding: '10px', 
+                                                                         borderRadius: '8px', 
+                                                                         border: '2px solid #E2E8F0', 
+                                                                         textAlign: 'center',
+                                                                         fontWeight: '800',
+                                                                         fontSize: '1.1rem',
+                                                                         backgroundColor: 'white'
+                                                                     }}
+                                                                 />
+                                                                 <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#475569', minWidth: '45px', textAlign: 'left' }}>
+                                                                     {item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg'}
+                                                                 </span>
+                                                             </div>
+                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2199,7 +2547,15 @@ function CreateOrderContent() {
                                         alignItems: 'center'
                                     }}>
                                         <button 
-                                            onClick={() => { setIsStaging(false); setStagedItems([]); }}
+                                            onClick={() => { 
+                                                setIsStaging(false); 
+                                                setStagedItems([]); 
+                                                setUploadedFile(null);
+                                                if (uploadedFileUrl) {
+                                                    URL.revokeObjectURL(uploadedFileUrl);
+                                                    setUploadedFileUrl(null);
+                                                }
+                                            }}
                                             style={{ padding: '10px 20px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#64748B', fontWeight: '700', cursor: 'pointer' }}
                                         >
                                             Cancelar y Limpiar
@@ -2210,6 +2566,7 @@ function CreateOrderContent() {
                                                 <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B' }}>{stagedItems.length} productos</div>
                                             </div>
                                             <button 
+                                                id="confirm-inject-button"
                                                 onClick={handleConfirmImport}
                                                 style={{ 
                                                     padding: '12px 28px', 
@@ -2240,6 +2597,7 @@ function CreateOrderContent() {
                             <div style={{ marginBottom: '2rem', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Agregar Productos Manualmente</label>
                             <input
+                                ref={productSearchInputRef}
                                 type="text"
                                 placeholder="Escribe para buscar (ej: Tomate)..."
                                 value={productSearch} 
@@ -2254,7 +2612,8 @@ function CreateOrderContent() {
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
                                     backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
+                                    maxHeight: '280px', overflowY: 'auto'
                                 }}>
                                     {filteredProducts.map((p, idx) => (
                                         <div
@@ -2267,7 +2626,7 @@ function CreateOrderContent() {
                                                 backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                             }}
                                         >
-                                            <span style={{ fontWeight: '600' }}>{p.name} {p.sku && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.sku})</span>}</span>
+                                            <span style={{ fontWeight: '600' }}>{p.name} {p.accounting_id && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.accounting_id})</span>}</span>
                                             <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
                                                 {formatMoney(p.base_price)}/{p.unit_of_measure}
                                                 {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
@@ -2288,12 +2647,12 @@ function CreateOrderContent() {
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: '#E5E7EB', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
                                     {/* Table Header */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 80px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         <div>Producto</div>
                                         <div style={{ textAlign: 'center' }}>Cantidad</div>
                                         <div style={{ textAlign: 'right' }}>Precio Unit.</div>
                                         <div style={{ textAlign: 'right' }}>Subtotal</div>
-                                        <div></div>
+                                        <div style={{ textAlign: 'center' }}>Acciones</div>
                                     </div>
 
                                     {cart.map((item, idx) => {
@@ -2305,13 +2664,27 @@ function CreateOrderContent() {
                                         return (
                                             <div key={`${item.product.id}-${idx}`} style={{ backgroundColor: 'white', borderBottom: '1px solid #E5E7EB' }}>
                                                 {/* Main Row */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 80px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem' }}>
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                                                             <span>{item.product.name}</span>
                                                             {item.variant_label && (
-                                                                <span style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                <span 
+                                                                    onClick={() => startEditingCartItem(idx)}
+                                                                    style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer' }}
+                                                                    title="Haz clic para editar variaciones"
+                                                                >
                                                                     {item.variant_label}
+                                                                </span>
+                                                            )}
+                                                            {item.picking_note && (
+                                                                <span style={{ fontWeight: '600', color: '#D97706', fontSize: '0.8em', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FCD34D' }}>
+                                                                    Nota: {item.picking_note}
+                                                                </span>
+                                                            )}
+                                                            {item.delivery_note && (
+                                                                <span style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.8em', backgroundColor: '#EEF2FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #C7D2FE' }}>
+                                                                    Entr: {item.delivery_note}
                                                                 </span>
                                                             )}
                                                             {/* Pricing Source Badge */}
@@ -2326,7 +2699,9 @@ function CreateOrderContent() {
                                                             )}
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                                                            <span>SKU: {item.product.sku || 'N/A'}</span>
+                                                            <span style={{ fontSize: '0.75rem', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '700' }}>
+                                                                ID: {item.product.accounting_id || 'N/A'}
+                                                            </span>
                                                             <span>•</span>
                                                             <button
                                                                 type="button"
@@ -2355,25 +2730,26 @@ function CreateOrderContent() {
 
                                                     {/* Cantidad Stepper */}
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC', height: '36px' }}>
                                                             <button
                                                                 onClick={() => {
                                                                     const nextQty = Math.max(0.5, parseFloat(item.qty.toString().replace(',', '.')) - 0.5);
                                                                     setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: nextQty, originalQty: nextQty, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
                                                                 }}
-                                                                style={{ width: '28px', height: '28px', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
+                                                                style={{ width: '32px', height: '100%', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
                                                             >−</button>
                                                             <input
                                                                 type="text"
                                                                 inputMode="decimal"
-                                                                value={item.qty.toString().replace('.', ',')}
+                                                                value={formatQuantityDisplay(item.qty)}
+                                                                onFocus={(e) => e.target.select()}
                                                                 onKeyDown={(e) => {
                                                                     if (e.key === '.') {
                                                                         e.preventDefault();
                                                                         const input = e.target as HTMLInputElement;
                                                                         const start = input.selectionStart || 0;
                                                                         const end = input.selectionEnd || 0;
-                                                                        const val = input.value;
+                                                                        const val = input.value.replace(/\./g, '');
                                                                         if (!val.includes(',')) {
                                                                             const newVal = val.substring(0, start) + ',' + val.substring(end);
                                                                             setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: newVal, originalQty: parseFloat(newVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
@@ -2381,21 +2757,23 @@ function CreateOrderContent() {
                                                                     }
                                                                 }}
                                                                 onChange={(e) => {
-                                                                    let val = e.target.value.replace(/[^0-9,]/g, '');
-                                                                    const parts = val.split(',');
+                                                                    let val = e.target.value.replace(/[^0-9,.]/g, '');
+                                                                    const rawVal = val.replace(/\./g, '');
+                                                                    const parts = rawVal.split(',');
+                                                                    let cleanVal = rawVal;
                                                                     if (parts.length > 2) {
-                                                                        val = parts[0] + ',' + parts.slice(1).join('');
+                                                                        cleanVal = parts[0] + ',' + parts.slice(1).join('');
                                                                     }
-                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: val, originalQty: parseFloat(val.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: cleanVal, originalQty: parseFloat(cleanVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
                                                                 }}
-                                                                style={{ width: '85px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
+                                                                style={{ width: '80px', height: '100%', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
                                                             />
                                                             <button
                                                                 onClick={() => {
                                                                     const nextQty = parseFloat(item.qty.toString().replace(',', '.')) + 0.5;
                                                                     setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: nextQty, originalQty: nextQty, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
                                                                 }}
-                                                                style={{ width: '28px', height: '28px', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
+                                                                style={{ width: '32px', height: '100%', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
                                                             >+</button>
                                                         </div>
                                                         <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em', minWidth: '35px' }}>
@@ -2405,16 +2783,19 @@ function CreateOrderContent() {
 
                                                     {/* Price Edit Input */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${isZeroPrice ? '#EF4444' : '#CBD5E1'}`, borderRadius: '6px', overflow: 'hidden', padding: '2px 4px', backgroundColor: 'white' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${isZeroPrice ? '#EF4444' : '#E2E8F0'}`, borderRadius: '8px', overflow: 'hidden', padding: '0 8px', backgroundColor: 'white', height: '36px', transition: 'all 0.2s' }}>
                                                             <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
                                                             <input
-                                                                type="number"
-                                                                value={item.price || ''}
+                                                                type="text"
+                                                                value={formatPriceDisplay(item.price !== undefined && item.price !== null ? item.price : '')}
+                                                                onFocus={(e) => e.target.select()}
                                                                 onChange={(e) => {
-                                                                    const val = parseFloat(e.target.value) || 0;
-                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: val } : c));
+                                                                    const val = e.target.value.replace(/[^0-9,.]/g, '');
+                                                                    const cleanVal = val.replace(/\./g, '').replace(',', '.');
+                                                                    const parsed = cleanVal === '' ? '' : (parseFloat(cleanVal) || 0);
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: parsed as any } : c));
                                                                 }}
-                                                                style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
+                                                                style={{ width: '80px', height: '100%', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', padding: '2px 4px' }}
                                                             />
                                                         </div>
                                                         {isZeroPrice && (
@@ -2427,8 +2808,17 @@ function CreateOrderContent() {
                                                         {formatMoney(unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0'))}
                                                     </div>
 
-                                                    {/* Delete */}
-                                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                    {/* Actions (Edit and Delete) */}
+                                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
+                                                        <button
+                                                            onClick={() => startEditingCartItem(idx)}
+                                                            style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                            title="Editar item (variantes, unidad, etc.)"
+                                                        >
+                                                            ✏️
+                                                        </button>
                                                         <button
                                                             onClick={() => removeFromCart(idx)}
                                                             style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
@@ -2630,6 +3020,7 @@ function CreateOrderContent() {
             {selectedProductForModal && (() => {
                 const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
+                const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
                 // Build full options list for unit selection (web_unit is first, if configured)
                 const optionsList = [];
@@ -2683,20 +3074,74 @@ function CreateOrderContent() {
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 1000, backdropFilter: 'blur(3px)'
-                    }} onClick={() => setSelectedProductForModal(null)}>
+                    }} onClick={() => closeProductModal()}>
 
                         <div
-                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '680px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', width: '95%', maxWidth: '820px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'left' }}
                             onClick={e => e.stopPropagation()} // Prevent close
                         >
-                            {selectedProductForModal.image_url && (
-                                <img
-                                    src={selectedProductForModal.image_url}
-                                    style={{ width: '100px', height: '100px', borderRadius: '16px', objectFit: 'cover', marginBottom: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
-                                />
-                            )}
-                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '0.3rem', color: '#111827' }}>{selectedProductForModal.name}</h3>
-                            
+                            {/* Horizontal flex container for header */}
+                            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                                {/* Left side: Image and Title */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                                    {selectedProductForModal.image_url ? (
+                                        <img
+                                            src={selectedProductForModal.image_url}
+                                            style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: '80px',
+                                            height: '80px',
+                                            borderRadius: '16px',
+                                            backgroundColor: '#F3F4F6',
+                                            border: '1px solid #E5E7EB',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                                        }}>
+                                            <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForModal.name}</h3>
+                                        <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                                            {selectedProductForModal.options_config && selectedProductForModal.options_config.length > 0
+                                                ? 'Personaliza tu producto:'
+                                                : 'Especifica la cantidad y unidad de medida:'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Right side: Helper box (if open from staging) */}
+                                {stagedItem && (
+                                    <div style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1px dashed #CBD5E1',
+                                        borderRadius: '12px',
+                                        padding: '0.8rem 1.2rem',
+                                        textAlign: 'left',
+                                        fontSize: '0.85rem',
+                                        color: '#475569',
+                                        minWidth: '280px',
+                                        flex: '1 1 auto',
+                                        maxWidth: '360px'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                                            <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
+                                            <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
+                                                {stagedItem.originalQtyInFile || stagedItem.quantity} uds detectadas
+                                            </span>
+                                        </div>
+                                        <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={stagedItem.originalName}>
+                                            &quot;{stagedItem.originalName}&quot;
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* CLIENT CUSTOM REQUIREMENT INFO BOX */}
                             {exc && (
                                 <div style={{
@@ -2704,7 +3149,7 @@ function CreateOrderContent() {
                                     border: '1px solid #FCD34D',
                                     borderRadius: '12px',
                                     padding: '0.8rem 1.2rem',
-                                    margin: '0.8rem 0 1.2rem 0',
+                                    margin: '0.5rem 0 1rem 0',
                                     textAlign: 'left',
                                     fontSize: '0.8rem',
                                     color: '#92400E',
@@ -2713,22 +3158,66 @@ function CreateOrderContent() {
                                     <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
                                         📌 Requerimientos del Cliente:
                                     </div>
-                                    {exc.nickname && exc.nickname !== selectedProductForModal.name && (
+                                    {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
                                         <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
                                     )}
                                     {exc.picking_note && (
-                                        <div><strong>Bodega (Picking):</strong> {exc.picking_note}</div>
-                                    )}
-                                    {exc.delivery_note && (
-                                        <div><strong>Despacho (Conductores):</strong> {exc.delivery_note}</div>
-                                    )}
-                                    {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
-                                        <div><strong>Variación Preferida:</strong> {Object.entries(exc.preferred_options).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
+                                        <div><strong>Nota del cliente:</strong> {exc.picking_note}</div>
                                     )}
                                 </div>
                             )}
 
-                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+
+                            {/* DISCRETE PRODUCT CONFIG ACTION BAR */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                gap: '12px',
+                                fontSize: '0.75rem',
+                                color: '#9CA3AF',
+                                marginBottom: '1.5rem',
+                                fontWeight: '700'
+                            }}>
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={() => setVariantConfigProduct(selectedProductForModal)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#4B5563',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontSize: 'inherit',
+                                        textDecoration: 'underline'
+                                    }}
+                                >
+                                    ⚙️ Editar Variantes
+                                </button>
+                                <span>|</span>
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={() => {
+                                        if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
+                                            setManageConversionsProduct(selectedProductForModal);
+                                        }
+                                    }}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#4B5563',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontSize: 'inherit',
+                                        textDecoration: 'underline'
+                                    }}
+                                >
+                                    ⚙️ Editar Equivalencias
+                                </button>
+                            </div>
 
                             {/* RENDER OPTIONS DYNAMICALLY */}
                             {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any, index: number) => (
@@ -2825,32 +3314,9 @@ function CreateOrderContent() {
                                 </div>
 
                                 <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                                            Unidad de Medida
-                                        </label>
-                                        <button
-                                            type="button"
-                                            tabIndex={-1}
-                                            onClick={() => {
-                                                if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
-                                                    setManageConversionsProduct(selectedProductForModal);
-                                                }
-                                            }}
-                                            style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                color: '#2563EB',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '700',
-                                                cursor: 'pointer',
-                                                padding: 0,
-                                                textDecoration: 'underline'
-                                            }}
-                                        >
-                                            ⚙️ Equivalencias
-                                        </button>
-                                    </div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Unidad de Medida
+                                    </label>
                                     {optionsList.length > 1 ? (
                                         <select
                                             id="modal-unit-select"
@@ -2924,7 +3390,7 @@ function CreateOrderContent() {
                                 <button
                                     type="button"
                                     tabIndex={-1}
-                                    onClick={() => setSelectedProductForModal(null)}
+                                    onClick={() => closeProductModal()}
                                     style={{ width: '120px', padding: '0.65rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '0.9rem', color: '#6B7280', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
                                     onFocus={(e) => {
                                         e.target.style.borderColor = '#3B82F6';
@@ -3157,6 +3623,33 @@ function CreateOrderContent() {
                     </div>
                 );
             })()}
+
+            {variantConfigProduct && (
+                <VariantModal
+                    product={variantConfigProduct}
+                    onClose={() => setVariantConfigProduct(null)}
+                    onSave={async (optionsConfig, variants) => {
+                        const success = await handleSaveVariantsFromOrder(variantConfigProduct.id, optionsConfig, variants);
+                        if (success) {
+                            setProducts(prev => prev.map(p => 
+                                p.id === variantConfigProduct.id 
+                                    ? { ...p, options_config: optionsConfig, variants: variants } 
+                                    : p
+                            ));
+                            setSelectedProductForModal(prev => {
+                                if (prev && prev.id === variantConfigProduct.id) {
+                                    return { ...prev, options_config: optionsConfig, variants: variants };
+                                }
+                                return prev;
+                            });
+                            showToast('Variantes del producto actualizadas', 'success');
+                        }
+                        return success;
+                    }}
+                    onUploadImage={handleVariantImageUploadFromOrder}
+                    readOnly={false}
+                />
+            )}
 
             {/* MAP PICKER MODAL */}
             {showMapPicker && (

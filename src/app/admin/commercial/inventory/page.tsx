@@ -759,6 +759,33 @@ export default function InventoryAdminPage() {
                                 Catálogo Maestro
                             </button>
                         </Link>
+                        <Link href="/admin/commercial/inventory/tasks-trello" style={{ textDecoration: 'none' }}>
+                            <button 
+                                style={{ 
+                                    padding: '0.55rem 1.25rem', 
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    background: '#0079BF', 
+                                    color: 'white', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.8rem', 
+                                    cursor: 'pointer', 
+                                    boxShadow: THEME.shadow.sm,
+                                    transition: 'all 0.2s ease-in-out',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                                onMouseEnter={(e) => { 
+                                    e.currentTarget.style.backgroundColor = '#026AA7'; 
+                                }}
+                                onMouseLeave={(e) => { 
+                                    e.currentTarget.style.backgroundColor = '#0079BF'; 
+                                }}
+                            >
+                                📊 Tablero Trello (Temp)
+                            </button>
+                        </Link>
                         <Link href="/admin/commercial/inventory/tasks" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 

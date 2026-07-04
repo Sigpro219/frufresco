@@ -164,6 +164,23 @@ export default function MasterProductsPage() {
         setCurrentPage(1);
     }, [searchQuery]);
 
+    // Abrir modal de conversión por URL (?editUnits=productId)
+    useEffect(() => {
+        if (products.length > 0) {
+            const params = new URLSearchParams(window.location.search);
+            const editUnitsId = params.get('editUnits');
+            if (editUnitsId) {
+                const matched = products.find(p => p.id === editUnitsId);
+                if (matched) {
+                    setConversionProduct(matched);
+                    // Limpiar el parámetro de la URL
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, '', newUrl);
+                }
+            }
+        }
+    }, [products]);
+
     // Helper para generar SKU técnico secuencial
     const generateSequentialSKU = (lastSKU: string) => {
         const num = parseInt(lastSKU || '0') + 1;
@@ -810,67 +827,64 @@ export default function MasterProductsPage() {
         const query = searchQuery.trim().toLowerCase();
         if (!query) return products;
 
-        // Separar términos normales de etiquetas con @
-        const parts = query.split(/\s+/);
-        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
-        const ids = parts.filter(p => p.startsWith('#')).map(t => t.slice(1));
-        const searchTerms = parts.filter(p => !p.startsWith('@') && !p.startsWith('#'));
+        // Separar factores por comas
+        const factors = query.split(',').map(f => f.trim()).filter(Boolean);
 
         return products.filter(p => {
-            // 1. Lógica de IDs EXACTOS (#3, #15...)
-            const matchesIds = ids.length === 0 || ids.some(id => 
-                p.accounting_id?.toString() === id
-            );
-            if (!matchesIds) return false;
-
-            // 2. Lógica de TEXTO (AND: debe cumplir todos los términos escritos)
-            const matchesText = searchTerms.every(term => 
-                p.name?.toLowerCase().includes(term) ||
-                p.sku?.toLowerCase().includes(term) ||
-                p.accounting_id?.toString().includes(term)
-            );
-
-            if (!matchesText && searchTerms.length > 0) return false;
-
-            // 2. Lógica de ETIQUETAS (AND: debe cumplir todos los filtros @)
-            const matchesTags = tags.every(tag => {
-                // Filtro IVA (@19, @19%, @0...)
-                if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
-                    const rate = parseInt(tag.replace('%', ''));
-                    return (p.iva_rate ?? 19) === rate;
+            return factors.every(factor => {
+                // 1. Lógica de IDs (#3, #15...)
+                if (factor.startsWith('#')) {
+                    const id = factor.slice(1);
+                    return p.accounting_id?.toString() === id;
                 }
 
-                // Filtro Web (@web, @virtual, @oculto)
-                if (tag === 'web' || tag === 'virtual') return p.show_on_web;
-                if (tag === 'oculto' || tag === 'hidden') return !p.show_on_web;
+                // 2. Lógica de ETIQUETAS (@web, @oculto...)
+                if (factor.startsWith('@')) {
+                    const tag = factor.slice(1);
+                    
+                    // Filtro IVA (@19, @19%, @0...)
+                    if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
+                        const rate = parseInt(tag.replace('%', ''));
+                        return (p.iva_rate ?? 19) === rate;
+                    }
 
-                // Filtro Estado Maestro (@on, @activo, @off, @inactivo)
-                if (tag === 'on' || tag === 'activo') return p.is_active;
-                if (tag === 'off' || tag === 'inactivo') return !p.is_active;
+                    // Filtro Web (@web, @virtual, @oculto)
+                    if (tag === 'web' || tag === 'virtual') return p.show_on_web;
+                    if (tag === 'oculto' || tag === 'hidden') return !p.show_on_web;
 
-                // Filtro Jerarquía (@padre, @hijo)
-                if (tag === 'padre') return p.parent_id === p.id;
-                if (tag === 'hijo') return p.parent_id !== null && p.parent_id !== p.id;
+                    // Filtro Estado Maestro (@on, @activo, @off, @inactivo)
+                    if (tag === 'on' || tag === 'activo') return p.is_active;
+                    if (tag === 'off' || tag === 'inactivo') return !p.is_active;
 
-                // Filtro Incompletos (@sindatos)
-                if (tag === 'sindatos' || tag === 'incompleto') {
-                    return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
+                    // Filtro Jerarquía (@padre, @hijo)
+                    if (tag === 'padre') return p.parent_id === p.id;
+                    if (tag === 'hijo') return p.parent_id !== null && p.parent_id !== p.id;
+
+                    // Filtro Incompletos (@sindatos)
+                    if (tag === 'sindatos' || tag === 'incompleto') {
+                        return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
+                    }
+
+                    // Filtro Categoría (@frutas, @despensa...)
+                    const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                        label.toLowerCase().startsWith(tag)
+                    );
+                    if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                    // Filtro Logística/Compras (@alistamiento, @equipo...)
+                    if (p.buying_team?.toLowerCase().includes(tag)) return true;
+                    if (p.procurement_method?.toLowerCase().includes(tag)) return true;
+
+                    return false;
                 }
 
-                // Filtro Categoría (@frutas, @despensa...)
-                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
-                    label.toLowerCase().startsWith(tag)
+                // 3. Lógica de TEXTO normal
+                return (
+                    p.name?.toLowerCase().includes(factor) ||
+                    p.sku?.toLowerCase().includes(factor) ||
+                    p.accounting_id?.toString().includes(factor)
                 );
-                if (categoryEntry && p.category === categoryEntry[0]) return true;
-
-                // Filtro Logística/Compras (@alistamiento, @equipo...)
-                if (p.buying_team?.toLowerCase().includes(tag)) return true;
-                if (p.procurement_method?.toLowerCase().includes(tag)) return true;
-
-                return false;
             });
-
-            return matchesTags;
         });
     }, [products, searchQuery]);
 
@@ -1341,7 +1355,7 @@ export default function MasterProductsPage() {
                                     ))}
                                 </div>
                                 <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
-                                    Tip: Puedes filtrar por Categoría escribiendo @ seguida del nombre.
+                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: Papa, @web, @activo
                                 </div>
                             </div>
                         )}
@@ -1832,7 +1846,7 @@ export default function MasterProductsPage() {
             {/* MODAL DE GESTIÓN DE CONVERSIONES */}
             {conversionProduct && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, width: '450px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.lg }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, width: '90%', maxWidth: '550px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.lg }}>
                         <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.25rem', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1866,19 +1880,23 @@ export default function MasterProductsPage() {
                             {/* SECCIÓN DE UNIDAD BASE (LA RAÍZ) */}
                             <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: THEME.radius.md, marginBottom: '1.25rem', border: `1px solid ${THEME.colors.border}` }}>
                                 <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unidad de Inventario (Base)</label>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <select
-                                        value={conversionProduct.unit_of_measure}
-                                        disabled={!canEdit}
-                                        onChange={(e) => updateProductField(conversionProduct.id, 'unit_of_measure', e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, cursor: canEdit ? 'pointer' : 'not-allowed' }}
-                                    >
-                                        {dynamicUnits.map(u => (
-                                            <option key={u} value={u}>{u}</option>
-                                        ))}
-                                    </select>
-                                    <div style={{ flex: 1.5, fontSize: '0.7rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
-                                        <Info size={12} strokeWidth={1.5} style={{ display: 'inline', marginRight: '3px' }} /> Usa la unidad más pequeña en la que vayas a mover el inventario (ej: Kg).
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <div style={{ 
+                                        padding: '0.5rem 1.25rem', 
+                                        backgroundColor: THEME.colors.primaryLight, 
+                                        border: `1px solid ${THEME.colors.border}`, 
+                                        borderRadius: THEME.radius.sm, 
+                                        fontSize: '0.9rem', 
+                                        fontWeight: '700', 
+                                        color: THEME.colors.primary,
+                                        minWidth: '100px',
+                                        textAlign: 'center'
+                                    }}>
+                                        {conversionProduct.unit_of_measure}
+                                    </div>
+                                    <div style={{ flex: 1, fontSize: '0.75rem', color: THEME.colors.textSecondary, lineHeight: '1.35' }}>
+                                        <Info size={13} strokeWidth={1.5} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                                        Unidad base definida para el control de inventario de este SKU. Para modificarla, dirígete a la sección de edición del SKU.
                                     </div>
                                 </div>
                             </div>
@@ -1948,7 +1966,7 @@ export default function MasterProductsPage() {
                                         </div>
                                         <div style={{ flex: 2 }}>
                                             <select id="raw-unit-1" style={{ width: '100%', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', backgroundColor: 'white', fontSize: '0.85rem' }}>
-                                                <option value="">Unidad</option>
+                                                <option value="">Selecciona unidad</option>
                                                 {dynamicUnits.map(u => (
                                                     <option key={u} value={u}>{u}</option>
                                                 ))}
@@ -1976,14 +1994,21 @@ export default function MasterProductsPage() {
                                         const unit1 = (document.getElementById('raw-unit-1') as HTMLInputElement).value;
                                         const qty2 = parseFloat((document.getElementById('raw-qty-2') as HTMLInputElement).value);
                                         
-                                        if (qty1 && unit1 && qty2) {
-                                            const factor = qty2 / qty1;
-                                            addConversion(conversionProduct.id, unit1, conversionProduct.unit_of_measure, factor);
-                                            
-                                            (document.getElementById('raw-qty-1') as HTMLInputElement).value = '1';
-                                            (document.getElementById('raw-unit-1') as HTMLInputElement).value = '';
-                                            (document.getElementById('raw-qty-2') as HTMLInputElement).value = '';
+                                        if (!unit1) {
+                                            showToast('Por favor, selecciona una unidad de origen.', 'info');
+                                            return;
                                         }
+                                        if (isNaN(qty1) || qty1 <= 0 || isNaN(qty2) || qty2 <= 0) {
+                                            showToast('Las cantidades deben ser valores válidos mayores a cero.', 'info');
+                                            return;
+                                        }
+
+                                        const factor = qty2 / qty1;
+                                        addConversion(conversionProduct.id, unit1, conversionProduct.unit_of_measure, factor);
+                                        
+                                        (document.getElementById('raw-qty-1') as HTMLInputElement).value = '1';
+                                        (document.getElementById('raw-unit-1') as HTMLInputElement).value = '';
+                                        (document.getElementById('raw-qty-2') as HTMLInputElement).value = '';
                                     }}
                                     style={{ 
                                         width: '100%',

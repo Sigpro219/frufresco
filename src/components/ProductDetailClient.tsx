@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { useCart } from '@/lib/cartContext';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -38,9 +39,26 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
     const [quantity, setQuantity] = useState(1);
 
+    const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchMaster = async () => {
+            const { data } = await supabase
+                .from('product_attributes_master')
+                .select('name, show_on_web');
+            if (data) setMasterAttributes(data);
+        };
+        fetchMaster();
+    }, []);
+
     // Normalizar las opciones (viniendo de options o de options_config del Admin)
     const displayOptions = product.options_config && product.options_config.length > 0
-        ? product.options_config.reduce((acc, opt) => ({ ...acc, [opt.name]: opt.values }), {})
+        ? product.options_config
+            .filter((opt: any) => {
+                const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
+                return master ? master.show_on_web !== false : true;
+            })
+            .reduce((acc: any, opt: any) => ({ ...acc, [opt.name]: opt.values }), {})
         : product.options || {};
 
     // Initialize selections with the first option of each category
@@ -112,6 +130,10 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {t.navHome}
                 </Link> 
                 <ChevronRight size={14} />
+                <Link href={`/#catalog${isEn ? '?lang=en' : ''}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>
+                    {t.navCatalog || 'Catálogo'}
+                </Link> 
+                <ChevronRight size={14} />
                 <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
                     {(isEn && product.name_en) ? product.name_en : (product.display_name || product.name)}
                 </span>
@@ -134,6 +156,33 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                         style={{ objectFit: 'cover' }}
                         priority
                     />
+                    {product.image_url && (product.image_url.includes('clean') || product.image_url.includes('overlay')) && (
+                        <div style={{
+                            position: 'absolute',
+                            bottom: '4%',
+                            right: '4%',
+                            width: '18%',
+                            height: '18%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 8,
+                            pointerEvents: 'none'
+                        }}>
+                            <img 
+                                src="/logo_simbolo.png" 
+                                alt="FruFresco" 
+                                style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'contain' 
+                                }} 
+                                onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                }}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Right: Product Info */}
@@ -193,20 +242,25 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                         <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
                             {t.quantity}
                         </label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
-                            <button
-                                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
-                                <Minus size={18} strokeWidth={2.5} />
-                            </button>
-                            <span style={{ width: '40px', textAlign: 'center', fontWeight: '800', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
-                                {quantity}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
+                                <button
+                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                    style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
+                                    <Minus size={18} strokeWidth={2.5} />
+                                </button>
+                                <span style={{ width: '40px', textAlign: 'center', fontWeight: '800', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
+                                    {quantity}
+                                </span>
+                                <button
+                                    onClick={() => setQuantity(quantity + 1)}
+                                    style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </button>
+                            </div>
+                            <span style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'lowercase', backgroundColor: 'rgba(34, 197, 94, 0.08)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.15)' }}>
+                                {product.web_unit || product.unit_of_measure || 'un'}
                             </span>
-                            <button
-                                onClick={() => setQuantity(quantity + 1)}
-                                style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
-                                <Plus size={18} strokeWidth={2.5} />
-                            </button>
                         </div>
                     </div>
 

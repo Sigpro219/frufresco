@@ -2,6 +2,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { 
@@ -17,11 +18,29 @@ import {
 } from 'lucide-react';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
-    const { profile } = useAuth();
+    const { profile, loading } = useAuth();
+    const router = useRouter();
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appShortName, setAppShortName] = useState('FRUFRESCO');
     const [roles, setRoles] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!loading) {
+            if (!profile) {
+                router.push('/');
+            } else {
+                const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
+                if (!staffRoles.includes(profile.role)) {
+                    if (profile.role === 'b2b_client') {
+                        router.push('/b2b/dashboard');
+                    } else {
+                        router.push('/');
+                    }
+                }
+            }
+        }
+    }, [loading, profile, router]);
 
     useEffect(() => {
         let isMounted = true;
@@ -51,6 +70,33 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
         fetchLogosymbol();
         return () => { isMounted = false; };
     }, []);
+
+    if (loading || !profile) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a111c', color: '#F9FAFB' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ 
+                        border: '3px solid rgba(16, 185, 129, 0.2)', 
+                        borderTop: '3px solid #10B981', 
+                        borderRadius: '50%', 
+                        width: '36px', 
+                        height: '36px', 
+                        animation: 'spin 1s linear infinite' 
+                    }} />
+                    <span style={{ color: '#8295a5', fontSize: '0.85rem', fontWeight: '600' }}>Verificando credenciales...</span>
+                </div>
+                <style dangerouslySetInnerHTML={{ __html: `
+                    @keyframes spin { to { transform: rotate(360deg); } }
+                ` }} />
+            </main>
+        );
+    }
+
+    // Check if user is staff before rendering operations content
+    const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
+    if (!staffRoles.includes(profile.role)) {
+        return null;
+    }
 
     const hasPermission = (moduleKey: string) => {
         return checkUserPermission(profile, moduleKey, roles);

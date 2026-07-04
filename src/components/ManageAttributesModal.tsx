@@ -8,6 +8,7 @@ interface MasterAttribute {
     id: string;
     name: string;
     suggested_values: string[];
+    show_on_web?: boolean;
 }
 
 interface ManageAttributesModalProps {
@@ -52,10 +53,15 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
         const newAttr: MasterAttribute = {
             id: `temp-${Math.random().toString(36).substr(2, 9)}`,
             name: newAttrName,
-            suggested_values: []
+            suggested_values: [],
+            show_on_web: true
         };
         setLocalAttributes([...localAttributes, newAttr]);
         setNewAttrName('');
+    };
+
+    const handleToggleShowOnWeb = (id: string, show: boolean) => {
+        setLocalAttributes(localAttributes.map(a => a.id === id ? { ...a, show_on_web: show } : a));
     };
 
     const handleRenameLocal = (id: string) => {
@@ -112,27 +118,37 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             const eliminados = dbAttributes.filter(a => !idsEnLocal.includes(a.id));
             
             for (const del of eliminados) {
-                await supabase.from('product_attributes_master').delete().eq('id', del.id);
+                const { error } = await supabase.from('product_attributes_master').delete().eq('id', del.id);
+                if (error) throw error;
             }
 
             for (const attr of localAttributes) {
                 const payload: any = { 
                     name: attr.name, 
-                    suggested_values: attr.suggested_values 
+                    suggested_values: attr.suggested_values,
+                    show_on_web: attr.show_on_web !== false
                 };
                 
                 if (attr.id.startsWith('temp-')) {
-                    await supabase.from('product_attributes_master').insert([payload]);
+                    const { error } = await supabase.from('product_attributes_master').insert([payload]);
+                    if (error) throw error;
                 } else {
-                    await supabase.from('product_attributes_master').update(payload).eq('id', attr.id);
+                    const { error } = await supabase.from('product_attributes_master').update(payload).eq('id', attr.id);
+                    if (error) throw error;
                 }
             }
 
             await fetchAttributes();
-            if ((window as any).showToast) (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
-        } catch (err) {
+            if ((window as any).showToast) {
+                (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
+            } else {
+                alert('Gobernanza actualizada con éxito ✅');
+            }
+            onClose(); // Cerrar el modal al guardar exitosamente
+        } catch (err: any) {
             console.error('Save error:', err);
-            alert('Error al guardar los cambios.');
+            const errMsg = err.message || err.details || 'Error desconocido de permisos de base de datos.';
+            alert(`Error al guardar los cambios: ${errMsg}`);
         } finally {
             setSaving(false);
         }
@@ -227,6 +243,15 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 >
                                                     <Edit3 size={14} />
                                                 </button>
+                                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginLeft: '12px', fontSize: '0.8rem', color: '#6B7280', userSelect: 'none' }}>
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={attr.show_on_web !== false}
+                                                        onChange={(e) => handleToggleShowOnWeb(attr.id, e.target.checked)}
+                                                        style={{ accentColor: '#10B981', cursor: 'pointer' }}
+                                                    />
+                                                    <span>Mostrar en la web</span>
+                                                </label>
                                             </div>
                                         )}
                                         

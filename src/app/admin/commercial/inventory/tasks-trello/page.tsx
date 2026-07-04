@@ -53,7 +53,7 @@ interface StaffProfile {
     is_active: boolean;
 }
 
-export default function KanbanTasksPage() {
+export default function KanbanTrelloPage() {
     const { user } = useAuth();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [staff, setStaff] = useState<StaffProfile[]>([]);
@@ -68,7 +68,13 @@ export default function KanbanTasksPage() {
     const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
     const [maintenanceStats, setMaintenanceStats] = useState({ urgent: 0, upcoming: 0 });
     
+    // Drag and Drop state
+    const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+    const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
     // Form state
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
+    const [newTaskStatus, setNewTaskStatus] = useState<'todo' | 'in_progress' | 'done'>('todo');
     const [newTask, setNewTask] = useState({
         title: '',
         description: '',
@@ -78,6 +84,111 @@ export default function KanbanTasksPage() {
         scheduled_start: '',
         due_date: ''
     });
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingTask(null);
+    };
+
+    useEffect(() => {
+        if (editingTask) {
+            setNewTask({
+                title: editingTask.title || '',
+                description: editingTask.description || '',
+                priority: (editingTask.priority || 'medium') as 'low' | 'medium' | 'high',
+                assigned_to: editingTask.assigned_to || '',
+                target_role: editingTask.target_role || '',
+                scheduled_start: editingTask.scheduled_start ? new Date(editingTask.scheduled_start).toISOString().split('T')[0] : '',
+                due_date: editingTask.due_date ? new Date(editingTask.due_date).toISOString().split('T')[0] : ''
+            });
+            setNewTaskStatus(editingTask.status as any);
+        } else {
+            setNewTask({
+                title: '',
+                description: '',
+                priority: 'medium',
+                assigned_to: '',
+                target_role: '',
+                scheduled_start: '',
+                due_date: ''
+            });
+        }
+        setTempFiles([]);
+    }, [editingTask]);
+
+    const handleUpdateTask = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingTask) return;
+        setUploading(true);
+        try {
+            const uploadedUrls = [...(editingTask.attachments || [])];
+
+            for (const file of tempFiles) {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Math.random()}.${fileExt}`;
+                const filePath = `tasks/${Date.now()}_${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('client-documents')
+                    .upload(filePath, file);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('client-documents')
+                    .getPublicUrl(filePath);
+                
+                uploadedUrls.push(publicUrl);
+            }
+
+            const { error } = await supabase
+                .from('admin_tasks')
+                .update({
+                    title: newTask.title,
+                    description: newTask.description,
+                    priority: newTask.priority,
+                    target_role: newTask.target_role,
+                    assigned_to: newTask.assigned_to,
+                    scheduled_start: newTask.scheduled_start || null,
+                    due_date: newTask.due_date || null,
+                    attachments: uploadedUrls
+                })
+                .eq('id', editingTask.id);
+
+            if (error) throw error;
+
+            window.showToast?.('Tarea actualizada correctamente', 'success');
+            closeModal();
+            fetchData();
+        } catch (err: any) {
+            const message = err?.message || 'Error desconocido';
+            alert('Error al actualizar tarea: ' + message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDeleteTask = async () => {
+        if (!editingTask) return;
+        if (!confirm('¿Estás seguro de que deseas eliminar esta tarea permanentemente?')) return;
+        setUploading(true);
+        try {
+            const { error } = await supabase
+                .from('admin_tasks')
+                .delete()
+                .eq('id', editingTask.id);
+
+            if (error) throw error;
+
+            window.showToast?.('Tarea eliminada correctamente', 'success');
+            closeModal();
+            fetchData();
+        } catch (err: any) {
+            alert('Error al eliminar tarea: ' + err.message);
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -147,7 +258,7 @@ export default function KanbanTasksPage() {
                 let urgent = 0;
                 let upcoming = 0;
 
-                mData.forEach((t: any) => { // Using any for maintenance data as its structure is complex
+                mData.forEach((t: any) => {
                     if (t.task_type === 'date' && t.next_due_date) {
                         const due = new Date(t.next_due_date);
                         const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -162,7 +273,7 @@ export default function KanbanTasksPage() {
                 setMaintenanceStats({ urgent, upcoming });
             }
 
-            // 6. Fetch Roles from Command Center
+            // 6. Fetch Roles
             const { data: settingsData } = await supabase
                 .from('app_settings')
                 .select('value')
@@ -207,7 +318,6 @@ export default function KanbanTasksPage() {
         try {
             const uploadedUrls = [];
 
-            // 1. Upload Attachments to Storage
             for (const file of tempFiles) {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
@@ -226,14 +336,13 @@ export default function KanbanTasksPage() {
                 uploadedUrls.push(publicUrl);
             }
 
-            // 2. Insert Task to DB
             const { error } = await supabase
                 .from('admin_tasks')
                 .insert([{
                     ...newTask,
                     created_by: user?.id,
                     assigned_to: newTask.assigned_to || null,
-                    status: 'todo',
+                    status: newTaskStatus,
                     attachments: uploadedUrls,
                     scheduled_start: newTask.scheduled_start || null,
                     due_date: newTask.due_date || null
@@ -255,6 +364,8 @@ export default function KanbanTasksPage() {
     };
 
     const updateTaskStatus = async (taskId: string, newStatus: string) => {
+        // Optimistic update
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as any } : t));
         try {
             const { error } = await supabase
                 .from('admin_tasks')
@@ -268,16 +379,15 @@ export default function KanbanTasksPage() {
             const errMsg = err?.message || err?.details || JSON.stringify(err);
             console.error('Error message:', errMsg);
             window.showToast?.('Error al actualizar estado: ' + errMsg, 'error');
-            fetchData();
+            fetchData(); // Rollback on error
         }
     };
 
-    // Filter staff based on selected role
     const filteredStaff = staff.filter(s => s.is_active && s.role === newTask.target_role);
 
     const columns = [
-        { id: 'todo', title: 'Pendientes', color: '#FEE2E2', textColor: '#991B1B' },
-        { id: 'in_progress', title: 'En Ejecución', color: '#FEF3C7', textColor: '#92400E' },
+        { id: 'todo', title: 'Pendientes', color: '#FEE2E2', textColor: '#B91C1C' },
+        { id: 'in_progress', title: 'En Ejecución', color: '#FEF3C7', textColor: '#D97706' },
         { id: 'done', title: 'Terminadas', color: '#DCFCE7', textColor: '#15803D' }
     ];
 
@@ -292,11 +402,14 @@ export default function KanbanTasksPage() {
                         <Link href="/admin/commercial/inventory" style={{ color: '#64748B', textDecoration: 'none', fontWeight: '600', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                             ← Volver a Inventario
                         </Link>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Tablero Kanban Administrativo</h1>
-                        <p style={{ color: '#64748B', fontSize: '1.1rem' }}>Gestión ágil de tareas y prioridades operativas.</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Tablero Trello Operativo</h1>
+                            <span style={{ backgroundColor: '#2563EB', color: 'white', fontSize: '0.65rem', fontWeight: '800', padding: '4px 8px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Beta Drag & Drop</span>
+                        </div>
+                        <p style={{ color: '#64748B', fontSize: '1.1rem' }}>Arrastra y suelta tarjetas entre columnas para gestionar tareas en tiempo real.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        <Link href="/admin/master/products" style={{ textDecoration: 'none' }}>
+                        <Link href="/admin/commercial/inventory/tasks" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
                                     backgroundColor: '#F8FAFC', color: '#1E293B', border: '1px solid #E2E8F0', padding: '1rem 1.5rem', 
@@ -305,27 +418,30 @@ export default function KanbanTasksPage() {
                                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
                                 }}
                             >
-                                <span>📚</span> Catálogo Maestro
+                                <span>📋</span> Vista Clásica
                             </button>
                         </Link>
                         <button 
-                            onClick={() => setIsModalOpen(true)}
+                            onClick={() => {
+                                setNewTaskStatus('todo');
+                                setIsModalOpen(true);
+                            }}
                             style={{ 
                                 backgroundColor: '#2563EB', color: 'white', border: 'none', padding: '1rem 2rem', 
                                 borderRadius: '14px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.2)',
                                 display: 'flex', alignItems: 'center', gap: '0.5rem'
                             }}
                         >
-                            <span>✚</span> Nueva Tarea
+                            <span>✚</span> Nueva Tarjeta
                         </button>
                     </div>
                 </div>
 
                 {/* Mini Dashboard */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '3rem' }}>
-                    <StatCard title="Total Tareas" value={tasks.length} color="#EFF6FF" textColor="#1D4ED8" />
+                    <StatCard title="Total Tarjetas" value={tasks.length} color="#EFF6FF" textColor="#1D4ED8" />
                     <StatCard title="Alta Prioridad" value={tasks.filter(t => t.priority === 'high').length} color="#FEF2F2" textColor="#B91C1C" />
-                    <StatCard title="En Curso" value={tasks.filter(t => t.status === 'in_progress').length} color="#FFFBEB" textColor="#92400E" />
+                    <StatCard title="En Ejecución" value={tasks.filter(t => t.status === 'in_progress').length} color="#FFFBEB" textColor="#92400E" />
                     <StatCard title="Mis Vencidas" value={myOverdueTasks.length} color={myOverdueTasks.length > 0 ? '#FEF2F2' : '#F0FDF4'} textColor={myOverdueTasks.length > 0 ? '#EF4444' : '#166534'} />
                 </div>
 
@@ -343,232 +459,205 @@ export default function KanbanTasksPage() {
                     </button>
                 </div>
 
-                {/* Kanban Board */}
+                {/* Trello Kanban Board */}
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '5rem', color: '#64748B' }}>🔄 Cargando tablero...</div>
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
-                        {columns.map(col => (
-                            <div key={col.id} style={{ backgroundColor: '#F1F5F9', borderRadius: '20px', padding: '1.5rem', minHeight: '600px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                    <h3 style={{ margin: 0, fontWeight: '800', color: col.textColor, textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
-                                        {col.title} <span style={{ backgroundColor: 'white', padding: '2px 8px', borderRadius: '6px', marginLeft: '8px', fontSize: '0.75rem' }}>{tasks.filter(t => t.status === col.id).length}</span>
-                                    </h3>
-                                </div>
+                        {columns.map(col => {
+                            const isOver = dragOverColumn === col.id;
+                            const colTasks = tasks.filter(t => {
+                                if (col.id === 'done') return showArchived ? (t.status === 'done' || t.status === 'archived') : (t.status === 'done');
+                                return t.status === col.id;
+                            });
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    {col.id === 'todo' && myPendingCount > 0 && (
-                                        <div style={{ 
-                                            backgroundColor: '#F0F9FF', borderRadius: '16px', padding: '1.25rem', 
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '2px solid #0EA5E9',
-                                            marginBottom: '0.5rem', position: 'relative', overflow: 'hidden'
-                                        }}>
-                                            <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: '#0EA5E9' }}></div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#E0F2FE', color: '#0369A1' }}>RESUMEN PERSONAL</span>
-                                                <span style={{ fontSize: '1.1rem' }}>👤</span>
-                                            </div>
-                                            <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#0369A1' }}>Mis Tareas</h4>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.85rem', color: '#0C4A6E' }}>Pendientes hoy:</span>
-                                                    <span style={{ fontWeight: '900', color: '#0EA5E9' }}>{myPendingCount}</span>
-                                                </div>
-                                                {myOverdueTasks.length > 0 && (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '4px 8px', borderRadius: '8px' }}>
-                                                        <span style={{ fontSize: '0.85rem', color: '#991B1B', fontWeight: '700' }}>🚨 VENCIDAS:</span>
-                                                        <span style={{ fontWeight: '950', color: '#EF4444' }}>{myOverdueTasks.length}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+                            return (
+                                <div 
+                                    key={col.id} 
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = 'move';
+                                    }}
+                                    onDragEnter={() => setDragOverColumn(col.id)}
+                                    onDragLeave={() => setDragOverColumn(prev => prev === col.id ? null : prev)}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const taskId = e.dataTransfer.getData('text/plain') || draggingTaskId;
+                                        if (taskId) {
+                                            updateTaskStatus(taskId, col.id);
+                                        }
+                                        setDragOverColumn(null);
+                                        setDraggingTaskId(null);
+                                    }}
+                                    style={{ 
+                                        backgroundColor: isOver ? '#E2E8F0' : '#F1F5F9', 
+                                        borderRadius: '20px', 
+                                        padding: '1.5rem', 
+                                        minHeight: '600px',
+                                        border: isOver ? `2px dashed ${col.textColor}` : '2px solid transparent',
+                                        transition: 'all 0.2s ease',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '1rem'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                        <h3 style={{ margin: 0, fontWeight: '800', color: col.textColor, textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
+                                            {col.title} <span style={{ backgroundColor: 'white', padding: '2px 8px', borderRadius: '6px', marginLeft: '8px', fontSize: '0.75rem', color: '#475569' }}>{colTasks.length}</span>
+                                        </h3>
+                                    </div>
 
-                                    {col.id === 'todo' && (maintenanceStats.urgent > 0 || maintenanceStats.upcoming > 0) && (
-                                        <div style={{ 
-                                            backgroundColor: '#FFF1F2', borderRadius: '16px', padding: '1.25rem', 
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '2px solid #F43F5E',
-                                            marginBottom: '0.5rem', position: 'relative', overflow: 'hidden'
-                                        }}>
-                                            <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: '#F43F5E' }}></div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#FFE4E6', color: '#9F1239' }}>SISTEMA / FLOTA</span>
-                                                <span style={{ fontSize: '1.1rem' }}>🚛</span>
-                                            </div>
-                                            <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#9F1239' }}>Resumen de Flota</h4>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                {maintenanceStats.urgent > 0 && (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '4px 8px', borderRadius: '8px' }}>
-                                                        <span style={{ fontSize: '0.85rem', color: '#991B1B', fontWeight: '700' }}>🚨 VENCIDAS:</span>
-                                                        <span style={{ fontWeight: '950', color: '#EF4444' }}>{maintenanceStats.urgent}</span>
-                                                    </div>
-                                                )}
-                                                {maintenanceStats.upcoming > 0 && (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <span style={{ fontSize: '0.85rem', color: '#9F1239' }}>Próximas (&#60;30d/1500km):</span>
-                                                        <span style={{ fontWeight: '900', color: '#F43F5E' }}>{maintenanceStats.upcoming}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <Link href="/admin/transport?tab=maintenance" style={{ 
-                                                display: 'block', width: '100%', marginTop: '1rem', padding: '0.6rem', border: 'none', 
-                                                borderRadius: '10px', backgroundColor: '#F43F5E', color: 'white', 
-                                                fontSize: '0.8rem', fontWeight: '800', cursor: 'pointer', textAlign: 'center', textDecoration: 'none'
-                                            }}>
-                                                Ver Mantenimientos
-                                            </Link>
-                                        </div>
-                                    )}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
 
-                                    {col.id === 'todo' && incompleteCount > 0 && (
-                                        <div style={{ 
-                                            backgroundColor: '#FFF7ED', borderRadius: '16px', padding: '1.25rem', 
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '2px solid #F97316',
-                                            marginBottom: '1rem', position: 'relative', overflow: 'hidden'
-                                        }}>
-                                            <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: '#F97316' }}></div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', backgroundColor: '#FFEDD5', color: '#9A3412' }}>SISTEMA / FACTURACIÓN</span>
-                                                <span style={{ fontSize: '0.7rem', color: '#C2410C', fontWeight: 'bold' }}>Hoy</span>
-                                            </div>
-                                            <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '900', color: '#9A3412' }}>🚨 Proveedores Incompletos</h4>
-                                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#7C2D12', lineHeight: '1.4' }}>
-                                                Se han detectado <strong>{incompleteCount}</strong> proveedores sin información bancaria completa. 
-                                            </p>
-                                            <Link href="/admin/commercial/billing" style={{ textDecoration: 'none' }}>
-                                                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: 'none', backgroundColor: '#F97316', color: 'white', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer' }}>
-                                                    Ir a Completar Datos
-                                                </button>
-                                            </Link>
-                                        </div>
-                                    )}
 
-                                    {tasks.filter(t => {
-                                        if (col.id === 'done') return showArchived ? (t.status === 'done' || t.status === 'archived') : (t.status === 'done');
-                                        return t.status === col.id;
-                                    }).map(task => {
-                                        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done' && task.status !== 'archived';
-                                        const isArchived = task.status === 'archived';
-                                        return (
-                                            <div key={task.id} style={{ 
-                                                backgroundColor: isArchived ? '#F8FAFC' : 'white', borderRadius: '16px', padding: '1.25rem', 
-                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: isOverdue ? '2px solid #EF4444' : isArchived ? '1px dashed #CBD5E1' : '1px solid #E2E8F0',
-                                                cursor: 'pointer', transition: 'transform 0.2s', opacity: isArchived ? 0.7 : 1
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                                            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                    <span style={{ 
-                                                        fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px',
-                                                        backgroundColor: task.priority === 'high' ? '#FEE2E2' : task.priority === 'medium' ? '#FEF3C7' : '#F1F5F9',
-                                                        color: task.priority === 'high' ? '#991B1B' : task.priority === 'medium' ? '#92400E' : '#475569'
-                                                    }}>
-                                                        {task.priority || 'medium'}
-                                                    </span>
-                                                    <div style={{ 
-                                                        display: 'flex', alignItems: 'center', gap: '6px', 
-                                                        backgroundColor: isOverdue ? '#FEF2F2' : '#F8FAFC', 
-                                                        padding: '4px 10px', borderRadius: '10px', 
-                                                        border: `1px solid ${isOverdue ? '#FEE2E2' : '#E2E8F0'}`,
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-                                                    }}>
-                                                        <span style={{ fontSize: '0.9rem' }}>{isOverdue ? '⚠️' : '📅'}</span>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
-                                                            <span style={{ fontSize: '0.6rem', fontWeight: '800', color: isOverdue ? '#EF4444' : '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: '1' }}>
-                                                                Cronograma
-                                                            </span>
-                                                            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: isOverdue ? '#991B1B' : '#475569', whiteSpace: 'nowrap' }}>
-                                                                {task.scheduled_start && task.due_date ? (
-                                                                    <>
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>del</span> {new Date(task.scheduled_start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} 
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}> al </span> {new Date(task.due_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                                    </>
-                                                                ) : task.due_date ? (
-                                                                    <>
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>vence </span> {new Date(task.due_date).toLocaleDateString()}
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>creado </span> {new Date(task.created_at).toLocaleDateString()}
-                                                                    </>
-                                                                )}
+                                        {/* Task Cards */}
+                                        {colTasks.map(task => {
+                                            const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done' && task.status !== 'archived';
+                                            const isArchived = task.status === 'archived';
+                                            const isDragging = draggingTaskId === task.id;
+
+                                            return (
+                                                <div 
+                                                    key={task.id} 
+                                                    draggable={true}
+                                                    onDragStart={(e) => {
+                                                        setDraggingTaskId(task.id);
+                                                        e.dataTransfer.setData('text/plain', task.id);
+                                                        e.dataTransfer.effectAllowed = 'move';
+                                                    }}
+                                                    onDragEnd={() => setDraggingTaskId(null)}
+                                                    onClick={() => {
+                                                        setEditingTask(task);
+                                                        setIsModalOpen(true);
+                                                    }}
+                                                    style={{ 
+                                                        backgroundColor: isArchived ? '#F8FAFC' : 'white', 
+                                                        borderRadius: '16px', 
+                                                        padding: '1.25rem', 
+                                                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', 
+                                                        border: isOverdue ? '2px solid #EF4444' : isArchived ? '1px dashed #CBD5E1' : '1px solid #E2E8F0',
+                                                        cursor: 'grab', 
+                                                        transition: 'all 0.2s', 
+                                                        opacity: isDragging ? 0.3 : isArchived ? 0.7 : 1,
+                                                        transform: isDragging ? 'scale(0.95)' : 'none'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (!isDragging) e.currentTarget.style.transform = 'translateY(-2px)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (!isDragging) e.currentTarget.style.transform = 'translateY(0)';
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'start' }}>
+                                                        <span style={{ 
+                                                            fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px',
+                                                            backgroundColor: task.priority === 'high' ? '#FEE2E2' : task.priority === 'medium' ? '#FEF3C7' : '#F1F5F9',
+                                                            color: task.priority === 'high' ? '#991B1B' : task.priority === 'medium' ? '#92400E' : '#475569'
+                                                        }}>
+                                                            {task.priority || 'medium'}
+                                                        </span>
+                                                        <div style={{ 
+                                                            display: 'flex', alignItems: 'center', gap: '6px', 
+                                                            backgroundColor: isOverdue ? '#FEF2F2' : '#F8FAFC', 
+                                                            padding: '2px 6px', borderRadius: '8px', 
+                                                            border: `1px solid ${isOverdue ? '#FEE2E2' : '#E2E8F0'}`
+                                                        }}>
+                                                            <span style={{ fontSize: '0.8rem' }}>{isOverdue ? '⚠️' : '📅'}</span>
+                                                            <span style={{ fontSize: '0.68rem', fontWeight: '700', color: isOverdue ? '#991B1B' : '#475569' }}>
+                                                                {task.due_date ? new Date(task.due_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'Sin fecha'}
                                                             </span>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '700', color: '#1E293B' }}>{task.title}</h4>
-                                                <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#64748B', lineHeight: '1.5' }}>{task.description}</p>
-                                                
-
-                                                {/* Attachments Preview */}
-                                                {task.attachments && task.attachments.length > 0 && (
-                                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                                                        {task.attachments.slice(0, 3).map((url, i) => (
-                                                            <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '40px', height: '40px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E8F0', backgroundColor: '#F9FAFB' }} onClick={(e) => e.stopPropagation()}>
-                                                                {url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                                    <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                                ) : (
-                                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>📄</div>
-                                                                )}
-                                                            </a>
-                                                        ))}
-                                                        {task.attachments.length > 3 && (
-                                                            <div style={{ fontSize: '0.7rem', color: '#94A3B8', alignSelf: 'center' }}>+{task.attachments.length - 3} más</div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.8rem', borderTop: '1px solid #F1F5F9' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.5rem', fontWeight: '900' }}>
-                                                            {task.profiles?.contact_name?.[0] || '?'}
+                                                    <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: '700', color: '#1E293B', fontSize: '0.95rem' }}>{task.title}</h4>
+                                                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: '#64748B', lineHeight: '1.4' }}>{task.description}</p>
+                                                    
+                                                    {/* Attachments Preview */}
+                                                    {task.attachments && task.attachments.length > 0 && (
+                                                        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                                            {task.attachments.slice(0, 3).map((url, i) => (
+                                                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '35px', height: '35px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #E2E8F0', backgroundColor: '#F9FAFB' }} onClick={(e) => e.stopPropagation()}>
+                                                                    {url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                                        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                    ) : (
+                                                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>📄</div>
+                                                                    )}
+                                                                </a>
+                                                            ))}
                                                         </div>
-                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                            <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#1E293B' }}>{task.profiles?.contact_name || 'Sin asignar'}</span>
-                                                            {task.profiles?.role && (
-                                                                <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                                                    {roles.find((r: Role) => r.value === task.profiles?.role)?.label || task.profiles?.role}
-                                                                </span>
+                                                    )}
+
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.8rem', borderTop: '1px solid #F1F5F9' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                            <div style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: '950', color: '#475569' }}>
+                                                                {task.profiles?.contact_name?.[0] || '?'}
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#1E293B' }}>{task.profiles?.contact_name || 'Sin asignar'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                            {task.status === 'done' && (
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); updateTaskStatus(task.id, 'archived'); }}
+                                                                    title="Archivar"
+                                                                    style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
+                                                                >
+                                                                    📦
+                                                                </button>
+                                                            )}
+                                                            {task.status === 'archived' && (
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); updateTaskStatus(task.id, 'done'); }}
+                                                                    title="Desarchivar"
+                                                                    style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
+                                                                >
+                                                                    📤
+                                                                </button>
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                                        <select 
-                                                            value={task.status} 
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            onChange={(e) => updateTaskStatus(task.id, e.target.value)}
-                                                            style={{ fontSize: '0.7rem', border: 'none', backgroundColor: '#F8FAFC', padding: '2px 5px', borderRadius: '4px', fontWeight: 'Bold', color: '#2563EB' }}
-                                                        >
-                                                            {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                                                            {task.status === 'archived' && <option value="archived">Archivada</option>}
-                                                        </select>
-                                                        {task.status === 'done' && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); updateTaskStatus(task.id, 'archived'); }}
-                                                                title="Archivar tarea"
-                                                                style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
-                                                            >
-                                                                📦
-                                                            </button>
-                                                        )}
-                                                        {task.status === 'archived' && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); updateTaskStatus(task.id, 'done'); }}
-                                                                title="Desarchivar"
-                                                                style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
-                                                            >
-                                                                📤
-                                                            </button>
-                                                        )}
-                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+
+                                        {/* Trello Style Column Quick Add Card Button */}
+                                        <button 
+                                            onClick={() => {
+                                                setNewTaskStatus(col.id as any);
+                                                setIsModalOpen(true);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.65rem',
+                                                border: '1px dashed #CBD5E1',
+                                                borderRadius: '12px',
+                                                background: 'transparent',
+                                                color: '#64748B',
+                                                fontWeight: '700',
+                                                fontSize: '0.8rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '0.4rem',
+                                                transition: 'all 0.2s',
+                                                marginTop: 'auto'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
+                                                e.currentTarget.style.color = '#1E293B';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.background = 'transparent';
+                                                e.currentTarget.style.color = '#64748B';
+                                            }}
+                                        >
+                                            <span>➕</span> Añadir una tarjeta
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
 
@@ -577,11 +666,16 @@ export default function KanbanTasksPage() {
                     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
                         <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A' }}>Nueva Tarea</h2>
-                                <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}>✕</button>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A' }}>{editingTask ? 'Editar Tarjeta' : 'Nueva Tarjeta'}</h2>
+                                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>
+                                        En columna: <span style={{ color: '#2563EB' }}>{columns.find(c => c.id === newTaskStatus)?.title}</span>
+                                    </span>
+                                </div>
+                                <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}>✕</button>
                             </div>
                             
-                            <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <form onSubmit={editingTask ? handleUpdateTask : handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 <div>
                                     <label style={labelStyle}>Asunto / Título</label>
                                     <input 
@@ -624,7 +718,6 @@ export default function KanbanTasksPage() {
                                     </div>
                                 </div>
 
-                                {/* Multi-Attachment Input */}
                                 <div>
                                     <label style={labelStyle}>Adjuntos</label>
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
@@ -692,9 +785,19 @@ export default function KanbanTasksPage() {
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                                    {editingTask && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleDeleteTask} 
+                                            style={{ padding: '0.8rem 1.2rem', borderRadius: '12px', border: '1px solid #FEE2E2', backgroundColor: '#FEF2F2', color: '#EF4444', fontWeight: '700', cursor: 'pointer' }}
+                                            title="Eliminar tarea permanentemente"
+                                        >
+                                            🗑️
+                                        </button>
+                                    )}
                                     <button 
                                         type="button"
-                                        onClick={() => setIsModalOpen(false)} 
+                                        onClick={closeModal} 
                                         style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', backgroundColor: 'transparent', fontWeight: '700', cursor: 'pointer' }}
                                     >
                                         Cancelar
@@ -704,7 +807,7 @@ export default function KanbanTasksPage() {
                                         disabled={!newTask.assigned_to || !newTask.priority || !newTask.target_role || uploading}
                                         style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', backgroundColor: (newTask.assigned_to && newTask.priority && newTask.target_role && !uploading) ? '#2563EB' : '#94A3B8', color: 'white', fontWeight: '800', cursor: (newTask.assigned_to && newTask.priority && newTask.target_role && !uploading) ? 'pointer' : 'not-allowed' }}
                                     >
-                                        {uploading ? 'SUBIENDO...' : 'CREAR TAREA'}
+                                        {uploading ? 'SUBIENDO...' : editingTask ? 'GUARDAR' : 'CREAR TARJETA'}
                                     </button>
                                 </div>
                             </form>

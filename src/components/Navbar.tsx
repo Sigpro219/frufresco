@@ -124,6 +124,17 @@ export default function Navbar() {
         }
     }, [appName, locale]);
 
+    useEffect(() => {
+        if (mobileOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [mobileOpen]);
+
     // Persistent Language Logic
     useEffect(() => {
         const savedLang = localStorage.getItem('frufresco_lang');
@@ -347,6 +358,9 @@ export default function Navbar() {
                         <>
                             <Link href="/" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2} /> {t.navHome}
+                            </Link>
+                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <ShoppingBag size={18} strokeWidth={2} /> {t.navCatalog || 'Catálogo'}
                             </Link>
                             {hasPermission('commercial') && (
                                 <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -797,7 +811,7 @@ export default function Navbar() {
                         borderBottom: `1px solid ${THEME.colors.border}`,
                         boxShadow: THEME.shadow.lg,
                         zIndex: 200,
-                        maxHeight: 'calc(100vh - 85px)',
+                        maxHeight: 'calc(100dvh - 95px)',
                         overflowY: 'auto',
                     }}
                 >
@@ -807,6 +821,24 @@ export default function Navbar() {
                             <User size={16} color={THEME.colors.primary} />
                             <span style={{ fontWeight: '600', fontSize: '0.9rem', color: THEME.colors.textMain }}>{profile?.contact_name || profile?.company_name || user.email?.split('@')[0]}</span>
                         </div>
+                    )}
+
+                    {/* General navigation links (Visible to all users) */}
+                    {mounted && (
+                        <>
+                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
+                            </Link>
+                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
+                            </Link>
+                            {/* B2B Institutional link for staff with commercial permissions */}
+                            {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && hasPermission('commercial') && (
+                                <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Building2 size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navInstitutional}
+                                </Link>
+                            )}
+                        </>
                     )}
 
                     {/* Navigation links for admin/employee */}
@@ -886,20 +918,14 @@ export default function Navbar() {
                         </>
                     )}
 
-                    {/* Guest links */}
-                    {mounted && !user && (
-                        <>
-                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
-                            </Link>
-                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
-                            </Link>
-                        </>
-                    )}
-
                     {/* Auth actions */}
-                    <div style={{ padding: '16px 20px', display: 'flex', gap: '12px', borderTop: `2px solid ${THEME.colors.border}` }}>
+                    <div style={{ 
+                        padding: '16px 20px 40px 20px', 
+                        display: 'flex', 
+                        gap: '12px', 
+                        borderTop: `2px solid ${THEME.colors.border}`,
+                        backgroundColor: 'white'
+                    }}>
                         {mounted && user ? (
                             <button
                                 onClick={() => { signOut(); setMobileOpen(false); }}

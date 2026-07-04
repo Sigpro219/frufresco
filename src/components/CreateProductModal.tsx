@@ -85,8 +85,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     console.warn('CreateModal: No master table found, using defaults.');
                     return;
                 }
-                if (data && data.length > 0) {
-                    setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                                if (data && data.length > 0) {
+                    setMasterAttributes(data.map(attr => ({ 
+                        name: attr.name, 
+                        values: attr.suggested_values,
+                        show_on_web: attr.show_on_web !== false
+                    })));
                 }
             } catch (err) {
                 console.warn('CreateModal: Error fetching master attributes.');
@@ -299,7 +303,14 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                 .insert([{
                     ...formData,
                     image_url: uploadedImageUrl,
-                    options_config: options,
+                    options_config: options.map(opt => {
+                        const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
+                        return {
+                            name: opt.name,
+                            values: opt.values,
+                            show_on_web: attr ? attr.show_on_web !== false : true
+                        };
+                    }),
                     variants: variants,
                     iva_rate: formData.iva_rate,
                     name_en: formData.name_en,
@@ -803,20 +814,20 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.5rem' }}>
                                             <select
-                                                value={masterAttributes.some(a => a.name === opt.name) ? opt.name : (opt.name ? 'Personalizado' : '')}
+                                                value={opt.name}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
-                                                    if (val === 'Personalizado') updateOption(idx, '', '');
-                                                    else {
+                                                    if (val) {
                                                         const master = masterAttributes.find(a => a.name === val);
                                                         updateOption(idx, val, master?.values.join(', ') || '');
+                                                    } else {
+                                                        updateOption(idx, '', '');
                                                     }
                                                 }}
                                                 style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid #D1D5DB', fontSize: '0.75rem', fontWeight: '700' }}
                                             >
                                                 <option value="">-- Variable --</option>
                                                 {masterAttributes.map(attr => <option key={attr.name} value={attr.name}>{attr.name}</option>)}
-                                                <option value="Personalizado">+ Otra...</option>
                                             </select>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                 {opt.values.slice(0, 4).map(v => <span key={v} style={{ fontSize: '0.65rem', padding: '2px 6px', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #E5E7EB' }}>{v}</span>)}

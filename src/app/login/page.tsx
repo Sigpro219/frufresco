@@ -5,11 +5,12 @@ import { useAuth } from '../../lib/authContext';
 import { supabase } from '../../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key } from 'lucide-react';
+import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { signIn, profile, user, signOut } = useAuth();
@@ -19,6 +20,8 @@ export default function LoginPage() {
     const [showForceChangePassword, setShowForceChangePassword] = useState(false);
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [changeSuccess, setChangeSuccess] = useState(false);
 
     // Capturar error de desactivación
@@ -266,13 +269,13 @@ export default function LoginPage() {
                                                     </div>
                                                     <input
                                                         required
-                                                        type="password"
+                                                        type={showNewPassword ? "text" : "password"}
                                                         value={newPassword}
                                                         onChange={(e) => setNewPassword(e.target.value)}
                                                         placeholder="Mínimo 6 caracteres"
                                                         style={{ 
                                                             width: '100%', 
-                                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                            padding: '0.7rem 3rem 0.7rem 2.8rem', 
                                                             borderRadius: '14px', 
                                                             border: '1px solid rgba(255,255,255,0.1)',
                                                             backgroundColor: 'rgba(255,255,255,0.05)',
@@ -283,6 +286,32 @@ export default function LoginPage() {
                                                         }}
                                                         className="login-input"
                                                     />
+                                                    <button
+                                                        type="button"
+                                                        onMouseDown={() => setShowNewPassword(true)}
+                                                        onMouseUp={() => setShowNewPassword(false)}
+                                                        onMouseLeave={() => setShowNewPassword(false)}
+                                                        onTouchStart={() => setShowNewPassword(true)}
+                                                        onTouchEnd={() => setShowNewPassword(false)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '12px',
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            color: showNewPassword ? '#10B981' : 'rgba(255,255,255,0.4)',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            padding: '0.2rem',
+                                                            userSelect: 'none',
+                                                            touchAction: 'none'
+                                                        }}
+                                                        title="Mantén presionado para ver la contraseña"
+                                                    >
+                                                        {showNewPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                                                    </button>
                                                 </div>
                                             </div>
 
@@ -296,13 +325,13 @@ export default function LoginPage() {
                                                     </div>
                                                     <input
                                                         required
-                                                        type="password"
+                                                        type={showConfirmPassword ? "text" : "password"}
                                                         value={confirmPassword}
                                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                                         placeholder="Repite tu contraseña"
                                                         style={{ 
                                                             width: '100%', 
-                                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                            padding: '0.7rem 3rem 0.7rem 2.8rem', 
                                                             borderRadius: '14px', 
                                                             border: '1px solid rgba(255,255,255,0.1)',
                                                             backgroundColor: 'rgba(255,255,255,0.05)',
@@ -313,6 +342,32 @@ export default function LoginPage() {
                                                         }}
                                                         className="login-input"
                                                     />
+                                                    <button
+                                                        type="button"
+                                                        onMouseDown={() => setShowConfirmPassword(true)}
+                                                        onMouseUp={() => setShowConfirmPassword(false)}
+                                                        onMouseLeave={() => setShowConfirmPassword(false)}
+                                                        onTouchStart={() => setShowConfirmPassword(true)}
+                                                        onTouchEnd={() => setShowConfirmPassword(false)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '12px',
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            color: showConfirmPassword ? '#10B981' : 'rgba(255,255,255,0.4)',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            padding: '0.2rem',
+                                                            userSelect: 'none',
+                                                            touchAction: 'none'
+                                                        }}
+                                                        title="Mantén presionado para ver la contraseña"
+                                                    >
+                                                        {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                                                    </button>
                                                 </div>
                                             </div>
 
@@ -436,13 +491,13 @@ export default function LoginPage() {
                                             </div>
                                             <input
                                                 required
-                                                type="password"
+                                                type={showPassword ? "text" : "password"}
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 placeholder="••••••••"
                                                 style={{ 
                                                     width: '100%', 
-                                                    padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                    padding: '0.7rem 3rem 0.7rem 2.8rem', 
                                                     borderRadius: '14px', 
                                                     border: '1px solid rgba(255,255,255,0.1)',
                                                     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -453,6 +508,32 @@ export default function LoginPage() {
                                                 }}
                                                 className="login-input"
                                             />
+                                            <button
+                                                type="button"
+                                                onMouseDown={() => setShowPassword(true)}
+                                                onMouseUp={() => setShowPassword(false)}
+                                                onMouseLeave={() => setShowPassword(false)}
+                                                onTouchStart={() => setShowPassword(true)}
+                                                onTouchEnd={() => setShowPassword(false)}
+                                                style={{
+                                                    position: 'absolute',
+                                                    right: '12px',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    color: showPassword ? '#10B981' : 'rgba(255,255,255,0.4)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    padding: '0.2rem',
+                                                    userSelect: 'none',
+                                                    touchAction: 'none'
+                                                }}
+                                                title="Mantén presionado para ver la contraseña"
+                                            >
+                                                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                                            </button>
                                         </div>
                                     </div>
 
