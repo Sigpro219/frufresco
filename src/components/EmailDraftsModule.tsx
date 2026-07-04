@@ -247,6 +247,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  const safeFetchJson = async (res: Response) => {
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      if (!res.ok) {
+        throw new Error(text || `Error de servidor (${res.status})`);
+      }
+      throw new Error(`Respuesta no válida del servidor: ${text.slice(0, 100)}`);
+    }
+    
+    if (!res.ok) {
+      throw new Error(json.error || `Error del servidor (${res.status})`);
+    }
+    
+    return json;
+  };
+
   useEffect(() => {
     async function loadClientExceptions() {
       if (!selectedDraft || !selectedDraft.profile_id) {
@@ -722,10 +741,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Error en el servidor');
-          }
+          await safeFetchJson(res);
 
           showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️', 'success');
           setSelectedDraft(null);
@@ -944,10 +960,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Error en el servidor');
-          }
+          await safeFetchJson(res);
 
           setRecentlyDeletedItems([]);
           setSelectedDraft((prev: any) => ({
@@ -1053,7 +1066,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setGeocoding(true);
       setDraftCoordinates(null);
       fetch(`/api/geocode?address=${encodeURIComponent(addressVal)}&city=Bogotá`)
-        .then(res => res.json())
+        .then(async res => {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (!res.ok) throw new Error(data.error || `Error (${res.status})`);
+            return data;
+          } catch {
+            if (!res.ok) throw new Error(text || `Error (${res.status})`);
+            throw new Error('Respuesta no válida del geocodificador');
+          }
+        })
         .then(data => {
           if (data.status === 'OK' && data.results && data.results.length > 0) {
             const loc = data.results[0].geometry.location;
@@ -4503,10 +4526,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   })
                                 });
 
-                                if (!res.ok) {
-                                  const errData = await res.json();
-                                  throw new Error(errData.error || 'Error en el servidor');
-                                }
+                                await safeFetchJson(res);
+
 
                                 setRecentlyDeletedItems([]);
                                 showToast('Novedades notificadas consolidadas al cliente por correo. ✉️', 'success');
@@ -5515,12 +5536,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         })
                       });
 
-                      if (!res.ok) {
-                        const errData = await res.json();
-                        throw new Error(errData.error || 'Error en el servidor');
-                      }
-
-                      const data = await res.json();
+                      const data = await safeFetchJson(res);
                       if (data.warning) {
                         showToast(data.warning, 'info');
                       } else {

@@ -1013,12 +1013,20 @@ function CreateOrderContent() {
                 body: formData
             });
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Error en la API de extracción');
+            const responseText = await response.text();
+            let data: any = null;
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                if (!response.ok) {
+                    throw new Error(responseText || `Error de servidor (${response.status})`);
+                }
+                throw new Error('Respuesta no válida de la API de extracción');
             }
 
-            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Error en la API de extracción');
+            }
             
             // Intentamos encontrar el mejor SKU sugerido para cada item extraído por la IA
             const suggested = data.items.map((item: any) => {
@@ -1110,7 +1118,13 @@ function CreateOrderContent() {
         setIsGettingLocation(true);
         try {
             const response = await fetch(`/api/geocode?address=${encodeURIComponent(addr)}&city=${encodeURIComponent(cty)}`);
-            const data = await response.json();
+            const text = await response.text();
+            let data: any = {};
+            try {
+                data = JSON.parse(text);
+            } catch {
+                throw new Error(text || `Error de geocodificación (${response.status})`);
+            }
 
             if (data.status === 'OK' && data.results && data.results.length > 0) {
                 const location = data.results[0].geometry.location;
@@ -1145,7 +1159,13 @@ function CreateOrderContent() {
             setIsGettingLocation(true);
             try {
                 const response = await fetch(`/api/geocode?address=${encodeURIComponent(guestInfo.address)}&city=${encodeURIComponent(guestInfo.city || 'Bogotá')}`);
-                const data = await response.json();
+                const text = await response.text();
+                let data: any = {};
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    console.error("Geocoding failed to parse response:", text);
+                }
 
                 if (data.status === 'OK' && data.results && data.results.length > 0) {
                     const location = data.results[0].geometry.location;
