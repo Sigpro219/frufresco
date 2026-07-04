@@ -3896,13 +3896,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>PRODUCTO ORIGINAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '6%' }}>CANT. ORIG.</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em', width: '130px' }}>UNIDADES</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '35%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '45%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3948,186 +3944,148 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         </td>
                                       )}
                                       <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        width: '15%', 
+                                        padding: '1rem 1rem', 
+                                        width: '35%', 
                                         backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
-                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
+                                        <div style={{ fontSize: '0.9rem', color: '#1E293B', textTransform: 'uppercase', fontWeight: 800 }}>
                                           {item.originalName || item.name || item.producto || item.item || ''}
+                                        </div>
+                                        <div style={{ marginTop: '6px' }}>
+                                          <span style={{
+                                            padding: '4px 10px',
+                                            backgroundColor: '#EFF6FF',
+                                            color: '#2563EB',
+                                            borderRadius: '20px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700
+                                          }}>
+                                            {item.originalQuantity || item.quantity || 1} unidades detectadas
+                                          </span>
                                         </div>
                                       </td>
                                       <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        textAlign: 'center', 
-                                        width: '6%', 
+                                        padding: '1rem 1rem', 
+                                        width: '45%', 
+                                        backgroundColor: getCellBgColor(i, false),
+                                        transition: 'background-color 0.2s'
+                                      }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+                                              <input
+                                                ref={el => { productInputRefs.current[i] = el; }}
+                                                disabled={!isEditing}
+                                                value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
+                                                placeholder="Buscar ID..."
+                                                list="all-products-list"
+                                                onFocus={(e) => e.target.select()}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Tab') {
+                                                    const val = e.currentTarget.value;
+                                                    const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                    if (p) {
+                                                      e.preventDefault();
+                                                      openVariantModalForItem(p, i);
+                                                    }
+                                                  } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = e.currentTarget.value;
+                                                    const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                    if (p) {
+                                                      const newEdits = [...editableItems];
+                                                      newEdits[i].matched_product_id = p.id;
+                                                      newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
+                                                      newEdits[i].skuQuery = p.sku || '';
+                                                      setEditableItems(newEdits);
+                                                    }
+                                                    const nextInput = productInputRefs.current[i + 1];
+                                                    if (nextInput) {
+                                                      nextInput.focus();
+                                                      nextInput.select();
+                                                    }
+                                                  }
+                                                }}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
+                                                    selectProduct(p, i);
+                                                  } else {
+                                                    const newEdits = [...editableItems];
+                                                    newEdits[i].matched_product_id = null;
+                                                    newEdits[i].searchQuery = val;
+                                                    newEdits[i].skuQuery = '';
+                                                    newEdits[i].selected_options = {};
+                                                    setEditableItems(newEdits);
+                                                  }
+                                                }}
+                                                style={{
+                                                  width: '100%',
+                                                  padding: '10px 14px',
+                                                  borderRadius: '10px',
+                                                  border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                  fontSize: '1rem',
+                                                  fontWeight: '700',
+                                                  backgroundColor: item.matched_product_id ? '#FFFFFF' : '#FFFBEB',
+                                                  outline: 'none',
+                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                  transition: 'all 0.2s'
+                                                }}
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td style={{ 
+                                        padding: '1rem 1rem', 
+                                        width: '20%', 
                                         backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
-                                        <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
-                                          {item.originalQuantity || item.quantity || item.cant || item.cantidad || ''}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                          <input 
+                                            type="number"
+                                            disabled={!isEditing}
+                                            value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                            onFocus={() => setFocusedRowIndex(i)}
+                                            onBlur={() => setFocusedRowIndex(null)}
+                                            onChange={(e) => {
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].quantity = parseFloat(e.target.value) || 0;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                // Añadir nueva fila
+                                                const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                                                setEditableItems(newEdits);
+                                                // Focus el nuevo input en el siguiente render
+                                                setTimeout(() => {
+                                                  const nextInput = productInputRefs.current[i + 1];
+                                                  if (nextInput) nextInput.focus();
+                                                }, 50);
+                                              }
+                                            }}
+                                            style={{
+                                              width: '70px',
+                                              padding: '8px',
+                                              textAlign: 'center',
+                                              borderRadius: '8px',
+                                              border: '2px solid #E2E8F0',
+                                              fontWeight: 800,
+                                              fontSize: '1.1rem',
+                                              backgroundColor: '#FFFFFF',
+                                              outline: 'none'
+                                            }}
+                                          />
+                                          <span style={{ fontWeight: 'bold', color: '#64748B', fontSize: '0.95rem', minWidth: '24px', textAlign: 'left' }}>
+                                            {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                          </span>
                                         </div>
                                       </td>
-                                    <td style={{ 
-                                      padding: '1rem 0.5rem', 
-                                      width: '30%', 
-                                      backgroundColor: getCellBgColor(i, false),
-                                      transition: 'background-color 0.2s'
-                                    }}>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
-                                            <input
-                                              ref={el => { productInputRefs.current[i] = el; }}
-                                              disabled={!isEditing}
-                                              value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
-                                              placeholder="Buscar ID..."
-                                              list="all-products-list"
-                                              onFocus={(e) => e.target.select()}
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'Tab') {
-                                                  const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                  if (p) {
-                                                    e.preventDefault();
-                                                    openVariantModalForItem(p, i);
-                                                  }
-                                                } else if (e.key === 'Enter') {
-                                                  e.preventDefault();
-                                                  const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                  if (p) {
-                                                    const newEdits = [...editableItems];
-                                                    newEdits[i].matched_product_id = p.id;
-                                                    newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
-                                                    newEdits[i].skuQuery = p.sku || '';
-                                                    setEditableItems(newEdits);
-                                                  }
-                                                  const nextInput = productInputRefs.current[i + 1];
-                                                  if (nextInput) {
-                                                    nextInput.focus();
-                                                    nextInput.select();
-                                                  }
-                                                }
-                                              }}
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                if (p) {
-                                                  selectProduct(p, i);
-                                                } else {
-                                                  const newEdits = [...editableItems];
-                                                  newEdits[i].matched_product_id = null;
-                                                  newEdits[i].searchQuery = val;
-                                                  newEdits[i].skuQuery = '';
-                                                  newEdits[i].selected_options = {};
-                                                  setEditableItems(newEdits);
-                                                }
-                                              }}
-                                              style={{
-                                                width: '100%',
-                                                padding: '10px 14px',
-                                                borderRadius: '10px',
-                                                border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
-                                                fontSize: '1rem',
-                                                fontWeight: '700',
-                                                backgroundColor: item.matched_product_id ? '#FFFFFF' : '#FFFBEB',
-                                                outline: 'none',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                transition: 'all 0.2s'
-                                              }}
-                                            />
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '130px' }}>
-                                      {isEditing ? (
-                                        <select
-                                          value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                          onFocus={() => setFocusedRowIndex(i)}
-                                          onBlur={() => setFocusedRowIndex(null)}
-                                          onChange={(e) => {
-                                            const newEdits = [...editableItems];
-                                            newEdits[i].unit = e.target.value;
-                                            setEditableItems(newEdits);
-                                          }}
-                                          style={{
-                                            width: '100%',
-                                            padding: '0.5rem 0.25rem',
-                                            borderRadius: '6px',
-                                            border: '1px solid #D1D5DB',
-                                            fontSize: '0.9rem',
-                                            backgroundColor: 'white',
-                                            fontWeight: 600,
-                                            color: '#111827'
-                                          }}
-                                        >
-                                          {Array.from(new Set(['Kg', 'Lb', 'Unidad', 'Litro', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 600 }}>
-                                          {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
-                                      <input 
-                                        type="number"
-                                        disabled={!isEditing}
-                                        value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
-                                        onFocus={() => setFocusedRowIndex(i)}
-                                        onBlur={() => setFocusedRowIndex(null)}
-                                        onChange={(e) => {
-                                          const newEdits = [...editableItems];
-                                          newEdits[i].quantity = parseFloat(e.target.value) || 0;
-                                          setEditableItems(newEdits);
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            // Añadir nueva fila
-                                            const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                                            setEditableItems(newEdits);
-                                            // Focus el nuevo input en el siguiente render
-                                            setTimeout(() => {
-                                              const nextInput = productInputRefs.current[i + 1];
-                                              if (nextInput) nextInput.focus();
-                                            }, 50);
-                                          }
-                                        }}
-                                        style={{
-                                          width: '90px',
-                                          padding: '0.5rem 0.25rem',
-                                          textAlign: 'center',
-                                          borderRadius: '6px',
-                                          border: '1px solid #10B981',
-                                          fontWeight: 800,
-                                          fontSize: '1rem'
-                                        }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
-                                      {matchedProd ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                          <span>{formatMoney(resolvedPrice)}</span>
-                                          {contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? (
-                                            <span style={{ fontSize: '0.6rem', padding: '1px 3px', borderRadius: '3px', backgroundColor: isB2CDefault ? '#FFE4E6' : '#DBEAFE', color: isB2CDefault ? '#BE123C' : '#1E40AF', fontWeight: 'bold' }}>
-                                              {isB2CDefault ? 'B2C' : 'Contrato'}
-                                            </span>
-                                          ) : (
-                                            <span style={{ fontSize: '0.6rem', padding: '1px 3px', borderRadius: '3px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
-                                              ⚠️ Sin Tarifa
-                                            </span>
-                                          )}
-                                        </div>
-                                      ) : '-'}
-                                    </td>
-                                    <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
-                                      {matchedProd ? formatMoney(itemTotal) : '-'}
-                                    </td>
                                   </tr>
                                   
                                   {false && (
