@@ -2346,7 +2346,9 @@ export default function OrderLoadingPage() {
                                         <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
                                             📌 REQUERIMIENTOS DEL CLIENTE:
                                         </div>
-                                        {exc.nickname && <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>}
+                                        {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
+                                            <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
+                                        )}
                                         {exc.picking_note && <div><strong>Nota Selección (Picking):</strong> {exc.picking_note}</div>}
                                         {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
                                     </div>
@@ -2508,7 +2510,11 @@ export default function OrderLoadingPage() {
                                                 }
                                             }}
                                             onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
+                                                if (e.key === 'Tab' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    const addBtn = document.getElementById('modal-add-button');
+                                                    if (addBtn) addBtn.focus();
+                                                } else if (e.key === 'Enter') {
                                                     e.preventDefault();
                                                     confirmVariantAdd();
                                                 }
@@ -2550,7 +2556,14 @@ export default function OrderLoadingPage() {
                                         Cancelar
                                     </button>
                                     <button 
+                                        id="modal-add-button"
                                         onClick={confirmVariantAdd}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === 'Tab') {
+                                                e.preventDefault();
+                                                confirmVariantAdd();
+                                            }
+                                        }}
                                         style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
                                     >
                                         Agregar
