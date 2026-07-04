@@ -231,6 +231,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
   const [clientExceptions, setClientExceptions] = useState<any[]>([]);
 
+  useEffect(() => {
+    if (selectedProductForVariant) {
+      const timer = setTimeout(() => {
+        if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
+          const firstSelect = document.getElementById('modal-select-0');
+          if (firstSelect) firstSelect.focus();
+        } else {
+          const qtyInput = document.getElementById('modal-qty-input');
+          if (qtyInput) {
+            qtyInput.focus();
+            (qtyInput as HTMLInputElement).select();
+          }
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedProductForVariant]);
+
   const formatQuantity = (val: number | string | null | undefined): string => {
     if (val === undefined || val === null || val === '') return '';
     const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
@@ -6086,8 +6104,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   {opt.name}
                 </label>
                 <select
+                  id={`modal-select-${index}`}
                   value={selectedOptions[opt.name] || ''}
                   onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (index < (selectedProductForVariant.options_config?.length || 0) - 1) {
+                        const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                        if (nextSelect) nextSelect.focus();
+                      } else {
+                        const qtyInput = document.getElementById('modal-qty-input');
+                        if (qtyInput) {
+                          qtyInput.focus();
+                          (qtyInput as HTMLInputElement).select();
+                        }
+                      }
+                    }
+                  }}
                   style={{
                     width: '100%',
                     padding: '0.8rem',
@@ -6115,13 +6149,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </label>
                 <input
                   id="modal-qty-input"
+                  tabIndex={1}
                   type="text"
                   value={variantQuantity}
                   onChange={(e) => {
                     setVariantQuantity(e.target.value);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === '.' || e.key === ',') {
+                      e.preventDefault();
+                      const input = e.currentTarget;
+                      const start = input.selectionStart ?? 0;
+                      const end = input.selectionEnd ?? 0;
+                      const val = input.value;
+                      const newVal = val.substring(0, start) + ',' + val.substring(end);
+                      setVariantQuantity(newVal);
+                      
+                      setTimeout(() => {
+                        input.setSelectionRange(start + 1, start + 1);
+                      }, 10);
+                    } else if (e.key === 'Enter') {
                       e.preventDefault();
                       const unitSel = document.getElementById('modal-unit-select');
                       if (unitSel) {
@@ -6161,6 +6208,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </label>
                 <select
                   id="modal-unit-select"
+                  tabIndex={2}
                   value={selectedUnit}
                   onChange={(e) => {
                     const opt = optionsList.find(o => o.unit === e.target.value);
@@ -6170,11 +6218,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Tab' && !e.shiftKey) {
-                      e.preventDefault();
-                      const addBtn = document.getElementById('modal-add-button');
-                      if (addBtn) addBtn.focus();
-                    } else if (e.key === 'Enter') {
+                    if (e.key === 'Enter') {
                       e.preventDefault();
                       confirmVariantAdd();
                     }
@@ -6210,6 +6254,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Footer buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
               <button 
+                tabIndex={4}
                 onClick={() => setSelectedProductForVariant(null)}
                 style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
               >
@@ -6217,6 +6262,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </button>
               <button 
                 id="modal-add-button"
+                tabIndex={3}
                 onClick={confirmVariantAdd}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'Tab') {
