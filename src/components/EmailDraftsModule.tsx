@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 
@@ -1833,7 +1833,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return;
     }
 
-    const hasUnmatchedProducts = editableItems.some(item => !item.isMetadata && !item.matched_product_id);
+    const hasUnmatchedProducts = editableItems.some(item => !item.isDeleted && !item.isMetadata && !item.matched_product_id);
     if (hasUnmatchedProducts) {
       showToast('Error: Existen productos sin emparejar. Por favor, asocia todos los productos a nuestro catálogo o elimínalos.', 'error');
       return;
@@ -1979,7 +1979,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
           // E. Guardar nuevos aliases/mapeos
           const newAliases: Record<string, string> = {};
-          editableItems.forEach(item => {
+          editableItems.filter(item => !item.isDeleted).forEach(item => {
             const originalText = item.originalName?.toLowerCase()?.trim();
             if (originalText && item.matched_product_id) {
               if (aliases[originalText] !== item.matched_product_id) {
@@ -2023,7 +2023,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             .eq('id', selectedDraft.id);
 
           // G. Enviar correo HTML de acuse de recibo con resumen de pedido
-          const itemsHtml = editableItems.map((item: any) => {
+          const itemsHtml = editableItems.filter((item: any) => !item.isDeleted).map((item: any) => {
             const prod = products.find(p => p.id === item.matched_product_id);
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             const unitPrice = prod?.base_price || 0;
@@ -2130,7 +2130,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     // 2. Validación de Productos Emparejados
-    const hasUnmatchedProducts = editableItems.some(item => !item.isMetadata && !item.matched_product_id);
+    const hasUnmatchedProducts = editableItems.some(item => !item.isDeleted && !item.isMetadata && !item.matched_product_id);
     if (hasUnmatchedProducts) {
       showToast('Error: Existen productos sin emparejar. Por favor, asocia todos los productos a nuestro catálogo o elimínalos.', 'error');
       return;
@@ -2159,7 +2159,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     // 1. Prepare new aliases to save
     const newAliases: Record<string, string> = {};
-    editableItems.forEach(item => {
+    editableItems.filter(item => !item.isDeleted).forEach(item => {
       const originalText = item.originalName?.toLowerCase()?.trim();
       if (originalText && item.matched_product_id) {
         // Solo guardamos si no estaba en la memoria o si cambió
@@ -2481,7 +2481,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return acc + (matchedProd ? (resolvedPrice * (item.quantity || 0)) : 0);
   }, 0);
 
-  const hasUnmatchedItems = editableItems.some(item => !item.matched_product_id);
+  const hasUnmatchedItems = editableItems.some(item => !item.isDeleted && !item.matched_product_id);
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
@@ -3964,25 +3964,219 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               return (
                                 <React.Fragment key={i}>
-                                  {item.isDeleted ? (
-                                    <tr 
-                                      className="scroll-row-animate"
-                                      style={{ 
-                                        borderBottom: `1px solid ${THEME.colors.border}`,
-                                        animationDelay: `${i * 0.04}s`,
-                                        backgroundColor: '#FFF1F2',
+                                  <tr 
+                                    className="scroll-row-animate"
+                                    style={{ 
+                                      borderBottom: `1px solid ${THEME.colors.border}`,
+                                      animationDelay: `${i * 0.04}s`,
+                                      backgroundColor: item.isDeleted ? '#FEF2F2' : (getRowBgColor(i) || 'transparent'),
+                                      transition: 'all 0.2s'
+                                    }}
+                                  >
+                                    {isEditing && (
+                                      <td style={{ 
+                                        padding: '1rem 0.5rem', 
+                                        textAlign: 'center', 
+                                        width: '40px', 
+                                        backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s',
-                                        height: '73px'
-                                      }}
-                                    >
-                                      <td colSpan={isEditing ? 5 : 4} style={{ padding: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#E11D48', fontWeight: 700 }}>
-                                            <span style={{ fontSize: '1.1rem' }}>🗑️</span>
-                                            <span>
-                                              Registro eliminado: <span style={{ textDecoration: 'line-through', opacity: 0.7 }}>{item.originalName || item.name || 'Producto Manual'}</span>
-                                            </span>
+                                        opacity: item.isDeleted ? 0.5 : 1
+                                      }}>
+                                        <input
+                                          type="checkbox"
+                                          disabled={item.isDeleted}
+                                          checked={selectedRowIndices.includes(i)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedRowIndices(prev => [...prev, i]);
+                                            } else {
+                                              setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
+                                            }
+                                          }}
+                                          style={{ transform: 'scale(1.2)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
+                                        />
+                                      </td>
+                                    )}
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      width: '33%', 
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <div style={{ 
+                                        fontSize: '0.9rem', 
+                                        color: '#1E293B', 
+                                        textTransform: 'uppercase', 
+                                        fontWeight: 800,
+                                        textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                        opacity: item.isDeleted ? 0.5 : 1
+                                      }}>
+                                        {item.originalName || item.name || item.producto || item.item || ''}
+                                      </div>
+                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1 }}>
+                                        <span style={{
+                                          padding: '4px 10px',
+                                          backgroundColor: '#EFF6FF',
+                                          color: '#2563EB',
+                                          borderRadius: '20px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: 700,
+                                          textDecoration: item.isDeleted ? 'line-through' : 'none'
+                                        }}>
+                                          {item.originalQuantity || item.quantity || 1} unidades detectadas
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      width: '42%', 
+                                      backgroundColor: getCellBgColor(i, false),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+                                            <input
+                                              ref={el => { productInputRefs.current[i] = el; }}
+                                              disabled={!isEditing || item.isDeleted}
+                                              value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
+                                              placeholder="Buscar ID..."
+                                              list="all-products-list"
+                                              onFocus={(e) => e.target.select()}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Tab') {
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
+                                                    e.preventDefault();
+                                                    openVariantModalForItem(p, i);
+                                                  }
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
+                                                    const newEdits = [...editableItems];
+                                                    newEdits[i].matched_product_id = p.id;
+                                                    newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
+                                                    newEdits[i].skuQuery = p.sku || '';
+                                                    setEditableItems(newEdits);
+                                                  }
+                                                  const nextInput = productInputRefs.current[i + 1];
+                                                  if (nextInput) {
+                                                    nextInput.focus();
+                                                    nextInput.select();
+                                                  }
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                if (p) {
+                                                  selectProduct(p, i);
+                                                } else {
+                                                  const newEdits = [...editableItems];
+                                                  newEdits[i].matched_product_id = null;
+                                                  newEdits[i].searchQuery = val;
+                                                  newEdits[i].skuQuery = '';
+                                                  newEdits[i].selected_options = {};
+                                                  setEditableItems(newEdits);
+                                                }
+                                              }}
+                                              style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                fontSize: '1rem',
+                                                fontWeight: '700',
+                                                backgroundColor: item.isDeleted ? '#F1F5F9' : (item.matched_product_id ? '#FFFFFF' : '#FFFBEB'),
+                                                color: item.isDeleted ? '#94A3B8' : '#1E293B',
+                                                textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                                cursor: item.isDeleted ? 'not-allowed' : 'text',
+                                                outline: 'none',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                transition: 'all 0.2s'
+                                              }}
+                                            />
                                           </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      width: '25%', 
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <input 
+                                          type="text"
+                                          disabled={!isEditing || item.isDeleted}
+                                          value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                          onFocus={() => setFocusedRowIndex(i)}
+                                          onBlur={() => {
+                                            setFocusedRowIndex(null);
+                                            const newEdits = [...editableItems];
+                                            newEdits[i].quantity_text = undefined;
+                                            setEditableItems(newEdits);
+                                          }}
+                                          onChange={(e) => {
+                                            const rawVal = e.target.value;
+                                            const parsed = parseQuantity(rawVal);
+                                            const newEdits = [...editableItems];
+                                            newEdits[i].quantity_text = rawVal;
+                                            newEdits[i].quantity = parsed;
+                                            setEditableItems(newEdits);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                                              setEditableItems(newEdits);
+                                              setTimeout(() => {
+                                                const nextInput = productInputRefs.current[i + 1];
+                                                if (nextInput) nextInput.focus();
+                                              }, 50);
+                                            }
+                                          }}
+                                          style={{
+                                            width: '90px',
+                                            padding: '8px',
+                                            textAlign: 'center',
+                                            borderRadius: '8px',
+                                            border: '2px solid #E2E8F0',
+                                            fontWeight: 800,
+                                            fontSize: '1.1rem',
+                                            backgroundColor: item.isDeleted ? '#F1F5F9' : '#FFFFFF',
+                                            color: item.isDeleted ? '#94A3B8' : '#1E293B',
+                                            textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                            cursor: item.isDeleted ? 'not-allowed' : 'text',
+                                            outline: 'none'
+                                          }}
+                                        />
+                                        <span style={{ 
+                                          fontWeight: 'bold', 
+                                          color: '#64748B', 
+                                          fontSize: '0.95rem', 
+                                          minWidth: '35px', 
+                                          textAlign: 'left',
+                                          textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                          opacity: item.isDeleted ? 0.5 : 1
+                                        }}>
+                                          {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td style={{ 
+                                      padding: '1rem 0.5rem', 
+                                      textAlign: 'center', 
+                                      width: '5%',
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      {isEditing && (
+                                        item.isDeleted ? (
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -3992,216 +4186,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               setEditableItems(newEdits);
                                             }}
                                             style={{
-                                              backgroundColor: '#10B981',
-                                              color: 'white',
+                                              background: 'none',
                                               border: 'none',
-                                              padding: '6px 14px',
-                                              borderRadius: '8px',
-                                              fontWeight: 800,
+                                              color: '#10B981',
                                               cursor: 'pointer',
-                                              fontSize: '0.85rem',
-                                              display: 'inline-flex',
+                                              padding: '6px',
+                                              borderRadius: '6px',
+                                              display: 'flex',
                                               alignItems: 'center',
-                                              gap: '6px',
-                                              boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                                              justifyContent: 'center',
+                                              transition: 'all 0.2s'
+                                            }}
+                                            title="Restaurar registro"
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = '#D1FAE5';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
                                             }}
                                           >
-                                            <RotateCcw size={14} /> Deshacer
+                                            <RotateCcw size={18} />
                                           </button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ) : (
-                                    <tr 
-                                      className="scroll-row-animate"
-                                      style={{ 
-                                        borderBottom: `1px solid ${THEME.colors.border}`,
-                                        animationDelay: `${i * 0.04}s`,
-                                        backgroundColor: getRowBgColor(i) || 'transparent',
-                                        transition: 'background-color 0.2s'
-                                      }}
-                                    >
-                                      {isEditing && (
-                                        <td style={{ 
-                                          padding: '1rem 0.5rem', 
-                                          textAlign: 'center', 
-                                          width: '40px', 
-                                          backgroundColor: getCellBgColor(i, true),
-                                          transition: 'background-color 0.2s'
-                                        }}>
-                                          <input
-                                            type="checkbox"
-                                            checked={selectedRowIndices.includes(i)}
-                                            onChange={(e) => {
-                                              if (e.target.checked) {
-                                                setSelectedRowIndices(prev => [...prev, i]);
-                                              } else {
-                                                setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
-                                              }
-                                            }}
-                                            style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
-                                          />
-                                        </td>
-                                      )}
-                                      <td style={{ 
-                                        padding: '1rem 1rem', 
-                                        width: '33%', 
-                                        backgroundColor: getCellBgColor(i, true),
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        <div style={{ fontSize: '0.9rem', color: '#1E293B', textTransform: 'uppercase', fontWeight: 800 }}>
-                                          {item.originalName || item.name || item.producto || item.item || ''}
-                                        </div>
-                                        <div style={{ marginTop: '6px' }}>
-                                          <span style={{
-                                            padding: '4px 10px',
-                                            backgroundColor: '#EFF6FF',
-                                            color: '#2563EB',
-                                            borderRadius: '20px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 700
-                                          }}>
-                                            {item.originalQuantity || item.quantity || 1} unidades detectadas
-                                          </span>
-                                        </div>
-                                      </td>
-                                      <td style={{ 
-                                        padding: '1rem 1rem', 
-                                        width: '42%', 
-                                        backgroundColor: getCellBgColor(i, false),
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
-                                              <input
-                                                ref={el => { productInputRefs.current[i] = el; }}
-                                                disabled={!isEditing}
-                                                value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
-                                                placeholder="Buscar ID..."
-                                                list="all-products-list"
-                                                onFocus={(e) => e.target.select()}
-                                                onKeyDown={(e) => {
-                                                  if (e.key === 'Tab') {
-                                                    const val = e.currentTarget.value;
-                                                    const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                    if (p) {
-                                                      e.preventDefault();
-                                                      openVariantModalForItem(p, i);
-                                                    }
-                                                  } else if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    const val = e.currentTarget.value;
-                                                    const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                    if (p) {
-                                                      const newEdits = [...editableItems];
-                                                      newEdits[i].matched_product_id = p.id;
-                                                      newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
-                                                      newEdits[i].skuQuery = p.sku || '';
-                                                      setEditableItems(newEdits);
-                                                    }
-                                                    const nextInput = productInputRefs.current[i + 1];
-                                                    if (nextInput) {
-                                                      nextInput.focus();
-                                                      nextInput.select();
-                                                    }
-                                                  }
-                                                }}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                  if (p) {
-                                                    selectProduct(p, i);
-                                                  } else {
-                                                    const newEdits = [...editableItems];
-                                                    newEdits[i].matched_product_id = null;
-                                                    newEdits[i].searchQuery = val;
-                                                    newEdits[i].skuQuery = '';
-                                                    newEdits[i].selected_options = {};
-                                                    setEditableItems(newEdits);
-                                                  }
-                                                }}
-                                                style={{
-                                                  width: '100%',
-                                                  padding: '10px 14px',
-                                                  borderRadius: '10px',
-                                                  border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
-                                                  fontSize: '1rem',
-                                                  fontWeight: '700',
-                                                  backgroundColor: item.matched_product_id ? '#FFFFFF' : '#FFFBEB',
-                                                  outline: 'none',
-                                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                  transition: 'all 0.2s'
-                                                }}
-                                              />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </td>
-                                      <td style={{ 
-                                        padding: '1rem 1rem', 
-                                        width: '25%', 
-                                        backgroundColor: getCellBgColor(i, true),
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                          <input 
-                                            type="text"
-                                            disabled={!isEditing}
-                                            value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
-                                            onFocus={() => setFocusedRowIndex(i)}
-                                            onBlur={() => {
-                                              setFocusedRowIndex(null);
-                                              const newEdits = [...editableItems];
-                                              newEdits[i].quantity_text = undefined;
-                                              setEditableItems(newEdits);
-                                            }}
-                                            onChange={(e) => {
-                                              const rawVal = e.target.value;
-                                              const parsed = parseQuantity(rawVal);
-                                              const newEdits = [...editableItems];
-                                              newEdits[i].quantity_text = rawVal;
-                                              newEdits[i].quantity = parsed;
-                                              setEditableItems(newEdits);
-                                            }}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                // Añadir nueva fila
-                                                const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                                                setEditableItems(newEdits);
-                                                // Focus el nuevo input en el siguiente render
-                                                setTimeout(() => {
-                                                  const nextInput = productInputRefs.current[i + 1];
-                                                  if (nextInput) nextInput.focus();
-                                                }, 50);
-                                              }
-                                            }}
-                                            style={{
-                                              width: '90px',
-                                              padding: '8px',
-                                              textAlign: 'center',
-                                              borderRadius: '8px',
-                                              border: '2px solid #E2E8F0',
-                                              fontWeight: 800,
-                                              fontSize: '1.1rem',
-                                              backgroundColor: '#FFFFFF',
-                                              outline: 'none'
-                                            }}
-                                          />
-                                          <span style={{ fontWeight: 'bold', color: '#64748B', fontSize: '0.95rem', minWidth: '35px', textAlign: 'left' }}>
-                                            {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                          </span>
-                                        </div>
-                                      </td>
-                                      <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        textAlign: 'center', 
-                                        width: '5%',
-                                        backgroundColor: getCellBgColor(i, true),
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        {isEditing && (
+                                        ) : (
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -4213,7 +4219,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             style={{
                                               background: 'none',
                                               border: 'none',
-                                              color: '#EF4444',
+                                              color: '#64748B',
                                               cursor: 'pointer',
                                               padding: '6px',
                                               borderRadius: '6px',
@@ -4222,20 +4228,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               justifyContent: 'center',
                                               transition: 'all 0.2s'
                                             }}
-                                            title="Eliminar registro"
+                                            title="Limpiar/Eliminar registro"
                                             onMouseEnter={(e) => {
-                                              e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                              e.currentTarget.style.backgroundColor = '#F1F5F9';
                                             }}
                                             onMouseLeave={(e) => {
                                               e.currentTarget.style.backgroundColor = 'transparent';
                                             }}
                                           >
-                                            <Trash2 size={18} />
+                                            <Eraser size={18} />
                                           </button>
-                                        )}
-                                      </td>
+                                        )
+                                      )}
+                                    </td>
                                   </tr>
-                                  )}
                                   
                                   {false && (
                                     <tr style={{ backgroundColor: '#F0FDF4' }}>
