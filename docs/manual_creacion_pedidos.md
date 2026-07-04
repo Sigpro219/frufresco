@@ -201,6 +201,7 @@ El flujo de geolocalización está protegido contra errores logísticos:
 Cuando se importa un pedido desde la Mesa de Trabajo, el sistema retiene el archivo original en el estado `uploadedFile`.
 1. **Subida Automática a Supabase Storage:** Al confirmar y crear el pedido en `handleSubmit`, si existe un archivo cargado en el estado, se sube de forma asíncrona al bucket existente de Supabase `order-attachments` con un UUID único.
 2. **Asociación en Base de Datos:** Se obtiene la URL pública del archivo y se inyecta en la columna `document_url` de la tabla `orders` para permitir que el PDF/documento original quede enlazado permanentemente al pedido.
+3. **Visualización en Detalle de Pedidos:** En la vista de listado de pedidos (`/admin/orders/loading`), el modal de detalles del pedido recupera la columna `document_url` y renderiza un botón azul "Ver Anexo ↗" en su footer para permitir consultar el documento original en cualquier momento.
 
 ---
 
