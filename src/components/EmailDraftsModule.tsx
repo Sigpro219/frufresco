@@ -3288,8 +3288,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: '95%',
-            maxWidth: '1250px',
+            width: '97%',
+            maxWidth: '1600px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
