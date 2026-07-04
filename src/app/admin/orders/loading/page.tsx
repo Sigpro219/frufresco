@@ -2079,6 +2079,43 @@ export default function OrderLoadingPage() {
                                             </div>
                                         </div>
                                     </div>
+                                    {selectedOrder.document_url && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ color: '#3B82F6' }}><FileText size={24} strokeWidth={1.5} /></div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>DOCUMENTO</div>
+                                                <div style={{ marginTop: '2px' }}>
+                                                    <a 
+                                                        href={selectedOrder.document_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        style={{ 
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            backgroundColor: '#EFF6FF', 
+                                                            color: '#1D4ED8', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '6px', 
+                                                            fontWeight: '800', 
+                                                            fontSize: '0.75rem',
+                                                            border: '1px solid #BFDBFE',
+                                                            textDecoration: 'none',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                        }}
+                                                    >
+                                                        Ver Anexo ↗
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
