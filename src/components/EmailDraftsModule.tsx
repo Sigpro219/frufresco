@@ -5930,7 +5930,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1100, // Above revision modal (999)
+          zIndex: 20000, // Above revision modal (which is 9999)
           padding: '1rem',
           animation: 'fadeIn 0.2s ease-out'
         }}>
