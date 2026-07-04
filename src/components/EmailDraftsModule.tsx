@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 
@@ -230,6 +230,42 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
   const [clientExceptions, setClientExceptions] = useState<any[]>([]);
 
+  const formatQuantity = (val: number | string | null | undefined): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
+    if (isNaN(num)) return '';
+    return num.toLocaleString('es-CO', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 3
+    });
+  };
+
+  const parseQuantity = (val: string): number => {
+    if (!val) return 0;
+    const normalized = val.replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const safeFetchJson = async (res: Response) => {
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      if (!res.ok) {
+        throw new Error(text || `Error de servidor (${res.status})`);
+      }
+      throw new Error(`Respuesta no válida del servidor: ${text.slice(0, 100)}`);
+    }
+    
+    if (!res.ok) {
+      throw new Error(json.error || `Error del servidor (${res.status})`);
+    }
+    
+    return json;
+  };
+
   useEffect(() => {
     async function loadClientExceptions() {
       if (!selectedDraft || !selectedDraft.profile_id) {
@@ -254,7 +290,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setSelectedRowForVariant(rowIndex);
     
     const item = editableItems[rowIndex];
-    setVariantQuantity(String(item.quantity || 1));
+    setVariantQuantity(item.quantity ? String(item.quantity).replace('.', ',') : '1');
     setSelectedUnit(item.unit || product.unit_of_measure || 'Kg');
     setSelectedConversionFactor(item.conversion_factor || 1);
     setSelectedOptions(item.selected_options || {});
@@ -265,9 +301,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     const idx = selectedRowForVariant;
     const newEdits = [...editableItems];
-    const qty = parseFloat(variantQuantity) || 0;
+    const qty = parseQuantity(variantQuantity) || 0;
     
     newEdits[idx].quantity = qty;
+    newEdits[idx].quantity_text = undefined;
     newEdits[idx].unit = selectedUnit;
     newEdits[idx].conversion_factor = selectedConversionFactor;
     newEdits[idx].selected_options = selectedOptions;
@@ -704,10 +741,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Error en el servidor');
-          }
+          await safeFetchJson(res);
 
           showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️', 'success');
           setSelectedDraft(null);
@@ -926,10 +960,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Error en el servidor');
-          }
+          await safeFetchJson(res);
 
           setRecentlyDeletedItems([]);
           setSelectedDraft((prev: any) => ({
@@ -1035,7 +1066,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setGeocoding(true);
       setDraftCoordinates(null);
       fetch(`/api/geocode?address=${encodeURIComponent(addressVal)}&city=Bogotá`)
-        .then(res => res.json())
+        .then(async res => {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (!res.ok) throw new Error(data.error || `Error (${res.status})`);
+            return data;
+          } catch {
+            if (!res.ok) throw new Error(text || `Error (${res.status})`);
+            throw new Error('Respuesta no válida del geocodificador');
+          }
+        })
         .then(data => {
           if (data.status === 'OK' && data.results && data.results.length > 0) {
             const loc = data.results[0].geometry.location;
@@ -1873,7 +1914,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           let totalWeight = 0;
           const itemsData: any[] = [];
 
-          editableItems.forEach(item => {
+          editableItems.filter(item => !item.isDeleted).forEach(item => {
             if (item.matched_product_id) {
               const prod = products.find(p => p.id === item.matched_product_id);
               if (prod) {
@@ -2237,7 +2278,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
 
-      for (const item of editableItems) {
+      for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
@@ -2434,7 +2475,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const totalValue = editableItems.reduce((acc, item) => {
+  const totalValue = editableItems.filter(item => !item.isDeleted).reduce((acc, item) => {
     const matchedProd = products.find(p => p.id === item.matched_product_id);
     const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
     return acc + (matchedProd ? (resolvedPrice * (item.quantity || 0)) : 0);
@@ -3284,6 +3325,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             .scroll-row-animate {
               animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
             }
+            
+            /* Hide spin buttons in number inputs */
+            input::-webkit-outer-spin-button,
+            input::-webkit-inner-spin-button {
+              -webkit-appearance: none;
+              margin: 0;
+            }
+            input[type=number] {
+              -moz-appearance: textfield;
+            }
           `}</style>
           <div style={{
             backgroundColor: 'white',
@@ -3896,9 +3947,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '35%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '45%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '33%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '42%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3912,15 +3964,63 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               return (
                                 <React.Fragment key={i}>
-                                  <tr 
-                                    className="scroll-row-animate"
-                                    style={{ 
-                                      borderBottom: `1px solid ${THEME.colors.border}`,
-                                      animationDelay: `${i * 0.04}s`,
-                                      backgroundColor: getRowBgColor(i) || 'transparent',
-                                      transition: 'background-color 0.2s'
-                                    }}
-                                  >
+                                  {item.isDeleted ? (
+                                    <tr 
+                                      className="scroll-row-animate"
+                                      style={{ 
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        animationDelay: `${i * 0.04}s`,
+                                        backgroundColor: '#FFF1F2',
+                                        transition: 'background-color 0.2s',
+                                        height: '73px'
+                                      }}
+                                    >
+                                      <td colSpan={isEditing ? 5 : 4} style={{ padding: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#E11D48', fontWeight: 700 }}>
+                                            <span style={{ fontSize: '1.1rem' }}>🗑️</span>
+                                            <span>
+                                              Registro eliminado: <span style={{ textDecoration: 'line-through', opacity: 0.7 }}>{item.originalName || item.name || 'Producto Manual'}</span>
+                                            </span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].isDeleted = false;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            style={{
+                                              backgroundColor: '#10B981',
+                                              color: 'white',
+                                              border: 'none',
+                                              padding: '6px 14px',
+                                              borderRadius: '8px',
+                                              fontWeight: 800,
+                                              cursor: 'pointer',
+                                              fontSize: '0.85rem',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '6px',
+                                              boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                                            }}
+                                          >
+                                            <RotateCcw size={14} /> Deshacer
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    <tr 
+                                      className="scroll-row-animate"
+                                      style={{ 
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        animationDelay: `${i * 0.04}s`,
+                                        backgroundColor: getRowBgColor(i) || 'transparent',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                    >
                                       {isEditing && (
                                         <td style={{ 
                                           padding: '1rem 0.5rem', 
@@ -3945,7 +4045,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       )}
                                       <td style={{ 
                                         padding: '1rem 1rem', 
-                                        width: '35%', 
+                                        width: '33%', 
                                         backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
@@ -3967,7 +4067,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       </td>
                                       <td style={{ 
                                         padding: '1rem 1rem', 
-                                        width: '45%', 
+                                        width: '42%', 
                                         backgroundColor: getCellBgColor(i, false),
                                         transition: 'background-color 0.2s'
                                       }}>
@@ -4040,20 +4140,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       </td>
                                       <td style={{ 
                                         padding: '1rem 1rem', 
-                                        width: '20%', 
+                                        width: '25%', 
                                         backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                           <input 
-                                            type="number"
+                                            type="text"
                                             disabled={!isEditing}
-                                            value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                            value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
                                             onFocus={() => setFocusedRowIndex(i)}
-                                            onBlur={() => setFocusedRowIndex(null)}
-                                            onChange={(e) => {
+                                            onBlur={() => {
+                                              setFocusedRowIndex(null);
                                               const newEdits = [...editableItems];
-                                              newEdits[i].quantity = parseFloat(e.target.value) || 0;
+                                              newEdits[i].quantity_text = undefined;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            onChange={(e) => {
+                                              const rawVal = e.target.value;
+                                              const parsed = parseQuantity(rawVal);
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].quantity_text = rawVal;
+                                              newEdits[i].quantity = parsed;
                                               setEditableItems(newEdits);
                                             }}
                                             onKeyDown={(e) => {
@@ -4070,7 +4178,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }
                                             }}
                                             style={{
-                                              width: '70px',
+                                              width: '90px',
                                               padding: '8px',
                                               textAlign: 'center',
                                               borderRadius: '8px',
@@ -4081,12 +4189,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               outline: 'none'
                                             }}
                                           />
-                                          <span style={{ fontWeight: 'bold', color: '#64748B', fontSize: '0.95rem', minWidth: '24px', textAlign: 'left' }}>
+                                          <span style={{ fontWeight: 'bold', color: '#64748B', fontSize: '0.95rem', minWidth: '35px', textAlign: 'left' }}>
                                             {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                           </span>
                                         </div>
                                       </td>
+                                      <td style={{ 
+                                        padding: '1rem 0.5rem', 
+                                        textAlign: 'center', 
+                                        width: '5%',
+                                        backgroundColor: getCellBgColor(i, true),
+                                        transition: 'background-color 0.2s'
+                                      }}>
+                                        {isEditing && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].isDeleted = true;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            style={{
+                                              background: 'none',
+                                              border: 'none',
+                                              color: '#EF4444',
+                                              cursor: 'pointer',
+                                              padding: '6px',
+                                              borderRadius: '6px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              transition: 'all 0.2s'
+                                            }}
+                                            title="Eliminar registro"
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
+                                          >
+                                            <Trash2 size={18} />
+                                          </button>
+                                        )}
+                                      </td>
                                   </tr>
+                                  )}
                                   
                                   {false && (
                                     <tr style={{ backgroundColor: '#F0FDF4' }}>
@@ -4377,10 +4526,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   })
                                 });
 
-                                if (!res.ok) {
-                                  const errData = await res.json();
-                                  throw new Error(errData.error || 'Error en el servidor');
-                                }
+                                await safeFetchJson(res);
+
 
                                 setRecentlyDeletedItems([]);
                                 showToast('Novedades notificadas consolidadas al cliente por correo. ✉️', 'success');
@@ -5389,12 +5536,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         })
                       });
 
-                      if (!res.ok) {
-                        const errData = await res.json();
-                        throw new Error(errData.error || 'Error en el servidor');
-                      }
-
-                      const data = await res.json();
+                      const data = await safeFetchJson(res);
                       if (data.warning) {
                         showToast(data.warning, 'info');
                       } else {
@@ -5511,7 +5653,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </tr>
                   </thead>
                   <tbody>
-                    {editableItems.map((item: any, idx: number) => {
+                    {editableItems.filter(item => !item.isDeleted).map((item: any, idx: number) => {
                       if (!item.matched_product_id) return null;
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
@@ -5906,8 +6048,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   type="text"
                   value={variantQuantity}
                   onChange={(e) => {
-                    const val = e.target.value.replace(',', '.');
-                    setVariantQuantity(val);
+                    setVariantQuantity(e.target.value);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
