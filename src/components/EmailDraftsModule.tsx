@@ -4031,14 +4031,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                     position: 'absolute',
                                                     top: '100%',
                                                     left: 0,
-                                                    right: 0,
+                                                    minWidth: '450px',
                                                     zIndex: 9999,
                                                     backgroundColor: 'white',
-                                                    border: '1px solid #E5E7EB',
-                                                    borderRadius: '8px',
-                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                                    marginTop: '4px',
-                                                    maxHeight: '220px',
+                                                    border: '1px solid #E2E8F0',
+                                                    borderRadius: '12px',
+                                                    boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                                                    marginTop: '8px',
+                                                    maxHeight: '280px',
                                                     overflowY: 'auto',
                                                     textAlign: 'left'
                                                   }}>
@@ -4052,28 +4052,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                           onClick={() => selectProduct(p, i)}
                                                           onMouseEnter={() => setFocusedProductIndex(idx)}
                                                           style={{
-                                                            padding: '8px 12px',
+                                                            padding: '0.8rem 1rem',
                                                             cursor: 'pointer',
-                                                            backgroundColor: isFocused ? '#EFF6FF' : 'transparent',
-                                                            transition: 'background-color 0.1s',
-                                                            borderBottom: '1px solid #F3F4F6'
+                                                            backgroundColor: isFocused ? '#EFF6FF' : 'white',
+                                                            borderBottom: '1px solid #F3F4F6',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            transition: 'background-color 0.2s'
                                                           }}
                                                         >
-                                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span style={{ fontWeight: '700', fontSize: '0.85rem', color: '#1F2937' }}>
-                                                              {p.name} <span style={{ fontWeight: '600', color: '#6B7280', fontSize: '0.75rem' }}>({p.accounting_id})</span>
-                                                            </span>
-                                                            <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#059669' }}>
-                                                              ${formatNumber(resolvedPrice, 0)}/{p.unit_of_measure || 'Kg'}
-                                                            </span>
-                                                          </div>
-                                                          {p.options_config && p.options_config.length > 0 && (
-                                                            <div style={{ marginTop: '2px' }}>
-                                                              <span style={{ fontSize: '0.65rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
+                                                          <span style={{ fontWeight: '600', color: '#1E293B', fontSize: '0.95rem' }}>
+                                                            {p.name} {p.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({p.accounting_id})</span>}
+                                                          </span>
+                                                          <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            {formatMoney(resolvedPrice)}/{p.unit_of_measure}
+                                                            {p.options_config && p.options_config.length > 0 && (
+                                                              <span style={{ fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>
                                                                 ⚙️ Opciones
                                                               </span>
-                                                            </div>
-                                                          )}
+                                                            )}
+                                                          </span>
                                                         </div>
                                                       );
                                                     })}
