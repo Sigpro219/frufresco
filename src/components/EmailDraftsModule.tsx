@@ -3977,110 +3977,68 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          {(() => {
-                                            const query = (item.searchQuery || '').toLowerCase().trim();
-                                            const filteredProducts = products
-                                              .filter(p => {
-                                                if (!query) return true;
-                                                return p.name.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query);
-                                              })
-                                              .slice(0, 15);
-
-                                            return (
-                                              <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
-                                                <input
-                                                  ref={el => { productInputRefs.current[i] = el; }}
-                                                  disabled={!isEditing}
-                                                  value={activeSearchRowIndex === i ? (item.searchQuery || '') : (matchedProd ? matchedProd.name : (item.searchQuery || ''))}
-                                                  placeholder="-- Buscar Producto --"
-                                                  onFocus={() => {
-                                                    setActiveSearchRowIndex(i);
-                                                    setFocusedProductIndex(-1);
-                                                  }}
-                                                  onBlur={() => {
-                                                    setTimeout(() => {
-                                                      setActiveSearchRowIndex(null);
-                                                    }, 200);
-                                                  }}
-                                                  onKeyDown={(e) => handleProductSearchKeyDown(e, i, filteredProducts)}
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
+                                          <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+                                            <input
+                                              ref={el => { productInputRefs.current[i] = el; }}
+                                              disabled={!isEditing}
+                                              value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
+                                              placeholder="Buscar ID..."
+                                              list="all-products-list"
+                                              onFocus={(e) => e.target.select()}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Tab') {
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
+                                                    e.preventDefault();
+                                                    openVariantModalForItem(p, i);
+                                                  }
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
                                                     const newEdits = [...editableItems];
-                                                    newEdits[i].matched_product_id = null;
-                                                    newEdits[i].searchQuery = val;
-                                                    newEdits[i].skuQuery = '';
-                                                    newEdits[i].selected_options = {};
+                                                    newEdits[i].matched_product_id = p.id;
+                                                    newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
+                                                    newEdits[i].skuQuery = p.sku || '';
                                                     setEditableItems(newEdits);
-                                                    setFocusedProductIndex(-1);
-                                                  }}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: '0.5rem',
-                                                    borderRadius: '6px',
-                                                    border: '1px solid #D1D5DB',
-                                                    fontSize: '0.9rem',
-                                                    backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
-                                                    fontWeight: 600,
-                                                    color: '#111827',
-                                                    minWidth: '0'
-                                                  }}
-                                                />
-                                                
-                                                {activeSearchRowIndex === i && filteredProducts.length > 0 && (
-                                                  <div style={{
-                                                    position: 'absolute',
-                                                    top: '100%',
-                                                    left: 0,
-                                                    minWidth: '450px',
-                                                    zIndex: 9999,
-                                                    backgroundColor: 'white',
-                                                    border: '1px solid #E2E8F0',
-                                                    borderRadius: '12px',
-                                                    boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                                                    marginTop: '8px',
-                                                    maxHeight: '280px',
-                                                    overflowY: 'auto',
-                                                    textAlign: 'left'
-                                                  }}>
-                                                    {filteredProducts.map((p, idx) => {
-                                                      const isFocused = focusedProductIndex === idx;
-                                                      const resolvedPrice = contractPrices[p.id] !== undefined && contractPrices[p.id] !== null ? contractPrices[p.id] : p.base_price;
-                                                      return (
-                                                        <div
-                                                          key={p.id}
-                                                          id={`search-item-${i}-${idx}`}
-                                                          onClick={() => selectProduct(p, i)}
-                                                          onMouseEnter={() => setFocusedProductIndex(idx)}
-                                                          style={{
-                                                            padding: '0.8rem 1rem',
-                                                            cursor: 'pointer',
-                                                            backgroundColor: isFocused ? '#EFF6FF' : 'white',
-                                                            borderBottom: '1px solid #F3F4F6',
-                                                            display: 'flex',
-                                                            justifyContent: 'space-between',
-                                                            alignItems: 'center',
-                                                            transition: 'background-color 0.2s'
-                                                          }}
-                                                        >
-                                                          <span style={{ fontWeight: '600', color: '#1E293B', fontSize: '0.95rem' }}>
-                                                            {p.name} {p.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({p.accounting_id})</span>}
-                                                          </span>
-                                                          <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            {formatMoney(resolvedPrice)}/{p.unit_of_measure}
-                                                            {p.options_config && p.options_config.length > 0 && (
-                                                              <span style={{ fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>
-                                                                ⚙️ Opciones
-                                                              </span>
-                                                            )}
-                                                          </span>
-                                                        </div>
-                                                      );
-                                                    })}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            );
-                                          })()}
+                                                  }
+                                                  const nextInput = productInputRefs.current[i + 1];
+                                                  if (nextInput) {
+                                                    nextInput.focus();
+                                                    nextInput.select();
+                                                  }
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                if (p) {
+                                                  selectProduct(p, i);
+                                                } else {
+                                                  const newEdits = [...editableItems];
+                                                  newEdits[i].matched_product_id = null;
+                                                  newEdits[i].searchQuery = val;
+                                                  newEdits[i].skuQuery = '';
+                                                  newEdits[i].selected_options = {};
+                                                  setEditableItems(newEdits);
+                                                }
+                                              }}
+                                              style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                fontSize: '1rem',
+                                                fontWeight: '700',
+                                                backgroundColor: item.matched_product_id ? '#FFFFFF' : '#FFFBEB',
+                                                outline: 'none',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                transition: 'all 0.2s'
+                                              }}
+                                            />
+                                          </div>
                                         </div>
                                       </div>
                                     </td>
@@ -6409,6 +6367,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         </div>
       )}
+      <datalist id="all-products-list">
+        {products.map(p => (
+          <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
+        ))}
+      </datalist>
     </div>
   );
 }
