@@ -3288,8 +3288,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: '96%',
-            maxWidth: '1600px',
+            width: '95%',
+            maxWidth: '1250px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
@@ -3903,7 +3903,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '80px' }}>OBS.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4128,144 +4127,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </td>
                                     <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                       {matchedProd ? formatMoney(itemTotal) : '-'}
-                                    </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: 'auto' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                                        {/* Botón de Equivalencias */}
-                                        {isEditing && matchedProd && (
-                                           <button
-                                             type="button"
-                                             onClick={() => openVariantModalForItem(matchedProd, i)}
-                                             style={{
-                                               padding: '0.25rem 0.5rem',
-                                               backgroundColor: item.conversion_factor && item.conversion_factor !== 1
-                                                   ? '#EEF2FF'
-                                                   : '#F3F4F6',
-                                               color: item.conversion_factor && item.conversion_factor !== 1
-                                                   ? '#4338CA'
-                                                   : '#4B5563',
-                                               border: item.conversion_factor && item.conversion_factor !== 1
-                                                   ? '1px solid #C7D2FE'
-                                                   : '1px solid #D1D5DB',
-                                               borderRadius: '6px',
-                                               cursor: 'pointer',
-                                               display: 'inline-flex',
-                                               alignItems: 'center',
-                                               gap: '4px',
-                                               transition: 'all 0.2s',
-                                               outline: 'none',
-                                               boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                             }}
-                                             onFocus={(e) => {
-                                               e.currentTarget.style.borderColor = '#6366F1';
-                                               e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.2)';
-                                             }}
-                                             onBlur={(e) => {
-                                               e.currentTarget.style.borderColor = item.conversion_factor && item.conversion_factor !== 1 ? '#C7D2FE' : '#D1D5DB';
-                                               e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-                                             }}
-                                             title="Equivalencias (Alt+E)"
-                                           >
-                                             <span style={{ fontSize: '0.95rem' }}>⚖️</span>
-                                             <span style={{ 
-                                               fontSize: '0.75rem', 
-                                               fontWeight: 700,
-                                               color: '#4338CA'
-                                             }}>Equivalencias</span>
-                                             {item.conversion_factor && item.conversion_factor !== 1 && (
-                                               <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                                                 x{item.conversion_factor}
-                                               </span>
-                                             )}
-                                           </button>
-                                         )}
-
-                                         {/* Botón de variantes si aplica */}
-                                         {isEditing && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
-                                           <button
-                                             type="button"
-                                             onClick={() => openVariantModalForItem(matchedProd, i)}
-                                             style={{
-                                               padding: '0.2rem 0.4rem',
-                                               backgroundColor: Object.keys(item.selected_options || {}).length > 0 
-                                                   ? '#ECFDF5' 
-                                                   : '#F3F4F6',
-                                               color: Object.keys(item.selected_options || {}).length > 0 
-                                                   ? '#047857' 
-                                                   : '#374151',
-                                               border: Object.keys(item.selected_options || {}).length > 0 
-                                                   ? '1px solid #A7F3D0' 
-                                                   : '1px solid #D1D5DB',
-                                               borderRadius: '20px',
-                                               fontSize: '0.75rem',
-                                               fontWeight: 700,
-                                               cursor: 'pointer',
-                                               whiteSpace: 'nowrap',
-                                               display: 'flex',
-                                               alignItems: 'center',
-                                               gap: '4px',
-                                               transition: 'all 0.2s',
-                                               boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                             }}
-                                             title="Ver / Modificar Variantes (Alt + V)"
-                                           >
-                                             <span style={{ fontSize: '0.9rem' }}>⚡</span>
-                                             {Object.keys(item.selected_options || {}).length > 0 ? (
-                                               <span>
-                                                 {Object.values(item.selected_options).join(', ')}
-                                               </span>
-                                             ) : (
-                                               <span style={{ fontSize: '0.75rem' }}>Variantes</span>
-                                             )}
-                                           </button>
-                                         )}
-
-                                        {/* En modo lectura, si tiene opciones elegidas, las mostramos como etiqueta */}
-                                        {!isEditing && item.selected_options && Object.keys(item.selected_options).length > 0 && (
-                                          <span style={{
-                                            padding: '4px 8px',
-                                            backgroundColor: '#E6F4EA',
-                                            color: '#137333',
-                                            borderRadius: '6px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 700,
-                                            whiteSpace: 'nowrap',
-                                            display: 'inline-flex',
-                                            alignItems: 'center'
-                                          }}>
-                                            {Object.values(item.selected_options).join(' | ')}
-                                          </span>
-                                        )}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setObsModal({
-                                            isOpen: true,
-                                            rowIndex: i,
-                                            text: item.observations || ''
-                                          });
-                                        }}
-                                        title={item.observations ? `Observaciones: ${item.observations}` : 'Agregar observaciones'}
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          color: item.observations ? THEME.colors.primary : '#9CA3AF',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          padding: '4px',
-                                          borderRadius: '6px',
-                                          backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
-                                          transition: 'all 0.2s',
-                                          borderWidth: '1px',
-                                          borderStyle: item.observations ? 'solid' : 'dashed',
-                                          borderColor: item.observations ? THEME.colors.primary : '#D1D5DB'
-                                        }}
-                                      >
-                                        <MessageSquare size={18} fill={item.observations ? THEME.colors.primary : 'none'} />
-                                      </button>
-                                      </div>
                                     </td>
                                   </tr>
                                   
