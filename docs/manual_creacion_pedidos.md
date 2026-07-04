@@ -229,6 +229,7 @@ Para garantizar la auditabilidad y trazabilidad de los pedidos que se originan d
 2. **Badge Interactivo Condicional:** En el footer del modal de detalles del pedido (al lado de la etiqueta de Canal de origen), se añade el siguiente bloque condicional:
    - Si `selectedOrder.document_url` existe, se renderiza un botón estilizado azul **"Ver Anexo ↗"** que abre la URL pública de Storage en una nueva pestaña del navegador.
    - Si el pedido se creó sin un documento de soporte, el espacio del footer permanece vacío y limpio.
+3. **Edición de Cantidades Fraccionarias en Modificación:** Al activar el modo de edición de un pedido en la vista de carga, se elimina el control de incrementadores (botones `-` y `+` que obligaban al uso de valores enteros debido a `parseInt`). Se reemplaza por un campo de texto numérico limpio con `step="any"` que utiliza `parseFloat`, permitiendo al operador escribir cantidades con decimales de manera fluida y rápida (ej. `8,5` o `15,3`), validando al momento de guardar que las cantidades sean mayores a cero.
 
 ---
 
