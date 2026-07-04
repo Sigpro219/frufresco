@@ -171,6 +171,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [profiles, setProfiles] = useState<any[]>([]);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const quantityInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [obsModal, setObsModal] = useState<{
     isOpen: boolean;
@@ -4062,10 +4063,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                     newEdits[i].skuQuery = p.sku || '';
                                                     setEditableItems(newEdits);
                                                   }
+                                                  // Jump focus to quantity input of same row
+                                                  setTimeout(() => {
+                                                    const qtyInput = quantityInputRefs.current[i];
+                                                    if (qtyInput) {
+                                                      qtyInput.focus();
+                                                      qtyInput.select();
+                                                    }
+                                                  }, 50);
+                                                } else if (e.key === 'ArrowDown') {
+                                                  e.preventDefault();
                                                   const nextInput = productInputRefs.current[i + 1];
                                                   if (nextInput) {
                                                     nextInput.focus();
                                                     nextInput.select();
+                                                  }
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  const prevInput = productInputRefs.current[i - 1];
+                                                  if (prevInput) {
+                                                    prevInput.focus();
+                                                    prevInput.select();
                                                   }
                                                 }
                                               }}
@@ -4111,35 +4129,81 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     }}>
                                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                         <input 
-                                          type="text"
-                                          disabled={!isEditing || item.isDeleted}
-                                          value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
-                                          onFocus={() => setFocusedRowIndex(i)}
-                                          onBlur={() => {
-                                            setFocusedRowIndex(null);
-                                            const newEdits = [...editableItems];
-                                            newEdits[i].quantity_text = undefined;
-                                            setEditableItems(newEdits);
-                                          }}
-                                          onChange={(e) => {
-                                            const rawVal = e.target.value;
-                                            const parsed = parseQuantity(rawVal);
-                                            const newEdits = [...editableItems];
-                                            newEdits[i].quantity_text = rawVal;
-                                            newEdits[i].quantity = parsed;
-                                            setEditableItems(newEdits);
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              e.preventDefault();
-                                              const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                                              setEditableItems(newEdits);
-                                              setTimeout(() => {
-                                                const nextInput = productInputRefs.current[i + 1];
-                                                if (nextInput) nextInput.focus();
-                                              }, 50);
-                                            }
-                                          }}
+                                           ref={el => { quantityInputRefs.current[i] = el; }}
+                                           type="text"
+                                           disabled={!isEditing || item.isDeleted}
+                                           value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                           onFocus={(e) => {
+                                             setFocusedRowIndex(i);
+                                             e.target.select();
+                                           }}
+                                           onBlur={() => {
+                                             setFocusedRowIndex(null);
+                                             const newEdits = [...editableItems];
+                                             newEdits[i].quantity_text = undefined;
+                                             setEditableItems(newEdits);
+                                           }}
+                                           onChange={(e) => {
+                                             const rawVal = e.target.value;
+                                             const parsed = parseQuantity(rawVal);
+                                             const newEdits = [...editableItems];
+                                             newEdits[i].quantity_text = rawVal;
+                                             newEdits[i].quantity = parsed;
+                                             setEditableItems(newEdits);
+                                           }}
+                                           onKeyDown={(e) => {
+                                             if (e.key === '.' || e.key === ',') {
+                                               e.preventDefault();
+                                               const input = e.currentTarget;
+                                               const start = input.selectionStart ?? 0;
+                                               const end = input.selectionEnd ?? 0;
+                                               const val = input.value;
+                                               const newVal = val.substring(0, start) + ',' + val.substring(end);
+                                               
+                                               const parsed = parseQuantity(newVal);
+                                               const newEdits = [...editableItems];
+                                               newEdits[i].quantity_text = newVal;
+                                               newEdits[i].quantity = parsed;
+                                               setEditableItems(newEdits);
+                                               
+                                               setTimeout(() => {
+                                                 input.setSelectionRange(start + 1, start + 1);
+                                               }, 10);
+                                             } else if (e.key === 'Enter') {
+                                               e.preventDefault();
+                                               if (i < editableItems.length - 1) {
+                                                 const nextInput = productInputRefs.current[i + 1];
+                                                 if (nextInput) {
+                                                   nextInput.focus();
+                                                   nextInput.select();
+                                                 }
+                                               } else {
+                                                 const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                                                 setEditableItems(newEdits);
+                                                 setTimeout(() => {
+                                                   const nextInput = productInputRefs.current[i + 1];
+                                                   if (nextInput) {
+                                                     nextInput.focus();
+                                                     nextInput.select();
+                                                   }
+                                                 }, 50);
+                                               }
+                                             } else if (e.key === 'ArrowDown') {
+                                               e.preventDefault();
+                                               const nextQty = quantityInputRefs.current[i + 1];
+                                               if (nextQty) {
+                                                 nextQty.focus();
+                                                 nextQty.select();
+                                               }
+                                             } else if (e.key === 'ArrowUp') {
+                                               e.preventDefault();
+                                               const prevQty = quantityInputRefs.current[i - 1];
+                                               if (prevQty) {
+                                                 prevQty.focus();
+                                                 prevQty.select();
+                                               }
+                                             }
+                                           }}
                                           style={{
                                             width: '130px',
                                             padding: '8px',
