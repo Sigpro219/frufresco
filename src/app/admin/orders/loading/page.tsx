@@ -2349,7 +2349,7 @@ export default function OrderLoadingPage() {
                                         {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
                                             <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
                                         )}
-                                        {exc.picking_note && <div><strong>Nota Selección (Picking):</strong> {exc.picking_note}</div>}
+                                        {exc.picking_note && <div><strong>Nota:</strong> {exc.picking_note}</div>}
                                         {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
                                     </div>
                                 )}
