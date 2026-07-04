@@ -230,6 +230,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
   const [clientExceptions, setClientExceptions] = useState<any[]>([]);
 
+  const formatQuantity = (val: number | string | null | undefined): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
+    if (isNaN(num)) return '';
+    return num.toLocaleString('es-CO', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 3
+    });
+  };
+
+  const parseQuantity = (val: string): number => {
+    if (!val) return 0;
+    const normalized = val.replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   useEffect(() => {
     async function loadClientExceptions() {
       if (!selectedDraft || !selectedDraft.profile_id) {
@@ -254,7 +271,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setSelectedRowForVariant(rowIndex);
     
     const item = editableItems[rowIndex];
-    setVariantQuantity(String(item.quantity || 1));
+    setVariantQuantity(item.quantity ? String(item.quantity).replace('.', ',') : '1');
     setSelectedUnit(item.unit || product.unit_of_measure || 'Kg');
     setSelectedConversionFactor(item.conversion_factor || 1);
     setSelectedOptions(item.selected_options || {});
@@ -265,9 +282,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     const idx = selectedRowForVariant;
     const newEdits = [...editableItems];
-    const qty = parseFloat(variantQuantity) || 0;
+    const qty = parseQuantity(variantQuantity) || 0;
     
     newEdits[idx].quantity = qty;
+    newEdits[idx].quantity_text = undefined;
     newEdits[idx].unit = selectedUnit;
     newEdits[idx].conversion_factor = selectedConversionFactor;
     newEdits[idx].selected_options = selectedOptions;
@@ -3284,6 +3302,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             .scroll-row-animate {
               animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
             }
+            
+            /* Hide spin buttons in number inputs */
+            input::-webkit-outer-spin-button,
+            input::-webkit-inner-spin-button {
+              -webkit-appearance: none;
+              margin: 0;
+            }
+            input[type=number] {
+              -moz-appearance: textfield;
+            }
           `}</style>
           <div style={{
             backgroundColor: 'white',
@@ -3896,9 +3924,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '35%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '45%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '33%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '42%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3945,7 +3973,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       )}
                                       <td style={{ 
                                         padding: '1rem 1rem', 
-                                        width: '35%', 
+                                        width: '33%', 
                                         backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
@@ -3967,7 +3995,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       </td>
                                       <td style={{ 
                                         padding: '1rem 1rem', 
-                                        width: '45%', 
+                                        width: '42%', 
                                         backgroundColor: getCellBgColor(i, false),
                                         transition: 'background-color 0.2s'
                                       }}>
@@ -4040,20 +4068,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       </td>
                                       <td style={{ 
                                         padding: '1rem 1rem', 
-                                        width: '20%', 
+                                        width: '25%', 
                                         backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                           <input 
-                                            type="number"
+                                            type="text"
                                             disabled={!isEditing}
-                                            value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                            value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
                                             onFocus={() => setFocusedRowIndex(i)}
-                                            onBlur={() => setFocusedRowIndex(null)}
-                                            onChange={(e) => {
+                                            onBlur={() => {
+                                              setFocusedRowIndex(null);
                                               const newEdits = [...editableItems];
-                                              newEdits[i].quantity = parseFloat(e.target.value) || 0;
+                                              newEdits[i].quantity_text = undefined;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            onChange={(e) => {
+                                              const rawVal = e.target.value;
+                                              const parsed = parseQuantity(rawVal);
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].quantity_text = rawVal;
+                                              newEdits[i].quantity = parsed;
                                               setEditableItems(newEdits);
                                             }}
                                             onKeyDown={(e) => {
@@ -4070,7 +4106,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }
                                             }}
                                             style={{
-                                              width: '70px',
+                                              width: '90px',
                                               padding: '8px',
                                               textAlign: 'center',
                                               borderRadius: '8px',
@@ -4081,7 +4117,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               outline: 'none'
                                             }}
                                           />
-                                          <span style={{ fontWeight: 'bold', color: '#64748B', fontSize: '0.95rem', minWidth: '24px', textAlign: 'left' }}>
+                                          <span style={{ fontWeight: 'bold', color: '#64748B', fontSize: '0.95rem', minWidth: '35px', textAlign: 'left' }}>
                                             {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                           </span>
                                         </div>
@@ -5906,8 +5942,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   type="text"
                   value={variantQuantity}
                   onChange={(e) => {
-                    const val = e.target.value.replace(',', '.');
-                    setVariantQuantity(val);
+                    setVariantQuantity(e.target.value);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
