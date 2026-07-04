@@ -582,6 +582,41 @@ export default function OrderLoadingPage() {
         return () => clearTimeout(delayDebounceFn);
     }, [productSearch]);
 
+    // Autofocus logic for sub-modal
+    useEffect(() => {
+        if (selectedProductForVariant) {
+            const timer = setTimeout(() => {
+                if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
+                    const firstSelect = document.getElementById('modal-select-0');
+                    if (firstSelect) firstSelect.focus();
+                } else {
+                    const qtyInput = document.getElementById('modal-qty-input');
+                    if (qtyInput) {
+                        (qtyInput as HTMLInputElement).focus();
+                        (qtyInput as HTMLInputElement).select();
+                    }
+                }
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedProductForVariant]);
+
+    const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (index < totalOptions - 1) {
+                const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                if (nextSelect) (nextSelect as HTMLElement).focus();
+            } else {
+                const qtyInput = document.getElementById('modal-qty-input');
+                if (qtyInput) {
+                    (qtyInput as HTMLElement).focus();
+                    (qtyInput as HTMLInputElement).select();
+                }
+            }
+        }
+    };
+
     if (authLoading || !rolesLoaded) {
         return (
             <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
@@ -703,40 +738,7 @@ export default function OrderLoadingPage() {
         setSelectedProductForVariant(null);
     };
 
-    // Autofocus logic for sub-modal
-    useEffect(() => {
-        if (selectedProductForVariant) {
-            const timer = setTimeout(() => {
-                if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
-                    const firstSelect = document.getElementById('modal-select-0');
-                    if (firstSelect) firstSelect.focus();
-                } else {
-                    const qtyInput = document.getElementById('modal-qty-input');
-                    if (qtyInput) {
-                        (qtyInput as HTMLInputElement).focus();
-                        (qtyInput as HTMLInputElement).select();
-                    }
-                }
-            }, 80);
-            return () => clearTimeout(timer);
-        }
-    }, [selectedProductForVariant]);
 
-    const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (index < totalOptions - 1) {
-                const nextSelect = document.getElementById(`modal-select-${index + 1}`);
-                if (nextSelect) (nextSelect as HTMLElement).focus();
-            } else {
-                const qtyInput = document.getElementById('modal-qty-input');
-                if (qtyInput) {
-                    (qtyInput as HTMLElement).focus();
-                    (qtyInput as HTMLInputElement).select();
-                }
-            }
-        }
-    };
 
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
