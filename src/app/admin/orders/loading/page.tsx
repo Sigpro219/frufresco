@@ -809,22 +809,12 @@ export default function OrderLoadingPage() {
 
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
-        let finalLabel = variantLabel || '';
-        let finalNickname = exc?.nickname || product.name;
-
-        // Append picking and delivery notes to variant label
-        const notes: string[] = [];
-        if (exc?.picking_note) notes.push(`Bodega: ${exc.picking_note}`);
-        if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
-        
-        if (notes.length > 0) {
-            const notesStr = notes.join(' | ');
-            finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
-        }
+        const finalLabel = variantLabel || '';
+        const finalNickname = exc?.nickname || product.name;
 
         // Check if item with same product_id AND variant_label exists
         const existsIndex = orderItems.findIndex(item => 
-            item.product_id === product.id && item.variant_label === finalLabel
+            item.product_id === product.id && item.variant_label === (finalLabel || null)
         );
 
         if (existsIndex >= 0) {
@@ -848,6 +838,7 @@ export default function OrderLoadingPage() {
                 products: {
                     name: product.name,
                     sku: product.sku,
+                    accounting_id: product.accounting_id,
                     unit_of_measure: product.unit_of_measure,
                     weight_kg: product.weight_kg
                 },
