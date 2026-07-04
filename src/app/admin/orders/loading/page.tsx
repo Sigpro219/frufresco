@@ -159,7 +159,7 @@ export default function OrderLoadingPage() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
 
-    const [variantQuantity, setVariantQuantity] = useState(1);
+    const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     const [selectedChannel, setSelectedChannel] = useState('');
@@ -675,7 +675,7 @@ export default function OrderLoadingPage() {
 
     const proceedAddProduct = (product: any, exc: any) => {
         // Reset sub-modal states
-        setVariantQuantity(1);
+        setVariantQuantity('1');
         setSelectedOptions({});
 
         // Pre-populate preferred variant options (if any)
@@ -687,18 +687,8 @@ export default function OrderLoadingPage() {
         }
         setSelectedOptions(initialOptions);
 
-        // Check if product has variants/options
-        if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
-            setSelectedProductForVariant(product);
-            setProductSearch('');
-            setSearchResults([]);
-            return;
-        }
-
-        // Direct add if no variants
-        const optValues = Object.values(initialOptions).filter(v => v);
-        const variantLabel = optValues.length > 0 ? optValues.join(', ') : undefined;
-        addOrUpdateItemInState(product, 1, variantLabel, initialOptions);
+        // Always open the sub-modal to input quantity/variants (just like create page!)
+        setSelectedProductForVariant(product);
         setProductSearch('');
         setSearchResults([]);
     };
@@ -708,8 +698,44 @@ export default function OrderLoadingPage() {
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         
-        addOrUpdateItemInState(selectedProductForVariant, variantQuantity, variantLabel, selectedOptions);
+        const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
+        addOrUpdateItemInState(selectedProductForVariant, qtyVal, variantLabel, selectedOptions);
         setSelectedProductForVariant(null);
+    };
+
+    // Autofocus logic for sub-modal
+    useEffect(() => {
+        if (selectedProductForVariant) {
+            const timer = setTimeout(() => {
+                if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
+                    const firstSelect = document.getElementById('modal-select-0');
+                    if (firstSelect) firstSelect.focus();
+                } else {
+                    const qtyInput = document.getElementById('modal-qty-input');
+                    if (qtyInput) {
+                        (qtyInput as HTMLInputElement).focus();
+                        (qtyInput as HTMLInputElement).select();
+                    }
+                }
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedProductForVariant]);
+
+    const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (index < totalOptions - 1) {
+                const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                if (nextSelect) (nextSelect as HTMLElement).focus();
+            } else {
+                const qtyInput = document.getElementById('modal-qty-input');
+                if (qtyInput) {
+                    (qtyInput as HTMLElement).focus();
+                    (qtyInput as HTMLInputElement).select();
+                }
+            }
+        }
     };
 
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
@@ -2133,110 +2159,218 @@ export default function OrderLoadingPage() {
                 )}
 
                 {/* --- VARIANT SELECTION MODAL (SUB-MODAL) --- */}
-                {selectedProductForVariant && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 3000, 
-                        backdropFilter: 'blur(4px)',
-                        padding: '1rem'
-                    }} onClick={() => setSelectedProductForVariant(null)}>
-                        <div 
-                            style={{ 
-                                backgroundColor: 'white', 
-                                padding: '2.5rem', 
-                                borderRadius: '32px', 
-                                width: '95%', 
-                                maxWidth: '420px', 
-                                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.3)', 
-                                border: '1px solid rgba(255,255,255,0.3)',
-                                position: 'relative'
-                            }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <button 
-                                onClick={() => setSelectedProductForVariant(null)}
-                                style={{
-                                    position: 'absolute',
-                                    top: '1.5rem',
-                                    right: '1.5rem',
-                                    border: 'none',
-                                    background: '#F1F5F9',
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '50%',
-                                    cursor: 'pointer',
-                                    color: '#64748B',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: 'bold'
+                {selectedProductForVariant && (() => {
+                    const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
+                    return (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            zIndex: 3000, 
+                            backdropFilter: 'blur(3px)',
+                            padding: '1rem'
+                        }} onClick={() => setSelectedProductForVariant(null)}>
+                            <div 
+                                style={{ 
+                                    backgroundColor: 'white', 
+                                    padding: '2rem', 
+                                    borderRadius: '24px', 
+                                    width: '95%', 
+                                    maxWidth: '820px', 
+                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', 
+                                    position: 'relative',
+                                    textAlign: 'left'
                                 }}
-                            >✕</button>
-                            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                                {selectedProductForVariant.image_url && (
-                                    <img 
-                                        src={selectedProductForVariant.image_url} 
-                                        alt={selectedProductForVariant.name}
-                                        style={{ width: '100px', height: '100px', borderRadius: '20px', objectFit: 'cover', marginBottom: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                                    />
-                                )}
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.25rem' }}>{selectedProductForVariant.name}</h3>
-                                <p style={{ color: '#64748B', fontSize: '0.875rem' }}>Personaliza las opciones del producto</p>
-                            </div>
-
-                            {/* Options Rendering */}
-                            {selectedProductForVariant.options_config?.map((opt: any) => (
-                                <div key={opt.name} style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {opt.name}
-                                    </label>
-                                    <select
-                                        value={selectedOptions[opt.name] || ''}
-                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                        style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '1rem', backgroundColor: '#F8FAFC', outline: 'none' }}
-                                    >
-                                        <option value="">Seleccionar {opt.name}...</option>
-                                        {opt.values?.map((val: string) => (
-                                            <option key={val} value={val}>{val}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            ))}
-
-                            {/* Quantity in Sub-Modal */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', margin: '2rem 0' }}>
-                                <button 
-                                    onClick={() => setVariantQuantity(Math.max(1, variantQuantity - 1))}
-                                    style={{ width: '45px', height: '45px', borderRadius: '15px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >-</button>
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0F172A' }}>{variantQuantity}</div>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{selectedProductForVariant.unit_of_measure}</div>
-                                </div>
-                                <button 
-                                    onClick={() => setVariantQuantity(variantQuantity + 1)}
-                                    style={{ width: '45px', height: '45px', borderRadius: '15px', border: 'none', backgroundColor: '#059669', color: 'white', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >+</button>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                onClick={e => e.stopPropagation()}
+                            >
                                 <button 
                                     onClick={() => setSelectedProductForVariant(null)}
-                                    style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
-                                >
-                                    Cancelar
-                                </button>
-                                <button 
-                                    onClick={confirmVariantAdd}
-                                    style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
-                                >
-                                    Agregar
-                                </button>
+                                    style={{
+                                        position: 'absolute',
+                                        top: '1.5rem',
+                                        right: '1.5rem',
+                                        border: 'none',
+                                        background: '#F1F5F9',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '50%',
+                                        cursor: 'pointer',
+                                        color: '#64748B',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontWeight: 'bold'
+                                    }}
+                                >✕</button>
+
+                                {/* Flex container for header */}
+                                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                                        {selectedProductForVariant.image_url ? (
+                                            <img 
+                                                src={selectedProductForVariant.image_url} 
+                                                alt={selectedProductForVariant.name}
+                                                style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: '80px',
+                                                height: '80px',
+                                                borderRadius: '16px',
+                                                backgroundColor: '#F3F4F6',
+                                                border: '1px solid #E5E7EB',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                                            }}>
+                                                <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
+                                            <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                                                {selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0
+                                                    ? 'Personaliza las variantes y cantidad:'
+                                                    : 'Especifica la cantidad para agregar:'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Client notes box */}
+                                {exc && (
+                                    <div style={{
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FCD34D',
+                                        borderRadius: '12px',
+                                        padding: '0.8rem 1.2rem',
+                                        margin: '0.5rem 0 1.2rem 0',
+                                        textAlign: 'left',
+                                        fontSize: '0.8rem',
+                                        color: '#92400E',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                                            📌 REQUERIMIENTOS DEL CLIENTE:
+                                        </div>
+                                        {exc.nickname && <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>}
+                                        {exc.picking_note && <div><strong>Nota Selección (Picking):</strong> {exc.picking_note}</div>}
+                                        {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
+                                    </div>
+                                )}
+
+                                {/* Main Grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0 ? '1fr 1fr' : '1fr', gap: '1.5rem', margin: '1.5rem 0' }}>
+                                    {/* Left side: options */}
+                                    {selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0 && (
+                                        <div>
+                                            {selectedProductForVariant.options_config.map((opt: any, index: number) => (
+                                                <div key={opt.name} style={{ marginBottom: '1.25rem' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                        {opt.name}
+                                                    </label>
+                                                    <select
+                                                        id={`modal-select-${index}`}
+                                                        value={selectedOptions[opt.name] || ''}
+                                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                                                        onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForVariant.options_config.length)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.8rem',
+                                                            border: '2px solid #E2E8F0',
+                                                            borderRadius: '10px',
+                                                            fontSize: '1rem',
+                                                            backgroundColor: '#F9FAFB',
+                                                            outline: 'none',
+                                                            transition: 'all 0.2s ease-in-out'
+                                                        }}
+                                                        onFocus={(e) => {
+                                                            e.target.style.borderColor = '#059669';
+                                                            e.target.style.backgroundColor = 'white';
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            e.target.style.borderColor = '#E2E8F0';
+                                                            e.target.style.backgroundColor = '#F9FAFB';
+                                                        }}
+                                                    >
+                                                        <option value="">Seleccionar {opt.name}...</option>
+                                                        {opt.values?.map((val: string) => (
+                                                            <option key={val} value={val}>{val}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Right side: quantity */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Cantidad
+                                        </label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <input
+                                                id="modal-qty-input"
+                                                type="text"
+                                                value={variantQuantity}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(',', '.');
+                                                    setVariantQuantity(val);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        confirmVariantAdd();
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.7rem 0.8rem',
+                                                    borderRadius: '10px',
+                                                    border: '2px solid #E2E8F0',
+                                                    fontWeight: '700',
+                                                    fontSize: '1.2rem',
+                                                    textAlign: 'center',
+                                                    outline: 'none',
+                                                    backgroundColor: '#F9FAFB',
+                                                    transition: 'all 0.2s ease-in-out'
+                                                }}
+                                                onFocus={(e) => {
+                                                    e.target.style.borderColor = '#059669';
+                                                    e.target.style.backgroundColor = 'white';
+                                                    e.target.select();
+                                                }}
+                                                onBlur={(e) => {
+                                                    e.target.style.borderColor = '#E2E8F0';
+                                                    e.target.style.backgroundColor = '#F9FAFB';
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#4B5563' }}>
+                                                {selectedProductForVariant.unit_of_measure}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Footer buttons */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                                    <button 
+                                        onClick={() => setSelectedProductForVariant(null)}
+                                        style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        onClick={confirmVariantAdd}
+                                        style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+                                    >
+                                        Agregar al Pedido
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
                     </>
                 ) : activeTab === 'emails' ? (
                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
