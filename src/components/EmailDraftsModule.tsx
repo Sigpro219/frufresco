@@ -327,6 +327,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     newEdits[idx].unit = selectedUnit;
     newEdits[idx].conversion_factor = selectedConversionFactor;
     newEdits[idx].selected_options = selectedOptions;
+    newEdits[idx].isConfirmed = true;
     
     const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 1);
     if (newEdits[idx].originalQuantity) {
@@ -336,6 +337,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setEditableItems(newEdits);
     setSelectedProductForVariant(null);
     setSelectedRowForVariant(null);
+
+    // Auto-focus next row's product input
+    setTimeout(() => {
+      const nextInput = productInputRefs.current[idx + 1];
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+      } else {
+        const approveBtn = document.getElementById('btn-approve-draft');
+        if (approveBtn) approveBtn.focus();
+      }
+    }, 80);
   };
 
   const selectProduct = (product: any, rowIndex: number) => {
@@ -343,6 +356,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     newEdits[rowIndex].matched_product_id = product.id;
     newEdits[rowIndex].searchQuery = product.name;
     newEdits[rowIndex].skuQuery = product.sku || '';
+    newEdits[rowIndex].isConfirmed = false;
     
     const currentOriginalUnit = newEdits[rowIndex].originalUnit || newEdits[rowIndex].unit || 'Kg';
     let conversionFactor = 1;
@@ -605,6 +619,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
 
   const getRowBgColor = (idx: number) => {
+    if (editableItems[idx]?.isConfirmed) return '#F0FDF4'; // Soft green for confirmed row
     if (focusedRowIndex === idx) return THEME.colors.primaryLight; // Soft brand green for currently focused/edited row
     if (activeEquivalenceRow === idx) return THEME.colors.primaryLight; // Soft brand green for equivalence row
     if (activeVariantRow === idx) return '#F0FDF4'; // Soft green for variant row
@@ -4074,19 +4089,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                   e.preventDefault();
                                                   const val = e.currentTarget.value;
                                                   const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  const newEdits = [...editableItems];
                                                   if (p) {
-                                                    const newEdits = [...editableItems];
                                                     newEdits[i].matched_product_id = p.id;
                                                     newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
                                                     newEdits[i].skuQuery = p.sku || '';
-                                                    setEditableItems(newEdits);
                                                   }
-                                                  // Jump focus to quantity input of same row
+                                                  newEdits[i].isConfirmed = true;
+                                                  setEditableItems(newEdits);
+                                                  
+                                                  // Jump focus to the next product input
                                                   setTimeout(() => {
-                                                    const qtyInput = quantityInputRefs.current[i];
-                                                    if (qtyInput) {
-                                                      qtyInput.focus();
-                                                      qtyInput.select();
+                                                    const nextInput = productInputRefs.current[i + 1];
+                                                    if (nextInput) {
+                                                      nextInput.focus();
+                                                      nextInput.select();
+                                                    } else {
+                                                      const approveBtn = document.getElementById('btn-approve-draft');
+                                                      if (approveBtn) approveBtn.focus();
                                                     }
                                                   }, 50);
                                                 } else if (e.key === 'ArrowDown') {
@@ -5965,7 +5985,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             overflowY: 'auto'
           }}>
             <button 
-              onClick={() => setSelectedProductForVariant(null)}
+              onClick={() => {
+                const idx = selectedRowForVariant;
+                setSelectedProductForVariant(null);
+                setSelectedRowForVariant(null);
+                if (idx !== null) {
+                  setTimeout(() => {
+                    const currentInput = productInputRefs.current[idx];
+                    if (currentInput) {
+                      currentInput.focus();
+                      currentInput.select();
+                    }
+                  }, 80);
+                }
+              }}
               style={{
                 position: 'absolute',
                 top: '1.5rem',
@@ -6255,7 +6288,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
               <button 
                 tabIndex={4}
-                onClick={() => setSelectedProductForVariant(null)}
+                onClick={() => {
+                  const idx = selectedRowForVariant;
+                  setSelectedProductForVariant(null);
+                  setSelectedRowForVariant(null);
+                  if (idx !== null) {
+                    setTimeout(() => {
+                      const currentInput = productInputRefs.current[idx];
+                      if (currentInput) {
+                        currentInput.focus();
+                        currentInput.select();
+                      }
+                    }, 80);
+                  }
+                }}
                 style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
               >
                 Cancelar
