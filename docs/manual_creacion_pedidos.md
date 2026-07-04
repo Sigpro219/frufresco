@@ -197,11 +197,38 @@ El flujo de geolocalización está protegido contra errores logísticos:
     ```
 2.  Si `outOfZone` es `true`, el operador puede pulsar el botón administrativo de excepciones (`isOverrideMode`). Esto requiere ingresar una justificación textual (ej: "Cliente acordó flete extra de $15,000") para desbloquear la creación del pedido. La justificación queda registrada directamente en el pedido en la columna `coverage_override_reason`.
 
-### Almacenamiento de Documento Original de Compra
-Cuando se importa un pedido desde la Mesa de Trabajo, el sistema retiene el archivo original en el estado `uploadedFile`.
-1. **Subida Automática a Supabase Storage:** Al confirmar y crear el pedido en `handleSubmit`, si existe un archivo cargado en el estado, se sube de forma asíncrona al bucket existente de Supabase `order-attachments` con un UUID único.
-2. **Asociación en Base de Datos:** Se obtiene la URL pública del archivo y se inyecta en la columna `document_url` de la tabla `orders` para permitir que el PDF/documento original quede enlazado permanentemente al pedido.
-3. **Visualización en Detalle de Pedidos:** En la vista de listado de pedidos (`/admin/orders/loading`), el modal de detalles del pedido recupera la columna `document_url` y renderiza un botón azul "Ver Anexo ↗" en su footer para permitir consultar el documento original en cualquier momento.
+### Almacenamiento y Visualización del Documento Original de Compra
+
+Para garantizar la auditabilidad y trazabilidad de los pedidos que se originan de órdenes de compra digitales (PDF, imágenes, hojas de cálculo), se diseñó un flujo integrado de carga, almacenamiento en Supabase Storage y visualización en caliente.
+
+#### A. Esquema de Base de Datos y Storage
+1. **Columna en BD:** Se añade la columna `document_url` (TEXT) a la tabla `orders` para almacenar la URL pública del archivo asociado (Migración: `supabase/migrations/20260703_add_order_document_url.sql`).
+2. **Bucket de Storage:** Se utiliza el bucket público `order-attachments` de Supabase Storage para alojar los archivos.
+3. **Políticas RLS en Storage:** Se habilitan permisos específicos para usuarios autenticados sobre la tabla `storage.objects` (Migración: `supabase/migrations/20260704_add_order_attachments_storage_policies.sql`):
+   ```sql
+   -- Permitir inserción (upload) a usuarios autenticados
+   CREATE POLICY "Allow authenticated uploads to order-attachments"
+   ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'order-attachments');
+
+   -- Permitir lectura (select) a usuarios autenticados
+   CREATE POLICY "Allow authenticated read from order-attachments"
+   ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'order-attachments');
+   ```
+
+#### B. Flujo de Carga (Página de Creación de Pedidos)
+1. **Retención del Archivo en Memoria:** Cuando el operador carga un archivo en el componente de importación, el objeto `File` crudo se almacena en el estado reactivo `uploadedFile`.
+2. **Enlace Temporal para Visualización:** Se genera un Object URL temporal con `URL.createObjectURL(file)` y se almacena en `uploadedFileUrl`. La cabecera del Staging Area muestra un botón interactivo (`📄 VER PDF` / `📄 VER EXCEL`) que permite abrir este Object URL en una nueva pestaña (`_blank`) para que el operador compare los datos lado a lado durante la auditoría.
+3. **Subida Física en Confirmación:** Al hacer clic en **"Confirmar Pedido"** (dentro del flujo de `handleSubmit` en `create/page.tsx`):
+   - Si `uploadedFile` está poblado, se genera un UUID único y se sube el archivo al bucket `order-attachments` mediante el cliente de Supabase Storage.
+   - Tras la subida exitosa, se obtiene su URL pública a través de `supabase.storage.from('order-attachments').getPublicUrl(filePath)`.
+   - La URL pública resultante se inyecta en la columna `document_url` de la inserción en la tabla `orders`.
+4. **Liberación de Recursos (Garbage Collection):** Al cancelar la importación o al crearse el pedido con éxito, se ejecuta `URL.revokeObjectURL(uploadedFileUrl)` para liberar la memoria del navegador.
+
+#### C. Visualización de Anexos (Detalles del Pedido)
+1. **Consulta con Comodín (`*`):** La vista del listado de pedidos (`/admin/orders/loading/page.tsx`) ejecuta una consulta `.select('*')` sobre la tabla `orders`, la cual recupera de forma transparente la columna `document_url` para cada registro.
+2. **Badge Interactivo Condicional:** En el footer del modal de detalles del pedido (al lado de la etiqueta de Canal de origen), se añade el siguiente bloque condicional:
+   - Si `selectedOrder.document_url` existe, se renderiza un botón estilizado azul **"Ver Anexo ↗"** que abre la URL pública de Storage en una nueva pestaña del navegador.
+   - Si el pedido se creó sin un documento de soporte, el espacio del footer permanece vacío y limpio.
 
 ---
 
