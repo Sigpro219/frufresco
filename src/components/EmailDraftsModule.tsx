@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 
@@ -1891,7 +1891,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           let totalWeight = 0;
           const itemsData: any[] = [];
 
-          editableItems.forEach(item => {
+          editableItems.filter(item => !item.isDeleted).forEach(item => {
             if (item.matched_product_id) {
               const prod = products.find(p => p.id === item.matched_product_id);
               if (prod) {
@@ -2255,7 +2255,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
 
-      for (const item of editableItems) {
+      for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
@@ -2452,7 +2452,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const totalValue = editableItems.reduce((acc, item) => {
+  const totalValue = editableItems.filter(item => !item.isDeleted).reduce((acc, item) => {
     const matchedProd = products.find(p => p.id === item.matched_product_id);
     const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
     return acc + (matchedProd ? (resolvedPrice * (item.quantity || 0)) : 0);
@@ -3926,7 +3926,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         )}
                         <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '33%' }}>NOMBRE EN DOCUMENTO</th>
                         <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '42%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3940,15 +3941,63 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               return (
                                 <React.Fragment key={i}>
-                                  <tr 
-                                    className="scroll-row-animate"
-                                    style={{ 
-                                      borderBottom: `1px solid ${THEME.colors.border}`,
-                                      animationDelay: `${i * 0.04}s`,
-                                      backgroundColor: getRowBgColor(i) || 'transparent',
-                                      transition: 'background-color 0.2s'
-                                    }}
-                                  >
+                                  {item.isDeleted ? (
+                                    <tr 
+                                      className="scroll-row-animate"
+                                      style={{ 
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        animationDelay: `${i * 0.04}s`,
+                                        backgroundColor: '#FFF1F2',
+                                        transition: 'background-color 0.2s',
+                                        height: '73px'
+                                      }}
+                                    >
+                                      <td colSpan={isEditing ? 5 : 4} style={{ padding: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#E11D48', fontWeight: 700 }}>
+                                            <span style={{ fontSize: '1.1rem' }}>🗑️</span>
+                                            <span>
+                                              Registro eliminado: <span style={{ textDecoration: 'line-through', opacity: 0.7 }}>{item.originalName || item.name || 'Producto Manual'}</span>
+                                            </span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].isDeleted = false;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            style={{
+                                              backgroundColor: '#10B981',
+                                              color: 'white',
+                                              border: 'none',
+                                              padding: '6px 14px',
+                                              borderRadius: '8px',
+                                              fontWeight: 800,
+                                              cursor: 'pointer',
+                                              fontSize: '0.85rem',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '6px',
+                                              boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                                            }}
+                                          >
+                                            <RotateCcw size={14} /> Deshacer
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    <tr 
+                                      className="scroll-row-animate"
+                                      style={{ 
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        animationDelay: `${i * 0.04}s`,
+                                        backgroundColor: getRowBgColor(i) || 'transparent',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                    >
                                       {isEditing && (
                                         <td style={{ 
                                           padding: '1rem 0.5rem', 
@@ -4122,7 +4171,48 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           </span>
                                         </div>
                                       </td>
+                                      <td style={{ 
+                                        padding: '1rem 0.5rem', 
+                                        textAlign: 'center', 
+                                        width: '5%',
+                                        backgroundColor: getCellBgColor(i, true),
+                                        transition: 'background-color 0.2s'
+                                      }}>
+                                        {isEditing && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].isDeleted = true;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            style={{
+                                              background: 'none',
+                                              border: 'none',
+                                              color: '#EF4444',
+                                              cursor: 'pointer',
+                                              padding: '6px',
+                                              borderRadius: '6px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              transition: 'all 0.2s'
+                                            }}
+                                            title="Eliminar registro"
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
+                                          >
+                                            <Trash2 size={18} />
+                                          </button>
+                                        )}
+                                      </td>
                                   </tr>
+                                  )}
                                   
                                   {false && (
                                     <tr style={{ backgroundColor: '#F0FDF4' }}>
@@ -5547,7 +5637,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </tr>
                   </thead>
                   <tbody>
-                    {editableItems.map((item: any, idx: number) => {
+                    {editableItems.filter(item => !item.isDeleted).map((item: any, idx: number) => {
                       if (!item.matched_product_id) return null;
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
