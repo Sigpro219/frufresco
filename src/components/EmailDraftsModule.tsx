@@ -220,6 +220,233 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [activeVariantRow, setActiveVariantRow] = useState<number | null>(null);
   const [activeEquivalenceRow, setActiveEquivalenceRow] = useState<number | null>(null);
 
+  const [activeSearchRowIndex, setActiveSearchRowIndex] = useState<number | null>(null);
+  const [focusedProductIndex, setFocusedProductIndex] = useState<number>(-1);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
+  const [selectedRowForVariant, setSelectedRowForVariant] = useState<number | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [variantQuantity, setVariantQuantity] = useState<string>('1');
+  const [selectedUnit, setSelectedUnit] = useState<string>('Kg');
+  const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
+  const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadClientExceptions() {
+      if (!selectedDraft || !selectedDraft.profile_id) {
+        setClientExceptions([]);
+        return;
+      }
+      const { data: excs } = await supabase
+        .from('product_nicknames')
+        .select('*')
+        .eq('customer_id', selectedDraft.profile_id);
+      if (excs) {
+        setClientExceptions(excs);
+      } else {
+        setClientExceptions([]);
+      }
+    }
+    loadClientExceptions();
+  }, [selectedDraft?.profile_id]);
+
+  const openVariantModalForItem = (product: any, rowIndex: number) => {
+    setSelectedProductForVariant(product);
+    setSelectedRowForVariant(rowIndex);
+    
+    const item = editableItems[rowIndex];
+    setVariantQuantity(String(item.quantity || 1));
+    setSelectedUnit(item.unit || product.unit_of_measure || 'Kg');
+    setSelectedConversionFactor(item.conversion_factor || 1);
+    setSelectedOptions(item.selected_options || {});
+  };
+
+  const confirmVariantAdd = () => {
+    if (selectedRowForVariant === null || !selectedProductForVariant) return;
+    
+    const idx = selectedRowForVariant;
+    const newEdits = [...editableItems];
+    const qty = parseFloat(variantQuantity) || 0;
+    
+    newEdits[idx].quantity = qty;
+    newEdits[idx].unit = selectedUnit;
+    newEdits[idx].conversion_factor = selectedConversionFactor;
+    newEdits[idx].selected_options = selectedOptions;
+    
+    const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 1);
+    if (newEdits[idx].originalQuantity) {
+      newEdits[idx].conversion_factor = parseFloat((qty / origQty).toFixed(3));
+    }
+    
+    setEditableItems(newEdits);
+    setSelectedProductForVariant(null);
+    setSelectedRowForVariant(null);
+  };
+
+  const selectProduct = (product: any, rowIndex: number) => {
+    const newEdits = [...editableItems];
+    newEdits[rowIndex].matched_product_id = product.id;
+    newEdits[rowIndex].searchQuery = product.name;
+    newEdits[rowIndex].skuQuery = product.sku || '';
+    
+    const currentOriginalUnit = newEdits[rowIndex].originalUnit || newEdits[rowIndex].unit || 'Kg';
+    let conversionFactor = 1;
+    let targetUnit = product.unit_of_measure || 'Kg';
+    let foundDbConversion = false;
+
+    if (conversions && conversions.length > 0) {
+      const dbConv = conversions.find(c => 
+        c.product_id === product.id &&
+        c.from_unit.toLowerCase().trim() === currentOriginalUnit.toLowerCase().trim() &&
+        c.to_unit.toLowerCase().trim() === targetUnit.toLowerCase().trim()
+      );
+      if (dbConv) {
+        conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+        targetUnit = dbConv.to_unit || product.unit_of_measure;
+        foundDbConversion = true;
+      }
+    }
+
+    if (!foundDbConversion) {
+      const u = (product.unit_of_measure || '').toLowerCase().trim();
+      let normalizedUnit = 'Kg';
+      if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
+      else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
+      else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
+      else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
+      else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
+      else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
+        normalizedUnit = getSmartFallbackUnit(product.name, 'Kg');
+      }
+      else if (product.unit_of_measure) {
+        normalizedUnit = getSmartFallbackUnit(product.name, product.unit_of_measure);
+      }
+      targetUnit = normalizedUnit;
+
+      const isLibra = currentOriginalUnit === 'Lb';
+      conversionFactor = isLibra ? 0.5 : 1;
+      
+      const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 1);
+      if (origQty >= 100 && !isLibra) {
+        if (targetUnit === 'Kg') {
+          conversionFactor = 0.001;
+        } else if (targetUnit === 'Atado') {
+          conversionFactor = 0.002;
+        }
+      }
+    }
+
+    newEdits[rowIndex].conversion_factor = conversionFactor;
+    newEdits[rowIndex].unit = targetUnit;
+    const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 1);
+    newEdits[rowIndex].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
+    
+    const autoSelectedOptions: Record<string, string> = {};
+    const rawOriginalName = newEdits[rowIndex].originalName || '';
+    let extraDescription = '';
+    if (product && product.name) {
+      const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+      const prodClean = product.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+      const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
+      const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
+      const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+      extraDescription = extraWords.join(' ');
+    }
+    let finalObservations = [newEdits[rowIndex].observations || '', extraDescription].filter(Boolean).join(' ').trim();
+    
+    if (product.variants && product.variants.length > 0) {
+      const variantOptionNames = new Set<string>();
+      let isOldFormat = false;
+      product.variants.forEach((v: any) => {
+        if (v.name && Array.isArray(v.options)) {
+          isOldFormat = true;
+        } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+          Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+        }
+      });
+
+      let variantOptionsList = product.variants;
+      if (!isOldFormat) {
+        variantOptionsList = Array.from(variantOptionNames).map(name => {
+          const values = new Set<string>();
+          product.variants.forEach((v: any) => {
+            if (v.options && v.options[name]) values.add(v.options[name]);
+          });
+          return { name, options: Array.from(values) };
+        });
+      }
+      
+      const searchText = `${rawOriginalName} ${finalObservations}`.toLowerCase();
+      variantOptionsList.forEach((v: any) => {
+        if (Array.isArray(v.options)) {
+          for (const optVal of v.options) {
+            const matchResult = matchVariantOption(searchText, String(optVal));
+            if (matchResult.matched && matchResult.matchedTextInSearch) {
+              autoSelectedOptions[v.name] = optVal;
+              const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+              const regex = new RegExp(`\\b${escapeRegex(matchResult.matchedTextInSearch)}\\b`, 'gi');
+              finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
+              break;
+            }
+          }
+        }
+      });
+    }
+    
+    newEdits[rowIndex].selected_options = autoSelectedOptions;
+    newEdits[rowIndex].observations = finalObservations;
+    
+    setEditableItems(newEdits);
+    setActiveSearchRowIndex(null);
+  };
+
+  const handleProductSearchKeyDown = (e: React.KeyboardEvent, rowIndex: number, filtered: any[]) => {
+    if (filtered.length === 0) return;
+    
+    let nextIndex = focusedProductIndex;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = focusedProductIndex < filtered.length - 1 ? focusedProductIndex + 1 : focusedProductIndex;
+      setFocusedProductIndex(nextIndex);
+      setTimeout(() => {
+        const el = document.getElementById(`search-item-${rowIndex}-${nextIndex}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }, 10);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = focusedProductIndex > 0 ? focusedProductIndex - 1 : focusedProductIndex;
+      setFocusedProductIndex(nextIndex);
+      setTimeout(() => {
+        const el = document.getElementById(`search-item-${rowIndex}-${nextIndex}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }, 10);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (focusedProductIndex >= 0 && focusedProductIndex < filtered.length) {
+        e.preventDefault();
+        selectProduct(filtered[focusedProductIndex], rowIndex);
+        setFocusedProductIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      setActiveSearchRowIndex(null);
+      setFocusedProductIndex(-1);
+    }
+  };
+
+  const optionsList = (() => {
+    if (!selectedProductForVariant) return [];
+    const list = [{ unit: selectedProductForVariant.unit_of_measure || 'Kg', factor: 1, label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)` }];
+    const prodConvs = conversions ? conversions.filter(c => c.product_id === selectedProductForVariant.id) : [];
+    prodConvs.forEach(c => {
+      if (!list.some(l => l.unit.toLowerCase().trim() === c.from_unit.toLowerCase().trim())) {
+        list.push({
+          unit: c.from_unit,
+          factor: parseFloat(c.conversion_factor) || 1,
+          label: `${c.from_unit} (${parseFloat(c.conversion_factor)} ${selectedProductForVariant.unit_of_measure || 'Kg'})`
+        });
+      }
+    });
+    return list;
+  })();
+
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
   const [activePricingModel, setActivePricingModel] = useState<any>(null);
   const [isB2CDefault, setIsB2CDefault] = useState(false);
@@ -3061,8 +3288,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: '100%',
-            maxWidth: '1300px',
+            width: '94%',
+            maxWidth: '1400px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
@@ -3676,7 +3903,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '80px' }}>OBS.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3750,168 +3976,70 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          <input
-                                            ref={el => { productInputRefs.current[i] = el; }}
-                                            list={`products-list-${i}`}
-                                            disabled={!isEditing}
-                                            value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
-                                            placeholder="-- Buscar Producto --"
-                                            onFocus={() => setFocusedRowIndex(i)}
-                                            onBlur={() => setFocusedRowIndex(null)}
-                                            onChange={(e) => {
-                                              const val = e.target.value;
-                                              const found = products.find(p => p.name === val);
-                                              const newEdits = [...editableItems];
-                                              if (found) {
-                                                newEdits[i].matched_product_id = found.id;
-                                                newEdits[i].searchQuery = found.name;
-                                                newEdits[i].skuQuery = found.sku || '';
-                                                
-                                                const currentOriginalUnit = newEdits[i].originalUnit || newEdits[i].unit || 'Kg';
-                                                let conversionFactor = 1;
-                                                let targetUnit = found.unit_of_measure || 'Kg';
-                                                let foundDbConversion = false;
-
-                                                if (conversions && conversions.length > 0) {
-                                                  const dbConv = conversions.find(c => 
-                                                    c.product_id === found.id &&
-                                                    c.from_unit.toLowerCase().trim() === currentOriginalUnit.toLowerCase().trim() &&
-                                                    c.to_unit.toLowerCase().trim() === targetUnit.toLowerCase().trim()
-                                                  );
-                                                  if (dbConv) {
-                                                    conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-                                                    targetUnit = dbConv.to_unit || found.unit_of_measure;
-                                                    foundDbConversion = true;
+                                          <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+                                            <input
+                                              ref={el => { productInputRefs.current[i] = el; }}
+                                              disabled={!isEditing}
+                                              value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
+                                              placeholder="Buscar ID..."
+                                              list="all-products-list"
+                                              onFocus={(e) => e.target.select()}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Tab') {
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
+                                                    e.preventDefault();
+                                                    openVariantModalForItem(p, i);
+                                                  }
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  if (p) {
+                                                    const newEdits = [...editableItems];
+                                                    newEdits[i].matched_product_id = p.id;
+                                                    newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
+                                                    newEdits[i].skuQuery = p.sku || '';
+                                                    setEditableItems(newEdits);
+                                                  }
+                                                  const nextInput = productInputRefs.current[i + 1];
+                                                  if (nextInput) {
+                                                    nextInput.focus();
+                                                    nextInput.select();
                                                   }
                                                 }
-
-                                                if (!foundDbConversion) {
-                                                  const u = (found.unit_of_measure || '').toLowerCase().trim();
-                                                  let normalizedUnit = 'Kg';
-                                                  if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
-                                                  else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
-                                                  else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
-                                                  else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
-                                                  else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
-                                                  else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
-                                                    normalizedUnit = getSmartFallbackUnit(found.name, 'Kg');
-                                                  }
-                                                  else if (found.unit_of_measure) {
-                                                    normalizedUnit = getSmartFallbackUnit(found.name, found.unit_of_measure);
-                                                  }
-                                                  targetUnit = normalizedUnit;
-
-                                                  const isLibra = currentOriginalUnit === 'Lb';
-                                                  conversionFactor = isLibra ? 0.5 : 1;
-                                                  
-                                                  const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].quantity || 1);
-                                                  if (origQty >= 100 && !isLibra) {
-                                                    if (targetUnit === 'Kg') {
-                                                      conversionFactor = 0.001;
-                                                    } else if (targetUnit === 'Atado') {
-                                                      conversionFactor = 0.002;
-                                                    }
-                                                  }
+                                              }}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                if (p) {
+                                                  selectProduct(p, i);
+                                                } else {
+                                                  const newEdits = [...editableItems];
+                                                  newEdits[i].matched_product_id = null;
+                                                  newEdits[i].searchQuery = val;
+                                                  newEdits[i].skuQuery = '';
+                                                  newEdits[i].selected_options = {};
+                                                  setEditableItems(newEdits);
                                                 }
-
-                                                newEdits[i].conversion_factor = conversionFactor;
-                                                newEdits[i].unit = targetUnit;
-                                                const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].quantity || 1);
-                                                newEdits[i].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
-                                                
-                                                // Extract variants from observations/originalName
-                                                const autoSelectedOptions: Record<string, string> = {};
-                                                const rawOriginalName = newEdits[i].originalName || '';
-                                                let extraDescription = '';
-                                                if (found && found.name) {
-                                                  const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
-                                                  const prodClean = found.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
-                                                  const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
-                                                  const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
-                                                  const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
-                                                  extraDescription = extraWords.join(' ');
-                                                }
-                                                let finalObservations = [newEdits[i].observations || '', extraDescription].filter(Boolean).join(' ').trim();
-                                                
-                                                if (found.variants && found.variants.length > 0) {
-                                                  const variantOptionNames = new Set<string>();
-                                                  let isOldFormat = false;
-                                                  found.variants.forEach((v: any) => {
-                                                    if (v.name && Array.isArray(v.options)) {
-                                                      isOldFormat = true;
-                                                    } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
-                                                      Object.keys(v.options).forEach(k => variantOptionNames.add(k));
-                                                    }
-                                                  });
-
-                                                  let variantOptionsList = found.variants;
-                                                  if (!isOldFormat) {
-                                                    variantOptionsList = Array.from(variantOptionNames).map(name => {
-                                                      const values = new Set<string>();
-                                                      found.variants.forEach((v: any) => {
-                                                        if (v.options && v.options[name]) values.add(v.options[name]);
-                                                      });
-                                                      return { name, options: Array.from(values) };
-                                                    });
-                                                  }
-                                                  
-                                                  const searchText = `${rawOriginalName} ${finalObservations}`.toLowerCase();
-                                                  variantOptionsList.forEach((v: any) => {
-                                                    if (Array.isArray(v.options)) {
-                                                      for (const optVal of v.options) {
-                                                        const matchResult = matchVariantOption(searchText, String(optVal));
-                                                        if (matchResult.matched && matchResult.matchedTextInSearch) {
-                                                          autoSelectedOptions[v.name] = optVal;
-                                                          const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                                                          const regex = new RegExp(`\\b${escapeRegex(matchResult.matchedTextInSearch)}\\b`, 'gi');
-                                                          finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
-                                                          break;
-                                                        }
-                                                      }
-                                                    }
-                                                  });
-                                                }
-                                                
-                                                newEdits[i].selected_options = autoSelectedOptions;
-                                                newEdits[i].observations = finalObservations;
-                                              } else {
-                                                newEdits[i].matched_product_id = null;
-                                                newEdits[i].searchQuery = val;
-                                                newEdits[i].skuQuery = '';
-                                                newEdits[i].selected_options = {};
-                                              }
-                                              setEditableItems(newEdits);
-                                            }}
-
-                                            style={{
-                                              flex: 1,
-                                              padding: '0.5rem',
-                                              borderRadius: '6px',
-                                              border: '1px solid #D1D5DB',
-                                              fontSize: '0.9rem',
-                                              backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
-                                              fontWeight: 600,
-                                              color: '#111827',
-                                              minWidth: '0'
-                                            }}
-                                          />
-                                          
-
+                                              }}
+                                              style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                fontSize: '1rem',
+                                                fontWeight: '700',
+                                                backgroundColor: item.matched_product_id ? '#FFFFFF' : '#FFFBEB',
+                                                outline: 'none',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                transition: 'all 0.2s'
+                                              }}
+                                            />
+                                          </div>
                                         </div>
                                       </div>
-                                      <datalist id={`products-list-${i}`}>
-                                        {products
-                                          .filter(p => {
-                                            const query = (matchedProd ? matchedProd.name : (item.searchQuery || '')).toLowerCase().trim();
-                                            if (!query) return true;
-                                            return p.name.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query);
-                                          })
-                                          .slice(0, 15)
-                                          .map(p => (
-                                            <option key={p.id} value={p.name} />
-                                          ))
-                                        }
-                                      </datalist>
                                     </td>
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '130px' }}>
                                       {isEditing ? (
@@ -4000,173 +4128,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                       {matchedProd ? formatMoney(itemTotal) : '-'}
                                     </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: 'auto' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                                        {/* Botón de Equivalencias */}
-                                        {isEditing && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setActiveEquivalenceRow(prev => prev === i ? null : i);
-                                              setActiveVariantRow(null);
-                                              setTimeout(() => {
-                                                const equivInput = document.getElementById(`equiv-input-${i}`);
-                                                if (equivInput) equivInput.focus();
-                                              }, 50);
-                                            }}
-                                            style={{
-                                              padding: '0.25rem 0.5rem',
-                                              backgroundColor: activeEquivalenceRow === i
-                                                ? '#4338CA'
-                                                : item.conversion_factor && item.conversion_factor !== 1
-                                                  ? '#EEF2FF'
-                                                  : '#F3F4F6',
-                                              color: activeEquivalenceRow === i
-                                                ? '#FFFFFF'
-                                                : item.conversion_factor && item.conversion_factor !== 1
-                                                  ? '#4338CA'
-                                                  : '#4B5563',
-                                              border: activeEquivalenceRow === i
-                                                ? '1px solid #4338CA'
-                                                : item.conversion_factor && item.conversion_factor !== 1
-                                                  ? '1px solid #C7D2FE'
-                                                  : '1px solid #D1D5DB',
-                                              borderRadius: '6px',
-                                              cursor: 'pointer',
-                                              display: 'inline-flex',
-                                              alignItems: 'center',
-                                              gap: '4px',
-                                              transition: 'all 0.2s',
-                                              outline: 'none',
-                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                            onFocus={(e) => {
-                                              e.currentTarget.style.borderColor = '#6366F1';
-                                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.2)';
-                                            }}
-                                            onBlur={(e) => {
-                                              e.currentTarget.style.borderColor = activeEquivalenceRow === i ? '#4338CA' : item.conversion_factor && item.conversion_factor !== 1 ? '#C7D2FE' : '#D1D5DB';
-                                              e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-                                            }}
-                                            title="Equivalencias (Alt+E)"
-                                          >
-                                            <span style={{ fontSize: '0.95rem' }}>⚖️</span>
-                                            <span style={{ 
-                                              fontSize: '0.75rem', 
-                                              fontWeight: 700,
-                                              color: activeEquivalenceRow === i ? '#FFFFFF' : '#4338CA'
-                                            }}>Equivalencias</span>
-                                            {item.conversion_factor && item.conversion_factor !== 1 && (
-                                              <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                                                x{item.conversion_factor}
-                                              </span>
-                                            )}
-                                          </button>
-                                        )}
-
-                                        {/* Botón de variantes si aplica */}
-                                        {isEditing && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setActiveVariantRow(prev => prev === i ? null : i);
-                                              setTimeout(() => {
-                                                const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                if (firstSelect) firstSelect.focus();
-                                              }, 50);
-                                            }}
-                                            style={{
-                                              padding: '0.2rem 0.4rem',
-                                              backgroundColor: activeVariantRow === i
-                                                ? '#059669'
-                                                : Object.keys(item.selected_options || {}).length > 0 
-                                                  ? '#ECFDF5' 
-                                                  : '#F3F4F6',
-                                              color: activeVariantRow === i
-                                                ? '#FFFFFF'
-                                                : Object.keys(item.selected_options || {}).length > 0 
-                                                  ? '#047857' 
-                                                  : '#374151',
-                                              border: activeVariantRow === i
-                                                ? '1px solid #047857'
-                                                : Object.keys(item.selected_options || {}).length > 0 
-                                                  ? '1px solid #A7F3D0' 
-                                                  : '1px solid #D1D5DB',
-                                              borderRadius: '20px',
-                                              fontSize: '0.75rem',
-                                              fontWeight: 700,
-                                              cursor: 'pointer',
-                                              whiteSpace: 'nowrap',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '4px',
-                                              transition: 'all 0.2s',
-                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                            title="Ver / Modificar Variantes (Alt + V)"
-                                          >
-                                            <span style={{ fontSize: '0.9rem' }}>⚡</span>
-                                            {Object.keys(item.selected_options || {}).length > 0 ? (
-                                              <span>
-                                                {Object.values(item.selected_options).join(', ')}
-                                              </span>
-                                            ) : (
-                                              <span style={{ fontSize: '0.75rem' }}>Variantes</span>
-                                            )}
-                                          </button>
-                                        )}
-
-                                        {/* En modo lectura, si tiene opciones elegidas, las mostramos como etiqueta */}
-                                        {!isEditing && item.selected_options && Object.keys(item.selected_options).length > 0 && (
-                                          <span style={{
-                                            padding: '4px 8px',
-                                            backgroundColor: '#E6F4EA',
-                                            color: '#137333',
-                                            borderRadius: '6px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 700,
-                                            whiteSpace: 'nowrap',
-                                            display: 'inline-flex',
-                                            alignItems: 'center'
-                                          }}>
-                                            {Object.values(item.selected_options).join(' | ')}
-                                          </span>
-                                        )}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setObsModal({
-                                            isOpen: true,
-                                            rowIndex: i,
-                                            text: item.observations || ''
-                                          });
-                                        }}
-                                        title={item.observations ? `Observaciones: ${item.observations}` : 'Agregar observaciones'}
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          color: item.observations ? THEME.colors.primary : '#9CA3AF',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          padding: '4px',
-                                          borderRadius: '6px',
-                                          backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
-                                          transition: 'all 0.2s',
-                                          borderWidth: '1px',
-                                          borderStyle: item.observations ? 'solid' : 'dashed',
-                                          borderColor: item.observations ? THEME.colors.primary : '#D1D5DB'
-                                        }}
-                                      >
-                                        <MessageSquare size={18} fill={item.observations ? THEME.colors.primary : 'none'} />
-                                      </button>
-                                      </div>
-                                    </td>
                                   </tr>
                                   
-                                  {/* Fila Inline de Expansión para Selección de Variantes */}
-                                  {isEditing && activeVariantRow === i && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
+                                  {false && (
                                     <tr style={{ backgroundColor: '#F0FDF4' }}>
                                       <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{
@@ -4292,8 +4256,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </tr>
                                   )}
 
-                                  {/* Fila Inline de Expansión para Equivalencias */}
-                                  {isEditing && activeEquivalenceRow === i && (
+                                  {false && (
                                     <tr style={{ backgroundColor: '#EEF2FF' }}>
                                       <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{
@@ -5787,6 +5750,320 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       )}
 
+      {/* PRODUCT VARIANT CUSTOM SUB-MODAL */}
+      {selectedProductForVariant && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100, // Above revision modal (999)
+          padding: '1rem',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '820px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            position: 'relative',
+            padding: '2.5rem',
+            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <button 
+              onClick={() => setSelectedProductForVariant(null)}
+              style={{
+                position: 'absolute',
+                top: '1.5rem',
+                right: '1.5rem',
+                border: 'none',
+                background: '#F1F5F9',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                color: '#64748B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+              }}
+            >✕</button>
+
+            {/* Flex container for header */}
+            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                {selectedProductForVariant.image_url ? (
+                  <img 
+                    src={selectedProductForVariant.image_url} 
+                    alt={selectedProductForVariant.name}
+                    style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '16px',
+                    backgroundColor: '#F3F4F6',
+                    border: '1px solid #E5E7EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                  }}>
+                    <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                  </div>
+                )}
+                <div>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
+                  <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                    Personaliza tu producto:
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Client notes box */}
+            {(() => {
+              const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
+              if (!exc) return null;
+              return (
+                <div style={{
+                  backgroundColor: '#FEF3C7',
+                  border: '1px solid #FCD34D',
+                  borderRadius: '12px',
+                  padding: '0.8rem 1.2rem',
+                  margin: '0.5rem 0 1.2rem 0',
+                  textAlign: 'left',
+                  fontSize: '0.8rem',
+                  color: '#92400E',
+                  lineHeight: '1.4'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                    📌 REQUERIMIENTOS DEL CLIENTE:
+                  </div>
+                  {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
+                    <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
+                  )}
+                  {exc.picking_note && <div><strong>Nota:</strong> {exc.picking_note}</div>}
+                  {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
+                </div>
+              );
+            })()}
+
+            {/* ACTION BAR */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              fontSize: '0.75rem',
+              color: '#9CA3AF',
+              marginBottom: '1.5rem',
+              fontWeight: '700'
+            }}>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => alert("Para editar las variantes Estructurales, por favor ve al panel de catálogo de productos.")}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#4B5563',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  textDecoration: 'underline'
+                }}
+              >
+                ⚙️ Editar Variantes
+              </button>
+              <span>|</span>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => {
+                  if (window.confirm("¿Quieres crear una nueva equivalencia? Te redirigiremos al catálogo de productos.")) {
+                    setSelectedProductForVariant(null);
+                    window.location.href = '/admin/products';
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#4B5563',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  textDecoration: 'underline'
+                }}
+              >
+                ⚙️ Editar Equivalencias
+              </button>
+            </div>
+
+            {/* Options Rendering */}
+            {selectedProductForVariant.options_config?.map((opt: any, index: number) => (
+              <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {opt.name}
+                </label>
+                <select
+                  value={selectedOptions[opt.name] || ''}
+                  onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    border: '2px solid #E2E8F0',
+                    borderRadius: '10px',
+                    fontSize: '1rem',
+                    backgroundColor: '#F9FAFB',
+                    outline: 'none',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                >
+                  <option value="">Seleccionar {opt.name}...</option>
+                  {opt.values?.map((val: string) => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+
+            {/* Quantity & Unit select grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Cantidad
+                </label>
+                <input
+                  id="modal-qty-input"
+                  type="text"
+                  value={variantQuantity}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(',', '.');
+                    setVariantQuantity(val);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const unitSel = document.getElementById('modal-unit-select');
+                      if (unitSel) {
+                        unitSel.focus();
+                      } else {
+                        confirmVariantAdd();
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.8rem',
+                    borderRadius: '10px',
+                    border: '2px solid #E2E8F0',
+                    fontWeight: '700',
+                    fontSize: '1.1rem',
+                    textAlign: 'center',
+                    outline: 'none',
+                    backgroundColor: '#F9FAFB',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                    e.target.select();
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E2E8F0';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Unidad de Medida
+                </label>
+                <select
+                  id="modal-unit-select"
+                  value={selectedUnit}
+                  onChange={(e) => {
+                    const opt = optionsList.find(o => o.unit === e.target.value);
+                    if (opt) {
+                      setSelectedUnit(opt.unit);
+                      setSelectedConversionFactor(opt.factor);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab' && !e.shiftKey) {
+                      e.preventDefault();
+                      const addBtn = document.getElementById('modal-add-button');
+                      if (addBtn) addBtn.focus();
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      confirmVariantAdd();
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    border: '2px solid #E2E8F0',
+                    borderRadius: '10px',
+                    fontSize: '1rem',
+                    backgroundColor: '#F9FAFB',
+                    outline: 'none',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E2E8F0';
+                    e.target.style.backgroundColor = '#F9FAFB';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                >
+                  {optionsList.map(o => (
+                    <option key={o.unit} value={o.unit}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Footer buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+              <button 
+                onClick={() => setSelectedProductForVariant(null)}
+                style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button 
+                id="modal-add-button"
+                onClick={confirmVariantAdd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    confirmVariantAdd();
+                  }
+                }}
+                style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div style={{
           position: 'fixed',
@@ -5951,6 +6228,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         </div>
       )}
+      <datalist id="all-products-list">
+        {products.map(p => (
+          <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
+        ))}
+      </datalist>
     </div>
   );
 }
