@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { supabase, type Product } from './supabase';
+import { supabase, createAdminClient, type Product } from './supabase';
 
 /**
  * Fetches all products visible on the web.
@@ -96,7 +96,8 @@ export const getTranslationCache = unstable_cache(
  */
 export const getSeoSettings = unstable_cache(
   async () => {
-    const { data, error } = await supabase
+    const adminSupabase = createAdminClient();
+    const { data, error } = await adminSupabase
       .from('seo_strategies')
       .select('*')
       .eq('is_active', true)

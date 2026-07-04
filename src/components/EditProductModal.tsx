@@ -68,8 +68,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     console.warn('EditModal: No master table found, using defaults.');
                     return;
                 }
-                if (data && data.length > 0) {
-                    setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                                if (data && data.length > 0) {
+                    setMasterAttributes(data.map(attr => ({ 
+                        name: attr.name, 
+                        values: attr.suggested_values,
+                        show_on_web: attr.show_on_web !== false
+                    })));
                 }
 
                 // Fetch Dynamic Units from Settings
@@ -287,7 +291,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 inventory_group: formData.inventory_group,
                 purchase_sublist: formData.purchase_sublist,
                 utility_deviation_pct: formData.utility_deviation_pct || 0,
-                options_config: options,
+                options_config: options.map(opt => {
+                    const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
+                    return {
+                        name: opt.name,
+                        values: opt.values,
+                        show_on_web: attr ? attr.show_on_web !== false : true
+                    };
+                }),
                 variants: variants,
                 iva_rate: formData.iva_rate,
                 display_name: formData.display_name,
@@ -1081,19 +1092,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             >
                                                 <option value="">-- Seleccionar --</option>
                                                 {masterAttributes.map(attr => <option key={attr.name} value={attr.name}>{attr.name}</option>)}
-                                                <option value="Personalizado">➕ Otra (Personalizada)...</option>
                                             </select>
-
-                                            {(opt.name !== '' && !masterAttributes.some(a => a.name === opt.name)) && (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre: ej. Calibre, Color..."
-                                                    value={opt.name}
-                                                    onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '2px solid #3B82F6', fontWeight: '800', marginTop: '10px', outline: 'none' }}
-                                                    autoFocus
-                                                />
-                                            )}
                                         </div>
 
                                         <div>
@@ -1137,13 +1136,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Verde, Pintón, Maduro"
-                                                    value={opt.values.join(', ')}
-                                                    onChange={(e) => updateOption(idx, opt.name, e.target.value)}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
-                                                />
+                                                <div style={{ fontSize: '0.85rem', color: '#94A3B8', fontWeight: '600', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #D1D5DB', textAlign: 'center' }}>
+                                                    Selecciona una variable de la lista para activar las opciones.
+                                                </div>
                                             )}
                                         </div>
                                     </div>

@@ -650,14 +650,65 @@ export default function ClientsModule() {
         const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
         if (searchTerms.length === 0) return data;
 
-        return data.filter(item => 
-            searchTerms.every(term => 
-                fields.some(field => {
-                    const value = (item as Record<string, unknown>)[field];
+        return data.filter(item => {
+            const record = item as Record<string, unknown>;
+            return searchTerms.every(term => {
+                // Special command handlers starting with @
+                if (term.startsWith('@')) {
+                    if (term === '@branch' || term === '@sucursal') {
+                        return !!record.parent_id;
+                    }
+                    if (term === '@matrix' || term === '@matriz') {
+                        return record.is_corporate_parent === true;
+                    }
+                    if (term === '@activo') {
+                        return record.is_active === true || getAgreementStatus(String(record.id || '')) === 'active';
+                    }
+                    if (term === '@vencido' || term === '@inactivo') {
+                        return record.is_active === false || getAgreementStatus(String(record.id || '')) === 'warning';
+                    }
+                    if (term === '@sin acuerdo' || term === '@sin_acuerdo' || term === '@sinacuerdo') {
+                        return getAgreementStatus(String(record.id || '')) === 'none';
+                    }
+                    if (term === '@nogps') {
+                        return !record.latitude || !record.longitude;
+                    }
+                    if (term === '@bogota' || term === '@bogotá') {
+                        const cityVal = String(record.city || '').toLowerCase();
+                        const muniVal = String(record.municipality || '').toLowerCase();
+                        const deptVal = String(record.department || '').toLowerCase();
+                        return cityVal.includes('bogot') || muniVal.includes('bogot') || deptVal.includes('bogot');
+                    }
+                    if (term.startsWith('@nit')) {
+                        const valuePart = term.replace('@nit', '').replace(':', '').trim();
+                        if (!valuePart) {
+                            return !!record.nit;
+                        }
+                        return String(record.nit || '').toLowerCase().includes(valuePart);
+                    }
+                }
+
+                // Default field searching
+                return fields.some(field => {
+                    const value = record[field];
                     return String(value || '').toLowerCase().includes(term);
-                })
-            )
-        );
+                });
+            });
+        });
+    };
+
+    const getActiveFilteredCount = (): number | null => {
+        if (!searchTerm) return null;
+        if (activeTab === 'b2b') {
+            return filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).length;
+        }
+        if (activeTab === 'b2c') {
+            return filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).length;
+        }
+        if (activeTab === 'leads') {
+            return filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).length;
+        }
+        return null;
     };
 
     return (
@@ -968,12 +1019,36 @@ export default function ClientsModule() {
                             }}
                         >
                             i
+                            {getActiveFilteredCount() !== null && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-6px',
+                                    right: '-6px',
+                                    backgroundColor: '#10B981', // Emerald green
+                                    color: 'white',
+                                    fontSize: '0.65rem',
+                                    fontWeight: '900',
+                                    borderRadius: '9999px',
+                                    height: '18px',
+                                    minWidth: '18px',
+                                    padding: '0 5px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '2px solid white',
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                    animation: 'popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                    pointerEvents: 'none'
+                                }}>
+                                    {getActiveFilteredCount()}
+                                </div>
+                            )}
                             {showHelpTooltip && (
                                 <div style={{
                                     position: 'absolute',
                                     top: '48px',
                                     right: '0',
-                                    width: '280px',
+                                    width: '310px',
                                     backgroundColor: '#1E293B',
                                     color: 'white',
                                     padding: '1.2rem',
@@ -988,15 +1063,17 @@ export default function ClientsModule() {
                                     <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                         🚀 COMANDOS CRM (@)
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '10px' }}>
                                         <div>
                                             <b style={{ color: '#FCD34D' }}>@bogota</b>: Por ciudad<br/>
                                             <b style={{ color: '#FCD34D' }}>@nit</b>: Por NIT<br/>
-                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo
+                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo<br/>
+                                            <b style={{ color: '#FCD34D' }}>@sin acuerdo</b>: Sin acuerdo
                                         </div>
                                         <div>
                                             <b style={{ color: '#FCD34D' }}>@activo</b>: Acuerdo ok<br/>
                                             <b style={{ color: '#FCD34D' }}>@vencido</b>: Expirado<br/>
+                                            <b style={{ color: '#FCD34D' }}>@matrix</b>: Casa Matriz<br/>
                                             <b style={{ color: '#FCD34D' }}>@branch</b>: Sucursales
                                         </div>
                                     </div>
@@ -1004,6 +1081,10 @@ export default function ClientsModule() {
                                         @keyframes fadeInDown {
                                             from { opacity: 0; transform: translateY(-10px); }
                                             to { opacity: 1; transform: translateY(0); }
+                                        }
+                                        @keyframes popIn {
+                                            from { opacity: 0; transform: scale(0.6); }
+                                            to { opacity: 1; transform: scale(1); }
                                         }
                                     `}</style>
                                 </div>
@@ -3496,6 +3577,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [products, setProducts] = useState<any[]>([]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const scrollableRef = useRef<HTMLDivElement>(null);
     
     const [newException, setNewException] = useState<any>({
         product_id: '',
@@ -3512,6 +3594,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [subSearchTerm, setSubSearchTerm] = useState('');
     const [showSubResults, setShowSubResults] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
+    const [focusedProdIndex, setFocusedProdIndex] = useState(-1);
+    const [focusedSubIndex, setFocusedSubIndex] = useState(-1);
 
     const fetchData = async () => {
         setLoading(true);
@@ -3522,7 +3606,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         
         const { data: prodData } = await supabase
             .from('products')
-            .select('id, name, sku, options_config')
+            .select('id, name, sku, options_config, accounting_id')
             .eq('is_active', true);
 
         if (excData) setExceptions(excData);
@@ -3531,6 +3615,44 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     };
 
     useEffect(() => { fetchData(); }, [clientId]);
+
+    useEffect(() => {
+        if (focusedProdIndex >= 0) {
+            const container = document.getElementById('original-prod-dropdown');
+            const element = document.getElementById(`orig-item-${focusedProdIndex}`);
+            if (container && element) {
+                const containerTop = container.scrollTop;
+                const containerBottom = containerTop + container.clientHeight;
+                const elemTop = element.offsetTop;
+                const elemBottom = elemTop + element.offsetHeight;
+                
+                if (elemTop < containerTop) {
+                    container.scrollTop = elemTop;
+                } else if (elemBottom > containerBottom) {
+                    container.scrollTop = elemBottom - container.clientHeight;
+                }
+            }
+        }
+    }, [focusedProdIndex]);
+
+    useEffect(() => {
+        if (focusedSubIndex >= 0) {
+            const container = document.getElementById('sub-prod-dropdown');
+            const element = document.getElementById(`sub-item-${focusedSubIndex}`);
+            if (container && element) {
+                const containerTop = container.scrollTop;
+                const containerBottom = containerTop + container.clientHeight;
+                const elemTop = element.offsetTop;
+                const elemBottom = elemTop + element.offsetHeight;
+                
+                if (elemTop < containerTop) {
+                    container.scrollTop = elemTop;
+                } else if (elemBottom > containerBottom) {
+                    container.scrollTop = elemBottom - container.clientHeight;
+                }
+            }
+        }
+    }, [focusedSubIndex]);
 
     const handleSave = async () => {
         if (!newException.product_id) return;
@@ -3611,7 +3733,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     </button>
                 </header>
 
-                <div style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
+                <div ref={scrollableRef} style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
                     {/* INSTRUCTIVO DE USO */}
                     <div style={{ marginBottom: '1.5rem' }}>
                         <button
@@ -3653,13 +3775,9 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     Guía de Excepciones y Particularidades del Cliente
                                 </h4>
                                 <p style={{ margin: '0 0 12px 0', lineHeight: '1.4' }}>
-                                    Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en tres tipos de particularidades:
+                                    Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en las siguientes particularidades:
                                 </p>
                                 <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <li>
-                                        <strong>⚙️ Variantes Fijas (Características Físicas):</strong> 
-                                        Si el producto tiene opciones configuradas (ej: Maduración, Calibre), puedes seleccionar la preferencia de este cliente. Al digitar un pedido, el sistema <em>pre-seleccionará automáticamente</em> esta opción.
-                                    </li>
                                     <li>
                                         <strong>🔄 Productos de Reemplazo (Sustitución):</strong> 
                                         Define qué producto alternativo ofrecer si el original no está disponible. Al agregar el producto original, el sistema <em>propondrá y permitirá cambiarlo</em> de inmediato con un clic.
@@ -3668,8 +3786,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         <strong>📦 Notas Logísticas y Alias de Facturación:</strong>
                                         <ul style={{ margin: '4px 0 0 0', paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             <li><u>Alias (Nombre Factura):</u> Sobrescribe el nombre impreso en la factura o remisión.</li>
-                                            <li><u>Nota de Picking (Bodega):</u> Indicaciones de empaque y preparación visibles para el alistador en bodega (ej: <em>Bolsa microperforada</em>).</li>
-                                            <li><u>Nota de Despacho (Conductor):</u> Instrucciones de entrega para el transportador (ej: <em>Recibir canastillas vacías</em>).</li>
+                                            <li><u>Nota del cliente:</u> Indicaciones de empaque y preparación solicitadas por el cliente (ej: <em>Bolsa microperforada, 130grs</em>).</li>
                                         </ul>
                                     </li>
                                 </ul>
@@ -3679,7 +3796,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                     {!readOnly && !isAdding && (
                         <button 
-                            onClick={() => setIsAdding(true)}
+                            onClick={() => {
+                                setIsAdding(true);
+                                scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
                             style={{ 
                                 width: '100%', 
                                 padding: '1rem', 
@@ -3720,6 +3840,32 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 onChange={(e) => {
                                                     setSearchTerm(e.target.value);
                                                     setShowResults(true);
+                                                    setFocusedProdIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (!showResults || searchTerm.length === 0) return;
+                                                    const filtered = products.filter(p => 
+                                                        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                                        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+                                                    ).slice(0, 10);
+                                                    
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setFocusedProdIndex(prev => (prev + 1) % filtered.length);
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setFocusedProdIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const targetIndex = focusedProdIndex >= 0 && focusedProdIndex < filtered.length ? focusedProdIndex : 0;
+                                                        const p = filtered[targetIndex];
+                                                        if (p) {
+                                                            setNewException(prev => ({...prev, product_id: p.id, preferred_options: {}}));
+                                                            setSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
+                                                            setShowResults(false);
+                                                            setFocusedProdIndex(-1);
+                                                        }
+                                                    }
                                                 }}
                                                 onFocus={() => setShowResults(true)}
                                                 style={{ 
@@ -3735,7 +3881,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     backgroundColor: 'white',
                                                     fontFamily: THEME.typography.fontFamilySecondary
                                                 }}
-                                                onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                                                onBlur={() => setTimeout(() => {
+                                                    setShowResults(false);
+                                                    setFocusedProdIndex(-1);
+                                                }, 200)}
                                             />
                                             {newException.product_id && (
                                                 <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
@@ -3747,37 +3896,43 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         </div>
 
                                         {showResults && searchTerm.length > 0 && (
-                                            <div style={{ 
-                                                position: 'absolute', top: '100%', left: 0, right: 0, 
-                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
-                                                boxShadow: THEME.shadow.lg, 
-                                                zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
-                                            }}>
+                                            <div 
+                                                id="original-prod-dropdown"
+                                                style={{ 
+                                                    position: 'absolute', top: '100%', left: 0, right: 0, 
+                                                    backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                    boxShadow: THEME.shadow.lg, 
+                                                    zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
+                                                }}
+                                            >
                                                 {products
                                                     .filter(p => 
                                                         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                                         p.sku.toLowerCase().includes(searchTerm.toLowerCase())
                                                     )
                                                     .slice(0, 10)
-                                                    .map(p => (
+                                                    .map((p, idx) => (
                                                         <div 
                                                             key={p.id}
+                                                            id={`orig-item-${idx}`}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, product_id: p.id, preferred_options: {}}));
-                                                                setSearchTerm(`[${p.sku}] ${p.name}`);
+                                                                setSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
                                                                 setShowResults(false);
+                                                                setFocusedProdIndex(-1);
                                                             }}
                                                             style={{ 
                                                                 padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}`,
                                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                                transition: 'background 0.2s'
+                                                                transition: 'background 0.2s',
+                                                                backgroundColor: idx === focusedProdIndex ? '#F1F5F9' : 'white'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                            onMouseEnter={() => setFocusedProdIndex(idx)}
+                                                            onMouseLeave={() => setFocusedProdIndex(-1)}
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>SKU: {p.sku}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>ID: {p.accounting_id || p.sku}</span>
                                                             </div>
                                                             <span style={{ color: THEME.colors.primary, fontSize: '0.95rem', fontWeight: '600' }}>＋</span>
                                                         </div>
@@ -3788,37 +3943,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     </div>
                                 </div>
 
-                                {/* B. VARIANTES PREFERIDAS (CONDICIONAL) */}
-                                {selectedOriginalProd?.options_config && selectedOriginalProd.options_config.length > 0 && (
-                                    <div style={{ backgroundColor: '#F0FDFA', border: '1px solid #CCFBF1', padding: '1rem', borderRadius: '8px' }}>
-                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0F766E', display: 'block', marginBottom: '8px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Variantes Preferidas del Cliente</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.8rem' }}>
-                                            {selectedOriginalProd.options_config.map((opt: any) => (
-                                                <div key={opt.name}>
-                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: '#115E59', display: 'block', marginBottom: '4px' }}>{opt.name}</label>
-                                                    <select
-                                                        value={newException.preferred_options?.[opt.name] || ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setNewException(prev => {
-                                                                const updatedOptions = { ...prev.preferred_options };
-                                                                if (val) updatedOptions[opt.name] = val;
-                                                                else delete updatedOptions[opt.name];
-                                                                return { ...prev, preferred_options: updatedOptions };
-                                                            });
-                                                        }}
-                                                        style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #CCFBF1', fontSize: '0.8rem', backgroundColor: 'white' }}
-                                                    >
-                                                        <option value="">Por defecto (Cualquiera)</option>
-                                                        {opt.values?.map((v: string) => (
-                                                            <option key={v} value={v}>{v}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* C. PRODUCTO DE REEMPLAZO (SUSTITUCIÓN) */}
                                 <div>
@@ -3835,6 +3959,34 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 onChange={(e) => {
                                                     setSubSearchTerm(e.target.value);
                                                     setShowSubResults(true);
+                                                    setFocusedSubIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (!showSubResults || subSearchTerm.length === 0) return;
+                                                    const filtered = products.filter(p => 
+                                                        p.id !== newException.product_id && (
+                                                            p.name.toLowerCase().includes(subSearchTerm.toLowerCase()) || 
+                                                            p.sku.toLowerCase().includes(subSearchTerm.toLowerCase())
+                                                        )
+                                                    ).slice(0, 10);
+                                                    
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setFocusedSubIndex(prev => (prev + 1) % filtered.length);
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setFocusedSubIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const targetIndex = focusedSubIndex >= 0 && focusedSubIndex < filtered.length ? focusedSubIndex : 0;
+                                                        const p = filtered[targetIndex];
+                                                        if (p) {
+                                                            setNewException(prev => ({...prev, substitution_product_id: p.id}));
+                                                            setSubSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
+                                                            setShowSubResults(false);
+                                                            setFocusedSubIndex(-1);
+                                                        }
+                                                    }
                                                 }}
                                                 onFocus={() => setShowSubResults(true)}
                                                 style={{ 
@@ -3850,7 +4002,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     backgroundColor: 'white',
                                                     fontFamily: THEME.typography.fontFamilySecondary
                                                 }}
-                                                onBlur={() => setTimeout(() => setShowSubResults(false), 200)}
+                                                onBlur={() => setTimeout(() => {
+                                                    setShowSubResults(false);
+                                                    setFocusedSubIndex(-1);
+                                                }, 200)}
                                             />
                                             {newException.substitution_product_id && (
                                                 <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3872,12 +4027,15 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         </div>
 
                                         {showSubResults && subSearchTerm.length > 0 && (
-                                            <div style={{ 
-                                                position: 'absolute', top: '100%', left: 0, right: 0, 
-                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
-                                                boxShadow: THEME.shadow.lg, 
-                                                zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
-                                            }}>
+                                            <div 
+                                                id="sub-prod-dropdown"
+                                                style={{ 
+                                                    position: 'absolute', top: '100%', left: 0, right: 0, 
+                                                    backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                    boxShadow: THEME.shadow.lg, 
+                                                    zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
+                                                }}
+                                            >
                                                 {products
                                                     .filter(p => 
                                                         p.id !== newException.product_id && (
@@ -3886,25 +4044,28 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         )
                                                     )
                                                     .slice(0, 10)
-                                                    .map(p => (
+                                                    .map((p, idx) => (
                                                         <div 
                                                             key={p.id}
+                                                            id={`sub-item-${idx}`}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, substitution_product_id: p.id}));
-                                                                setSubSearchTerm(`[${p.sku}] ${p.name}`);
+                                                                setSubSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
                                                                 setShowSubResults(false);
+                                                                setFocusedSubIndex(-1);
                                                             }}
                                                             style={{ 
                                                                 padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}`,
                                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                                transition: 'background 0.2s'
+                                                                transition: 'background 0.2s',
+                                                                backgroundColor: idx === focusedSubIndex ? '#F1F5F9' : 'white'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                            onMouseEnter={() => setFocusedSubIndex(idx)}
+                                                            onMouseLeave={() => setFocusedSubIndex(-1)}
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>SKU: {p.sku}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>ID: {p.accounting_id || p.sku}</span>
                                                             </div>
                                                             <span style={{ color: '#D97706', fontSize: '0.95rem', fontWeight: '600' }}>🔄</span>
                                                         </div>
@@ -3924,20 +4085,13 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         placeholder="Ej: Papa Amarilla (Sin costo)"
                                     />
                                     <FormField 
-                                        label="Nota de Picking (Bodega)" 
+                                        label="Nota del cliente" 
                                         value={newException.picking_note} 
                                         onChange={(v) => setNewException({...newException, picking_note: v})} 
                                         placeholder="Ej: Maduración: Pintón / Con etiqueta"
                                     />
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                    <FormField 
-                                        label="Nota de Despacho / Conductor (Entrega)" 
-                                        value={newException.delivery_note} 
-                                        onChange={(v) => setNewException({...newException, delivery_note: v})} 
-                                        placeholder="Ej: Entregar en sótano 1, recibir canastillas vacías"
-                                    />
-                                </div>
+
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                                     <button onClick={() => {
                                         setIsAdding(false);
@@ -3970,29 +4124,25 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                             <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <span>Original: {origProd?.name || '---'}</span>
                                                 <span style={{ color: '#94A3B8' }}>|</span>
-                                                <span style={{ color: '#64748B' }}>SKU: {origProd?.sku || '---'}</span>
+                                                <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
                                             </div>
 
                                             {/* RENDER DETAILED RULES */}
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
                                                 
                                                 {/* Nickname alias */}
-                                                <div>
-                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
-                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname || '---'}</span>
-                                                </div>
+                                                {exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase() && (
+                                                    <div>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
+                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname}</span>
+                                                    </div>
+                                                )}
 
                                                 {/* Picking notes */}
-                                                <div>
-                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Instrucción Bodega (Picking): </span>
-                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note || '---'}</span>
-                                                </div>
-
-                                                {/* Delivery note */}
-                                                {exc.delivery_note && (
+                                                {exc.picking_note && (
                                                     <div>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Conductor (Despacho): </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#4F46E5', fontWeight: '600' }}>{exc.delivery_note}</span>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nota del cliente: </span>
+                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
                                                     </div>
                                                 )}
 
@@ -4001,23 +4151,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
                                                         <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>
-                                                            [{subProd.sku}] {subProd.name}
+                                                            [{subProd.accounting_id || subProd.sku}] {subProd.name}
                                                         </span>
                                                     </div>
                                                 )}
-
-                                                {/* Preferred options list */}
-                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#0F766E', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>⚙️ Variantes Fijas:</span>
-                                                        {Object.entries(exc.preferred_options).map(([k, v]) => (
-                                                            <span key={k} style={{ fontSize: '0.65rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                {k}: {String(v)}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-
                                             </div>
                                         </div>
                                         {!readOnly && (
@@ -4033,9 +4170,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                             delivery_note: exc.delivery_note || '',
                                                             preferred_options: exc.preferred_options || {}
                                                         });
-                                                        setSearchTerm(origProd ? `[${origProd.sku}] ${origProd.name}` : '');
-                                                        setSubSearchTerm(subProd ? `[${subProd.sku}] ${subProd.name}` : '');
+                                                        setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
+                                                        setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
                                                         setIsAdding(true);
+                                                        scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                                                     }} 
                                                     style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}

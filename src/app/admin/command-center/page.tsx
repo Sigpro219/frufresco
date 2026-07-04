@@ -8,6 +8,7 @@ import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft, MapP
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import TechUserGovernance from '@/components/admin/TechUserGovernance';
+import ManageAttributesModal from '@/components/ManageAttributesModal';
 import * as XLSX from 'xlsx';
 
 interface Point {
@@ -80,6 +81,7 @@ export default function CommandCenter() {
     const [loading, setLoading] = useState(true);
     const [, setStatusMessage] = useState({ text: '', type: '' });
     const [isEditing, setIsEditing] = useState(false);
+    const [showAttributesModal, setShowAttributesModal] = useState(false);
     const [activeTab, setActiveTab] = useState<'governance' | 'helpdesk' | 'approvals' | 'fleet' | 'geofencing' | 'audit'>('governance');
     
     // Help Desk state
@@ -857,6 +859,35 @@ export default function CommandCenter() {
                                     </div>
                                 </div>
                             </section>
+
+                            {/* SECCIÓN: ATRIBUTOS MAESTROS */}
+                            <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <div>
+                                        <h2 style={{ fontSize: '1.25rem', fontWeight: '900', margin: '0 0 4px 0' }}>⚙️ Gobernanza de Atributos Maestros</h2>
+                                        <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: 0 }}>Define los atributos base (calibre, maduración, empaque, etc.) y valores recomendados para el catálogo de productos.</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setShowAttributesModal(true)}
+                                        style={{ 
+                                            padding: '12px 1.5rem', 
+                                            backgroundColor: '#111827', 
+                                            color: 'white', 
+                                            border: 'none', 
+                                            borderRadius: '12px', 
+                                            fontWeight: '800', 
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            fontSize: '0.85rem',
+                                            transition: 'background-color 0.2s'
+                                        }}
+                                    >
+                                        <Settings size={16} /> GESTIONAR ATRIBUTOS
+                                    </button>
+                                </div>
+                            </section>
                         </div>
                     )}
 
@@ -1279,6 +1310,9 @@ export default function CommandCenter() {
                         </div>
                     </div>
                 </div>
+            )}
+            {showAttributesModal && (
+                <ManageAttributesModal onClose={() => setShowAttributesModal(false)} />
             )}
             <style jsx>{`
                 .animate-spin { animation: spin 1s linear infinite; }

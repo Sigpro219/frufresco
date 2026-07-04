@@ -112,6 +112,14 @@ export default function OrderLoadingPage() {
                 }
                 setRolesLoaded(true);
             });
+
+        supabase.from('product_conversions')
+            .select('*')
+            .then(({ data, error }) => {
+                if (!error && data) {
+                    setConversions(data);
+                }
+            });
     }, []);
 
     useEffect(() => {
@@ -159,7 +167,7 @@ export default function OrderLoadingPage() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
 
-    const [variantQuantity, setVariantQuantity] = useState(1);
+    const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     const [selectedChannel, setSelectedChannel] = useState('');
@@ -183,6 +191,10 @@ export default function OrderLoadingPage() {
 
     // Client Exceptions (Product Nicknames & Notes) State
     const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+    const [conversions, setConversions] = useState<any[]>([]);
+    const [selectedUnit, setSelectedUnit] = useState<string>('');
+    const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
+    const [focusedProductIndex, setFocusedProductIndex] = useState<number>(-1);
 
     useEffect(() => {
         async function resolveContract() {
@@ -285,7 +297,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 
@@ -481,7 +493,7 @@ export default function OrderLoadingPage() {
                 .select(`
                     *,
                     products (
-                        name, sku, unit_of_measure, weight_kg, image_url
+                        name, sku, accounting_id, unit_of_measure, weight_kg, image_url
                     )
                 `)
                 .eq('order_id', order.id);
@@ -501,7 +513,7 @@ export default function OrderLoadingPage() {
                     const productIds = [...new Set(rawItems.map(i => i.product_id))];
                     const { data: rawProducts, error: prodErr } = await supabase
                         .from('products')
-                        .select('id, name, sku, unit_of_measure, weight_kg, image_url')
+                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url')
                         .in('id', productIds);
                     
                     if (!prodErr && rawProducts) {
@@ -543,6 +555,39 @@ export default function OrderLoadingPage() {
         setProductSearch(term);
     };
 
+    const handleProductSearchKeyDown = (e: React.KeyboardEvent) => {
+        if (searchResults.length === 0) return;
+        
+        let nextIndex = focusedProductIndex;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            nextIndex = focusedProductIndex < searchResults.length - 1 ? focusedProductIndex + 1 : focusedProductIndex;
+            setFocusedProductIndex(nextIndex);
+            setTimeout(() => {
+                const el = document.getElementById(`search-item-${nextIndex}`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }, 10);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            nextIndex = focusedProductIndex > 0 ? focusedProductIndex - 1 : focusedProductIndex;
+            setFocusedProductIndex(nextIndex);
+            setTimeout(() => {
+                const el = document.getElementById(`search-item-${nextIndex}`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }, 10);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (focusedProductIndex >= 0 && focusedProductIndex < searchResults.length) {
+                e.preventDefault();
+                addProductToOrder(searchResults[focusedProductIndex]);
+                setFocusedProductIndex(-1);
+            }
+        } else if (e.key === 'Escape') {
+            setProductSearch('');
+            setSearchResults([]);
+            setFocusedProductIndex(-1);
+        }
+    };
+
     useEffect(() => {
         if (productSearch.length < 3) {
             setSearchResults([]);
@@ -556,7 +601,7 @@ export default function OrderLoadingPage() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
                     .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
                     .limit(8);
                 
@@ -581,6 +626,54 @@ export default function OrderLoadingPage() {
 
         return () => clearTimeout(delayDebounceFn);
     }, [productSearch]);
+
+    // Autofocus logic for sub-modal
+    useEffect(() => {
+        if (selectedProductForVariant) {
+            const timer = setTimeout(() => {
+                if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
+                    const firstSelect = document.getElementById('modal-select-0');
+                    if (firstSelect) firstSelect.focus();
+                } else {
+                    const qtyInput = document.getElementById('modal-qty-input');
+                    if (qtyInput) {
+                        (qtyInput as HTMLInputElement).focus();
+                        (qtyInput as HTMLInputElement).select();
+                    }
+                }
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedProductForVariant]);
+
+    // Close sub-modal on Escape keypress globally
+    useEffect(() => {
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (selectedProductForVariant) {
+                    setSelectedProductForVariant(null);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [selectedProductForVariant]);
+
+    const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (index < totalOptions - 1) {
+                const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                if (nextSelect) (nextSelect as HTMLElement).focus();
+            } else {
+                const qtyInput = document.getElementById('modal-qty-input');
+                if (qtyInput) {
+                    (qtyInput as HTMLElement).focus();
+                    (qtyInput as HTMLInputElement).select();
+                }
+            }
+        }
+    };
 
     if (authLoading || !rolesLoaded) {
         return (
@@ -654,7 +747,7 @@ export default function OrderLoadingPage() {
             const fetchAndSubstitute = async () => {
                 const { data: subProduct } = await supabase
                     .from('products')
-                    .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
                     .eq('id', exc.substitution_product_id)
                     .single();
                 
@@ -675,7 +768,7 @@ export default function OrderLoadingPage() {
 
     const proceedAddProduct = (product: any, exc: any) => {
         // Reset sub-modal states
-        setVariantQuantity(1);
+        setVariantQuantity('1');
         setSelectedOptions({});
 
         // Pre-populate preferred variant options (if any)
@@ -687,18 +780,16 @@ export default function OrderLoadingPage() {
         }
         setSelectedOptions(initialOptions);
 
-        // Check if product has variants/options
-        if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
-            setSelectedProductForVariant(product);
-            setProductSearch('');
-            setSearchResults([]);
-            return;
-        }
+        // Always open the sub-modal to input quantity/variants (just like create page!)
+        setSelectedProductForVariant(product);
 
-        // Direct add if no variants
-        const optValues = Object.values(initialOptions).filter(v => v);
-        const variantLabel = optValues.length > 0 ? optValues.join(', ') : undefined;
-        addOrUpdateItemInState(product, 1, variantLabel, initialOptions);
+        // Find default unit conversions
+        const hasWebUnit = product.web_unit && product.web_conversion_factor;
+        const defaultUnit = hasWebUnit ? product.web_unit : (product.unit_of_measure || 'Kg');
+        const defaultFactor = hasWebUnit ? parseFloat(product.web_conversion_factor) || 1 : 1;
+        setSelectedUnit(defaultUnit);
+        setSelectedConversionFactor(defaultFactor);
+
         setProductSearch('');
         setSearchResults([]);
     };
@@ -708,28 +799,22 @@ export default function OrderLoadingPage() {
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         
-        addOrUpdateItemInState(selectedProductForVariant, variantQuantity, variantLabel, selectedOptions);
+        const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
+        const baseQty = parseFloat((qtyVal * selectedConversionFactor).toFixed(2));
+        addOrUpdateItemInState(selectedProductForVariant, baseQty, variantLabel, selectedOptions);
         setSelectedProductForVariant(null);
     };
 
+
+
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
-        let finalLabel = variantLabel || '';
-        let finalNickname = exc?.nickname || product.name;
-
-        // Append picking and delivery notes to variant label
-        const notes: string[] = [];
-        if (exc?.picking_note) notes.push(`Bodega: ${exc.picking_note}`);
-        if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
-        
-        if (notes.length > 0) {
-            const notesStr = notes.join(' | ');
-            finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
-        }
+        const finalLabel = variantLabel || '';
+        const finalNickname = exc?.nickname || product.name;
 
         // Check if item with same product_id AND variant_label exists
         const existsIndex = orderItems.findIndex(item => 
-            item.product_id === product.id && item.variant_label === finalLabel
+            item.product_id === product.id && item.variant_label === (finalLabel || null)
         );
 
         if (existsIndex >= 0) {
@@ -753,6 +838,7 @@ export default function OrderLoadingPage() {
                 products: {
                     name: product.name,
                     sku: product.sku,
+                    accounting_id: product.accounting_id,
                     unit_of_measure: product.unit_of_measure,
                     weight_kg: product.weight_kg
                 },
@@ -763,7 +849,7 @@ export default function OrderLoadingPage() {
     };
 
     const updateItemQuantity = (idx: number, newQty: number) => {
-        if (newQty <= 0) return;
+        if (newQty < 0) return;
         const newOrderItems = [...orderItems];
         newOrderItems[idx] = { ...newOrderItems[idx], quantity: newQty, isModified: true };
         setOrderItems(newOrderItems);
@@ -782,6 +868,13 @@ export default function OrderLoadingPage() {
         const zeroPriceItem = orderItems.find(item => !item.unit_price || parseFloat(item.unit_price.toString()) === 0);
         if (zeroPriceItem) {
             alert(`❌ No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
+            return;
+        }
+
+        // Block Zero / Negative Quantities
+        const zeroQtyItem = orderItems.find(item => !item.quantity || parseFloat(item.quantity.toString()) <= 0);
+        if (zeroQtyItem) {
+            alert(`❌ No se puede guardar: El producto "${zeroQtyItem.products?.name || 'Item'}" tiene cantidad menor o igual a 0. Si desea eliminarlo, use el icono de la papelera.`);
             return;
         }
 
@@ -1833,7 +1926,8 @@ export default function OrderLoadingPage() {
                                                         type="text"
                                                         placeholder="Buscar productos para agregar..."
                                                         value={productSearch}
-                                                        onChange={(e) => handleSearchProducts(e.target.value)}
+                                                        onChange={(e) => { handleSearchProducts(e.target.value); setFocusedProductIndex(-1); }}
+                                                        onKeyDown={handleProductSearchKeyDown}
                                                         style={{
                                                             width: '100%',
                                                             padding: '12px 16px',
@@ -1865,13 +1959,16 @@ export default function OrderLoadingPage() {
                                                     zIndex: 10,
                                                     marginTop: '8px',
                                                     border: '1px solid #E2E8F0',
-                                                    overflow: 'hidden'
+                                                    maxHeight: '280px',
+                                                    overflowY: 'auto'
                                                 }}>
-                                                    {searchResults.map(prod => (
+                                                    {searchResults.map((prod, idx) => (
                                                         <div 
                                                             key={prod.id}
+                                                            id={`search-item-${idx}`}
                                                             onClick={() => addProductToOrder(prod)}
                                                             className="search-item"
+                                                            onMouseEnter={() => setFocusedProductIndex(idx)}
                                                             style={{
                                                                 padding: '12px 16px',
                                                                 cursor: 'pointer',
@@ -1879,24 +1976,22 @@ export default function OrderLoadingPage() {
                                                                 display: 'flex',
                                                                 justifyContent: 'space-between',
                                                                 alignItems: 'center',
-                                                                transition: 'background-color 0.2s'
+                                                                transition: 'background-color 0.2s',
+                                                                backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                         >
                                                             <div>
-                                                                <div style={{ fontWeight: '700', color: '#1E293B' }}>{prod.name}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748B' }}>SKU: {prod.sku} | {prod.unit_of_measure}</div>
+                                                                <div style={{ fontWeight: '700', color: '#1E293B' }}>
+                                                                    {prod.name} {prod.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({prod.accounting_id})</span>}
+                                                                </div>
                                                             </div>
                                                             <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <span>{formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0))}</span>
-                                                                {contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        {isB2CDefault ? 'B2C' : 'Contrato'}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        ⚠️ Sin Tarifa
+                                                                <span>
+                                                                    {formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0))}/{prod.unit_of_measure}
+                                                                </span>
+                                                                {prod.options_config && prod.options_config.length > 0 && (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                        ⚙️ Opciones
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -1917,7 +2012,7 @@ export default function OrderLoadingPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr style={{ textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>SKU</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>ID</th>
                                                 <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'center' }}>CANTIDAD</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>PRECIO U.</th>
@@ -1931,37 +2026,56 @@ export default function OrderLoadingPage() {
                                                     borderBottom: '1px solid #F1F5F9',
                                                     backgroundColor: item.isNew ? '#F0F9FF' : 'transparent'
                                                 }}>
-                                                    <td style={{ padding: '1.25rem 2rem', fontFamily: 'monospace', fontSize: '0.9rem', color: '#475569', fontWeight: 'bold' }}>
-                                                        {item.products?.sku || '-'}
-                                                    </td>
-                                                    <td style={{ padding: '1.25rem 2rem' }}>
-                                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                                            {item.products?.name}
-                                                            {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
-                                                        </div>
-                                                        {item.variant_label && (
-                                                             <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                                                 <Sparkles size={10} strokeWidth={1.5} /> {item.variant_label}
-                                                             </div>
-                                                         )}
+                                                    <td style={{ padding: '1.25rem 2rem', fontSize: '0.95rem', color: '#475569', fontWeight: '800' }}>
+                                                         {item.products?.accounting_id || '-'}
+                                                     </td>
+                                                     <td style={{ padding: '1.25rem 2rem' }}>
+                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                                             {item.products?.name}
+                                                             {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
+                                                         </div>
+                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
+                                                             {item.variant_label && (
+                                                                  <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                      <Sparkles size={10} strokeWidth={1.5} /> {(() => {
+                                                                          const cleaned = item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim();
+                                                                          return cleaned;
+                                                                      })()}
+                                                                  </div>
+                                                             )}
+                                                             {(() => {
+                                                                 const exc = clientExceptions.find(e => e.product_id === (item.product_id || item.products?.id));
+                                                                 return (
+                                                                     <>
+                                                                         {exc?.picking_note && (
+                                                                             <div style={{ fontWeight: '600', color: '#D97706', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center' }}>
+                                                                                 Nota: {exc.picking_note}
+                                                                             </div>
+                                                                         )}
+                                                                         {exc?.delivery_note && (
+                                                                             <div style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.75rem', backgroundColor: '#EEF2FF', padding: '2px 8px', borderRadius: '4px', border: '1px solid #C7D2FE', display: 'inline-flex', alignItems: 'center' }}>
+                                                                                 Entr: {exc.delivery_note}
+                                                                             </div>
+                                                                         )}
+                                                                     </>
+                                                                 );
+                                                             })()}
+                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
                                                         {editMode ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                                <button 
-                                                                    onClick={() => updateItemQuantity(idx, item.quantity - 1)}
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', cursor: 'pointer' }}
-                                                                >-</button>
                                                                 <input 
                                                                     type="number"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => updateItemQuantity(idx, parseInt(e.target.value) || 1)}
-                                                                    style={{ width: '50px', textAlign: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #CBD5E1', fontWeight: '800' }}
+                                                                    step="any"
+                                                                    value={item.quantity === 0 ? '' : item.quantity}
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
+                                                                        updateItemQuantity(idx, val);
+                                                                    }}
+                                                                    style={{ width: '75px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white' }}
                                                                 />
-                                                                <button 
-                                                                    onClick={() => updateItemQuantity(idx, item.quantity + 1)}
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', cursor: 'pointer' }}
-                                                                >+</button>
                                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
                                                             </div>
                                                         ) : (
@@ -1986,11 +2100,12 @@ export default function OrderLoadingPage() {
                                                                 <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
                                                                 <input
                                                                     type="number"
-                                                                    value={item.unit_price || ''}
+                                                                    value={item.unit_price === 0 ? 0 : (item.unit_price || '')}
+                                                                    onFocus={(e) => e.target.select()}
                                                                     onChange={(e) => {
-                                                                        const val = parseFloat(e.target.value) || 0;
+                                                                        const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
                                                                         const newOrderItems = [...orderItems];
-                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val, isModified: true };
+                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val as any, isModified: true };
                                                                         setOrderItems(newOrderItems);
                                                                     }}
                                                                     style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
@@ -2056,6 +2171,43 @@ export default function OrderLoadingPage() {
                                             </div>
                                         </div>
                                     </div>
+                                    {selectedOrder.document_url && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ color: '#3B82F6' }}><FileText size={24} strokeWidth={1.5} /></div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>DOCUMENTO</div>
+                                                <div style={{ marginTop: '2px' }}>
+                                                    <a 
+                                                        href={selectedOrder.document_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        style={{ 
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            backgroundColor: '#EFF6FF', 
+                                                            color: '#1D4ED8', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '6px', 
+                                                            fontWeight: '800', 
+                                                            fontSize: '0.75rem',
+                                                            border: '1px solid #BFDBFE',
+                                                            textDecoration: 'none',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                        }}
+                                                    >
+                                                        Ver Anexo ↗
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
@@ -2069,110 +2221,358 @@ export default function OrderLoadingPage() {
                 )}
 
                 {/* --- VARIANT SELECTION MODAL (SUB-MODAL) --- */}
-                {selectedProductForVariant && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 3000, 
-                        backdropFilter: 'blur(4px)',
-                        padding: '1rem'
-                    }} onClick={() => setSelectedProductForVariant(null)}>
-                        <div 
-                            style={{ 
-                                backgroundColor: 'white', 
-                                padding: '2.5rem', 
-                                borderRadius: '32px', 
-                                width: '95%', 
-                                maxWidth: '420px', 
-                                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.3)', 
-                                border: '1px solid rgba(255,255,255,0.3)',
-                                position: 'relative'
-                            }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <button 
-                                onClick={() => setSelectedProductForVariant(null)}
-                                style={{
-                                    position: 'absolute',
-                                    top: '1.5rem',
-                                    right: '1.5rem',
-                                    border: 'none',
-                                    background: '#F1F5F9',
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '50%',
-                                    cursor: 'pointer',
-                                    color: '#64748B',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: 'bold'
+                {selectedProductForVariant && (() => {
+                    const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
+                    
+                    // Build full options list for unit selection (web_unit is first, if configured)
+                    const optionsList = [];
+                    const hasWebUnit = selectedProductForVariant.web_unit && selectedProductForVariant.web_conversion_factor;
+                    
+                    if (hasWebUnit) {
+                        optionsList.push({
+                            unit: selectedProductForVariant.web_unit,
+                            factor: parseFloat(selectedProductForVariant.web_conversion_factor) || 1,
+                            label: `${selectedProductForVariant.web_unit} (${selectedProductForVariant.web_conversion_factor} ${selectedProductForVariant.unit_of_measure})`
+                        });
+                    }
+                    
+                    if (!hasWebUnit || selectedProductForVariant.unit_of_measure !== selectedProductForVariant.web_unit) {
+                        optionsList.push({
+                            unit: selectedProductForVariant.unit_of_measure || 'Kg',
+                            factor: 1,
+                            label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)`
+                        });
+                    }
+                    
+                    const itemConversions = conversions.filter(c => c.product_id === selectedProductForVariant.id);
+                    itemConversions.forEach(c => {
+                        const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === c.from_unit.toLowerCase());
+                        if (!isDuplicate) {
+                            optionsList.push({
+                                unit: c.from_unit,
+                                factor: parseFloat(c.conversion_factor) || 1,
+                                label: `${c.from_unit} (${c.conversion_factor} ${c.to_unit})`
+                            });
+                        }
+                    });
+
+                    return (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            zIndex: 3000, 
+                            backdropFilter: 'blur(3px)',
+                            padding: '1rem'
+                        }} onClick={() => setSelectedProductForVariant(null)}>
+                            <div 
+                                style={{ 
+                                    backgroundColor: 'white', 
+                                    padding: '2rem', 
+                                    borderRadius: '24px', 
+                                    width: '95%', 
+                                    maxWidth: '820px', 
+                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', 
+                                    position: 'relative',
+                                    textAlign: 'left'
                                 }}
-                            >✕</button>
-                            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                                {selectedProductForVariant.image_url && (
-                                    <img 
-                                        src={selectedProductForVariant.image_url} 
-                                        alt={selectedProductForVariant.name}
-                                        style={{ width: '100px', height: '100px', borderRadius: '20px', objectFit: 'cover', marginBottom: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                                    />
-                                )}
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.25rem' }}>{selectedProductForVariant.name}</h3>
-                                <p style={{ color: '#64748B', fontSize: '0.875rem' }}>Personaliza las opciones del producto</p>
-                            </div>
-
-                            {/* Options Rendering */}
-                            {selectedProductForVariant.options_config?.map((opt: any) => (
-                                <div key={opt.name} style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {opt.name}
-                                    </label>
-                                    <select
-                                        value={selectedOptions[opt.name] || ''}
-                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                        style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '1rem', backgroundColor: '#F8FAFC', outline: 'none' }}
-                                    >
-                                        <option value="">Seleccionar {opt.name}...</option>
-                                        {opt.values?.map((val: string) => (
-                                            <option key={val} value={val}>{val}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            ))}
-
-                            {/* Quantity in Sub-Modal */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', margin: '2rem 0' }}>
-                                <button 
-                                    onClick={() => setVariantQuantity(Math.max(1, variantQuantity - 1))}
-                                    style={{ width: '45px', height: '45px', borderRadius: '15px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >-</button>
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0F172A' }}>{variantQuantity}</div>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{selectedProductForVariant.unit_of_measure}</div>
-                                </div>
-                                <button 
-                                    onClick={() => setVariantQuantity(variantQuantity + 1)}
-                                    style={{ width: '45px', height: '45px', borderRadius: '15px', border: 'none', backgroundColor: '#059669', color: 'white', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >+</button>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                onClick={e => e.stopPropagation()}
+                            >
                                 <button 
                                     onClick={() => setSelectedProductForVariant(null)}
-                                    style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
-                                >
-                                    Cancelar
-                                </button>
-                                <button 
-                                    onClick={confirmVariantAdd}
-                                    style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
-                                >
-                                    Agregar
-                                </button>
+                                    style={{
+                                        position: 'absolute',
+                                        top: '1.5rem',
+                                        right: '1.5rem',
+                                        border: 'none',
+                                        background: '#F1F5F9',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '50%',
+                                        cursor: 'pointer',
+                                        color: '#64748B',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontWeight: 'bold'
+                                    }}
+                                >✕</button>
+
+                                {/* Flex container for header */}
+                                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                                        {selectedProductForVariant.image_url ? (
+                                            <img 
+                                                src={selectedProductForVariant.image_url} 
+                                                alt={selectedProductForVariant.name}
+                                                style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: '80px',
+                                                height: '80px',
+                                                borderRadius: '16px',
+                                                backgroundColor: '#F3F4F6',
+                                                border: '1px solid #E5E7EB',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                                            }}>
+                                                <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
+                                            <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                                                Personaliza tu producto:
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Client notes box */}
+                                {exc && (
+                                    <div style={{
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FCD34D',
+                                        borderRadius: '12px',
+                                        padding: '0.8rem 1.2rem',
+                                        margin: '0.5rem 0 1.2rem 0',
+                                        textAlign: 'left',
+                                        fontSize: '0.8rem',
+                                        color: '#92400E',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                                            📌 REQUERIMIENTOS DEL CLIENTE:
+                                        </div>
+                                        {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
+                                            <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
+                                        )}
+                                        {exc.picking_note && <div><strong>Nota:</strong> {exc.picking_note}</div>}
+                                        {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
+                                    </div>
+                                )}
+
+                                {/* DISCRETE PRODUCT CONFIG ACTION BAR */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    gap: '12px',
+                                    fontSize: '0.75rem',
+                                    color: '#9CA3AF',
+                                    marginBottom: '1.5rem',
+                                    fontWeight: '700'
+                                }}>
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => alert("Para editar las variantes Estructurales, por favor ve al panel de catálogo de productos o a la creación del pedido.")}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#4B5563',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        ⚙️ Editar Variantes
+                                    </button>
+                                    <span>|</span>
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => {
+                                            if (window.confirm("¿Quieres crear una nueva equivalencia? Te redirigiremos al catálogo de productos.")) {
+                                                setSelectedProductForVariant(null);
+                                                window.location.href = '/admin/products';
+                                            }
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#4B5563',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        ⚙️ Editar Equivalencias
+                                    </button>
+                                </div>
+
+                                {/* Options Rendering */}
+                                {selectedProductForVariant.options_config?.map((opt: any, index: number) => (
+                                    <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {opt.name}
+                                        </label>
+                                        <select
+                                            id={`modal-select-${index}`}
+                                            value={selectedOptions[opt.name] || ''}
+                                            onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                                            onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForVariant.options_config.length)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.8rem',
+                                                border: '2px solid #E2E8F0',
+                                                borderRadius: '10px',
+                                                fontSize: '1rem',
+                                                backgroundColor: '#F9FAFB',
+                                                outline: 'none',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            <option value="">Seleccionar {opt.name}...</option>
+                                            {opt.values?.map((val: string) => (
+                                                <option key={val} value={val}>{val}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ))}
+
+                                {/* Quantity & Unit select grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Cantidad
+                                        </label>
+                                        <input
+                                            id="modal-qty-input"
+                                            type="text"
+                                            value={variantQuantity}
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(',', '.');
+                                                setVariantQuantity(val);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const unitSel = document.getElementById('modal-unit-select');
+                                                    if (unitSel) {
+                                                        unitSel.focus();
+                                                    } else {
+                                                        confirmVariantAdd();
+                                                    }
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.7rem 0.8rem',
+                                                borderRadius: '10px',
+                                                border: '2px solid #E2E8F0',
+                                                fontWeight: '700',
+                                                fontSize: '1.1rem',
+                                                textAlign: 'center',
+                                                outline: 'none',
+                                                backgroundColor: '#F9FAFB',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                                e.target.select();
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Unidad de Medida
+                                        </label>
+                                        <select
+                                            id="modal-unit-select"
+                                            value={selectedUnit}
+                                            onChange={(e) => {
+                                                const opt = optionsList.find(o => o.unit === e.target.value);
+                                                if (opt) {
+                                                    setSelectedUnit(opt.unit);
+                                                    setSelectedConversionFactor(opt.factor);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Tab' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    const addBtn = document.getElementById('modal-add-button');
+                                                    if (addBtn) addBtn.focus();
+                                                } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    confirmVariantAdd();
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.8rem',
+                                                border: '2px solid #E2E8F0',
+                                                borderRadius: '10px',
+                                                fontSize: '1rem',
+                                                backgroundColor: '#F9FAFB',
+                                                outline: 'none',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            {optionsList.map(o => (
+                                                <option key={o.unit} value={o.unit}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Footer buttons */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                                    <button 
+                                        onClick={() => setSelectedProductForVariant(null)}
+                                        style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        id="modal-add-button"
+                                        onClick={confirmVariantAdd}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === 'Tab') {
+                                                e.preventDefault();
+                                                confirmVariantAdd();
+                                            }
+                                        }}
+                                        style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+                                    >
+                                        Agregar
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
                     </>
                 ) : activeTab === 'emails' ? (
                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
