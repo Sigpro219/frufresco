@@ -557,19 +557,34 @@ export default function OrderLoadingPage() {
 
     const handleProductSearchKeyDown = (e: React.KeyboardEvent) => {
         if (searchResults.length === 0) return;
+        
+        let nextIndex = focusedProductIndex;
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setFocusedProductIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+            nextIndex = focusedProductIndex < searchResults.length - 1 ? focusedProductIndex + 1 : focusedProductIndex;
+            setFocusedProductIndex(nextIndex);
+            setTimeout(() => {
+                const el = document.getElementById(`search-item-${nextIndex}`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }, 10);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            setFocusedProductIndex(prev => (prev > 0 ? prev - 1 : prev));
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
+            nextIndex = focusedProductIndex > 0 ? focusedProductIndex - 1 : focusedProductIndex;
+            setFocusedProductIndex(nextIndex);
+            setTimeout(() => {
+                const el = document.getElementById(`search-item-${nextIndex}`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }, 10);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
             if (focusedProductIndex >= 0 && focusedProductIndex < searchResults.length) {
+                e.preventDefault();
                 addProductToOrder(searchResults[focusedProductIndex]);
+                setFocusedProductIndex(-1);
             }
         } else if (e.key === 'Escape') {
+            setProductSearch('');
             setSearchResults([]);
+            setFocusedProductIndex(-1);
         }
     };
 
@@ -629,6 +644,19 @@ export default function OrderLoadingPage() {
             }, 80);
             return () => clearTimeout(timer);
         }
+    }, [selectedProductForVariant]);
+
+    // Close sub-modal on Escape keypress globally
+    useEffect(() => {
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (selectedProductForVariant) {
+                    setSelectedProductForVariant(null);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
     }, [selectedProductForVariant]);
 
     const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
@@ -1946,6 +1974,7 @@ export default function OrderLoadingPage() {
                                                     {searchResults.map((prod, idx) => (
                                                         <div 
                                                             key={prod.id}
+                                                            id={`search-item-${idx}`}
                                                             onClick={() => addProductToOrder(prod)}
                                                             className="search-item"
                                                             onMouseEnter={() => setFocusedProductIndex(idx)}
@@ -1964,7 +1993,6 @@ export default function OrderLoadingPage() {
                                                                 <div style={{ fontWeight: '700', color: '#1E293B' }}>
                                                                     {prod.name} {prod.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({prod.accounting_id})</span>}
                                                                 </div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748B' }}>SKU: {prod.sku}</div>
                                                             </div>
                                                             <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                 <span>
@@ -1973,15 +2001,6 @@ export default function OrderLoadingPage() {
                                                                 {prod.options_config && prod.options_config.length > 0 && (
                                                                     <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                         ⚙️ Opciones
-                                                                    </span>
-                                                                )}
-                                                                {contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        {isB2CDefault ? 'B2C' : 'Contrato'}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        ⚠️ Sin Tarifa
                                                                     </span>
                                                                 )}
                                                             </div>
