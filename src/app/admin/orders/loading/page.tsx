@@ -763,7 +763,7 @@ export default function OrderLoadingPage() {
     };
 
     const updateItemQuantity = (idx: number, newQty: number) => {
-        if (newQty <= 0) return;
+        if (newQty < 0) return;
         const newOrderItems = [...orderItems];
         newOrderItems[idx] = { ...newOrderItems[idx], quantity: newQty, isModified: true };
         setOrderItems(newOrderItems);
@@ -782,6 +782,13 @@ export default function OrderLoadingPage() {
         const zeroPriceItem = orderItems.find(item => !item.unit_price || parseFloat(item.unit_price.toString()) === 0);
         if (zeroPriceItem) {
             alert(`❌ No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
+            return;
+        }
+
+        // Block Zero / Negative Quantities
+        const zeroQtyItem = orderItems.find(item => !item.quantity || parseFloat(item.quantity.toString()) <= 0);
+        if (zeroQtyItem) {
+            alert(`❌ No se puede guardar: El producto "${zeroQtyItem.products?.name || 'Item'}" tiene cantidad menor o igual a 0. Si desea eliminarlo, use el icono de la papelera.`);
             return;
         }
 
@@ -1970,20 +1977,17 @@ export default function OrderLoadingPage() {
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
                                                         {editMode ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                                <button 
-                                                                    onClick={() => updateItemQuantity(idx, item.quantity - 1)}
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', cursor: 'pointer' }}
-                                                                >-</button>
                                                                 <input 
                                                                     type="number"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => updateItemQuantity(idx, parseInt(e.target.value) || 1)}
-                                                                    style={{ width: '50px', textAlign: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #CBD5E1', fontWeight: '800' }}
+                                                                    step="any"
+                                                                    value={item.quantity === 0 ? '' : item.quantity}
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
+                                                                        updateItemQuantity(idx, val);
+                                                                    }}
+                                                                    style={{ width: '75px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white' }}
                                                                 />
-                                                                <button 
-                                                                    onClick={() => updateItemQuantity(idx, item.quantity + 1)}
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', cursor: 'pointer' }}
-                                                                >+</button>
                                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
                                                             </div>
                                                         ) : (
