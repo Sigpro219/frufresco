@@ -6048,6 +6048,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </p>
                 </div>
               </div>
+
+              {/* Right side: Helper box with detected information */}
+              {selectedRowForVariant !== null && editableItems[selectedRowForVariant] && (
+                <div style={{
+                  backgroundColor: '#F8FAFC',
+                  border: '1px dashed #CBD5E1',
+                  borderRadius: '12px',
+                  padding: '0.8rem 1.2rem',
+                  textAlign: 'left',
+                  fontSize: '0.85rem',
+                  color: '#475569',
+                  minWidth: '280px',
+                  flex: '1 1 auto',
+                  maxWidth: '360px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                    <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
+                    <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
+                      {editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity} {editableItems[selectedRowForVariant].originalUnit || 'uds'} detectadas
+                    </span>
+                  </div>
+                  <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={editableItems[selectedRowForVariant].originalName}>
+                    &quot;{editableItems[selectedRowForVariant].originalName}&quot;
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Client notes box */}
