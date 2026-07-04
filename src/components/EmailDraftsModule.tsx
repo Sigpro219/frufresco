@@ -6164,6 +6164,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </label>
                 <select
                   id={`modal-select-${index}`}
+                  tabIndex={index + 1}
                   value={selectedOptions[opt.name] || ''}
                   onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
                   onKeyDown={(e) => {
@@ -6208,7 +6209,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </label>
                 <input
                   id="modal-qty-input"
-                  tabIndex={1}
+                  tabIndex={(selectedProductForVariant.options_config?.length || 0) + 1}
                   type="text"
                   value={variantQuantity}
                   onChange={(e) => {
@@ -6267,7 +6268,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </label>
                 <select
                   id="modal-unit-select"
-                  tabIndex={2}
+                  tabIndex={(selectedProductForVariant.options_config?.length || 0) + 2}
                   value={selectedUnit}
                   onChange={(e) => {
                     const opt = optionsList.find(o => o.unit === e.target.value);
@@ -6313,7 +6314,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Footer buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
               <button 
-                tabIndex={4}
+                tabIndex={(selectedProductForVariant.options_config?.length || 0) + 4}
                 onClick={() => {
                   const idx = selectedRowForVariant;
                   setSelectedProductForVariant(null);
@@ -6334,7 +6335,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </button>
               <button 
                 id="modal-add-button"
-                tabIndex={3}
+                tabIndex={(selectedProductForVariant.options_config?.length || 0) + 3}
                 onClick={confirmVariantAdd}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'Tab') {
