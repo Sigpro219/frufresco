@@ -3947,9 +3947,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '33%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '42%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '40%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
                         <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
@@ -3999,7 +3999,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     )}
                                     <td style={{ 
                                       padding: '1rem 1rem', 
-                                      width: '33%', 
+                                      width: '30%', 
                                       backgroundColor: getCellBgColor(i, true),
                                       transition: 'background-color 0.2s'
                                     }}>
@@ -4029,7 +4029,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </td>
                                     <td style={{ 
                                       padding: '1rem 1rem', 
-                                      width: '42%', 
+                                      width: '40%', 
                                       backgroundColor: getCellBgColor(i, false),
                                       transition: 'background-color 0.2s'
                                     }}>
@@ -4141,7 +4141,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             }
                                           }}
                                           style={{
-                                            width: '90px',
+                                            width: '130px',
                                             padding: '8px',
                                             textAlign: 'center',
                                             borderRadius: '8px',
