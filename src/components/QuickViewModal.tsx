@@ -244,7 +244,12 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             backgroundColor: '#F9FAFB'
                         }}>
                             <button
-                                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                onClick={() => {
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                    const step = isWeightUnit ? 0.5 : 1;
+                                    setQuantity(Math.max(step, parseFloat((quantity - step).toFixed(2))));
+                                }}
                                 style={{
                                     width: '44px', height: '44px',
                                     border: 'none',
@@ -259,9 +264,28 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >−</button>
                             <input
-                                type="number"
+                                type="text"
                                 value={quantity}
-                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                        setQuantity(0);
+                                        return;
+                                    }
+                                    const cleanVal = val.replace(',', '.');
+                                    if (/^\d*\.?\d*$/.test(cleanVal)) {
+                                        const num = parseFloat(cleanVal);
+                                        setQuantity(isNaN(num) ? 0 : num);
+                                    }
+                                }}
+                                onBlur={() => {
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                    const step = isWeightUnit ? 0.5 : 1;
+                                    if (quantity <= 0) {
+                                        setQuantity(step);
+                                    }
+                                }}
                                 style={{
                                     width: '60px',
                                     textAlign: 'center',
@@ -274,7 +298,12 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                 }}
                             />
                             <button
-                                onClick={() => setQuantity(quantity + 1)}
+                                onClick={() => {
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                    const step = isWeightUnit ? 0.5 : 1;
+                                    setQuantity(parseFloat((quantity + step).toFixed(2)));
+                                }}
                                 style={{
                                     width: '44px', height: '44px',
                                     border: 'none',
