@@ -52,6 +52,12 @@ export default function CheckoutPage() {
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
     const [specialNotes, setSpecialNotes] = useState('');
+    const [isProfileMatched, setIsProfileMatched] = useState(false);
+    const [isProfileUnlocked, setIsProfileUnlocked] = useState(false);
+    const [maskedName, setMaskedName] = useState('');
+    const [maskedAddress, setMaskedAddress] = useState('');
+    const [lookupLoading, setLookupLoading] = useState(false);
+    const [lookupError, setLookupError] = useState('');
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     
@@ -120,6 +126,91 @@ export default function CheckoutPage() {
         setSpecialNotes(val);
         localStorage.setItem('checkout_specialNotes', val);
     };
+
+    // Step 1: Automatic B2C profile detection (Debounced)
+    useEffect(() => {
+        setIsProfileMatched(false);
+        setIsProfileUnlocked(false);
+        setMaskedName('');
+        setMaskedAddress('');
+        setLookupError('');
+
+        const emailVal = (email || '').trim();
+        const idVal = (identification || '').trim();
+
+        if (emailVal.includes('@') && emailVal.length > 5 && idVal.length >= 5) {
+            const delayDebounceFn = setTimeout(async () => {
+                setLookupLoading(true);
+                try {
+                    const res = await fetch('/api/checkout/lookup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: emailVal, nit: idVal })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.found) {
+                            setIsProfileMatched(true);
+                            setMaskedName(data.name);
+                            setMaskedAddress(data.address);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error during profile lookup:', err);
+                } finally {
+                    setLookupLoading(false);
+                }
+            }, 600);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [email, identification]);
+
+    // Step 2: Automatic phone verification to unlock details (Debounced)
+    useEffect(() => {
+        const cleanPhoneStr = (p: string) => (p || '').replace(/\D/g, '');
+        const phoneVal = cleanPhoneStr(phone);
+
+        if (isProfileMatched && !isProfileUnlocked && phoneVal.length >= 10) {
+            const delayDebounceFn = setTimeout(async () => {
+                setLookupLoading(true);
+                setLookupError('');
+                try {
+                    const res = await fetch('/api/checkout/lookup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: (email || '').trim(),
+                            nit: (identification || '').trim(),
+                            phone: phoneVal
+                        })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.verified) {
+                            setIsProfileUnlocked(true);
+                            setName(data.name);
+                            localStorage.setItem('checkout_name', data.name);
+                            setAddress(data.address);
+                            localStorage.setItem('checkout_address', data.address);
+                            setPhone(data.phone);
+                            localStorage.setItem('checkout_phone', data.phone);
+                            setIsProfileMatched(false);
+                        } else {
+                            setLookupError(data.error || 'El celular no coincide.');
+                        }
+                    } else {
+                        setLookupError('Error en la verificación.');
+                    }
+                } catch (err) {
+                    console.error('Error during phone verification:', err);
+                    setLookupError('Error en la conexión.');
+                } finally {
+                    setLookupLoading(false);
+                }
+            }, 500);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [phone, isProfileMatched, isProfileUnlocked, email, identification]);
 
     useEffect(() => {
         async function fetchGeofence() {
@@ -634,9 +725,21 @@ export default function CheckoutPage() {
                                     <input
                                         type="text"
                                         placeholder={t.fullNamePlaceholder}
-                                        value={name}
+                                        value={isProfileMatched ? maskedName : name}
                                         onChange={(e) => handleNameChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
+                                        readOnly={isProfileMatched}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.5rem 1rem 0.5rem 2.5rem', 
+                                            borderRadius: '10px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: isProfileMatched ? '#F3F4F6' : '#F9FAFB', 
+                                            color: isProfileMatched ? '#9CA3AF' : '#111827',
+                                            outline: 'none', 
+                                            transition: 'all 0.2s' 
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -679,6 +782,20 @@ export default function CheckoutPage() {
                                             className="checkout-input-modern"
                                         />
                                     </div>
+                                    {isProfileMatched && (
+                                        <div style={{ 
+                                            fontSize: '0.75rem', 
+                                            color: lookupError ? '#EF4444' : '#2563EB', 
+                                            fontWeight: '700', 
+                                            marginTop: '0.3rem', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '4px' 
+                                        }}>
+                                            <AlertCircle size={12} />
+                                            {lookupError || (lookupLoading ? 'Verificando celular...' : '🔒 Cuenta detectada. Digita el celular registrado para desbloquear.')}
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -711,9 +828,20 @@ export default function CheckoutPage() {
                                     <input
                                         type="text"
                                         placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
-                                        value={address}
+                                        value={isProfileMatched ? maskedAddress : address}
                                         onChange={(e) => handleAddressChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        readOnly={isProfileMatched}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.5rem 1rem 0.5rem 2.5rem', 
+                                            borderRadius: '10px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: isProfileMatched ? '#F3F4F6' : '#F9FAFB', 
+                                            color: isProfileMatched ? '#9CA3AF' : '#111827',
+                                            outline: 'none' 
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
