@@ -249,6 +249,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   }, [selectedProductForVariant]);
 
+  const normalizeUnitName = (u: string): string => {
+    const normalized = (u || '').toLowerCase().trim();
+    if (['libra', 'libras', 'lb', 'lbs', 'libra.', 'libras.'].includes(normalized)) return 'libra';
+    if (['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos'].includes(normalized)) return 'kg';
+    if (['unidad', 'unidades', 'und', 'unds', 'ud', 'uds'].includes(normalized)) return 'unidad';
+    if (['litro', 'litros', 'lt', 'lts', 'l'].includes(normalized)) return 'litro';
+    return normalized;
+  };
+
   const formatQuantity = (val: number | string | null | undefined): string => {
     if (val === undefined || val === null || val === '') return '';
     const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
@@ -366,8 +375,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (conversions && conversions.length > 0) {
       const dbConv = conversions.find(c => 
         c.product_id === product.id &&
-        c.from_unit.toLowerCase().trim() === currentOriginalUnit.toLowerCase().trim() &&
-        c.to_unit.toLowerCase().trim() === targetUnit.toLowerCase().trim()
+        normalizeUnitName(c.from_unit) === normalizeUnitName(currentOriginalUnit) &&
+        normalizeUnitName(c.to_unit) === normalizeUnitName(targetUnit)
       );
       if (dbConv) {
         conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
@@ -506,11 +515,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const list = [{ unit: selectedProductForVariant.unit_of_measure || 'Kg', factor: 1, label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)` }];
     const prodConvs = conversions ? conversions.filter(c => c.product_id === selectedProductForVariant.id) : [];
     prodConvs.forEach(c => {
-      if (!list.some(l => l.unit.toLowerCase().trim() === c.from_unit.toLowerCase().trim())) {
+      let displayUnit = c.from_unit || '';
+      const norm = normalizeUnitName(displayUnit);
+      if (norm === 'libra') displayUnit = 'libra';
+      else if (norm === 'kg') displayUnit = 'Kg';
+      else if (norm === 'unidad') displayUnit = 'Unidad';
+      else if (norm === 'litro') displayUnit = 'Litro';
+
+      if (!list.some(l => normalizeUnitName(l.unit) === norm)) {
         list.push({
-          unit: c.from_unit,
+          unit: displayUnit,
           factor: parseFloat(c.conversion_factor) || 1,
-          label: `${c.from_unit} (${parseFloat(c.conversion_factor)} ${selectedProductForVariant.unit_of_measure || 'Kg'})`
+          label: `${displayUnit} (${parseFloat(c.conversion_factor)} ${selectedProductForVariant.unit_of_measure || 'Kg'})`
         });
       }
     });
@@ -1227,8 +1243,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if (prod && conversions && conversions.length > 0) {
           const dbConv = conversions.find(c => 
             c.product_id === prod.id &&
-            c.from_unit.toLowerCase().trim() === parsedUnit.toLowerCase().trim() &&
-            c.to_unit.toLowerCase().trim() === prod.unit_of_measure.toLowerCase().trim()
+            normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
+            normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
           );
           if (dbConv) {
             conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
