@@ -575,8 +575,8 @@ export default function Navbar() {
                                 fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
                             }}>
                                 <ShoppingCart size={20} color="var(--primary)" strokeWidth={2} /> 
-                                <span style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '0.9rem' }}>
-                                    {mounted ? `${parseFloat(totalWeight.toFixed(2)).toString().replace('.', ',')} Kg` : '0 Kg'}
+                                <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '0.95rem' }}>
+                                    {mounted ? `$${totalPrice.toLocaleString('es-CO')}` : '$0'}
                                 </span>
                             </button>
                         </Link>
