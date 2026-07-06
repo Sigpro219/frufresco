@@ -61,6 +61,9 @@ export default function CheckoutPage() {
     const [originalAddress, setOriginalAddress] = useState('');
     const [originalCoords, setOriginalCoords] = useState<{lat: number, lng: number} | null>(null);
     const [matchedProfileId, setMatchedProfileId] = useState<string | null>(null);
+    const [unlockedEmail, setUnlockedEmail] = useState('');
+    const [unlockedId, setUnlockedId] = useState('');
+    const [unlockedPhone, setUnlockedPhone] = useState('');
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     
@@ -199,6 +202,9 @@ export default function CheckoutPage() {
                             localStorage.setItem('checkout_phone', data.phone);
                             setOriginalAddress(data.address);
                             setMatchedProfileId(data.id || null);
+                            setUnlockedEmail((email || '').trim());
+                            setUnlockedId((identification || '').trim());
+                            setUnlockedPhone(phoneVal);
                             if (data.latitude && data.longitude) {
                                 const latVal = parseFloat(data.latitude);
                                 const lngVal = parseFloat(data.longitude);
@@ -227,6 +233,30 @@ export default function CheckoutPage() {
             return () => clearTimeout(delayDebounceFn);
         }
     }, [phone, isProfileMatched, isProfileUnlocked, email, identification]);
+
+    // Step 3: Monitor lookup fields to clear auto-filled profile details if credentials change/are removed
+    useEffect(() => {
+        if (matchedProfileId) {
+            const currentEmail = (email || '').trim();
+            const currentId = (identification || '').trim();
+            const cleanPhoneStr = (p: string) => (p || '').replace(/\D/g, '');
+            const currentPhone = cleanPhoneStr(phone);
+
+            if (currentEmail !== unlockedEmail || currentId !== unlockedId || currentPhone !== unlockedPhone) {
+                setMatchedProfileId(null);
+                setIsProfileUnlocked(false);
+                setName('');
+                setAddress('');
+                setLatitude(null);
+                setLongitude(null);
+                setUnlockedEmail('');
+                setUnlockedId('');
+                setUnlockedPhone('');
+                localStorage.removeItem('checkout_name');
+                localStorage.removeItem('checkout_address');
+            }
+        }
+    }, [email, identification, phone, matchedProfileId, unlockedEmail, unlockedId, unlockedPhone]);
 
     useEffect(() => {
         async function fetchGeofence() {
