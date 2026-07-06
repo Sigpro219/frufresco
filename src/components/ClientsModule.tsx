@@ -2264,6 +2264,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
+
+    const defaultB2CDeliveryRestrictions = "Lunes a Viernes de 7:00 AM a 7:00 PM, Sábados de 7:00 AM a 2:00 PM";
+    const defaultB2CLogisticsData = {
+        windows: [{ startTime: "07:00", endTime: "19:00" }],
+        days: [1, 2, 3, 4, 5, 6],
+        allowed_days: [1, 2, 3, 4, 5, 6],
+        start_time: "07:00",
+        end_time: "19:00",
+        parsing_date: new Date().toISOString(),
+        special_notes: defaultB2CDeliveryRestrictions
+    };
+
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
         razon_social: editData?.razon_social || '',
@@ -2280,8 +2292,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         pricing_model_id: editData?.pricing_model_id || '',
         credit_limit: editData?.credit_limit || 0,
         payment_terms: editData?.payment_terms || 'Contado',
-        delivery_restrictions: editData?.delivery_restrictions || '',
-        logistics_data: editData?.logistics_data || null,
+        delivery_restrictions: editData?.delivery_restrictions || (isB2C ? defaultB2CDeliveryRestrictions : ''),
+        logistics_data: editData?.logistics_data || (isB2C ? defaultB2CLogisticsData : null),
         latitude: editData?.latitude || '',
         longitude: editData?.longitude || '',
         geocoding_status: editData?.geocoding_status || 'manual',
@@ -2933,45 +2945,38 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         )}
 
                         {/* BLOQUE: CONFIGURACIÓN COMERCIAL (COMMON) */}
-                        <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-                                <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                {isB2C ? (
+                        {!isB2C && (
+                            <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
+                                    <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
-                                        <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
-                                        <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                                <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
-                                                <select 
-                                                    value={formData.pricing_model_id} 
-                                                    onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
-                                                    disabled={isReadOnly}
-                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
-                                                >
-                                                    <option value="">Seleccionar...</option>
-                                                    {pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <FormField label="Días de Pago" value={formData.payment_days} onChange={(v) => setFormData({...formData, payment_days: parseInt(v) || 0})} type="number" readOnly={isReadOnly} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
+                                            <select 
+                                                value={formData.pricing_model_id} 
+                                                onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
+                                                disabled={isReadOnly}
+                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
+                                            >
+                                                <option value="">Seleccionar...</option>
+                                                {pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
+                                            </select>
                                         </div>
-                                        {!formData.is_corporate_parent && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                                                <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
-                                                <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
-                                                <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </section>
+                                        <FormField label="Días de Pago" value={formData.payment_days} onChange={(v) => setFormData({...formData, payment_days: parseInt(v) || 0})} type="number" readOnly={isReadOnly} />
+                                    </div>
+                                    {!formData.is_corporate_parent && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                                            <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
+                                            <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
+                                            <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        )}
 
                         {/* BLOQUE: CONTACTO OPERATIVO (COMMON) */}
                         {!isB2C && (
