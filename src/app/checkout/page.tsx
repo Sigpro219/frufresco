@@ -199,7 +199,7 @@ export default function CheckoutPage() {
             }
             console.log('👤 profile found, filling member data...');
         }
-    }, [profile, email, address]);
+    }, [profile]);
 
     // Fetch settings and refine date
     useEffect(() => {
