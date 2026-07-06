@@ -808,7 +808,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const fetchProducts = async () => {
     try {
-      const { data } = await supabase.from('products').select('*').eq('is_active', true).eq('show_on_web', true);
+      const { data } = await supabase.from('products').select('*').eq('is_active', true);
       if (data) setProducts(data);
     } catch (e) {
       console.error(e);
