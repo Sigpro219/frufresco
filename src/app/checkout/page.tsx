@@ -58,6 +58,8 @@ export default function CheckoutPage() {
     const [maskedAddress, setMaskedAddress] = useState('');
     const [lookupLoading, setLookupLoading] = useState(false);
     const [lookupError, setLookupError] = useState('');
+    const [originalAddress, setOriginalAddress] = useState('');
+    const [originalCoords, setOriginalCoords] = useState<{lat: number, lng: number} | null>(null);
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     
@@ -194,6 +196,18 @@ export default function CheckoutPage() {
                             localStorage.setItem('checkout_address', data.address);
                             setPhone(data.phone);
                             localStorage.setItem('checkout_phone', data.phone);
+                            setOriginalAddress(data.address);
+                            if (data.latitude && data.longitude) {
+                                const latVal = parseFloat(data.latitude);
+                                const lngVal = parseFloat(data.longitude);
+                                setLatitude(latVal);
+                                setLongitude(lngVal);
+                                setOriginalCoords({ lat: latVal, lng: lngVal });
+                            } else {
+                                setLatitude(null);
+                                setLongitude(null);
+                                setOriginalCoords(null);
+                            }
                             setIsProfileMatched(false);
                         } else {
                             setLookupError(data.error || 'El celular no coincide.');
@@ -219,6 +233,19 @@ export default function CheckoutPage() {
         }
         fetchGeofence();
     }, []);
+
+    // Monitor changes to delivery address to invalidate coordinates if address changes
+    useEffect(() => {
+        if (originalAddress && address.trim().toLowerCase() !== originalAddress.trim().toLowerCase()) {
+            setLatitude(null);
+            setLongitude(null);
+        } else if (originalAddress && address.trim().toLowerCase() === originalAddress.trim().toLowerCase()) {
+            if (originalCoords) {
+                setLatitude(originalCoords.lat);
+                setLongitude(originalCoords.lng);
+            }
+        }
+    }, [address, originalAddress, originalCoords]);
 
     // Perform validation whenever coordinates change
     useEffect(() => {
