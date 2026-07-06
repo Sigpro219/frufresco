@@ -80,10 +80,26 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             return;
         }
 
+        const attr = localAttributes.find(a => a.id === attrId);
+        const isPresentacion = attr?.name.toLowerCase().includes('presentaci');
+
+        let finalVal = val;
+        if (isPresentacion) {
+            const grams = prompt(`⚠️ EQUIVALENCIA EN GRAMOS:\n\nIngrese la equivalencia en gramos para "${val}" (ej: 250):`);
+            if (grams === null) return; // Operator clicked cancel
+            const gramsNum = parseInt(grams.trim());
+            if (isNaN(gramsNum) || gramsNum <= 0) {
+                alert('🛑 Error: Debe ingresar un número de gramos válido (mayor a 0).');
+                return;
+            }
+            finalVal = `${val}|${gramsNum}`;
+        }
+
         setLocalAttributes(localAttributes.map(a => {
             if (a.id === attrId) {
-                if (a.suggested_values.includes(val)) return a;
-                return { ...a, suggested_values: [...a.suggested_values, val] };
+                const cleanValues = a.suggested_values.map(v => v.includes('|') ? v.split('|')[0] : v);
+                if (cleanValues.includes(val)) return a;
+                return { ...a, suggested_values: [...a.suggested_values, finalVal] };
             }
             return a;
         }));
@@ -281,7 +297,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                     padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
                                                     fontWeight: '700', color: '#374151' 
                                                 }}>
-                                                    {val}
+                                                     {val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]}g)` : val}
                                                     <button 
                                                         onClick={() => handleRemoveValueLocal(attr.id, val)}
                                                         style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}
