@@ -28,12 +28,16 @@ import {
     X,
     ShieldCheck,
     Truck,
-    Lock as LockIcon
+    Lock as LockIcon,
+    Pencil
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
+import dynamic from 'next/dynamic';
+
+const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), { ssr: false });
 
 export default function CheckoutPage() {
-    const { items, totalPrice, removeItem, clearCart } = useCart();
+    const { items, totalPrice, removeItem, clearCart, updateItemQuantity } = useCart();
     const [isMounted, setIsMounted] = useState(false);
     const [name, setName] = useState('');
     const [identification, setIdentification] = useState('');
@@ -44,6 +48,10 @@ export default function CheckoutPage() {
     const [minOrder, setMinOrder] = useState(0);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingCartItem, setEditingCartItem] = useState<any | null>(null);
+    const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
     const [minDeliveryDate, setMinDeliveryDate] = useState('');
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
@@ -573,6 +581,40 @@ export default function CheckoutPage() {
             setLoading(false);
         }
     };
+    const handleEditItem = async (item: any) => {
+        try {
+            setLoadingProductId(item.id);
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('id', item.id)
+                .single();
+            if (data) {
+                setSelectedProduct({
+                    id: data.id,
+                    name: data.name,
+                    name_en: data.name_en,
+                    base_price: data.base_price,
+                    unit_of_measure: data.unit_of_measure,
+                    image_url: data.image_url,
+                    sku: data.sku,
+                    iva_rate: data.iva_rate,
+                    options: data.options,
+                    options_config: data.options_config,
+                    variants: data.variants,
+                    web_conversion_factor: data.web_conversion_factor,
+                    display_name: data.display_name,
+                    weight_kg: data.weight_kg
+                });
+                setEditingCartItem(item);
+                setIsEditModalOpen(true);
+            }
+        } catch (err) {
+            console.error('Error fetching product for edit:', err);
+        } finally {
+            setLoadingProductId(null);
+        }
+    };
 
     if (!isMounted) return null;
 
@@ -719,9 +761,37 @@ export default function CheckoutPage() {
                                                 }}>
                                                     ${item.price.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
                                                 </span>
-                                                <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '600' }}>
-                                                    • {item.quantity} {item.unit || ''}
-                                                </span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                        • {String(item.quantity).replace('.', ',')} {item.unit || ''}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleEditItem(item)}
+                                                        disabled={loadingProductId === item.id}
+                                                        style={{
+                                                            border: 'none',
+                                                            background: 'none',
+                                                            cursor: 'pointer',
+                                                            color: 'var(--primary)',
+                                                            padding: '2px 4px',
+                                                            borderRadius: '4px',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            opacity: 0.7,
+                                                            transition: 'opacity 0.2s'
+                                                        }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+                                                        title="Editar cantidad"
+                                                    >
+                                                        {loadingProductId === item.id ? (
+                                                            <Loader2 size={11} className="animate-spin" />
+                                                        ) : (
+                                                            <Pencil size={11} />
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1427,6 +1497,23 @@ export default function CheckoutPage() {
                         </div>
                     </div>
                 </div>
+            )}
+            
+            {isEditModalOpen && selectedProduct && (
+                <QuickViewModal
+                    product={selectedProduct}
+                    initialQuantity={editingCartItem?.quantity}
+                    onUpdateQuantity={(qty) => {
+                        if (editingCartItem) {
+                            updateItemQuantity(editingCartItem.id, editingCartItem.name, qty);
+                        }
+                    }}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setSelectedProduct(null);
+                        setEditingCartItem(null);
+                    }}
+                />
             )}
         </main>
     );

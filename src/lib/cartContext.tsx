@@ -21,6 +21,7 @@ interface CartContextType {
     addItem: (item: CartItem) => void;
     removeItem: (id: string, name: string) => void;
     clearCart: () => void;
+    updateItemQuantity: (id: string, name: string, quantity: number) => void;
     totalItems: number;
     totalPrice: number;
     totalWeight: number;
@@ -92,6 +93,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('frufresco_cart');
     };
 
+    const updateItemQuantity = (id: string, name: string, quantity: number) => {
+        setItems((prev) =>
+            prev.map((i) =>
+                (i.id === id && i.name === name)
+                    ? { ...i, quantity: quantity }
+                    : i
+            )
+        );
+    };
+
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
     const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const totalWeight = items.reduce((sum, item) => {
@@ -103,7 +114,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, 0);
 
     return (
-        <CartContext.Provider value={{ items, addItem, removeItem, clearCart, totalItems, totalPrice, totalWeight }}>
+        <CartContext.Provider value={{ items, addItem, removeItem, clearCart, updateItemQuantity, totalItems, totalPrice, totalWeight }}>
             {children}
         </CartContext.Provider>
     );
