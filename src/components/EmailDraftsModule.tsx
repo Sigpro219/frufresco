@@ -6192,6 +6192,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     outline: 'none',
                     transition: 'all 0.2s ease-in-out'
                   }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E2E8F0';
+                    e.target.style.backgroundColor = '#F9FAFB';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 >
                   <option value="">Seleccionar {opt.name}...</option>
                   {opt.values?.map((val: string) => (
