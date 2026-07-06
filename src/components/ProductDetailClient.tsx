@@ -27,6 +27,7 @@ interface Product {
     show_on_web?: boolean;
     iva_rate?: number;
     pricing_model_prices?: { price: number }[];
+    weight_kg?: number | null;
 }
 
 export default function ProductDetailClient({ product }: { product: Product }) {
@@ -96,6 +97,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     };
 
     const handleAdd = () => {
+        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+        const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
+        const isLibra = ['libra', 'libras'].includes(unitLower);
+        const unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+
         addItem({
             id: product.id,
             name: getFormattedName(),
@@ -103,7 +109,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             iva_rate: product.iva_rate,
             unit: product.web_unit || product.unit_of_measure,
             quantity: quantity,
-            image_url: product.image_url
+            image_url: product.image_url,
+            weight_kg: unitWeight
         });
 
         const name = (isEn && product.name_en) ? product.name_en : (product.display_name || product.name);
@@ -111,6 +118,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     };
 
     const handleBuyNow = () => {
+        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+        const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
+        const isLibra = ['libra', 'libras'].includes(unitLower);
+        const unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+
         addItem({
             id: product.id,
             name: getFormattedName(),
@@ -118,7 +130,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             iva_rate: product.iva_rate,
             unit: product.web_unit || product.unit_of_measure,
             quantity: quantity,
-            image_url: product.image_url
+            image_url: product.image_url,
+            weight_kg: unitWeight
         });
         router.push('/checkout');
     };
