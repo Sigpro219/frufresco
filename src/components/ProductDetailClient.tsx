@@ -245,15 +245,56 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
                                 <button
-                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                    onClick={() => {
+                                        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                        const step = isWeightUnit ? 0.5 : 1;
+                                        setQuantity(Math.max(step, parseFloat((quantity - step).toFixed(2))));
+                                    }}
                                     style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
                                     <Minus size={18} strokeWidth={2.5} />
                                 </button>
-                                <span style={{ width: '40px', textAlign: 'center', fontWeight: '800', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
-                                    {quantity}
-                                </span>
+                                <input
+                                    type="text"
+                                    value={quantity}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') {
+                                            setQuantity(0);
+                                            return;
+                                        }
+                                        const cleanVal = val.replace(',', '.');
+                                        if (/^\d*\.?\d*$/.test(cleanVal)) {
+                                            const num = parseFloat(cleanVal);
+                                            setQuantity(isNaN(num) ? 0 : num);
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                        const step = isWeightUnit ? 0.5 : 1;
+                                        if (quantity <= 0) {
+                                            setQuantity(step);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '60px',
+                                        textAlign: 'center',
+                                        fontWeight: '800',
+                                        fontSize: '1.2rem',
+                                        color: 'var(--primary-dark)',
+                                        border: 'none',
+                                        outline: 'none',
+                                        background: 'transparent'
+                                    }}
+                                />
                                 <button
-                                    onClick={() => setQuantity(quantity + 1)}
+                                    onClick={() => {
+                                        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                        const step = isWeightUnit ? 0.5 : 1;
+                                        setQuantity(parseFloat((quantity + step).toFixed(2)));
+                                    }}
                                     style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
                                     <Plus size={18} strokeWidth={2.5} />
                                 </button>
