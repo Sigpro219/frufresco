@@ -559,8 +559,8 @@ export default function OrderLoadingPage() {
     const currentTotal = orderItems.reduce((acc, item) => acc + ((item.unit_price || 0) * item.quantity), 0);
     const currentWeight = orderItems.reduce((acc, item) => {
         const unit = (item.products?.unit_of_measure || '').toLowerCase();
-        // Si la unidad es Kg, el peso es la cantidad misma. Si es otra unidad, multiplicamos por weight_kg
-        const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (item.products?.weight_kg || 0);
+        // Consistente con el creador de pedidos y base de datos: usa weight_kg si está definido, de lo contrario cae a 1 si la unidad es kg
+        const weightFactor = item.products?.weight_kg || ((unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : 0);
         return acc + (weightFactor * item.quantity);
     }, 0);
 
