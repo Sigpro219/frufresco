@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         // 1. Query the B2C client from profiles
         const { data: profilesList, error } = await supabase
             .from('profiles')
-            .select('id, contact_name, address, phone')
+            .select('id, contact_name, address, phone, latitude, longitude')
             .eq('role', 'b2c_client')
             .eq('email', normalizedEmail)
             .eq('nit', normalizedNit)
@@ -59,7 +59,9 @@ export async function POST(request: Request) {
                     verified: true,
                     name: profile.contact_name,
                     address: profile.address,
-                    phone: profile.phone
+                    phone: profile.phone,
+                    latitude: profile.latitude,
+                    longitude: profile.longitude
                 });
             } else {
                 console.log(`Phone verification failed for: ${normalizedEmail}`);
