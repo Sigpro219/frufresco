@@ -143,7 +143,18 @@ function CreateOrderContent() {
     const [productSearch, setProductSearch] = useState('');
 
     const [originSource, setOriginSource] = useState(searchParams.get('source') || 'phone'); // phone, whatsapp, email
-    const [deliveryDate, setDeliveryDate] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]); // Default tomorrow
+    const getMinDeliveryDate = () => {
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const bogotaNow = new Date(utc + (3600000 * -5));
+        const currentHour = bogotaNow.getHours();
+        const daysToAdd = currentHour >= 17 ? 2 : 1;
+        const result = new Date(bogotaNow);
+        result.setDate(bogotaNow.getDate() + daysToAdd);
+        return result.toISOString().split('T')[0];
+    };
+    const minDeliveryDate = getMinDeliveryDate();
+    const [deliveryDate, setDeliveryDate] = useState(minDeliveryDate); // Default safe Bogota date
     const [deliverySlot, setDeliverySlot] = useState('AM'); // AM or PM
     const [isManualDelivery, setIsManualDelivery] = useState(false);
     const [manualDeliveryTime, setManualDeliveryTime] = useState('');
@@ -2088,7 +2099,18 @@ function CreateOrderContent() {
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.4rem' }}>FECHA DE ENTREGA</label>
                                             <input
                                                 type="date"
-                                                value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
+                                                value={deliveryDate}
+                                                min={minDeliveryDate}
+                                                onChange={e => {
+                                                    const newDate = e.target.value;
+                                                    const minDate = getMinDeliveryDate();
+                                                    if (newDate < minDate) {
+                                                        showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
+                                                        setDeliveryDate(minDate);
+                                                        return;
+                                                    }
+                                                    setDeliveryDate(newDate);
+                                                }}
                                                 style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
                                             />
                                         </div>
