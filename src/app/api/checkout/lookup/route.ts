@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         // 1. Query the B2C client from profiles
         const { data: profilesList, error } = await supabase
             .from('profiles')
-            .select('id, contact_name, address, phone, latitude, longitude')
+            .select('id, contact_name, address, phone, contact_phone, latitude, longitude')
             .eq('role', 'b2c_client')
             .eq('email', normalizedEmail)
             .eq('nit', normalizedNit)
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         // STEP 2: If phone is provided, run verification and return unmasked data
         if (phone !== undefined) {
             const clientEnteredPhone = cleanPhone(phone);
-            const dbPhone = cleanPhone(profile.phone);
+            const dbPhone = cleanPhone(profile.phone || profile.contact_phone);
 
             if (clientEnteredPhone && dbPhone && clientEnteredPhone === dbPhone) {
                 console.log(`Successfully verified and unlocked profile for: ${normalizedEmail}`);
@@ -59,12 +59,12 @@ export async function POST(request: Request) {
                     verified: true,
                     name: profile.contact_name,
                     address: profile.address,
-                    phone: profile.phone,
+                    phone: profile.contact_phone || profile.phone,
                     latitude: profile.latitude,
                     longitude: profile.longitude
                 });
             } else {
-                console.log(`Phone verification failed for: ${normalizedEmail}`);
+                console.log(`Phone verification failed for: ${normalizedEmail}. Entered: ${clientEnteredPhone}, DB: ${dbPhone}`);
                 return NextResponse.json({ verified: false, error: 'El número de celular no coincide con el registrado.' });
             }
         }
