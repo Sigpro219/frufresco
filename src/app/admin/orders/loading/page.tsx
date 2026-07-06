@@ -328,12 +328,25 @@ export default function OrderLoadingPage() {
                             name = order.customer_name || 'Cliente Desconocido';
                             phone = order.customer_phone || 'Sin Teléfono';
 
+                            if (name === 'Cliente Desconocido' && order.special_notes) {
+                                const nameMatch = order.special_notes.match(/\[CLIENTE:\s*(.*?)\s*\|/);
+                                const phoneMatch = order.special_notes.match(/Tel:\s*(.*?)\s*\|/);
+                                if (nameMatch) name = nameMatch[1].trim();
+                                if (phoneMatch) phone = phoneMatch[1].trim();
+                            }
+
                             if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
                                 const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
                                 const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
                                 if (nameMatch) name = nameMatch[1];
                                 if (phoneMatch) phone = phoneMatch[1];
                             }
+                        }
+
+                        let nit = order.profiles?.nit || null;
+                        if (!order.profiles && order.special_notes) {
+                            const nitMatch = order.special_notes.match(/ID:\s*(.*?)(?:\]|\s*\|)/);
+                            if (nitMatch) nit = nitMatch[1].trim();
                         }
 
                         // Payment Method Logic
@@ -349,7 +362,7 @@ export default function OrderLoadingPage() {
                             ...order,
                             customer_name: name,
                             customer_phone: phone,
-                            customer_nit: order.profiles?.nit || null,
+                            customer_nit: nit,
                             paymentMethod: paymentMethod,
                             isComplete: true
                         };
