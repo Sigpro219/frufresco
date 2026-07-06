@@ -60,6 +60,7 @@ export default function CheckoutPage() {
     const [lookupError, setLookupError] = useState('');
     const [originalAddress, setOriginalAddress] = useState('');
     const [originalCoords, setOriginalCoords] = useState<{lat: number, lng: number} | null>(null);
+    const [matchedProfileId, setMatchedProfileId] = useState<string | null>(null);
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     
@@ -197,6 +198,7 @@ export default function CheckoutPage() {
                             setPhone(data.phone);
                             localStorage.setItem('checkout_phone', data.phone);
                             setOriginalAddress(data.address);
+                            setMatchedProfileId(data.id || null);
                             if (data.latitude && data.longitude) {
                                 const latVal = parseFloat(data.latitude);
                                 const lngVal = parseFloat(data.longitude);
@@ -410,6 +412,9 @@ export default function CheckoutPage() {
                 total: totalPrice,
                 latitude: safeLat,
                 longitude: safeLng,
+                customer_name: name,
+                customer_phone: phone,
+                profile_id: matchedProfileId || null,
                 special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[ORIGIN: web]\n${specialNotes || ''}`
             };
 

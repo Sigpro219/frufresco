@@ -50,7 +50,7 @@ export async function POST(request: Request) {
             }
 
             // 2. Mapear estado
-            const mappedStatus = status === 'APPROVED' ? 'approved' : status === 'DECLINED' ? 'cancelled' : 'pending_approval';
+            const mappedStatus = status === 'APPROVED' ? 'pending_approval' : status === 'DECLINED' ? 'cancelled' : 'pending_approval';
             
             // 3. Lógica SI el pago es aprobado
             let profileId = order.profile_id;

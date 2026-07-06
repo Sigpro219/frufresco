@@ -91,6 +91,30 @@ export async function POST(request: Request) {
             console.error("Backend price validation threw exception (continuing checkout safely):", validationErr.message);
         }
 
+        // Calculate total weight for the order
+        let calculatedWeight = 0;
+        try {
+            const productIds = items.map((item: any) => item.product_id);
+            const { data: weightProds } = await supabase
+                .from('products')
+                .select('id, weight_kg, unit_of_measure')
+                .in('id', productIds);
+            
+            if (weightProds) {
+                for (const item of items) {
+                    const dbProd = weightProds.find((p: any) => p.id === item.product_id);
+                    if (dbProd) {
+                        const qtyNum = parseFloat(item.quantity?.toString() || '0');
+                        const w = dbProd.weight_kg || (dbProd.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+                        calculatedWeight += (qtyNum * w);
+                    }
+                }
+            }
+        } catch (weightErr) {
+            console.error('Error calculating weight in public order api:', weightErr);
+        }
+        order.total_weight_kg = calculatedWeight;
+
         // 1. Crear la cabecera del pedido
         const { data: orderData, error: orderError } = await supabase
             .from('orders')
