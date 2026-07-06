@@ -90,24 +90,46 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
-            .map(([key, value]) => `${key}: ${value}`)
+            .map(([key, value]) => {
+                const displayKey = key.toLowerCase().includes('presentaci') ? 'Presentación' : key;
+                const displayVal = value.includes('|') ? value.split('|')[0] : value;
+                return `${displayKey}: ${displayVal}`;
+            })
             .join(', ');
         const baseName = (isEn && product.name_en) ? product.name_en : (product.display_name || product.name);
         return optionString ? `${baseName} (${optionString})` : baseName;
     };
 
     const handleAdd = () => {
+        let selectedPresentationVal: string | null = null;
+        Object.entries(selections).forEach(([key, val]) => {
+            if (key.toLowerCase().includes('presentaci')) {
+                selectedPresentationVal = val;
+            }
+        });
+
         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
         const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
         const isLibra = ['libra', 'libras'].includes(unitLower);
-        const unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+
+        let unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+        let cartUnit = product.web_unit || product.unit_of_measure;
+
+        if (selectedPresentationVal && selectedPresentationVal.includes('|')) {
+            const parts = selectedPresentationVal.split('|');
+            const grams = parseFloat(parts[1]);
+            if (!isNaN(grams) && grams > 0) {
+                unitWeight = grams / 1000;
+            }
+            cartUnit = parts[0];
+        }
 
         addItem({
             id: product.id,
             name: getFormattedName(),
             price: currentPrice,
             iva_rate: product.iva_rate,
-            unit: product.web_unit || product.unit_of_measure,
+            unit: cartUnit,
             quantity: quantity,
             image_url: product.image_url,
             weight_kg: unitWeight
@@ -118,17 +140,35 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     };
 
     const handleBuyNow = () => {
+        let selectedPresentationVal: string | null = null;
+        Object.entries(selections).forEach(([key, val]) => {
+            if (key.toLowerCase().includes('presentaci')) {
+                selectedPresentationVal = val;
+            }
+        });
+
         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
         const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
         const isLibra = ['libra', 'libras'].includes(unitLower);
-        const unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+
+        let unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+        let cartUnit = product.web_unit || product.unit_of_measure;
+
+        if (selectedPresentationVal && selectedPresentationVal.includes('|')) {
+            const parts = selectedPresentationVal.split('|');
+            const grams = parseFloat(parts[1]);
+            if (!isNaN(grams) && grams > 0) {
+                unitWeight = grams / 1000;
+            }
+            cartUnit = parts[0];
+        }
 
         addItem({
             id: product.id,
             name: getFormattedName(),
             price: currentPrice,
             iva_rate: product.iva_rate,
-            unit: product.web_unit || product.unit_of_measure,
+            unit: cartUnit,
             quantity: quantity,
             image_url: product.image_url,
             weight_kg: unitWeight
@@ -223,33 +263,39 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     <hr style={{ border: 'none', borderTop: '1px solid var(--border)', marginBottom: '2rem' }} />
 
                     {/* Dynamic Variant Selectors */}
-                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => (
-                        <div key={optionName} style={{ marginBottom: '2rem' }}>
-                            <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
-                                {optionName}
-                            </label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                {Array.isArray(values) && values.map((val) => (
-                                    <button
-                                        key={val}
-                                        onClick={() => setSelections({ ...selections, [optionName]: val })}
-                                        style={{
-                                            padding: '0.75rem 1.5rem',
-                                            borderRadius: 'var(--radius-md)',
-                                            border: selections[optionName] === val ? '2px solid black' : '1px solid var(--border)',
-                                            backgroundColor: selections[optionName] === val ? 'black' : 'white',
-                                            color: selections[optionName] === val ? 'white' : 'var(--text-main)',
-                                            fontWeight: '600',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                                        }}
-                                    >
-                                        {val}
-                                    </button>
-                                ))}
+                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => {
+                        const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                        return (
+                            <div key={optionName} style={{ marginBottom: '2rem' }}>
+                                <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
+                                    {displayOptionName}
+                                </label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                    {Array.isArray(values) && values.map((val) => {
+                                        const displayVal = val.includes('|') ? val.split('|')[0] : val;
+                                        return (
+                                            <button
+                                                key={val}
+                                                onClick={() => setSelections({ ...selections, [optionName]: val })}
+                                                style={{
+                                                    padding: '0.75rem 1.5rem',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    border: selections[optionName] === val ? '2px solid black' : '1px solid var(--border)',
+                                                    backgroundColor: selections[optionName] === val ? 'black' : 'white',
+                                                    color: selections[optionName] === val ? 'white' : 'var(--text-main)',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                }}
+                                            >
+                                                {displayVal}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
 
                     {/* Quantity Section */}
                     <div style={{ marginBottom: '2.5rem' }}>
