@@ -50,7 +50,7 @@ export default function Footer() {
     <footer style={{ 
       background: 'linear-gradient(180deg, #05130e 0%, #020a07 100%)', 
       color: '#F9FAFB', 
-      padding: '1.5rem 0 1rem',
+      padding: '4rem 0 3rem',
       borderTop: '1px solid rgba(255,255,255,0.05)'
     }}>
       <div className="container">
