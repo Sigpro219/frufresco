@@ -28,16 +28,18 @@ interface Product {
 interface QuickViewModalProps {
     product: Product;
     onClose: () => void;
+    initialQuantity?: number;
+    onUpdateQuantity?: (qty: number) => void;
 }
 
-const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
+const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initialQuantity, onUpdateQuantity }) => {
     const { addItem } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
-    const [quantity, setQuantity] = useState(1);
-    const [inputValue, setInputValue] = useState('1');
+    const [quantity, setQuantity] = useState(initialQuantity !== undefined ? initialQuantity : 1);
+    const [inputValue, setInputValue] = useState(initialQuantity !== undefined ? String(initialQuantity).replace('.', ',') : '1');
 
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
 
@@ -91,21 +93,25 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
     };
 
     const handleAddToCart = () => {
-        const unitLower = (product.unit_of_measure || '').toLowerCase();
-        const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
-        const isLibra = ['libra', 'libras'].includes(unitLower);
-        const unitWeight = (product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+        if (onUpdateQuantity) {
+            onUpdateQuantity(quantity);
+        } else {
+            const unitLower = (product.unit_of_measure || '').toLowerCase();
+            const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
+            const isLibra = ['libra', 'libras'].includes(unitLower);
+            const unitWeight = (product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
 
-        addItem({
-            id: product.id,
-            name: getFormattedName(),
-            price: currentPrice,
-            iva_rate: product.iva_rate,
-            unit: product.unit_of_measure,
-            quantity: quantity,
-            image_url: product.image_url,
-            weight_kg: unitWeight
-        });
+            addItem({
+                id: product.id,
+                name: getFormattedName(),
+                price: currentPrice,
+                iva_rate: product.iva_rate,
+                unit: product.unit_of_measure,
+                quantity: quantity,
+                image_url: product.image_url,
+                weight_kg: unitWeight
+            });
+        }
         onClose();
     };
 
@@ -389,39 +395,43 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             }
                         }}
                     >
-                        {isAvailable ? t.addToOrder : t.unavailable}
+                        {onUpdateQuantity 
+                            ? (locale === 'en' ? 'Update Quantity' : 'Actualizar Cantidad') 
+                            : (isAvailable ? t.addToOrder : t.unavailable)}
                     </button>
-                    <button
-                        onClick={handleBuyNow}
-                        disabled={!isAvailable}
-                        style={{
-                            width: '100%',
-                            padding: '1.15rem',
-                            borderRadius: '15px',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            cursor: isAvailable ? 'pointer' : 'not-allowed',
-                            backgroundColor: isAvailable ? 'var(--primary)' : '#F3F4F6',
-                            color: isAvailable ? 'white' : '#9CA3AF',
-                            border: 'none',
-                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                            boxShadow: isAvailable ? '0 10px 20px rgba(26, 77, 46, 0.2)' : 'none'
-                        }}
-                        onMouseEnter={(e) => {
-                            if(isAvailable) {
-                                e.currentTarget.style.transform = 'scale(1.02)';
-                                e.currentTarget.style.boxShadow = '0 15px 30px rgba(26, 77, 46, 0.3)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if(isAvailable) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = '0 10px 20px rgba(26, 77, 46, 0.2)';
-                            }
-                        }}
-                    >
-                        {isAvailable ? t.payNow : t.outOfStock}
-                    </button>
+                    {!onUpdateQuantity && (
+                        <button
+                            onClick={handleBuyNow}
+                            disabled={!isAvailable}
+                            style={{
+                                width: '100%',
+                                padding: '1.15rem',
+                                borderRadius: '15px',
+                                fontSize: '1rem',
+                                fontWeight: '800',
+                                cursor: isAvailable ? 'pointer' : 'not-allowed',
+                                backgroundColor: isAvailable ? 'var(--primary)' : '#F3F4F6',
+                                color: isAvailable ? 'white' : '#9CA3AF',
+                                border: 'none',
+                                transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                boxShadow: isAvailable ? '0 10px 20px rgba(26, 77, 46, 0.2)' : 'none'
+                            }}
+                            onMouseEnter={(e) => {
+                                if(isAvailable) {
+                                    e.currentTarget.style.transform = 'scale(1.02)';
+                                    e.currentTarget.style.boxShadow = '0 15px 30px rgba(26, 77, 46, 0.3)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if(isAvailable) {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.boxShadow = '0 10px 20px rgba(26, 77, 46, 0.2)';
+                                }
+                            }}
+                        >
+                            {isAvailable ? t.payNow : t.outOfStock}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
