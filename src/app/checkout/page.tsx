@@ -707,34 +707,47 @@ export default function CheckoutPage() {
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.2rem', 
+                            fontSize: '1.25rem', 
                             fontWeight: '900', 
-                            marginBottom: '1rem', 
+                            marginBottom: '1.25rem', 
                             color: 'var(--text-main)', 
                             letterSpacing: '-0.04em',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px'
-                        }}>
-                            <CreditCard size={18} color="var(--primary)" strokeWidth={2.5} /> {t.deliveryDetail}
+                            gap: '10px',
+                            borderBottom: '1px solid #F3F4F6',
+                            paddingBottom: '0.75rem'
+                         }}>
+                            <CreditCard size={20} color="var(--primary)" strokeWidth={2.5} /> {t.deliveryDetail}
                         </h3>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {/* 1. Email */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     {t.email}
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <Mail size={15} />
+                                    <div style={{ position: 'absolute', left: '14px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
+                                        <Mail size={16} />
                                     </div>
                                     <input
                                         type="email"
                                         placeholder={t.emailPlaceholder}
                                         value={email}
                                         onChange={(e) => handleEmailChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.625rem 1rem 0.625rem 2.75rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -742,19 +755,30 @@ export default function CheckoutPage() {
 
                             {/* 2. Identificación */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Identificación (Cédula/NIT)
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <User size={15} />
+                                    <div style={{ position: 'absolute', left: '14px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
+                                        <User size={16} />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Ej: 123456789"
                                         value={identification}
                                         onChange={(e) => handleIdChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.625rem 1rem 0.625rem 2.75rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none', 
+                                            transition: 'all 0.2s ease-in-out' 
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -762,46 +786,75 @@ export default function CheckoutPage() {
 
                             {/* 3. WhatsApp */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     {t.whatsapp}
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <Phone size={15} />
+                                    <div style={{ position: 'absolute', left: '14px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
+                                        <Phone size={16} />
                                     </div>
                                     <input
                                         type="tel"
                                         placeholder={t.whatsappPlaceholder}
                                         value={phone}
                                         onChange={(e) => handlePhoneChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.625rem 1rem 0.625rem 2.75rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
                                 {isProfileMatched && (
                                     <div style={{ 
-                                        fontSize: '0.75rem', 
-                                        color: lookupError ? '#EF4444' : '#2563EB', 
-                                        fontWeight: '700', 
-                                        marginTop: '0.3rem', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '4px' 
+                                        backgroundColor: lookupError ? '#FEF2F2' : '#EFF6FF',
+                                        border: `1px solid ${lookupError ? '#FCA5A5' : '#BFDBFE'}`,
+                                        borderRadius: '12px',
+                                        padding: '0.75rem',
+                                        marginTop: '0.5rem',
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '8px'
                                     }}>
-                                        <AlertCircle size={12} />
-                                        {lookupError || (lookupLoading ? 'Verificando celular...' : '🔒 Cuenta detectada. Digita el celular registrado para desbloquear.')}
+                                        <AlertCircle size={16} color={lookupError ? '#EF4444' : '#2563EB'} style={{ marginTop: '2px', flexShrink: 0 }} />
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '800', color: lookupError ? '#991B1B' : '#1E40AF' }}>
+                                                {lookupError ? 'Error de Validación' : '🔒 Cuenta FruFresco Detectada'}
+                                            </p>
+                                            <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', fontWeight: '500', color: lookupError ? '#7F1D1D' : '#1E3A8A', lineHeight: '1.3' }}>
+                                                {lookupError || (lookupLoading ? 'Validando número...' : 'Por tu seguridad, digita el número de celular registrado para autocompletar tu compra.')}
+                                            </p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
 
                             {/* 4. Nombre Completo */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     {t.fullName}
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <User size={15} />
+                                    <div style={{ 
+                                        position: 'absolute', 
+                                        left: '14px', 
+                                        top: 0, 
+                                        bottom: 0, 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
+                                        opacity: 0.5, 
+                                        pointerEvents: 'none' 
+                                    }}>
+                                        {isProfileMatched ? <LockIcon size={15} /> : <User size={16} />}
                                     </div>
                                     <input
                                         type="text"
@@ -811,15 +864,16 @@ export default function CheckoutPage() {
                                         readOnly={isProfileMatched}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.5rem 1rem 0.5rem 2.5rem', 
-                                            borderRadius: '10px', 
-                                            border: '1px solid #E5E7EB', 
+                                            padding: '0.625rem 1rem 0.625rem 2.75rem', 
+                                            borderRadius: '12px', 
+                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E5E7EB', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
-                                            backgroundColor: isProfileMatched ? '#F3F4F6' : '#F9FAFB', 
-                                            color: isProfileMatched ? '#9CA3AF' : '#111827',
+                                            backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
+                                            color: isProfileMatched ? '#6B7280' : '#111827',
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
                                             outline: 'none', 
-                                            transition: 'all 0.2s' 
+                                            transition: 'all 0.2s ease-in-out' 
                                         }}
                                         className="checkout-input-modern"
                                     />
@@ -828,12 +882,22 @@ export default function CheckoutPage() {
 
                             {/* 5. Dirección de Entrega */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Dirección de Entrega
                                 </label>
                                 <div style={{ position: 'relative', marginBottom: '0.6rem' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <MapPin size={15} />
+                                    <div style={{ 
+                                        position: 'absolute', 
+                                        left: '14px', 
+                                        top: 0, 
+                                        bottom: 0, 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
+                                        opacity: 0.5, 
+                                        pointerEvents: 'none' 
+                                    }}>
+                                        {isProfileMatched ? <LockIcon size={15} /> : <MapPin size={16} />}
                                     </div>
                                     <input
                                         type="text"
@@ -843,13 +907,14 @@ export default function CheckoutPage() {
                                         readOnly={isProfileMatched}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.5rem 1rem 0.5rem 2.5rem', 
-                                            borderRadius: '10px', 
-                                            border: '1px solid #E5E7EB', 
+                                            padding: '0.625rem 1rem 0.625rem 2.75rem', 
+                                            borderRadius: '12px', 
+                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E5E7EB', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
-                                            backgroundColor: isProfileMatched ? '#F3F4F6' : '#F9FAFB', 
-                                            color: isProfileMatched ? '#9CA3AF' : '#111827',
+                                            backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
+                                            color: isProfileMatched ? '#6B7280' : '#111827',
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
                                             outline: 'none' 
                                         }}
                                         className="checkout-input-modern"
