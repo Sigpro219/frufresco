@@ -87,19 +87,33 @@ export default function CheckoutPage() {
     useEffect(() => {
         setIsMounted(true);
         if (typeof window !== 'undefined') {
-            const savedName = localStorage.getItem('checkout_name');
+            const isAutofilled = localStorage.getItem('checkout_is_profile_autofilled') === 'true';
             const savedId = localStorage.getItem('checkout_identification');
             const savedEmail = localStorage.getItem('checkout_email');
             const savedPhone = localStorage.getItem('checkout_phone');
-            const savedAddress = localStorage.getItem('checkout_address');
             const savedNotes = localStorage.getItem('checkout_specialNotes');
 
-            if (savedName) setName(savedName);
             if (savedId) setIdentification(savedId);
             if (savedEmail) setEmail(savedEmail);
             if (savedPhone) setPhone(savedPhone);
-            if (savedAddress) setAddress(savedAddress);
             if (savedNotes) setSpecialNotes(savedNotes);
+
+            const savedName = localStorage.getItem('checkout_name');
+            const savedAddress = localStorage.getItem('checkout_address');
+            const isLuis = savedName && savedName.includes('Luis Fernando');
+            const isCalle127 = savedAddress && savedAddress.includes('Calle 127');
+
+            // ONLY load saved name and address if they were NOT autofilled from a profile
+            if (!isAutofilled && !isLuis && !isCalle127) {
+                if (savedName) setName(savedName);
+                if (savedAddress) setAddress(savedAddress);
+            } else {
+                setName('');
+                setAddress('');
+                localStorage.removeItem('checkout_name');
+                localStorage.removeItem('checkout_address');
+                localStorage.removeItem('checkout_is_profile_autofilled');
+            }
         }
     }, []);
 
@@ -202,6 +216,7 @@ export default function CheckoutPage() {
                             localStorage.setItem('checkout_phone', data.phone);
                             setOriginalAddress(data.address);
                             setMatchedProfileId(data.id || null);
+                            localStorage.setItem('checkout_is_profile_autofilled', 'true');
                             setUnlockedEmail((email || '').trim());
                             setUnlockedId((identification || '').trim());
                             setUnlockedPhone(phoneVal);
@@ -254,6 +269,7 @@ export default function CheckoutPage() {
                 setUnlockedPhone('');
                 localStorage.removeItem('checkout_name');
                 localStorage.removeItem('checkout_address');
+                localStorage.removeItem('checkout_is_profile_autofilled');
             }
         }
     }, [email, identification, phone, matchedProfileId, unlockedEmail, unlockedId, unlockedPhone]);
