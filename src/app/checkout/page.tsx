@@ -714,6 +714,81 @@ export default function CheckoutPage() {
                         </h3>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {/* 1. Email */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {t.email}
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
+                                        <Mail size={15} />
+                                    </div>
+                                    <input
+                                        type="email"
+                                        placeholder={t.emailPlaceholder}
+                                        value={email}
+                                        onChange={(e) => handleEmailChange(e.target.value)}
+                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        className="checkout-input-modern"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* 2. Identificación */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Identificación (Cédula/NIT)
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
+                                        <User size={15} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Ej: 123456789"
+                                        value={identification}
+                                        onChange={(e) => handleIdChange(e.target.value)}
+                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
+                                        className="checkout-input-modern"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* 3. WhatsApp */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {t.whatsapp}
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
+                                        <Phone size={15} />
+                                    </div>
+                                    <input
+                                        type="tel"
+                                        placeholder={t.whatsappPlaceholder}
+                                        value={phone}
+                                        onChange={(e) => handlePhoneChange(e.target.value)}
+                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        className="checkout-input-modern"
+                                    />
+                                </div>
+                                {isProfileMatched && (
+                                    <div style={{ 
+                                        fontSize: '0.75rem', 
+                                        color: lookupError ? '#EF4444' : '#2563EB', 
+                                        fontWeight: '700', 
+                                        marginTop: '0.3rem', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '4px' 
+                                    }}>
+                                        <AlertCircle size={12} />
+                                        {lookupError || (lookupLoading ? 'Verificando celular...' : '🔒 Cuenta detectada. Digita el celular registrado para desbloquear.')}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 4. Nombre Completo */}
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     {t.fullName}
@@ -745,78 +820,7 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Identificación (Cédula/NIT)
-                                </label>
-                                <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <User size={15} />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Ej: 123456789"
-                                        value={identification}
-                                        onChange={(e) => handleIdChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
-                                        className="checkout-input-modern"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {t.whatsapp}
-                                    </label>
-                                    <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                            <Phone size={15} />
-                                        </div>
-                                        <input
-                                            type="tel"
-                                            placeholder={t.whatsappPlaceholder}
-                                            value={phone}
-                                            onChange={(e) => handlePhoneChange(e.target.value)}
-                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
-                                            className="checkout-input-modern"
-                                        />
-                                    </div>
-                                    {isProfileMatched && (
-                                        <div style={{ 
-                                            fontSize: '0.75rem', 
-                                            color: lookupError ? '#EF4444' : '#2563EB', 
-                                            fontWeight: '700', 
-                                            marginTop: '0.3rem', 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            gap: '4px' 
-                                        }}>
-                                            <AlertCircle size={12} />
-                                            {lookupError || (lookupLoading ? 'Verificando celular...' : '🔒 Cuenta detectada. Digita el celular registrado para desbloquear.')}
-                                        </div>
-                                    )}
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {t.email}
-                                    </label>
-                                    <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                            <Mail size={15} />
-                                        </div>
-                                        <input
-                                            type="email"
-                                            placeholder={t.emailPlaceholder}
-                                            value={email}
-                                            onChange={(e) => handleEmailChange(e.target.value)}
-                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
-                                            className="checkout-input-modern"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
+                            {/* 5. Dirección de Entrega */}
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Dirección de Entrega
