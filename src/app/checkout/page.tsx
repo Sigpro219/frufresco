@@ -412,8 +412,6 @@ export default function CheckoutPage() {
                 total: totalPrice,
                 latitude: safeLat,
                 longitude: safeLng,
-                customer_name: name,
-                customer_phone: phone,
                 profile_id: matchedProfileId || null,
                 special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[ORIGIN: web]\n${specialNotes || ''}`
             };
