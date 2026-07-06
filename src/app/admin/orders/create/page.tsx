@@ -430,6 +430,7 @@ function CreateOrderContent() {
                 .from('products')
                 .select('id, accounting_id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
                 .eq('is_active', true)
+                .eq('show_on_web', true)
                 .order('name');
 
             if (errorProds) console.error("Error cargando productos:", errorProds);
@@ -563,7 +564,8 @@ function CreateOrderContent() {
                             const { data: dbProducts } = await supabase
                                 .from('products')
                                 .select('*')
-                                .eq('is_active', true);
+                                .eq('is_active', true)
+                                .eq('show_on_web', true);
                             
                             if (dbProducts) {
                                 const newCartItems: any[] = [];
