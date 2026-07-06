@@ -13,7 +13,7 @@ import { SYNC_METADATA } from '@/lib/sync-status';
 import { translations, Locale } from '@/lib/translations';
 
 export default function Navbar() {
-    const { totalItems, totalPrice } = useCart();
+    const { totalItems, totalPrice, totalWeight, items } = useCart();
     const { user, profile, signOut, loading } = useAuth();
     const pathname = usePathname();
     // Cart only visible on shopping-context pages (not admin or ops)
@@ -575,14 +575,33 @@ export default function Navbar() {
                                 fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
                             }}>
                                 <ShoppingCart size={20} color="var(--primary)" strokeWidth={2} /> 
-                                <span style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '1rem' }}>{mounted ? totalItems : 0}</span>
+                                <span style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                                    {mounted ? `${parseFloat(totalWeight.toFixed(2)).toString().replace('.', ',')} Kg` : '0 Kg'}
+                                </span>
                             </button>
                         </Link>
-                        {mounted && totalItems > 0 && (
-                            <div className="cart-tooltip">
-                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px', fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>Total Estimado</div>
-                                <div style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--primary)', fontFamily: THEME.typography.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-                                    ${mounted ? totalPrice.toLocaleString() : '0'}
+                        {mounted && items.length > 0 && (
+                            <div className="cart-tooltip" style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                padding: '12px 16px',
+                                minWidth: '180px',
+                                textAlign: 'left'
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Refs. Únicas</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>{items.length} {items.length === 1 ? 'referencia' : 'referencias'}</div>
+                                </div>
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '6px' }}>
+                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Peso Total</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>{parseFloat(totalWeight.toFixed(2)).toString().replace('.', ',')} Kg</div>
+                                </div>
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '6px' }}>
+                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Estimado</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--primary)' }}>
+                                        ${totalPrice.toLocaleString('es-CO')}
+                                    </div>
                                 </div>
                             </div>
                         )}
