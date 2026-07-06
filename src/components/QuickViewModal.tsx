@@ -91,6 +91,11 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
     };
 
     const handleAddToCart = () => {
+        const unitLower = (product.unit_of_measure || '').toLowerCase();
+        const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
+        const isLibra = ['libra', 'libras'].includes(unitLower);
+        const unitWeight = (product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+
         addItem({
             id: product.id,
             name: getFormattedName(),
@@ -98,7 +103,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
             iva_rate: product.iva_rate,
             unit: product.unit_of_measure,
             quantity: quantity,
-            image_url: product.image_url
+            image_url: product.image_url,
+            weight_kg: unitWeight
         });
         onClose();
     };
