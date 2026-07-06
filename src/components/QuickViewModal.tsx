@@ -86,7 +86,11 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
-            .map(([key, value]) => `${key}: ${value}`)
+            .map(([key, value]) => {
+                const displayKey = key.toLowerCase().includes('presentaci') ? 'Presentación' : key;
+                const displayVal = value.includes('|') ? value.split('|')[0] : value;
+                return `${displayKey}: ${displayVal}`;
+            })
             .join(', ');
         const baseName = locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name);
         return optionString ? `${baseName} (${optionString})` : baseName;
@@ -96,17 +100,35 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
         if (onUpdateQuantity) {
             onUpdateQuantity(quantity);
         } else {
+            let selectedPresentationVal: string | null = null;
+            Object.entries(selections).forEach(([key, val]) => {
+                if (key.toLowerCase().includes('presentaci')) {
+                    selectedPresentationVal = val;
+                }
+            });
+
             const unitLower = (product.unit_of_measure || '').toLowerCase();
             const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
             const isLibra = ['libra', 'libras'].includes(unitLower);
-            const unitWeight = (product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+
+            let unitWeight = (product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+            let cartUnit = product.unit_of_measure;
+
+            if (selectedPresentationVal && selectedPresentationVal.includes('|')) {
+                const parts = selectedPresentationVal.split('|');
+                const grams = parseFloat(parts[1]);
+                if (!isNaN(grams) && grams > 0) {
+                    unitWeight = grams / 1000;
+                }
+                cartUnit = parts[0];
+            }
 
             addItem({
                 id: product.id,
                 name: getFormattedName(),
                 price: currentPrice,
                 iva_rate: product.iva_rate,
-                unit: product.unit_of_measure,
+                unit: cartUnit,
                 quantity: quantity,
                 image_url: product.image_url,
                 weight_kg: unitWeight
@@ -213,34 +235,40 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                 <div style={{ height: '1px', backgroundColor: '#F3F4F6', margin: '1.5rem 0' }}></div>
 
                 <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1.5rem', paddingRight: '0.5rem' }}>
-                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => (
-                        <div key={optionName} style={{ marginBottom: '1.25rem' }}>
-                            <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
-                                {optionName}
-                            </label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                                {Array.isArray(values) && values.map((val) => (
-                                    <button
-                                        key={val}
-                                        onClick={() => setSelections({ ...selections, [optionName]: val })}
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: '10px',
-                                            border: selections[optionName] === val ? '2px solid var(--primary)' : '1px solid #E5E7EB',
-                                            backgroundColor: selections[optionName] === val ? 'var(--primary)' : 'white',
-                                            color: selections[optionName] === val ? 'white' : '#4B5563',
-                                            fontWeight: '700',
-                                            fontSize: '0.85rem',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                                        }}
-                                    >
-                                        {val}
-                                    </button>
-                                ))}
+                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => {
+                        const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                        return (
+                            <div key={optionName} style={{ marginBottom: '1.25rem' }}>
+                                <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
+                                    {displayOptionName}
+                                </label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                                    {Array.isArray(values) && values.map((val) => {
+                                        const displayVal = val.includes('|') ? val.split('|')[0] : val;
+                                        return (
+                                            <button
+                                                key={val}
+                                                onClick={() => setSelections({ ...selections, [optionName]: val })}
+                                                style={{
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '10px',
+                                                    border: selections[optionName] === val ? '2px solid var(--primary)' : '1px solid #E5E7EB',
+                                                    backgroundColor: selections[optionName] === val ? 'var(--primary)' : 'white',
+                                                    color: selections[optionName] === val ? 'white' : '#4B5563',
+                                                    fontWeight: '700',
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                }}
+                                            >
+                                                {displayVal}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <div style={{ marginBottom: '2rem' }}>
