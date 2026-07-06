@@ -97,8 +97,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
         setLocalAttributes(localAttributes.map(a => {
             if (a.id === attrId) {
-                const cleanValues = a.suggested_values.map(v => v.includes('|') ? v.split('|')[0] : v);
-                if (cleanValues.includes(val)) return a;
+                if (a.suggested_values.includes(finalVal)) return a;
                 return { ...a, suggested_values: [...a.suggested_values, finalVal] };
             }
             return a;
