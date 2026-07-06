@@ -318,7 +318,7 @@ export default function CheckoutPage() {
                 const bogotaNow = new Date(utc + (3600000 * -5));
                 const currentHour = bogotaNow.getHours();
 
-                let daysToAdd = cutoffEnabled ? 1 : 0;
+                let daysToAdd = 1;
                 if (cutoffEnabled && currentHour >= DEFAULT_CUTOFF_HOUR) {
                     daysToAdd = 2;
                 }
@@ -356,6 +356,12 @@ export default function CheckoutPage() {
         if (!address) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
         if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
         if (outOfZone) return alert(t.outOfZoneMsg);
+        if (date < minDeliveryDate) {
+            return alert(locale === 'es' 
+                ? `La fecha de entrega seleccionada no es válida. La fecha mínima de entrega permitida es ${minDeliveryDate}.`
+                : `The selected delivery date is not valid. The minimum allowed delivery date is ${minDeliveryDate}.`
+            );
+        }
 
         setLoading(true);
 
