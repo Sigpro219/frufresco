@@ -770,25 +770,31 @@ export default function CheckoutPage() {
                                                         disabled={loadingProductId === item.id}
                                                         style={{
                                                             border: 'none',
-                                                            background: 'none',
+                                                            backgroundColor: 'rgba(26, 77, 46, 0.08)',
                                                             cursor: 'pointer',
                                                             color: 'var(--primary)',
-                                                            padding: '2px 4px',
-                                                            borderRadius: '4px',
+                                                            padding: '4px 6px',
+                                                            borderRadius: '6px',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            opacity: 0.7,
-                                                            transition: 'opacity 0.2s'
+                                                            transition: 'all 0.2s ease',
+                                                            marginLeft: '6px'
                                                         }}
-                                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'var(--primary)';
+                                                            e.currentTarget.style.color = 'white';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(26, 77, 46, 0.08)';
+                                                            e.currentTarget.style.color = 'var(--primary)';
+                                                        }}
                                                         title="Editar cantidad"
                                                     >
                                                         {loadingProductId === item.id ? (
-                                                            <Loader2 size={11} className="animate-spin" />
+                                                            <Loader2 size={13} className="animate-spin" />
                                                         ) : (
-                                                            <Pencil size={11} />
+                                                            <Pencil size={13} />
                                                         )}
                                                     </button>
                                                 </div>
