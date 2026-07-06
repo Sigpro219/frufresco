@@ -37,6 +37,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
     const [quantity, setQuantity] = useState(1);
+    const [inputValue, setInputValue] = useState('1');
 
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
 
@@ -248,7 +249,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
                                     const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
                                     const step = isWeightUnit ? 0.5 : 1;
-                                    setQuantity(Math.max(step, parseFloat((quantity - step).toFixed(2))));
+                                    const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
+                                    setQuantity(newQty);
+                                    setInputValue(String(newQty).replace('.', ','));
                                 }}
                                 style={{
                                     width: '44px', height: '44px',
@@ -265,17 +268,21 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             >−</button>
                             <input
                                 type="text"
-                                value={quantity}
+                                value={inputValue}
                                 onChange={(e) => {
                                     const val = e.target.value;
                                     if (val === '') {
+                                        setInputValue('');
                                         setQuantity(0);
                                         return;
                                     }
                                     const cleanVal = val.replace(',', '.');
                                     if (/^\d*\.?\d*$/.test(cleanVal)) {
+                                        setInputValue(val);
                                         const num = parseFloat(cleanVal);
-                                        setQuantity(isNaN(num) ? 0 : num);
+                                        if (!isNaN(num) && num > 0) {
+                                            setQuantity(num);
+                                        }
                                     }
                                 }}
                                 onBlur={() => {
@@ -284,6 +291,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                     const step = isWeightUnit ? 0.5 : 1;
                                     if (quantity <= 0) {
                                         setQuantity(step);
+                                        setInputValue(String(step).replace('.', ','));
+                                    } else {
+                                        setInputValue(String(quantity).replace('.', ','));
                                     }
                                 }}
                                 style={{
@@ -302,7 +312,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
                                     const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
                                     const step = isWeightUnit ? 0.5 : 1;
-                                    setQuantity(parseFloat((quantity + step).toFixed(2)));
+                                    const newQty = parseFloat((quantity + step).toFixed(2));
+                                    setQuantity(newQty);
+                                    setInputValue(String(newQty).replace('.', ','));
                                 }}
                                 style={{
                                     width: '44px', height: '44px',
