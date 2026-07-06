@@ -31,18 +31,22 @@ export async function POST(request: Request) {
         const normalizedNit = nit.toLowerCase().trim();
 
         // 1. Query the B2C client from profiles
-        const { data: profile, error } = await supabase
+        const { data: profilesList, error } = await supabase
             .from('profiles')
             .select('id, contact_name, address, phone')
             .eq('role', 'b2c_client')
             .eq('email', normalizedEmail)
             .eq('nit', normalizedNit)
-            .single();
+            .order('created_at', { ascending: false })
+            .limit(1);
 
-        if (error || !profile) {
+        if (error || !profilesList || profilesList.length === 0) {
             console.log(`Lookup not found for email: ${normalizedEmail}, nit: ${normalizedNit}`);
+            if (error) console.error('DB error during lookup:', error);
             return NextResponse.json({ found: false });
         }
+
+        const profile = profilesList[0];
 
         // STEP 2: If phone is provided, run verification and return unmasked data
         if (phone !== undefined) {
