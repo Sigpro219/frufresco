@@ -579,7 +579,7 @@ export default function CheckoutPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
 
-            <div className="container mobile-stack" style={{ padding: '2.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '2.5rem' }}>
+            <div className="container mobile-stack" style={{ padding: '2.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 420px', gap: '2.5rem', maxWidth: '1440px' }}>
 
                 {/* LEFT COLUMN: LIST */}
                 <div style={{ position: 'relative', zIndex: 1 }}>
