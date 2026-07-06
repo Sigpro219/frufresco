@@ -107,7 +107,7 @@ export async function POST(request: Request) {
                                 longitude: order.longitude,
                                 geocoding_status: order.latitude ? 'verified' : 'pending',
                                 document_id: extractedId,
-                                document_type: 'CC', // Por defecto Cédula para Hogar
+                                document_type: 'invoice', // Factura Digital
                                 nit: extractedId,
                                 delivery_restrictions: '08:00 a 19:00'
                             })
