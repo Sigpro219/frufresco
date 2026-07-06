@@ -74,7 +74,52 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         setIsMounted(true);
+        if (typeof window !== 'undefined') {
+            const savedName = localStorage.getItem('checkout_name');
+            const savedId = localStorage.getItem('checkout_identification');
+            const savedEmail = localStorage.getItem('checkout_email');
+            const savedPhone = localStorage.getItem('checkout_phone');
+            const savedAddress = localStorage.getItem('checkout_address');
+            const savedNotes = localStorage.getItem('checkout_specialNotes');
+
+            if (savedName) setName(savedName);
+            if (savedId) setIdentification(savedId);
+            if (savedEmail) setEmail(savedEmail);
+            if (savedPhone) setPhone(savedPhone);
+            if (savedAddress) setAddress(savedAddress);
+            if (savedNotes) setSpecialNotes(savedNotes);
+        }
     }, []);
+
+    const handleNameChange = (val: string) => {
+        setName(val);
+        localStorage.setItem('checkout_name', val);
+    };
+
+    const handleIdChange = (val: string) => {
+        setIdentification(val);
+        localStorage.setItem('checkout_identification', val);
+    };
+
+    const handlePhoneChange = (val: string) => {
+        setPhone(val);
+        localStorage.setItem('checkout_phone', val);
+    };
+
+    const handleEmailChange = (val: string) => {
+        setEmail(val);
+        localStorage.setItem('checkout_email', val);
+    };
+
+    const handleAddressChange = (val: string) => {
+        setAddress(val);
+        localStorage.setItem('checkout_address', val);
+    };
+
+    const handleNotesChange = (val: string) => {
+        setSpecialNotes(val);
+        localStorage.setItem('checkout_specialNotes', val);
+    };
 
     useEffect(() => {
         async function fetchGeofence() {
@@ -144,11 +189,17 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (profile) {
             // El nombre se deja limpio a propósito para que se llene manualmente
-            if (!email && profile.company_name?.includes('@')) setEmail(profile.company_name);
-            if (!address) setAddress(profile.address_main || '');
+            if (!email && profile.company_name?.includes('@')) {
+                setEmail(profile.company_name);
+                localStorage.setItem('checkout_email', profile.company_name);
+            }
+            if (!address && profile.address_main) {
+                setAddress(profile.address_main);
+                localStorage.setItem('checkout_address', profile.address_main);
+            }
             console.log('👤 profile found, filling member data...');
         }
-    }, [profile]);
+    }, [profile, email, address]);
 
     // Fetch settings and refine date
     useEffect(() => {
@@ -327,6 +378,9 @@ export default function CheckoutPage() {
             
             const wompiUrl = `/payments/simulator?reference=${orderData.id}&amount-in-cents=${amountInCents}&currency=COP`;
 
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('checkout_specialNotes');
+            }
             clearCart();
             window.location.href = wompiUrl;
 
@@ -380,12 +434,9 @@ export default function CheckoutPage() {
                         }}>
                             <ShoppingCart size={24} strokeWidth={2.5} color="var(--primary)" /> {t.checkoutTitle}
                         </h1>
-                        {items.length > 0 && (
-                            <button
-                                onClick={() => {
-                                    clearCart();
-                                    router.push('/');
-                                }}
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <Link
+                                href="/"
                                 style={{
                                     padding: '0.5rem 1rem',
                                     borderRadius: '12px',
@@ -393,19 +444,44 @@ export default function CheckoutPage() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '0.5rem',
-                                    color: '#EF4444',
-                                    backgroundColor: '#FEF2F2',
-                                    border: '1px solid #FEE2E2',
+                                    color: 'var(--primary)',
+                                    backgroundColor: '#ECFDF5',
+                                    border: '1px solid #A7F3D0',
                                     fontWeight: '700',
                                     cursor: 'pointer',
+                                    textDecoration: 'none',
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
                             >
-                                <Trash2 size={14} /> {t.clearCart}
-                            </button>
-                        )}
+                                🛒 {locale === 'es' ? 'Seguir comprando' : 'Continue shopping'}
+                            </Link>
+                            {items.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        clearCart();
+                                        router.push('/');
+                                    }}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '12px',
+                                        fontSize: '0.8rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        color: '#EF4444',
+                                        backgroundColor: '#FEF2F2',
+                                        border: '1px solid #FEE2E2',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                >
+                                    <Trash2 size={14} /> {t.clearCart}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {items.length === 0 ? (
@@ -559,7 +635,7 @@ export default function CheckoutPage() {
                                         type="text"
                                         placeholder={t.fullNamePlaceholder}
                                         value={name}
-                                        onChange={(e) => setName(e.target.value)}
+                                        onChange={(e) => handleNameChange(e.target.value)}
                                         style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
                                         className="checkout-input-modern"
                                     />
@@ -578,7 +654,7 @@ export default function CheckoutPage() {
                                         type="text"
                                         placeholder="Ej: 123456789"
                                         value={identification}
-                                        onChange={(e) => setIdentification(e.target.value)}
+                                        onChange={(e) => handleIdChange(e.target.value)}
                                         style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
                                         className="checkout-input-modern"
                                     />
@@ -598,7 +674,7 @@ export default function CheckoutPage() {
                                             type="tel"
                                             placeholder={t.whatsappPlaceholder}
                                             value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
+                                            onChange={(e) => handlePhoneChange(e.target.value)}
                                             style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
@@ -616,7 +692,7 @@ export default function CheckoutPage() {
                                             type="email"
                                             placeholder={t.emailPlaceholder}
                                             value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
+                                            onChange={(e) => handleEmailChange(e.target.value)}
                                             style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
@@ -636,7 +712,7 @@ export default function CheckoutPage() {
                                         type="text"
                                         placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
                                         value={address}
-                                        onChange={(e) => setAddress(e.target.value)}
+                                        onChange={(e) => handleAddressChange(e.target.value)}
                                         style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
                                         className="checkout-input-modern"
                                     />
@@ -783,7 +859,7 @@ export default function CheckoutPage() {
                                 <textarea
                                     placeholder={t.specialNotesPlaceholder}
                                     value={specialNotes}
-                                    onChange={(e) => setSpecialNotes(e.target.value.slice(0, 150))}
+                                    onChange={(e) => handleNotesChange(e.target.value.slice(0, 150))}
                                     style={{ 
                                         width: '100%', 
                                         padding: '0.5rem 0.75rem', 
