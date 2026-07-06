@@ -100,6 +100,7 @@ export async function POST(request: Request) {
                                 role: 'b2c_client',
                                 company_name: extractedName,
                                 contact_name: extractedName,
+                                phone: extractedPhone,
                                 contact_phone: extractedPhone,
                                 email: extractedEmail,
                                 address: order.shipping_address,
