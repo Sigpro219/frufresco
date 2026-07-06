@@ -603,7 +603,6 @@ export default function OrderLoadingPage() {
                     .from('products')
                     .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
                     .eq('is_active', true)
-                    .eq('show_on_web', true)
                     .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
                     .limit(8);
                 
