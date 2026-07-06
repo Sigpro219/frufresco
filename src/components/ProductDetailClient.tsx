@@ -38,6 +38,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const t = translations[lang as Locale] || translations.es;
 
     const [quantity, setQuantity] = useState(1);
+    const [inputValue, setInputValue] = useState('1');
 
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
 
@@ -249,24 +250,30 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
                                         const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
                                         const step = isWeightUnit ? 0.5 : 1;
-                                        setQuantity(Math.max(step, parseFloat((quantity - step).toFixed(2))));
+                                        const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
+                                        setQuantity(newQty);
+                                        setInputValue(String(newQty).replace('.', ','));
                                     }}
                                     style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
                                     <Minus size={18} strokeWidth={2.5} />
                                 </button>
                                 <input
                                     type="text"
-                                    value={quantity}
+                                    value={inputValue}
                                     onChange={(e) => {
                                         const val = e.target.value;
                                         if (val === '') {
+                                            setInputValue('');
                                             setQuantity(0);
                                             return;
                                         }
                                         const cleanVal = val.replace(',', '.');
                                         if (/^\d*\.?\d*$/.test(cleanVal)) {
+                                            setInputValue(val);
                                             const num = parseFloat(cleanVal);
-                                            setQuantity(isNaN(num) ? 0 : num);
+                                            if (!isNaN(num) && num > 0) {
+                                                setQuantity(num);
+                                            }
                                         }
                                     }}
                                     onBlur={() => {
@@ -275,6 +282,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                         const step = isWeightUnit ? 0.5 : 1;
                                         if (quantity <= 0) {
                                             setQuantity(step);
+                                            setInputValue(String(step).replace('.', ','));
+                                        } else {
+                                            setInputValue(String(quantity).replace('.', ','));
                                         }
                                     }}
                                     style={{
@@ -293,7 +303,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
                                         const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
                                         const step = isWeightUnit ? 0.5 : 1;
-                                        setQuantity(parseFloat((quantity + step).toFixed(2)));
+                                        const newQty = parseFloat((quantity + step).toFixed(2));
+                                        setQuantity(newQty);
+                                        setInputValue(String(newQty).replace('.', ','));
                                     }}
                                     style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
                                     <Plus size={18} strokeWidth={2.5} />
