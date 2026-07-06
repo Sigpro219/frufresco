@@ -56,9 +56,12 @@ export default function Footer() {
       <div className="container">
         {/* Compact Tracking in Footer */}
         {/* Compact Tracking in Footer */}
-        <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
-             <OrderTracking />
-         </div>
+        {/* Hiding OrderTracking section as requested by user, keeping code intact for future use */}
+        {false && (
+          <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+               <OrderTracking />
+           </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '3rem', marginBottom: '3rem' }}>
           
