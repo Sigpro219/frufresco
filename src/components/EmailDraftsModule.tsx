@@ -149,7 +149,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
-  const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+  const getMinDeliveryDate = () => {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const bogotaNow = new Date(utc + (3600000 * -5));
+    const currentHour = bogotaNow.getHours();
+    const daysToAdd = currentHour >= 17 ? 2 : 1;
+    const result = new Date(bogotaNow);
+    result.setDate(bogotaNow.getDate() + daysToAdd);
+    return result.toISOString().split('T')[0];
+  };
+  const minDeliveryDate = getMinDeliveryDate();
+  const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
@@ -1394,7 +1405,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPriceList(metadata.priceList || '');
       setOrderDocument(metadata.orderDocument || 'Remisión');
       setPurchaseOrder(metadata.purchaseOrder || '');
-      let initialDateStr = metadata.deliveryDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      let initialDateStr = metadata.deliveryDate || minDeliveryDate;
+      if (initialDateStr < minDeliveryDate) {
+        initialDateStr = minDeliveryDate;
+      }
       if (matchedProfile?.logistics_data) {
         const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
         if (allowedDays && allowedDays.length > 0) {
@@ -1414,7 +1428,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPriceList('');
       setOrderDocument('Remisión');
       setPurchaseOrder('');
-      setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+      setDeliveryDate(minDeliveryDate);
     }
   }, [selectedDraft, products, aliases, conversions, profiles]);
 
@@ -3804,9 +3818,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <input 
                             type="date" 
                             value={deliveryDate} 
+                            min={minDeliveryDate}
                             disabled={!isEditing} 
                             onChange={(e) => {
                               const newDate = e.target.value;
+                              const minDate = getMinDeliveryDate();
+                              if (newDate < minDate) {
+                                showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
+                                setDeliveryDate(minDate);
+                                return;
+                              }
                               const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
                               if (matchedProfile?.logistics_data) {
                                 const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
@@ -5809,7 +5830,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <input 
                   type="date" 
                   value={deliveryDate} 
-                  onChange={(e) => setDeliveryDate(e.target.value)} 
+                  min={minDeliveryDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    const minDate = getMinDeliveryDate();
+                    if (newDate < minDate) {
+                      showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
+                      setDeliveryDate(minDate);
+                      return;
+                    }
+                    setDeliveryDate(newDate);
+                  }} 
                   style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700 }}
                 />
               </div>
