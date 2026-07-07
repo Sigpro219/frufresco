@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -298,6 +299,52 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
   const [showFloatingEmail, setShowFloatingEmail] = useState(true);
+  const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
+  const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
+  const [loadingAttachment, setLoadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveTab('email');
+    setAttachmentHtml(null);
+    setAttachmentError(null);
+  }, [selectedDraft?.id]);
+
+  useEffect(() => {
+    if (!selectedDraft || activeTab !== 'attachment') return;
+    const metadata = getDraftMetadata(selectedDraft);
+    if (!metadata.attachmentUrl) return;
+    
+    const attachmentName = metadata.attachmentName || '';
+    const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+    
+    if (ext === 'xlsx' || ext === 'xls') {
+      setLoadingAttachment(true);
+      setAttachmentError(null);
+      setAttachmentHtml(null);
+      
+      fetch(metadata.attachmentUrl)
+        .then(res => {
+          if (!res.ok) throw new Error("No se pudo descargar el archivo Excel.");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const html = XLSX.utils.sheet_to_html(worksheet, { id: 'excel-table' });
+          setAttachmentHtml(html);
+        })
+        .catch(err => {
+          console.error("Error loading attachment:", err);
+          setAttachmentError(err.message || "Error al procesar el archivo Excel.");
+        })
+        .finally(() => {
+          setLoadingAttachment(false);
+        });
+    }
+  }, [selectedDraft, activeTab]);
+
   const getMinDeliveryDate = () => {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -5195,9 +5242,208 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 Asunto: {selectedDraft.email_subject || '(Sin Asunto)'}
               </div>
 
-              {/* Cuerpo del correo con scrollbar premium */}
+              {/* Selector de Pestañas (Tabs) */}
               {(() => {
                 const metadata = getDraftMetadata(selectedDraft);
+                if (!metadata.attachmentUrl) return null;
+                return (
+                  <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid #E2E8F0',
+                    backgroundColor: '#F8FAFC',
+                    padding: '0 8px',
+                    gap: '4px'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('email')}
+                      style={{
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: activeTab === 'email' ? 800 : 500,
+                        color: activeTab === 'email' ? '#2563EB' : '#64748B',
+                        borderBottom: activeTab === 'email' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Mail size={14} />
+                      Correo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('attachment')}
+                      style={{
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: activeTab === 'attachment' ? 800 : 500,
+                        color: activeTab === 'attachment' ? '#2563EB' : '#64748B',
+                        borderBottom: activeTab === 'attachment' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Paperclip size={14} />
+                      Adjunto
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Contenido Dinámico de la Pestaña */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                
+                // PESTAÑA: Adjunto
+                if (activeTab === 'attachment' && metadata.attachmentUrl) {
+                  const attachmentName = metadata.attachmentName || '';
+                  const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+
+                  // 1. Caso: Excel (.xlsx, .xls)
+                  if (ext === 'xlsx' || ext === 'xls') {
+                    if (loadingAttachment) {
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
+                          <style>{`
+                            @keyframes spin {
+                              from { transform: rotate(0deg); }
+                              to { transform: rotate(360deg); }
+                            }
+                          `}</style>
+                          <Loader2 size={32} color="#2563EB" style={{ animation: 'spin 1.2s linear infinite' }} />
+                          <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Cargando tabla Excel...</span>
+                        </div>
+                      );
+                    }
+                    if (attachmentError) {
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                          <AlertTriangle size={32} color="#EF4444" />
+                          <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: 700 }}>{attachmentError}</span>
+                          <a href={metadata.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#2563EB', fontWeight: 800, textDecoration: 'underline', marginTop: '4px' }}>
+                            Descargar archivo original
+                          </a>
+                        </div>
+                      );
+                    }
+                    if (attachmentHtml) {
+                      return (
+                        <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '12px' }}>
+                          <style>{`
+                            #excel-table {
+                              border-collapse: collapse;
+                              width: 100%;
+                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                              font-size: 0.725rem;
+                              color: #334155;
+                              background-color: white;
+                              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                              border-radius: 8px;
+                              overflow: hidden;
+                              border: 1px solid #E2E8F0;
+                            }
+                            #excel-table td, #excel-table th {
+                              border: 1px solid #E2E8F0;
+                              padding: 8px 10px;
+                              min-width: 60px;
+                              white-space: nowrap;
+                              text-align: left;
+                            }
+                            #excel-table tr:first-child {
+                              background-color: #F1F5F9;
+                              font-weight: 800;
+                              color: #1E293B;
+                              position: sticky;
+                              top: 0;
+                              border-bottom: 2px solid #CBD5E1;
+                            }
+                            #excel-table tr:nth-child(even) {
+                              background-color: #F8FAFC;
+                            }
+                            #excel-table tr:hover {
+                              background-color: #EFF6FF;
+                            }
+                          `}</style>
+                          <div dangerouslySetInnerHTML={{ __html: attachmentHtml }} />
+                        </div>
+                      );
+                    }
+                    return null;
+                  }
+
+                  // 2. Caso: PDF (.pdf)
+                  if (ext === 'pdf') {
+                    return (
+                      <div style={{ flex: 1, backgroundColor: 'white', position: 'relative' }}>
+                        <iframe
+                          src={metadata.attachmentUrl}
+                          style={{ width: '100%', height: '100%', border: 'none' }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // 3. Caso: Otros (Word .docx, .doc, etc.)
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                      <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', width: '85%', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                        <FileText size={48} color="#2563EB" />
+                        <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#1E293B', wordBreak: 'break-all' }}>{attachmentName}</span>
+                        <span style={{ fontSize: '0.725rem', color: '#64748B' }}>Documento de oficina u otro formato adjunto</span>
+                        <a
+                          href={metadata.attachmentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            marginTop: '8px',
+                            backgroundColor: '#2563EB',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                          }}
+                        >
+                          <Download size={14} />
+                          Descargar Documento
+                        </a>
+                      </div>
+                      
+                      <a 
+                        href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(metadata.attachmentUrl)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: '0.75rem',
+                          color: '#2563EB',
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                          borderBottom: '1px dashed #2563EB'
+                        }}
+                      >
+                        Abrir en Visor de Office Online ↗
+                      </a>
+                    </div>
+                  );
+                }
+
+                // PESTAÑA: Correo (Default)
                 if (metadata.emailHtml) {
                   return (
                     <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
