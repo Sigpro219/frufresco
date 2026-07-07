@@ -3615,7 +3615,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: showFloatingEmail ? (isFloatingExpanded ? 'calc(100% - 872px)' : 'calc(100% - 472px)') : '94%',
+            width: showFloatingEmail ? (isFloatingExpanded ? 'calc(100% - 1022px)' : 'calc(100% - 622px)') : '94%',
+            minWidth: showFloatingEmail ? '480px' : 'auto',
             maxWidth: '1400px',
             maxHeight: '90vh',
             display: 'flex',
@@ -5187,7 +5188,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               position: 'fixed',
               right: '24px',
               top: '5vh',
-              width: isFloatingExpanded ? '800px' : '400px',
+              width: isFloatingExpanded ? '950px' : '550px',
               height: '90vh',
               backgroundColor: 'white',
               borderRadius: THEME.radius.xl,
