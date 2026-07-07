@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2 } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
@@ -304,10 +304,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
+  const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
+
   useEffect(() => {
     setActiveTab('email');
     setAttachmentHtml(null);
     setAttachmentError(null);
+    setIsFloatingExpanded(false);
   }, [selectedDraft?.id]);
 
   useEffect(() => {
@@ -3611,8 +3614,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: showFloatingEmail ? '68%' : '94%',
-            maxWidth: showFloatingEmail ? '1100px' : '1400px',
+            width: showFloatingEmail ? (isFloatingExpanded ? '38%' : '68%') : '94%',
+            maxWidth: showFloatingEmail ? (isFloatingExpanded ? '600px' : '1100px') : '1400px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
@@ -3620,7 +3623,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             position: 'relative',
             overflow: 'hidden',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            marginRight: showFloatingEmail ? '440px' : '0'
+            marginRight: showFloatingEmail ? (isFloatingExpanded ? '840px' : '440px') : '0'
           }}>
             {/* Modal Header */}
             <div style={{
@@ -5184,7 +5187,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               position: 'fixed',
               right: '24px',
               top: '5vh',
-              width: '400px',
+              width: isFloatingExpanded ? '800px' : '400px',
               height: '90vh',
               backgroundColor: 'white',
               borderRadius: THEME.radius.xl,
@@ -5193,6 +5196,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
+              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
             }} onClick={e => e.stopPropagation()}>
               {/* Header de la ventana flotante */}
@@ -5208,26 +5212,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <Mail size={16} color="#2563EB" />
                   <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Cuerpo del Correo</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowFloatingEmail(false)}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    color: '#64748B',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
-                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <X size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsFloatingExpanded(prev => !prev)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      color: '#64748B',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background-color 0.2s, color 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#EFF6FF';
+                      e.currentTarget.style.color = '#2563EB';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#64748B';
+                    }}
+                    title={isFloatingExpanded ? "Contraer visor" : "Expandir visor"}
+                  >
+                    {isFloatingExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowFloatingEmail(false)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      color: '#64748B',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background-color 0.2s, color 0.2s'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#FEF2F2';
+                      e.currentTarget.style.color = '#EF4444';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#64748B';
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
 
               {/* Asunto del correo */}
@@ -5342,7 +5382,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <style>{`
                             #excel-table {
                               border-collapse: collapse;
-                              width: 100%;
+                              width: max-content;
+                              min-width: 100%;
                               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                               font-size: 0.725rem;
                               color: #334155;
