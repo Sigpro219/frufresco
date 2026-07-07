@@ -1662,7 +1662,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       priceList: meta?.priceList || null,
       orderDocument: meta?.orderDocument || null,
       purchaseOrder: meta?.purchaseOrder || null,
-      receiptEmailSent: meta?.receiptEmailSent || false
+      receiptEmailSent: meta?.receiptEmailSent || false,
+      emailHtml: meta?.emailHtml || null
     };
   };
 
@@ -4973,9 +4974,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     );
                   })()}
-                  <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: getDraftMetadata(selectedDraft).attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: getDraftMetadata(selectedDraft).attachmentUrl ? '12px' : '0' }}>
-                    {selectedDraft.email_body || '(Sin cuerpo)'}
-                  </div>
+                  {(() => {
+                    const metadata = getDraftMetadata(selectedDraft);
+                    if (metadata.emailHtml) {
+                      return (
+                        <div style={{ borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0', height: '350px', backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                          <iframe
+                            srcDoc={metadata.emailHtml}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              border: 'none',
+                              backgroundColor: 'white'
+                            }}
+                            sandbox="allow-same-origin allow-popups"
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0' }}>
+                        {selectedDraft.email_body || '(Sin cuerpo)'}
+                      </div>
+                    );
+                  })()}
                 </div>
               </details>
 
@@ -5174,22 +5196,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
 
               {/* Cuerpo del correo con scrollbar premium */}
-              <div 
-                className="premium-scrollbar"
-                style={{
-                  padding: '16px',
-                  overflowY: 'auto',
-                  flex: 1,
-                  fontSize: '0.825rem',
-                  color: '#334155',
-                  lineHeight: '1.6',
-                  whiteSpace: 'pre-wrap',
-                  backgroundColor: '#FCFDFE',
-                  fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
-                }}
-              >
-                {selectedDraft.email_body || '(Sin cuerpo de correo)'}
-              </div>
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                if (metadata.emailHtml) {
+                  return (
+                    <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
+                      <iframe
+                        srcDoc={metadata.emailHtml}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          backgroundColor: 'white'
+                        }}
+                        sandbox="allow-same-origin allow-popups"
+                      />
+                    </div>
+                  );
+                }
+                return (
+                  <div 
+                    className="premium-scrollbar"
+                    style={{
+                      padding: '16px',
+                      overflowY: 'auto',
+                      flex: 1,
+                      fontSize: '0.825rem',
+                      color: '#334155',
+                      lineHeight: '1.6',
+                      whiteSpace: 'pre-wrap',
+                      backgroundColor: '#FCFDFE',
+                      fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
+                    }}
+                  >
+                    {selectedDraft.email_body || '(Sin cuerpo de correo)'}
+                  </div>
+                );
+              })()}
 
               {/* Barra de archivo adjunto si existe */}
               {(() => {

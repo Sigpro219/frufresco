@@ -125,6 +125,7 @@ export async function POST(req: Request) {
           const toField = headers.to || headers.To || envelope.to || '';
           const subject = headers.subject || headers.Subject || '';
           const plainText = payload.plain || '';
+          const htmlText = payload.html || '';
           const attachments = payload.attachments || [];
           
           // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
@@ -1015,7 +1016,8 @@ export async function POST(req: Request) {
             nit: extractedData.nit || null,
             clientType: clientType,
             attachmentUrl: attachmentUrl || null,
-            attachmentName: attachmentName || null
+            attachmentName: attachmentName || null,
+            emailHtml: htmlText || null
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
             let originalName = String(itm.originalName || itm.name || '').trim();
