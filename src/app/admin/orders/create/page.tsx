@@ -3064,6 +3064,51 @@ function CreateOrderContent() {
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
                 const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
+                // Helper to extract weight in Kg from text
+                const getParsedWeight = (text: string): number | null => {
+                    if (!text) return null;
+                    if (text.includes('|')) {
+                        const parts = text.split('|');
+                        const grams = parseFloat(parts[1]);
+                        if (!isNaN(grams) && grams > 0) return grams / 1000;
+                    }
+                    const clean = text.toLowerCase();
+                    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+                    if (kgMatch) {
+                        const val = parseFloat(kgMatch[1]);
+                        if (!isNaN(val) && val > 0) return val;
+                    }
+                    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+                    if (gMatch) {
+                        const val = parseFloat(gMatch[1]);
+                        if (!isNaN(val) && val > 0) return val / 1000;
+                    }
+                    if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+                    return null;
+                };
+
+                // Normalizar y prepend/sort las opciones configuradas del producto
+                const normalizedOptionsConfig = (selectedProductForModal.options_config || []).map((opt: any) => {
+                    let values = opt.values || [];
+                    if (opt.name.toLowerCase().includes('presentaci') && (selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure)) {
+                        const defaultVal = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
+                        if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                            values = [defaultVal, ...values];
+                        }
+                    }
+                    
+                    const defaultUnit = (selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure || '').toLowerCase();
+                    const sortedValues = values.slice().sort((valA: string, valB: string) => {
+                        const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                        const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                        if (cleanA.toLowerCase() === defaultUnit) return -1;
+                        if (cleanB.toLowerCase() === defaultUnit) return 1;
+                        return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                    });
+                    
+                    return { ...opt, values: sortedValues };
+                });
+
                 // Build full options list for unit selection (web_unit is first, if configured)
                 const optionsList = [];
                 const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
@@ -3094,6 +3139,34 @@ function CreateOrderContent() {
                         });
                     }
                 });
+
+                // Si hay una presentación seleccionada que no está en optionsList, inyectarla dinámicamente
+                let selectedPresentationVal: string | null = null;
+                Object.entries(selectedOptions).forEach(([key, val]) => {
+                    if (key.toLowerCase().includes('presentaci')) {
+                        selectedPresentationVal = val;
+                    }
+                });
+
+                if (selectedPresentationVal) {
+                    const cleanPresUnit = selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal;
+                    const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
+                    const isDefault = cleanPresUnit.toLowerCase() === defaultUnit.toLowerCase();
+                    
+                    if (!isDefault) {
+                        const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === cleanPresUnit.toLowerCase());
+                        if (!isDuplicate) {
+                            const parsedWeight = getParsedWeight(cleanPresUnit);
+                            if (parsedWeight !== null) {
+                                optionsList.push({
+                                    unit: cleanPresUnit,
+                                    factor: parsedWeight,
+                                    label: `${cleanPresUnit} (${parsedWeight} ${selectedProductForModal.unit_of_measure || 'Kg'})`
+                                });
+                            }
+                        }
+                    }
+                }
 
                 const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
                     if (e.key === 'Enter') {
@@ -3262,7 +3335,7 @@ function CreateOrderContent() {
                             </div>
 
                             {/* RENDER OPTIONS DYNAMICALLY */}
-                            {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any, index: number) => (
+                            {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => (
                                 <div key={opt.name} style={{ marginBottom: '1.2rem', textAlign: 'left' }}>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         {opt.name}
@@ -3271,8 +3344,36 @@ function CreateOrderContent() {
                                         id={`modal-select-${index}`}
                                         ref={index === 0 ? firstSelectRef : undefined}
                                         value={selectedOptions[opt.name] || ''}
-                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                        onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForModal.options_config.length)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setSelectedOptions(prev => ({ ...prev, [opt.name]: val }));
+                                            
+                                            // Lógica especial de sincronización bidireccional
+                                            if (opt.name.toLowerCase().includes('presentaci')) {
+                                                if (val) {
+                                                    const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                                                    const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
+                                                    if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                                                        setModalUnit(defaultUnit);
+                                                        const defaultFactor = parseFloat(selectedProductForModal.web_conversion_factor) || 1;
+                                                        setModalFactor(defaultFactor);
+                                                    } else {
+                                                        const matchedUnit = optionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
+                                                        if (matchedUnit) {
+                                                            setModalUnit(matchedUnit.unit);
+                                                            setModalFactor(matchedUnit.factor);
+                                                        } else {
+                                                            const parsedWeight = getParsedWeight(cleanUnit);
+                                                            if (parsedWeight !== null) {
+                                                                setModalUnit(cleanUnit);
+                                                                setModalFactor(parsedWeight);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                        onKeyDown={(e) => handleSelectKeyDown(e, index, normalizedOptionsConfig.length)}
                                         style={{
                                             width: '100%',
                                             padding: '0.8rem',
