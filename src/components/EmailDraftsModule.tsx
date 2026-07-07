@@ -304,6 +304,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
+  const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
+
   const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
 
   useEffect(() => {
@@ -311,14 +313,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setAttachmentHtml(null);
     setAttachmentError(null);
     setIsFloatingExpanded(false);
+    setSelectedAttachmentIndex(0);
   }, [selectedDraft?.id]);
 
   useEffect(() => {
     if (!selectedDraft || activeTab !== 'attachment') return;
     const metadata = getDraftMetadata(selectedDraft);
-    if (!metadata.attachmentUrl) return;
     
-    const attachmentName = metadata.attachmentName || '';
+    // Choose correct attachment URL and Name based on selectedAttachmentIndex
+    let currentUrl = metadata.attachmentUrl;
+    let currentName = metadata.attachmentName;
+    if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+      const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+      if (selectedAtt) {
+        currentUrl = selectedAtt.url;
+        currentName = selectedAtt.name;
+      }
+    }
+    
+    if (!currentUrl) return;
+    
+    const attachmentName = currentName || '';
     const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
     
     if (ext === 'xlsx' || ext === 'xls') {
@@ -326,7 +341,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setAttachmentError(null);
       setAttachmentHtml(null);
       
-      fetch(metadata.attachmentUrl)
+      fetch(currentUrl)
         .then(res => {
           if (!res.ok) throw new Error("No se pudo descargar el archivo Excel.");
           return res.arrayBuffer();
@@ -346,7 +361,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           setLoadingAttachment(false);
         });
     }
-  }, [selectedDraft, activeTab]);
+  }, [selectedDraft, activeTab, selectedAttachmentIndex]);
 
   const getMinDeliveryDate = () => {
     const now = new Date();
@@ -1706,6 +1721,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       deliverySlot: deliverySlot,
       attachmentUrl: meta?.attachmentUrl || null,
       attachmentName: meta?.attachmentName || null,
+      attachments: meta?.attachments || null,
       rejectReason: meta?.rejectReason || null,
       latitude: meta?.latitude || null,
       longitude: meta?.longitude || null,
@@ -5346,14 +5362,88 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const metadata = getDraftMetadata(selectedDraft);
                 
                 // PESTAÑA: Adjunto
-                if (activeTab === 'attachment' && metadata.attachmentUrl) {
-                  const attachmentName = metadata.attachmentName || '';
+                if (activeTab === 'attachment') {
+                  let currentUrl = metadata.attachmentUrl;
+                  let currentName = metadata.attachmentName;
+                  if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                    const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                    if (selectedAtt) {
+                      currentUrl = selectedAtt.url;
+                      currentName = selectedAtt.name;
+                    }
+                  }
+
+                  if (!currentUrl) {
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', backgroundColor: '#F8FAFC', color: '#64748B' }}>
+                        <span>No hay documentos adjuntos.</span>
+                      </div>
+                    );
+                  }
+
+                  const attachmentName = currentName || '';
                   const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+
+                  // Inline helper for multiple attachments selectors
+                  const renderSelector = () => {
+                    if (!metadata.attachments || !Array.isArray(metadata.attachments) || metadata.attachments.length <= 1) return null;
+                    return (
+                      <div style={{
+                        display: 'flex',
+                        gap: '6px',
+                        padding: '8px 12px',
+                        backgroundColor: '#F1F5F9',
+                        borderBottom: '1px solid #E2E8F0',
+                        overflowX: 'auto',
+                        whiteSpace: 'nowrap'
+                      }} className="premium-scrollbar">
+                        {metadata.attachments.map((att: any, idx: number) => {
+                          const isActive = idx === selectedAttachmentIndex;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setSelectedAttachmentIndex(idx)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                border: '1px solid',
+                                borderColor: isActive ? '#2563EB' : '#CBD5E1',
+                                backgroundColor: isActive ? '#EFF6FF' : 'white',
+                                color: isActive ? '#2563EB' : '#475569',
+                                fontSize: '0.725rem',
+                                fontWeight: isActive ? 800 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <span>📎</span>
+                              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
+                                {att.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  };
+
+                  const wrapContent = (content: React.ReactNode) => {
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                        {renderSelector()}
+                        {content}
+                      </div>
+                    );
+                  };
 
                   // 1. Caso: Excel (.xlsx, .xls)
                   if (ext === 'xlsx' || ext === 'xls') {
                     if (loadingAttachment) {
-                      return (
+                      return wrapContent(
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
                           <style>{`
                             @keyframes spin {
@@ -5367,18 +5457,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       );
                     }
                     if (attachmentError) {
-                      return (
+                      return wrapContent(
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
                           <AlertTriangle size={32} color="#EF4444" />
                           <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: 700 }}>{attachmentError}</span>
-                          <a href={metadata.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#2563EB', fontWeight: 800, textDecoration: 'underline', marginTop: '4px' }}>
+                          <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#2563EB', fontWeight: 800, textDecoration: 'underline', marginTop: '4px' }}>
                             Descargar archivo original
                           </a>
                         </div>
                       );
                     }
                     if (attachmentHtml) {
-                      return (
+                      return wrapContent(
                         <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '12px' }}>
                           <style>{`
                             #excel-table {
@@ -5425,10 +5515,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                   // 2. Caso: PDF (.pdf)
                   if (ext === 'pdf') {
-                    return (
+                    return wrapContent(
                       <div style={{ flex: 1, backgroundColor: 'white', position: 'relative' }}>
                         <iframe
-                          src={metadata.attachmentUrl}
+                          src={currentUrl}
                           style={{ width: '100%', height: '100%', border: 'none' }}
                         />
                       </div>
@@ -5436,14 +5526,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }
 
                   // 3. Caso: Otros (Word .docx, .doc, etc.)
-                  return (
+                  return wrapContent(
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
                       <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', width: '85%', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                         <FileText size={48} color="#2563EB" />
                         <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#1E293B', wordBreak: 'break-all' }}>{attachmentName}</span>
                         <span style={{ fontSize: '0.725rem', color: '#64748B' }}>Documento de oficina u otro formato adjunto</span>
                         <a
-                          href={metadata.attachmentUrl}
+                          href={currentUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -5468,7 +5558,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                       
                       <a 
-                        href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(metadata.attachmentUrl)}`}
+                        href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(currentUrl)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -5525,7 +5615,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               {/* Barra de archivo adjunto si existe */}
               {(() => {
                 const metadata = getDraftMetadata(selectedDraft);
-                if (!metadata.attachmentUrl) return null;
+                let currentUrl = metadata.attachmentUrl;
+                let currentName = metadata.attachmentName;
+                if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                  const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                  if (selectedAtt) {
+                    currentUrl = selectedAtt.url;
+                    currentName = selectedAtt.name;
+                  }
+                }
+                
+                if (!currentUrl) return null;
                 return (
                   <div style={{
                     padding: '12px 16px',
@@ -5535,11 +5635,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={metadata.attachmentName}>
-                      📎 {metadata.attachmentName || 'Documento adjunto'}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={currentName}>
+                      📎 {currentName || 'Documento adjunto'}
                     </span>
                     <a
-                      href={metadata.attachmentUrl}
+                      href={currentUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{

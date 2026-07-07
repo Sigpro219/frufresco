@@ -224,18 +224,63 @@ export async function POST(req: Request) {
     let isExcel = false;
     let excelTextContext = '';
     let programmaticExcelItems: any[] = [];
+    let uploadedAttachments: { name: string, url: string }[] = [];
 
     if (attachments.length > 0) {
+      // 1. Upload ALL attachments to Supabase Storage
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        const attFileName = att.file_name || att.filename || `adjunto_${i}.bin`;
+        const attBase64 = att.content;
+        const attMime = att.content_type || 'application/octet-stream';
+        
+        try {
+          // Ensure order-attachments bucket exists
+          try {
+            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+          } catch (_) {}
+
+          const buffer = Buffer.from(attBase64, 'base64');
+          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
+          const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+            .from('order-attachments')
+            .upload(storagePath, buffer, {
+              contentType: attMime,
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data: { publicUrl } } = supabaseAdmin.storage
+              .from('order-attachments')
+              .getPublicUrl(storagePath);
+            uploadedAttachments.push({
+              name: attFileName,
+              url: publicUrl
+            });
+            console.log(`[Email Inbound] Attachment ${i} (${attFileName}) uploaded to Supabase Storage: ${publicUrl}`);
+          } else {
+            console.error(`[Email Inbound] Failed to upload attachment ${i} (${attFileName}):`, uploadError);
+          }
+        } catch (uploadErr) {
+          console.error(`[Email Inbound] Storage upload handler crashed for attachment ${i}:`, uploadErr);
+        }
+      }
+
+      // Keep compatibility with existing code that references attachmentUrl/attachmentName
+      if (uploadedAttachments.length > 0) {
+        attachmentUrl = uploadedAttachments[0].url;
+        attachmentName = uploadedAttachments[0].name;
+      }
+
       const attFileName = attachments[0].file_name || attachments[0].filename || 'adjunto.xlsx';
-      console.log(`[Email Inbound] Processing attachment: ${attFileName}`);
-      // CloudMailin attachment format: content is base64 encoded
+      console.log(`[Email Inbound] Processing main attachment for extraction: ${attFileName}`);
       const attachment = attachments[0];
       const base64Data = attachment.content;
       const mimeType = attachment.content_type || 'application/pdf';
-      attachmentName = attFileName;
 
       const lowerMime = mimeType.toLowerCase();
-      const lowerName = attachmentName ? attachmentName.toLowerCase() : '';
+      const lowerName = attFileName.toLowerCase();
       isExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
       if (isExcel) {
@@ -330,35 +375,6 @@ export async function POST(req: Request) {
         } catch (err) {
           console.error('[Email Inbound] Error parsing Excel:', err);
         }
-      }
-
-      try {
-        // Ensure order-attachments bucket exists
-        try {
-          await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
-        } catch (_) {}
-
-        const buffer = Buffer.from(base64Data, 'base64');
-        const sanitizedFilename = (attachmentName || 'unnamed').replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `${draftUuid}_${sanitizedFilename}`;
-        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-          .from('order-attachments')
-          .upload(storagePath, buffer, {
-            contentType: mimeType,
-            upsert: true
-          });
-
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabaseAdmin.storage
-            .from('order-attachments')
-            .getPublicUrl(storagePath);
-          attachmentUrl = publicUrl;
-          console.log(`[Email Inbound] Attachment uploaded to Supabase Storage: ${attachmentUrl}`);
-        } else {
-          console.error('[Email Inbound] Failed to upload attachment:', uploadError);
-        }
-      } catch (uploadErr) {
-        console.error('[Email Inbound] Storage upload handler crashed:', uploadErr);
       }
 
       const prompt = `
@@ -1017,6 +1033,7 @@ export async function POST(req: Request) {
             clientType: clientType,
             attachmentUrl: attachmentUrl || null,
             attachmentName: attachmentName || null,
+            attachments: uploadedAttachments,
             emailHtml: htmlText || null
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
