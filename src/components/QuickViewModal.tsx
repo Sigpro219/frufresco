@@ -377,7 +377,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             <button
                                 onClick={() => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
                                     const step = isWeightUnit ? 0.5 : 1;
                                     const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
                                     setQuantity(newQty);
@@ -460,6 +460,22 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >+</button>
                         </div>
+
+                        <span style={{ 
+                            fontSize: '0.9rem', 
+                            fontWeight: '800', 
+                            color: 'var(--primary)', 
+                            textTransform: 'lowercase', 
+                            backgroundColor: 'rgba(34, 197, 94, 0.08)', 
+                            padding: '6px 12px', 
+                            borderRadius: '10px', 
+                            border: '1px solid rgba(34, 197, 94, 0.15)',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                        }}>
+                            {activeUnit}
+                        </span>
+
                         <div style={{ flex: 1, textAlign: 'right' }}>
                              <span style={{ fontSize: '0.9rem', color: '#9CA3AF', fontWeight: '600' }}>{t.total}</span>
                              <div style={{ fontSize: '1.35rem', fontWeight: '900', color: isAvailable ? '#111827' : '#9CA3AF' }}>
