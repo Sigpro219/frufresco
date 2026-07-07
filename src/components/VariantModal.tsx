@@ -276,7 +276,11 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
                                             return (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                                                    {matchedAttribute.suggested_values.map((val: string) => {
+                                                    {matchedAttribute.suggested_values.slice().sort((a: string, b: string) => {
+                                                        const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                                                        const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                                                        return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                                    }).map((val: string) => {
                                                         const isChecked = opt.values.includes(val);
                                                         return (
                                                             <label 

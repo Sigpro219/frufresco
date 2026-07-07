@@ -36,7 +36,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             
             if (error) throw error;
             setDbAttributes(data || []);
-            setLocalAttributes(JSON.parse(JSON.stringify(data || [])));
+            const sortedData = JSON.parse(JSON.stringify(data || [])).sort((a: any, b: any) => a.name.localeCompare(b.name));
+            setLocalAttributes(sortedData);
         } catch (error: any) {
             console.error('❌ Error fetching attributes:', error.message);
         } finally {
@@ -56,7 +57,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             suggested_values: [],
             show_on_web: true
         };
-        setLocalAttributes([...localAttributes, newAttr]);
+        setLocalAttributes([...localAttributes, newAttr].sort((a, b) => a.name.localeCompare(b.name)));
         setNewAttrName('');
     };
 
@@ -138,9 +139,14 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             }
 
             for (const attr of localAttributes) {
+                const sortedValues = attr.suggested_values.slice().sort((a, b) => {
+                    const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                    const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                    return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                });
                 const payload: any = { 
                     name: attr.name, 
-                    suggested_values: attr.suggested_values,
+                    suggested_values: sortedValues,
                     show_on_web: attr.show_on_web !== false
                 };
                 
@@ -289,7 +295,11 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
                                     <div style={{ backgroundColor: '#F9FAFB', padding: '8px 10px', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                            {attr.suggested_values.map(val => (
+                                            {attr.suggested_values.slice().sort((a, b) => {
+                                                const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                                                const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                                                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                            }).map(val => (
                                                 <span key={val} style={{ 
                                                     display: 'inline-flex', alignItems: 'center', gap: '5px', 
                                                     backgroundColor: 'white', border: '1.5px solid #E5E7EB', 

@@ -63,10 +63,16 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
             .reduce((acc: any, opt: any) => ({ ...acc, [opt.name]: opt.values }), {})
         : product.options || {};
 
+    // Initialize selections with the first option of each category (sorted alphabetically)
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
         if (Array.isArray(values) && values.length > 0) {
-            initialSelections[key] = values[0];
+            const sortedValues = values.slice().sort((valA, valB) => {
+                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+            initialSelections[key] = sortedValues[0];
         }
     });
 
@@ -235,15 +241,24 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                 <div style={{ height: '1px', backgroundColor: '#F3F4F6', margin: '1.5rem 0' }}></div>
 
                 <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1.5rem', paddingRight: '0.5rem' }}>
-                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => {
-                        const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
-                        return (
-                            <div key={optionName} style={{ marginBottom: '1.25rem' }}>
-                                <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
-                                    {displayOptionName}
-                                </label>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                                    {Array.isArray(values) && values.map((val) => {
+                    {Object.entries(displayOptions)
+                        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+                        .map(([optionName, values]: [string, any]) => {
+                            const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                            return (
+                                <div key={optionName} style={{ marginBottom: '1.25rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
+                                        {displayOptionName}
+                                    </label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                                        {Array.isArray(values) && values
+                                            .slice()
+                                            .sort((valA, valB) => {
+                                                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                                                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                                                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                            })
+                                            .map((val) => {
                                         const displayVal = val.includes('|') ? val.split('|')[0] : val;
                                         return (
                                             <button
