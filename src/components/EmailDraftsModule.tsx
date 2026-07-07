@@ -133,6 +133,27 @@ const getNextAllowedDeliveryDate = (baseDateStr: string, allowedDays: number[]):
   return baseDateStr;
 };
 
+const getAccountingIdDisplay = (product: any) => {
+    if (!product) return '';
+    if (product.accounting_id) {
+        if (typeof product.accounting_id === 'number') {
+            return product.accounting_id.toString();
+        }
+        const match = String(product.accounting_id).match(/\d+/);
+        if (match) {
+            return parseInt(match[0], 10).toString();
+        }
+        return String(product.accounting_id);
+    }
+    if (product.sku) {
+        const skuMatch = product.sku.match(/^[A-Z]{2}-(\d+)/i);
+        if (skuMatch) {
+            return parseInt(skuMatch[1], 10).toString();
+        }
+    }
+    return product.id || '';
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -4110,14 +4131,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             <input
                                               ref={el => { productInputRefs.current[i] = el; }}
                                               disabled={!isEditing || item.isDeleted}
-                                              value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
+                                              value={matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : (item.searchQuery || '')}
                                               placeholder="Buscar ID..."
                                               list="all-products-list"
                                               onFocus={(e) => e.target.select()}
                                               onKeyDown={(e) => {
                                                 if (e.key === 'Tab') {
                                                   const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                   if (p) {
                                                     e.preventDefault();
                                                     openVariantModalForItem(p, i);
@@ -4125,11 +4146,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 } else if (e.key === 'Enter') {
                                                   e.preventDefault();
                                                   const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                   const newEdits = [...editableItems];
                                                   if (p) {
                                                     newEdits[i].matched_product_id = p.id;
-                                                    newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
+                                                    newEdits[i].searchQuery = `${p.name} (${getAccountingIdDisplay(p)})`;
                                                     newEdits[i].skuQuery = p.sku || '';
                                                   }
                                                   newEdits[i].isConfirmed = true;
@@ -4164,7 +4185,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }}
                                               onChange={(e) => {
                                                 const val = e.target.value;
-                                                const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                 if (p) {
                                                   selectProduct(p, i);
                                                 } else {
@@ -6575,7 +6596,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       )}
       <datalist id="all-products-list">
         {products.map(p => (
-          <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
+          <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
         ))}
       </datalist>
     </div>
