@@ -1745,7 +1745,7 @@ function CreateOrderContent() {
                 width: showFloatingDoc ? (isFloatingDocExpanded ? 'calc(100% - 998px)' : 'calc(100% - 598px)') : '100%',
                 maxWidth: showFloatingDoc ? 'none' : '1700px',
                 margin: showFloatingDoc ? '0' : '0 auto',
-                padding: '1rem 2rem',
+                padding: showFloatingDoc ? '1rem 2rem 8rem 2rem' : '1rem 2rem',
                 transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 boxSizing: 'border-box'
             }}>
@@ -1768,7 +1768,7 @@ function CreateOrderContent() {
                     </Link>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: showFloatingDoc ? '1fr' : 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
 
                     {/* LEFT COLUMN: FORM */}
                     <div style={{ backgroundColor: THEME.colors.surface, padding: '2rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
@@ -3223,38 +3223,40 @@ function CreateOrderContent() {
                     </div>
 
                     {/* RIGHT COLUMN: SUMMARY */}
-                    <div>
-                        <div style={{ position: 'sticky', top: '2rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem', color: '#111827' }}>Resumen</h3>
+                    {!showFloatingDoc && (
+                        <div>
+                            <div style={{ position: 'sticky', top: '2rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem', color: '#111827' }}>Resumen</h3>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                <span style={{ color: '#6B7280' }}>Total Items:</span>
-                                <span style={{ fontWeight: 'bold' }}>{cart.length}</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                    <span style={{ color: '#6B7280' }}>Total Items:</span>
+                                    <span style={{ fontWeight: 'bold' }}>{cart.length}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
+                                    <span>TOTAL:</span>
+                                    <span>{formatMoney(calculateTotal())}</span>
+                                </div>
+
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={loading || cart.length === 0}
+                                    style={{
+                                        width: '100%', padding: '1rem', borderRadius: '12px',
+                                        backgroundColor: '#111827', color: 'white', border: 'none',
+                                        fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer',
+                                        opacity: (loading || cart.length === 0) ? 0.5 : 1,
+                                        marginBottom: '1rem'
+                                    }}
+                                >
+                                    {loading ? 'Creando...' : 'CONFIRMAR PEDIDO'}
+                                </button>
+
+                                <p style={{ fontSize: '0.8rem', color: '#9CA3AF', textAlign: 'center', lineHeight: '1.4' }}>
+                                    Al confirmar, el pedido entrará a la Mesa de Control en estado &quot;Recibido&quot; para su revisión y aprobación.
+                                </p>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
-                                <span>TOTAL:</span>
-                                <span>{formatMoney(calculateTotal())}</span>
-                            </div>
-
-                            <button
-                                onClick={handleSubmit}
-                                disabled={loading || cart.length === 0}
-                                style={{
-                                    width: '100%', padding: '1rem', borderRadius: '12px',
-                                    backgroundColor: '#111827', color: 'white', border: 'none',
-                                    fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer',
-                                    opacity: (loading || cart.length === 0) ? 0.5 : 1,
-                                    marginBottom: '1rem'
-                                }}
-                            >
-                                {loading ? 'Creando...' : 'CONFIRMAR PEDIDO'}
-                            </button>
-
-                            <p style={{ fontSize: '0.8rem', color: '#9CA3AF', textAlign: 'center', lineHeight: '1.4' }}>
-                                Al confirmar, el pedido entrará a la Mesa de Control en estado &quot;Recibido&quot; para su revisión y aprobación.
-                            </p>
                         </div>
-                    </div>
+                    )}
 
                 </div>
             </div>
@@ -4448,6 +4450,71 @@ function CreateOrderContent() {
                     >
                         <X size={16} />
                     </button>
+                </div>
+            )}
+
+            {/* Barra de resumen sticky inferior cuando la ventana flotante está activa */}
+            {showFloatingDoc && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    width: isFloatingDocExpanded ? 'calc(100% - 998px)' : 'calc(100% - 598px)',
+                    backgroundColor: 'white',
+                    borderTop: '1px solid #E2E8F0',
+                    boxShadow: '0 -10px 15px -3px rgba(0, 0, 0, 0.05), 0 -4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    padding: '1rem 2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    zIndex: 999,
+                    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxSizing: 'border-box'
+                }}>
+                    {/* Resumen del pedido */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Items</span>
+                            <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1E293B' }}>{cart.length}</span>
+                        </div>
+                        <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total a Pagar</span>
+                            <span style={{ fontSize: '1.5rem', fontWeight: 950, color: '#059669' }}>{formatMoney(calculateTotal())}</span>
+                        </div>
+                    </div>
+
+                    {/* Acciones */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', maxWidth: '220px', textAlign: 'right', lineHeight: '1.3' }}>
+                            El pedido se creará en estado &quot;Recibido&quot; para aprobación.
+                        </span>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading || cart.length === 0}
+                            style={{
+                                padding: '0.75rem 2rem',
+                                borderRadius: '12px',
+                                backgroundColor: '#1E293B',
+                                color: 'white',
+                                border: 'none',
+                                fontWeight: '800',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                opacity: (loading || cart.length === 0) ? 0.5 : 1,
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                            }}
+                            onMouseEnter={e => {
+                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = '#0F172A';
+                            }}
+                            onMouseLeave={e => {
+                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = '#1E293B';
+                            }}
+                        >
+                            {loading ? 'Creando...' : 'Confirmar Pedido'}
+                        </button>
+                    </div>
                 </div>
             )}
 
