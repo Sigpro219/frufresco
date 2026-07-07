@@ -3391,7 +3391,7 @@ function CreateOrderContent() {
                     <div style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 1000, backdropFilter: 'blur(3px)'
+                        zIndex: 12000, backdropFilter: 'blur(3px)'
                     }} onClick={() => closeProductModal()}>
 
                         <div
@@ -3860,7 +3860,7 @@ function CreateOrderContent() {
                     <div style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 1100, backdropFilter: 'blur(3px)'
+                        zIndex: 13000, backdropFilter: 'blur(3px)'
                     }} onClick={() => setManageConversionsProduct(null)}>
 
                         <div
