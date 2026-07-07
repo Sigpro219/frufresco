@@ -333,6 +333,17 @@ function CreateOrderContent() {
         onConfirm: () => void;
     } | null>(null);
 
+    const [duplicateConfirm, setDuplicateConfirm] = useState<{
+        isOpen: boolean;
+        product: any;
+        qty: number;
+        variantLabel?: string;
+        optionsRaw?: any;
+        unit?: string;
+        factor?: number;
+        existingIndex: number;
+    } | null>(null);
+
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
     useEffect(() => {
@@ -765,7 +776,8 @@ function CreateOrderContent() {
         variantLabel?: string, 
         optionsRaw?: any,
         unit?: string,
-        factor?: number
+        factor?: number,
+        bypassDuplicateCheck = false
     ) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
         let finalLabel = variantLabel || '';
@@ -775,37 +787,66 @@ function CreateOrderContent() {
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
         const baseQty = parseFloat((qty * resolvedFactor).toFixed(2));
 
-        setCart(prev => {
-            const existingIndex = prev.findIndex(item =>
+        if (!bypassDuplicateCheck) {
+            const existingIndex = cart.findIndex(item =>
                 item.product.id === product.id && item.variant_label === finalLabel && item.originalUnit === resolvedUnit
             );
 
-            const resolvedPrice = contractPrices[product.id] || 0;
-
             if (existingIndex >= 0) {
-                const newCart = [...prev];
+                setDuplicateConfirm({
+                    isOpen: true,
+                    product,
+                    qty,
+                    variantLabel,
+                    optionsRaw,
+                    unit,
+                    factor,
+                    existingIndex
+                });
+                return;
+            }
+        }
+
+        const resolvedPrice = contractPrices[product.id] || 0;
+        setCart(prev => [{ 
+            product, 
+            qty: baseQty, 
+            price: resolvedPrice,
+            originalQty: qty,
+            originalUnit: resolvedUnit,
+            conversion_factor: resolvedFactor,
+            variant_label: finalLabel || undefined, 
+            selected_options: optionsRaw || {},
+            nickname: finalNickname,
+            picking_note: exc?.picking_note || undefined,
+            delivery_note: exc?.delivery_note || undefined
+        }, ...prev]);
+    };
+
+    const handleMergeDuplicateItem = () => {
+        if (!duplicateConfirm) return;
+        const { existingIndex, qty, factor } = duplicateConfirm;
+        const resolvedFactor = factor || 1;
+        setCart(prev => {
+            const newCart = [...prev];
+            if (newCart[existingIndex]) {
                 const item = { ...newCart[existingIndex] };
                 item.originalQty = parseFloat(((item.originalQty || 0) + qty).toFixed(2));
-                item.qty = parseFloat((item.originalQty * resolvedFactor).toFixed(2));
-                
-                const filteredCart = newCart.filter((_, i) => i !== existingIndex);
-                return [item, ...filteredCart];
-            } else {
-                return [{ 
-                    product, 
-                    qty: baseQty, 
-                    price: resolvedPrice,
-                    originalQty: qty,
-                    originalUnit: resolvedUnit,
-                    conversion_factor: resolvedFactor,
-                    variant_label: finalLabel || undefined, 
-                    selected_options: optionsRaw || {},
-                    nickname: finalNickname,
-                    picking_note: exc?.picking_note || undefined,
-                    delivery_note: exc?.delivery_note || undefined
-                }, ...prev];
+                item.qty = parseFloat((item.originalQty * (item.conversion_factor || resolvedFactor)).toFixed(2));
+                newCart[existingIndex] = item;
             }
+            return newCart;
         });
+        setDuplicateConfirm(null);
+        showToast('Cantidad acumulada en la línea existente. ✅', 'success');
+    };
+
+    const handleKeepDuplicateAsSeparate = () => {
+        if (!duplicateConfirm) return;
+        const { product, qty, variantLabel, optionsRaw, unit, factor } = duplicateConfirm;
+        addToCartDirectly(product, qty, variantLabel, optionsRaw, unit, factor, true);
+        setDuplicateConfirm(null);
+        showToast('Producto agregado como una fila separada. ✅', 'success');
     };
 
     const handleSaveVariantsFromOrder = async (productId: string, optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
@@ -4396,6 +4437,116 @@ function CreateOrderContent() {
                                 }}
                             >
                                 Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {duplicateConfirm && duplicateConfirm.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 11000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '2rem',
+                        width: '90%',
+                        maxWidth: '480px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FEF3C7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.5rem',
+                            color: '#D97706'
+                        }}>
+                            <AlertTriangle size={28} />
+                        </div>
+                        <h3 style={{
+                            fontSize: '1.25rem',
+                            fontWeight: 800,
+                            color: '#111827',
+                            margin: '0 0 0.5rem 0'
+                        }}>
+                            Producto Duplicado Detectado
+                        </h3>
+                        <p style={{
+                            fontSize: '0.9rem',
+                            color: '#4B5563',
+                            margin: '0 0 1.5rem 0',
+                            lineHeight: '1.6'
+                        }}>
+                            El producto <strong>{duplicateConfirm.product.name}</strong> 
+                            {duplicateConfirm.product.accounting_id ? ` (ID Contable: ${duplicateConfirm.product.accounting_id})` : ''} 
+                            ya está en este pedido. ¿Cómo deseas proceder?
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button
+                                type="button"
+                                onClick={handleMergeDuplicateItem}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#10B981',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                                }}
+                            >
+                                Sumar cantidad a la línea existente (+{duplicateConfirm.qty})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleKeepDuplicateAsSeparate}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#2563EB',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                                }}
+                            >
+                                Agregar como una fila separada
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDuplicateConfirm(null)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#F3F4F6',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: '#4B5563',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
                             </button>
                         </div>
                     </div>

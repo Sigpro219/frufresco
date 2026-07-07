@@ -298,6 +298,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
+  const [duplicateMatchConfirm, setDuplicateMatchConfirm] = useState<{
+    isOpen: boolean;
+    product: any;
+    rowIndex: number;
+    duplicateIndex: number;
+  } | null>(null);
   const [showFloatingEmail, setShowFloatingEmail] = useState(true);
   const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
   const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
@@ -633,6 +639,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   };
 
   const selectProduct = (product: any, rowIndex: number) => {
+    // Check if product is already matched in another row
+    const duplicateIndex = editableItems.findIndex((item, idx) =>
+      idx !== rowIndex && !item.isDeleted && !item.isMetadata && item.matched_product_id === product.id
+    );
+
+    if (duplicateIndex >= 0) {
+      setDuplicateMatchConfirm({
+        isOpen: true,
+        product,
+        rowIndex,
+        duplicateIndex
+      });
+      return;
+    }
+
+    executeSelectProduct(product, rowIndex);
+  };
+
+  const executeSelectProduct = (product: any, rowIndex: number) => {
     const newEdits = [...editableItems];
     newEdits[rowIndex].matched_product_id = product.id;
     newEdits[rowIndex].searchQuery = product.name;
@@ -748,6 +773,44 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     setEditableItems(newEdits);
     setActiveSearchRowIndex(null);
+  };
+
+  const handleMergeDuplicateMatch = () => {
+    if (!duplicateMatchConfirm) return;
+    const { product, rowIndex, duplicateIndex } = duplicateMatchConfirm;
+    
+    const newEdits = [...editableItems];
+    
+    const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
+    const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
+    
+    const factor = newEdits[duplicateIndex].conversion_factor || 1;
+    newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
+    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(3));
+    newEdits[duplicateIndex].isConfirmed = true;
+    
+    newEdits[rowIndex].isDeleted = true;
+    newEdits[rowIndex].matched_product_id = null;
+    
+    if (newEdits[rowIndex].observations) {
+      newEdits[duplicateIndex].observations = [
+        newEdits[duplicateIndex].observations,
+        newEdits[rowIndex].observations
+      ].filter(Boolean).join(' | ');
+    }
+    
+    setEditableItems(newEdits);
+    setDuplicateMatchConfirm(null);
+    setActiveSearchRowIndex(null);
+    showToast('Cantidad acumulada en la línea existente y fila duplicada descartada. ✅', 'success');
+  };
+
+  const handleKeepBothMatches = () => {
+    if (!duplicateMatchConfirm) return;
+    const { product, rowIndex } = duplicateMatchConfirm;
+    executeSelectProduct(product, rowIndex);
+    setDuplicateMatchConfirm(null);
   };
 
   const handleProductSearchKeyDown = (e: React.KeyboardEvent, rowIndex: number, filtered: any[]) => {
@@ -5813,6 +5876,120 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               })()}
             </div>
           )}
+        </div>
+      )}
+
+      {duplicateMatchConfirm && duplicateMatchConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(17, 24, 39, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 16000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            width: '90%',
+            maxWidth: '480px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            padding: '24px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#FEF3C7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: '#D97706'
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 8px 0'
+            }}>
+              Producto Duplicado Detectado
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#4B5563',
+              margin: '0 0 24px 0',
+              lineHeight: '1.6'
+            }}>
+              El producto <strong>{duplicateMatchConfirm.product.name}</strong> 
+              {(() => {
+                const acctId = getAccountingIdDisplay(duplicateMatchConfirm.product);
+                return acctId && acctId !== duplicateMatchConfirm.product.id ? ` (ID Contable: ${acctId})` : '';
+              })()} 
+              ya está asignado a otra línea activa de este pedido. ¿Cómo deseas proceder?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleMergeDuplicateMatch}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#10B981',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                }}
+              >
+                Sumar y unificar cantidades
+              </button>
+              <button
+                type="button"
+                onClick={handleKeepBothMatches}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#2563EB',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                }}
+              >
+                Mantener filas separadas
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateMatchConfirm(null)}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
