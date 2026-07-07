@@ -96,8 +96,6 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
         Object.entries(selections).every(([key, value]) => v.options[key] === value)
     );
 
-    const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
-    
     // Helper para extraer peso en Kg
     const getParsedWeight = (text: string): number | null => {
         if (!text) return null;
@@ -135,13 +133,14 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
     const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
     const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : ((product as any).web_unit || product.unit_of_measure);
 
+    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected ? true : !!currentVariant) : true;
+    
     // Aplicar factor de conversión y redondeo a 50
     const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price || 0) : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
     
-    // Si la variante tiene price_adjustment_percent, aplicarlo al precio base
-    const priceWithAdjustment = currentVariant && currentVariant.price_adjustment_percent 
-        ? rawPrice * (1 + currentVariant.price_adjustment_percent / 100) 
-        : rawPrice;
+    // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
+    const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;
+    const priceWithAdjustment = rawPrice * (1 + adjustmentPercent / 100);
 
     const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
 
