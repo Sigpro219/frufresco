@@ -136,15 +136,14 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         Object.entries(selections).every(([key, value]) => v.options[key] === value)
     );
 
-    const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
+    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected ? true : !!currentVariant) : true;
     
     // Aplicar factor de conversión comercial
     const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price) : (product.pricing_model_prices?.[0]?.price || product.base_price);
     
-    // Si la variante tiene price_adjustment_percent, aplicarlo al precio base
-    const priceWithAdjustment = currentVariant && currentVariant.price_adjustment_percent 
-        ? basePrice * (1 + currentVariant.price_adjustment_percent / 100) 
-        : basePrice;
+    // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
+    const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;
+    const priceWithAdjustment = basePrice * (1 + adjustmentPercent / 100);
 
     const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
 
