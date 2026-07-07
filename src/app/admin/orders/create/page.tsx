@@ -40,6 +40,46 @@ import {
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
 
+const formatDetectedUnit = (qty: number, unit: string) => {
+    const u = (unit || '').toLowerCase();
+    let cleanUnit = u;
+    let suffix = 'detectados';
+    
+    if (u.includes('libra') || u.includes('lb')) {
+        cleanUnit = qty === 1 ? 'libra' : 'libras';
+        suffix = 'detectadas';
+    } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = 'detectadas';
+    } else if (u.includes('kilo') || u.includes('kg')) {
+        cleanUnit = qty === 1 ? 'kilo' : 'kilos';
+        suffix = 'detectados';
+    } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
+        cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
+        suffix = 'detectados';
+    } else if (u.includes('litro') || u.includes('lt')) {
+        cleanUnit = qty === 1 ? 'litro' : 'litros';
+        suffix = 'detectados';
+    } else if (u.includes('frasco')) {
+        cleanUnit = qty === 1 ? 'frasco' : 'frascos';
+        suffix = 'detectados';
+    } else if (u.includes('bolsa')) {
+        cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
+        suffix = 'detectadas';
+    } else if (u.includes('caja')) {
+        cleanUnit = qty === 1 ? 'caja' : 'cajas';
+        suffix = 'detectadas';
+    } else if (u.includes('atado')) {
+        cleanUnit = qty === 1 ? 'atado' : 'atados';
+        suffix = 'detectados';
+    } else {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = 'detectadas';
+    }
+    
+    return `${qty} ${cleanUnit} ${suffix}`;
+};
+
 function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -2592,7 +2632,7 @@ function CreateOrderContent() {
                                                              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
                                                              <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
                                                                  <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
-                                                                     {item.originalQtyInFile || item.quantity} unidades detectadas
+                                                                     {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
                                                                  </span>
                                                              </div>
                                                          </td>
@@ -3374,7 +3414,7 @@ function CreateOrderContent() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                                             <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
                                             <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
-                                                {stagedItem.originalQtyInFile || stagedItem.quantity} uds detectadas
+                                                {formatDetectedUnit(stagedItem.originalQtyInFile || stagedItem.quantity, stagedItem.originalUnit)}
                                             </span>
                                         </div>
                                         <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={stagedItem.originalName}>
