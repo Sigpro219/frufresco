@@ -63,7 +63,30 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             .reduce((acc: any, opt: any) => ({ ...acc, [opt.name]: opt.values }), {})
         : product.options || {};
 
-    // Initialize selections with the first option of each category
+    // Helper para extraer peso en Kg
+    const getParsedWeight = (text: string): number | null => {
+        if (!text) return null;
+        if (text.includes('|')) {
+            const parts = text.split('|');
+            const grams = parseFloat(parts[1]);
+            if (!isNaN(grams) && grams > 0) return grams / 1000;
+        }
+        const clean = text.toLowerCase();
+        const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+        if (kgMatch) {
+            const val = parseFloat(kgMatch[1]);
+            if (!isNaN(val) && val > 0) return val;
+        }
+        const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+        if (gMatch) {
+            const val = parseFloat(gMatch[1]);
+            if (!isNaN(val) && val > 0) return val / 1000;
+        }
+        if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+        return null;
+    };
+
+    // Initialize selections with the first option of each category (sorted alphabetically)
     // Initialize selections with the first option of each category (sorted alphabetically)
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
@@ -79,6 +102,18 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
     const [selections, setSelections] = useState(initialSelections);
 
+    // Obtener la presentación seleccionada
+    let selectedPresentationVal: string | null = null;
+    Object.entries(selections).forEach(([key, val]) => {
+        if (key.toLowerCase().includes('presentaci')) {
+            selectedPresentationVal = val;
+        }
+    });
+
+    const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
+    const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : (product.web_unit || product.unit_of_measure);
+
     // Solo considerar variantes que estén marcadas para mostrarse en web
     const visibleVariants = (product.variants || []).filter(v => (v as any).show_on_web !== false);
 
@@ -90,9 +125,14 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
     
     // Aplicar factor de conversión comercial
-    const conversionFactor = product.web_conversion_factor || 1;
-    const basePrice = currentVariant ? currentVariant.price : (product.pricing_model_prices?.[0]?.price || product.base_price);
-    const currentPrice = Math.ceil((basePrice * conversionFactor) / 50) * 50;
+    const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price) : (product.pricing_model_prices?.[0]?.price || product.base_price);
+    
+    // Si la variante tiene price_adjustment_percent, aplicarlo al precio base
+    const priceWithAdjustment = currentVariant && currentVariant.price_adjustment_percent 
+        ? basePrice * (1 + currentVariant.price_adjustment_percent / 100) 
+        : basePrice;
+
+    const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
@@ -118,17 +158,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
         const isLibra = ['libra', 'libras'].includes(unitLower);
 
-        let unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
-        let cartUnit = product.web_unit || product.unit_of_measure;
-
-        if (selectedPresentationVal && selectedPresentationVal.includes('|')) {
-            const parts = selectedPresentationVal.split('|');
-            const grams = parseFloat(parts[1]);
-            if (!isNaN(grams) && grams > 0) {
-                unitWeight = grams / 1000;
-            }
-            cartUnit = parts[0];
-        }
+        const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+        let unitWeight = parsedWeight !== null ? parsedWeight : (product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0));
+        let cartUnit = activeUnit;
 
         addItem({
             id: product.id,
@@ -157,17 +189,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
         const isLibra = ['libra', 'libras'].includes(unitLower);
 
-        let unitWeight = product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
-        let cartUnit = product.web_unit || product.unit_of_measure;
-
-        if (selectedPresentationVal && selectedPresentationVal.includes('|')) {
-            const parts = selectedPresentationVal.split('|');
-            const grams = parseFloat(parts[1]);
-            if (!isNaN(grams) && grams > 0) {
-                unitWeight = grams / 1000;
-            }
-            cartUnit = parts[0];
-        }
+        const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+        let unitWeight = parsedWeight !== null ? parsedWeight : (product.weight_kg !== undefined && product.weight_kg !== null ? product.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0));
+        let cartUnit = activeUnit;
 
         addItem({
             id: product.id,
@@ -258,7 +282,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>{t.unavailable}</span>
                         )}
                         <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
-                            {t.perUnit} {product.web_unit || product.unit_of_measure || 'Un'}
+                            {t.perUnit} {activeUnit}
                         </span>
                     </div>
 
@@ -322,7 +346,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                 <button
                                     onClick={() => {
                                         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
                                         const step = isWeightUnit ? 0.5 : 1;
                                         const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
                                         setQuantity(newQty);
@@ -352,7 +376,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                     }}
                                     onBlur={() => {
                                         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
                                         const step = isWeightUnit ? 0.5 : 1;
                                         if (quantity <= 0) {
                                             setQuantity(step);
@@ -375,7 +399,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                 <button
                                     onClick={() => {
                                         const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
                                         const step = isWeightUnit ? 0.5 : 1;
                                         const newQty = parseFloat((quantity + step).toFixed(2));
                                         setQuantity(newQty);
@@ -386,7 +410,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                 </button>
                             </div>
                             <span style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'lowercase', backgroundColor: 'rgba(34, 197, 94, 0.08)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.15)' }}>
-                                {product.web_unit || product.unit_of_measure || 'un'}
+                                {activeUnit}
                             </span>
                         </div>
                     </div>

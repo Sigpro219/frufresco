@@ -86,9 +86,50 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
 
     const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
     
+    // Helper para extraer peso en Kg
+    const getParsedWeight = (text: string): number | null => {
+        if (!text) return null;
+        if (text.includes('|')) {
+            const parts = text.split('|');
+            const grams = parseFloat(parts[1]);
+            if (!isNaN(grams) && grams > 0) return grams / 1000;
+        }
+        const clean = text.toLowerCase();
+        const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+        if (kgMatch) {
+            const val = parseFloat(kgMatch[1]);
+            if (!isNaN(val) && val > 0) return val;
+        }
+        const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+        if (gMatch) {
+            const val = parseFloat(gMatch[1]);
+            if (!isNaN(val) && val > 0) return val / 1000;
+        }
+        if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+        return null;
+    };
+
+    // Obtener la presentación seleccionada
+    let selectedPresentationVal: string | null = null;
+    Object.entries(selections).forEach(([key, val]) => {
+        if (key.toLowerCase().includes('presentaci')) {
+            selectedPresentationVal = val;
+        }
+    });
+
+    const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
+    const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : ((product as any).web_unit || product.unit_of_measure);
+
     // Aplicar factor de conversión y redondeo a 50
-    const rawPrice = currentVariant ? currentVariant.price : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
-    const currentPrice = Math.ceil((rawPrice * (product.web_conversion_factor || 1)) / 50) * 50;
+    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price || 0) : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
+    
+    // Si la variante tiene price_adjustment_percent, aplicarlo al precio base
+    const priceWithAdjustment = currentVariant && currentVariant.price_adjustment_percent 
+        ? rawPrice * (1 + currentVariant.price_adjustment_percent / 100) 
+        : rawPrice;
+
+    const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
@@ -106,28 +147,13 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
         if (onUpdateQuantity) {
             onUpdateQuantity(quantity);
         } else {
-            let selectedPresentationVal: string | null = null;
-            Object.entries(selections).forEach(([key, val]) => {
-                if (key.toLowerCase().includes('presentaci')) {
-                    selectedPresentationVal = val;
-                }
-            });
-
             const unitLower = (product.unit_of_measure || '').toLowerCase();
             const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
             const isLibra = ['libra', 'libras'].includes(unitLower);
 
-            let unitWeight = (product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
-            let cartUnit = product.unit_of_measure;
-
-            if (selectedPresentationVal && selectedPresentationVal.includes('|')) {
-                const parts = selectedPresentationVal.split('|');
-                const grams = parseFloat(parts[1]);
-                if (!isNaN(grams) && grams > 0) {
-                    unitWeight = grams / 1000;
-                }
-                cartUnit = parts[0];
-            }
+            const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+            let unitWeight = parsedWeight !== null ? parsedWeight : ((product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0));
+            let cartUnit = activeUnit;
 
             addItem({
                 id: product.id,
@@ -233,7 +259,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                             margin: 0
                         }}>
                             ${(currentPrice || 0).toLocaleString('es-CO')}
-                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '500' }}> / {product.unit_of_measure}</span>
+                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '500' }}> / {activeUnit}</span>
                         </p>
                     </div>
                 </div>
@@ -342,7 +368,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                                 }}
                                 onBlur={() => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
                                     const step = isWeightUnit ? 0.5 : 1;
                                     if (quantity <= 0) {
                                         setQuantity(step);
@@ -365,7 +391,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                             <button
                                 onClick={() => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower);
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
                                     const step = isWeightUnit ? 0.5 : 1;
                                     const newQty = parseFloat((quantity + step).toFixed(2));
                                     setQuantity(newQty);
