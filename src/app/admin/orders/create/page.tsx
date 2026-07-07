@@ -225,6 +225,7 @@ function CreateOrderContent() {
             setModalQuantity('1');
 
             const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+            const initialUnit = hasWebUnit ? selectedProductForModal.web_unit : (selectedProductForModal.unit_of_measure || 'Kg');
             if (hasWebUnit) {
                 setModalUnit(selectedProductForModal.web_unit);
                 setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
@@ -232,6 +233,20 @@ function CreateOrderContent() {
                 setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
                 setModalFactor(1);
             }
+
+            const initialOptions: Record<string, string> = {};
+            if (selectedProductForModal.options_config) {
+                selectedProductForModal.options_config.forEach((opt: any) => {
+                    if (opt.name.toLowerCase().includes('presentaci')) {
+                        const matchedValue = opt.values?.find((v: string) => {
+                            const clean = v.includes('|') ? v.split('|')[0] : v;
+                            return clean.toLowerCase() === initialUnit.toLowerCase();
+                        }) || initialUnit;
+                        initialOptions[opt.name] = matchedValue;
+                    }
+                });
+            }
+            setSelectedOptions(initialOptions);
         }
     }, [selectedProductForModal, editingCartIndex, editingStagedItemId]);
 
@@ -3140,33 +3155,33 @@ function CreateOrderContent() {
                     }
                 });
 
-                // Si hay una presentación seleccionada que no está en optionsList, inyectarla dinámicamente
-                let selectedPresentationVal: string | null = null;
-                Object.entries(selectedOptions).forEach(([key, val]) => {
-                    if (key.toLowerCase().includes('presentaci')) {
-                        selectedPresentationVal = val;
-                    }
-                });
-
-                if (selectedPresentationVal) {
-                    const cleanPresUnit = selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal;
-                    const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
-                    const isDefault = cleanPresUnit.toLowerCase() === defaultUnit.toLowerCase();
-                    
-                    if (!isDefault) {
-                        const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === cleanPresUnit.toLowerCase());
-                        if (!isDuplicate) {
-                            const parsedWeight = getParsedWeight(cleanPresUnit);
-                            if (parsedWeight !== null) {
+                // Escanear normalizedOptionsConfig para inyectar automáticamente todas las opciones de "Presentación" en optionsList
+                normalizedOptionsConfig.forEach((opt: any) => {
+                    if (opt.name.toLowerCase().includes('presentaci')) {
+                        opt.values.forEach((val: string) => {
+                            const cleanPresUnit = val.includes('|') ? val.split('|')[0] : val;
+                            const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === cleanPresUnit.toLowerCase());
+                            if (!isDuplicate) {
+                                let factor = 1;
+                                const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
+                                if (cleanPresUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                                    factor = parseFloat(selectedProductForModal.web_conversion_factor) || 1;
+                                } else {
+                                    const parsedWeight = getParsedWeight(cleanPresUnit);
+                                    if (parsedWeight !== null) {
+                                        factor = parsedWeight;
+                                    }
+                                }
+                                
                                 optionsList.push({
                                     unit: cleanPresUnit,
-                                    factor: parsedWeight,
-                                    label: `${cleanPresUnit} (${parsedWeight} ${selectedProductForModal.unit_of_measure || 'Kg'})`
+                                    factor: factor,
+                                    label: `${cleanPresUnit} (${factor} ${selectedProductForModal.unit_of_measure || 'Kg'})`
                                 });
                             }
-                        }
+                        });
                     }
-                }
+                });
 
                 const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
                     if (e.key === 'Enter') {
@@ -3471,6 +3486,32 @@ function CreateOrderContent() {
                                                 if (matched) {
                                                     setModalFactor(matched.factor);
                                                 }
+                                                
+                                                // Sincronización inversa de UNIDAD DE MEDIDA -> PRESENTACIÓN
+                                                normalizedOptionsConfig.forEach((opt: any) => {
+                                                    if (opt.name.toLowerCase().includes('presentaci')) {
+                                                        const matchedValue = opt.values.find((val: string) => {
+                                                            const cleanVal = val.includes('|') ? val.split('|')[0] : val;
+                                                            return cleanVal.toLowerCase() === selected.toLowerCase();
+                                                        });
+                                                        if (matchedValue) {
+                                                            setSelectedOptions(prev => ({ ...prev, [opt.name]: matchedValue }));
+                                                        } else {
+                                                            const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
+                                                            if (selected.toLowerCase() === defaultUnit.toLowerCase()) {
+                                                                const matchedDefault = opt.values.find((val: string) => {
+                                                                    const cleanVal = val.includes('|') ? val.split('|')[0] : val;
+                                                                    return cleanVal.toLowerCase() === defaultUnit.toLowerCase();
+                                                                });
+                                                                if (matchedDefault) {
+                                                                    setSelectedOptions(prev => ({ ...prev, [opt.name]: matchedDefault }));
+                                                                }
+                                                            } else {
+                                                                setSelectedOptions(prev => ({ ...prev, [opt.name]: '' }));
+                                                            }
+                                                        }
+                                                    }
+                                                });
                                             }}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
