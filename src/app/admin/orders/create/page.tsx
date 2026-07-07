@@ -80,6 +80,27 @@ const formatDetectedUnit = (qty: number, unit: string) => {
     return `✨ ${qty} ${cleanUnit} ${suffix}`;
 };
 
+const getAccountingIdDisplay = (product: any) => {
+    if (!product) return '';
+    if (product.accounting_id) {
+        if (typeof product.accounting_id === 'number') {
+            return product.accounting_id.toString();
+        }
+        const match = String(product.accounting_id).match(/\d+/);
+        if (match) {
+            return parseInt(match[0], 10).toString();
+        }
+        return String(product.accounting_id);
+    }
+    if (product.sku) {
+        const skuMatch = product.sku.match(/^[A-Z]{2}-(\d+)/i);
+        if (skuMatch) {
+            return parseInt(skuMatch[1], 10).toString();
+        }
+    }
+    return product.id || '';
+};
+
 function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -2423,7 +2444,7 @@ function CreateOrderContent() {
                                 {/* Global Datalist for SKUs to improve performance */}
                                 <datalist id="all-products-list">
                                     {products.map(p => (
-                                        <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
+                                        <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
                                     ))}
                                 </datalist>
 
@@ -2640,7 +2661,7 @@ function CreateOrderContent() {
                                                              <input 
                                                                  type="text"
                                                                  placeholder="Buscar ID..."
-                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.accounting_id || item.suggestedProduct.id})` : ''}
+                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${getAccountingIdDisplay(item.suggestedProduct)})` : ''}
                                                                  list="all-products-list"
                                                                  onFocus={(e) => e.target.select()}
                                                                  className="sku-search-input"
@@ -2648,7 +2669,7 @@ function CreateOrderContent() {
                                                                  onKeyDown={(e) => {
                                                                      if (e.key === 'Tab') {
                                                                          const val = e.currentTarget.value;
-                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                                          if (p) {
                                                                              e.preventDefault(); 
                                                                              openModalForStagedItem(
@@ -2665,7 +2686,7 @@ function CreateOrderContent() {
                                                                      } else if (e.key === 'Enter') {
                                                                          e.preventDefault();
                                                                          const val = e.currentTarget.value;
-                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                                          if (p) {
                                                                              updateStagedItem(item.id, 'product', p);
                                                                          }
@@ -2835,7 +2856,7 @@ function CreateOrderContent() {
                                                 backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                             }}
                                         >
-                                            <span style={{ fontWeight: '600' }}>{p.name} {p.accounting_id && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.accounting_id})</span>}</span>
+                                            <span style={{ fontWeight: '600' }}>{p.name} <span style={{fontSize: '0.8em', color: '#6B7280'}}>({getAccountingIdDisplay(p)})</span></span>
                                             <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
                                                 {formatMoney(p.base_price)}/{p.unit_of_measure}
                                                 {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
@@ -2909,7 +2930,7 @@ function CreateOrderContent() {
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                                                             <span style={{ fontSize: '0.75rem', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '700' }}>
-                                                                ID: {item.product.accounting_id || 'N/A'}
+                                                                ID: {getAccountingIdDisplay(item.product)}
                                                             </span>
                                                             <span>•</span>
                                                             <button
