@@ -246,8 +246,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                             setShowCustomInput(prev => ({ ...prev, [idx]: true }));
                                                             updateOption(idx, '', '');
                                                         } else {
-                                                            const matched = masterAttributes.find(ma => ma.name === val);
-                                                            updateOption(idx, val, matched ? matched.suggested_values.join(', ') : '');
+                                                            updateOption(idx, val, '');
                                                         }
                                                     }}
                                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
