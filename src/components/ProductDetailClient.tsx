@@ -64,10 +64,16 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         : product.options || {};
 
     // Initialize selections with the first option of each category
+    // Initialize selections with the first option of each category (sorted alphabetically)
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
         if (Array.isArray(values) && values.length > 0) {
-            initialSelections[key] = values[0];
+            const sortedValues = values.slice().sort((valA, valB) => {
+                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+            initialSelections[key] = sortedValues[0];
         }
     });
 
@@ -262,19 +268,28 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
                     <hr style={{ border: 'none', borderTop: '1px solid var(--border)', marginBottom: '2rem' }} />
 
-                    {/* Dynamic Variant Selectors */}
-                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => {
-                        const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
-                        return (
-                            <div key={optionName} style={{ marginBottom: '2rem' }}>
-                                <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
-                                    {displayOptionName}
-                                </label>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                    {Array.isArray(values) && values.map((val) => {
-                                        const displayVal = val.includes('|') ? val.split('|')[0] : val;
-                                        return (
-                                            <button
+                    {/* Dynamic Variant Selectors (Sorted alphabetically) */}
+                    {Object.entries(displayOptions)
+                        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+                        .map(([optionName, values]: [string, any]) => {
+                            const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                            return (
+                                <div key={optionName} style={{ marginBottom: '2rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
+                                        {displayOptionName}
+                                    </label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                        {Array.isArray(values) && values
+                                            .slice()
+                                            .sort((valA, valB) => {
+                                                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                                                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                                                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                            })
+                                            .map((val) => {
+                                                const displayVal = val.includes('|') ? val.split('|')[0] : val;
+                                                return (
+                                                    <button
                                                 key={val}
                                                 onClick={() => setSelections({ ...selections, [optionName]: val })}
                                                 style={{
