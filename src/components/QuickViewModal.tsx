@@ -60,16 +60,28 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                 const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
                 return master ? master.show_on_web !== false : true;
             })
-            .reduce((acc: any, opt: any) => ({ ...acc, [opt.name]: opt.values }), {})
+            .reduce((acc: any, opt: any) => {
+                let values = opt.values || [];
+                if (opt.name.toLowerCase().includes('presentaci') && ((product as any).web_unit || product.unit_of_measure)) {
+                    const defaultVal = (product as any).web_unit || product.unit_of_measure;
+                    if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                        values = [defaultVal, ...values];
+                    }
+                }
+                return { ...acc, [opt.name]: values };
+            }, {})
         : product.options || {};
 
     // Initialize selections with the first option of each category (sorted alphabetically)
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
         if (Array.isArray(values) && values.length > 0) {
+            const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
             const sortedValues = values.slice().sort((valA, valB) => {
                 const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                 const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                if (cleanA.toLowerCase() === defaultUnit) return -1;
+                if (cleanB.toLowerCase() === defaultUnit) return 1;
                 return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
             });
             initialSelections[key] = sortedValues[0];
@@ -117,7 +129,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
         }
     });
 
-    const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+    const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+    const isDefaultSelected = selectedPresentationVal?.toLowerCase() === defaultUnit;
+    const parsedWeight = selectedPresentationVal && !isDefaultSelected ? getParsedWeight(selectedPresentationVal) : null;
     const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
     const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : ((product as any).web_unit || product.unit_of_measure);
 
@@ -282,6 +296,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
                                             .sort((valA, valB) => {
                                                 const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                                                 const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                                                const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+                                                if (cleanA.toLowerCase() === defaultUnit) return -1;
+                                                if (cleanB.toLowerCase() === defaultUnit) return 1;
                                                 return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
                                             })
                                             .map((val) => {
