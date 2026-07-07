@@ -818,8 +818,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                                 onChange={(e) => {
                                                     const val = e.target.value;
                                                     if (val) {
-                                                        const master = masterAttributes.find(a => a.name === val);
-                                                        updateOption(idx, val, master?.values.join(', ') || '');
+                                                        updateOption(idx, val, '');
                                                     } else {
                                                         updateOption(idx, '', '');
                                                     }
