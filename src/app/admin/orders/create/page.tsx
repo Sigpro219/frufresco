@@ -1250,23 +1250,33 @@ function CreateOrderContent() {
                 return null;
             };
 
+            // Ensure data is structured correctly
+            if (!data) {
+                throw new Error('La respuesta de la API está vacía');
+            }
+            const rawItems = Array.isArray(data.items) ? data.items : [];
+
             // Intentamos encontrar el mejor SKU sugerido para cada item extraído por la IA
-            const suggested = data.items.map((item: any) => {
+            const suggested = rawItems.map((item: any) => {
+                if (!item) return null;
+                const originalName = item.originalName || 'Producto Desconocido';
+                const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
+
                 // Algoritmo de Fuzzy Match simple
                 const match = products.find(p => 
-                    item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
-                    p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
+                    originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                    p.name.toLowerCase().includes(originalName.toLowerCase().split(' ')[0])
                 );
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
-                const detectedUnit = match ? detectUnitFromName(item.originalName, match, productConversions) : null;
+                const detectedUnit = match ? detectUnitFromName(originalName, match, productConversions) : null;
                 
                 return {
                     id: crypto.randomUUID(),
-                    originalName: item.originalName,
-                    quantity: detectedUnit ? parseFloat((item.quantity * detectedUnit.factor).toFixed(2)) : item.quantity,
-                    originalQtyInFile: item.quantity,
-                    originalQty: item.quantity,
+                    originalName: originalName,
+                    quantity: detectedUnit ? parseFloat((quantity * detectedUnit.factor).toFixed(2)) : quantity,
+                    originalQtyInFile: quantity,
+                    originalQty: quantity,
                     originalUnit: detectedUnit ? detectedUnit.unit : (match?.unit_of_measure || 'Kg'),
                     conversion_factor: detectedUnit ? detectedUnit.factor : 1,
                     suggestedProduct: match || null,
@@ -1285,18 +1295,20 @@ function CreateOrderContent() {
                         return opts;
                     })() : {}
                 };
-            });
+            }).filter(Boolean);
 
             // Lógica de Validación de Cliente (Auditoría)
             const selectedDetails = clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails();
-            const clientInFile = data.clientInDocument;
+            const clientInFile = data.clientInDocument || 'Cliente Desconocido';
             
             // Verificamos si hay coincidencia entre el documento y el sistema
             const selectedName = (selectedDetails?.company_name || selectedDetails?.contact_name || '').toUpperCase();
             const detectedName = clientInFile.toUpperCase();
             
-            const isMatch = selectedName.includes(detectedName.split(' ')[0]) || 
-                            detectedName.includes(selectedName.split(' ')[0]);
+            const isMatch = selectedName && detectedName && (
+                selectedName.includes(detectedName.split(' ')[0]) || 
+                detectedName.includes(selectedName.split(' ')[0])
+            );
 
             setImportValidation({
                 clientInDocument: clientInFile,
