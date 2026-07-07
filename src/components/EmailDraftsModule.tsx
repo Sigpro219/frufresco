@@ -194,6 +194,93 @@ const formatDetectedUnit = (qty: number, unit: string) => {
     return `✨ ${qty} ${cleanUnit} ${suffix}`;
 };
 
+const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
+    const cleanName = originalName.toLowerCase();
+    
+    // 1. Obtener todas las unidades posibles para este producto
+    const possibleUnits: { unit: string; factor: number }[] = [];
+    
+    if (product.web_unit && product.web_conversion_factor) {
+        possibleUnits.push({
+            unit: product.web_unit,
+            factor: parseFloat(product.web_conversion_factor) || 1
+        });
+    }
+    
+    if (product.unit_of_measure) {
+        possibleUnits.push({
+            unit: product.unit_of_measure,
+            factor: 1
+        });
+    }
+    
+    productConversions.forEach(c => {
+        if (!possibleUnits.some(u => u.unit.toLowerCase() === c.from_unit.toLowerCase())) {
+            possibleUnits.push({
+                unit: c.from_unit,
+                factor: parseFloat(c.conversion_factor) || 1
+            });
+        }
+    });
+    
+    // También agregar variantes del options_config
+    if (product.options_config) {
+        product.options_config.forEach((opt: any) => {
+            if (opt.name.toLowerCase().includes('presentaci')) {
+                opt.values?.forEach((val: string) => {
+                    const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                    if (!possibleUnits.some(u => u.unit.toLowerCase() === cleanUnit.toLowerCase())) {
+                        let factor = 1;
+                        const defaultUnit = product.web_unit || product.unit_of_measure;
+                        if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                            factor = parseFloat(product.web_conversion_factor) || 1;
+                        } else {
+                            // Intentar calcular factor dinámico usando parseWeight
+                            if (cleanUnit.includes('|')) {
+                                const grams = parseFloat(cleanUnit.split('|')[1]);
+                                if (!isNaN(grams) && grams > 0) factor = grams / 1000;
+                            } else {
+                                const clean = cleanUnit.toLowerCase();
+                                const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+                                if (kgMatch) factor = parseFloat(kgMatch[1]);
+                                const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+                                if (gMatch) factor = parseFloat(gMatch[1]) / 1000;
+                                if (clean.includes('libra') || clean.includes('lb')) factor = 0.5;
+                            }
+                        }
+                        possibleUnits.push({ unit: cleanUnit, factor });
+                    }
+                });
+            }
+        });
+    }
+    
+    // 2. Buscar en originalName qué unidad coincide mejor
+    for (const u of possibleUnits) {
+        const unitLower = u.unit.toLowerCase();
+        if (unitLower.length > 2) {
+            if (cleanName.includes(unitLower)) {
+                return u;
+            }
+        }
+    }
+    
+    if (cleanName.includes('libra') || cleanName.includes('lb')) {
+        const lbUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('libra') || u.unit.toLowerCase().includes('lb'));
+        if (lbUnit) return lbUnit;
+    }
+    if (cleanName.includes('kilo') || cleanName.includes('kg')) {
+        const kgUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('kilo') || u.unit.toLowerCase().includes('kg'));
+        if (kgUnit) return kgUnit;
+    }
+    if (cleanName.includes('unidad') || cleanName.includes('ud') || cleanName.includes('und')) {
+        const undUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('unidad') || u.unit.toLowerCase().includes('und') || u.unit.toLowerCase().includes('ud'));
+        if (undUnit) return undUnit;
+    }
+    
+    return null;
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -1269,8 +1356,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (matchedProd) matchedId = matchedProd.id;
         }
         const prod = products.find(p => p.id === matchedId);
+        const productConversions = prod ? conversions.filter(c => c.product_id === prod.id) : [];
+        const detectedUnit = prod ? detectUnitFromName(rawOriginalName, prod, productConversions) : null;
         
         const parsedUnit = (() => {
+          if (detectedUnit) return detectedUnit.unit;
+          
           const origLower = rawOriginalName.toLowerCase();
           
           // Priorizar unidades explícitas en el nombre original del producto (por ejemplo "1000 G", "Lb", "Kilo", "500g")
@@ -1313,20 +1404,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         })();
 
         const initialQty = parseFloat(item.quantity || 1);
-        let conversionFactor = 1;
+        let conversionFactor = detectedUnit ? detectedUnit.factor : 1;
         let finalUnit = prod?.unit_of_measure || parsedUnit;
-        let foundDbConversion = false;
+        let foundDbConversion = detectedUnit ? true : false;
 
-        if (prod && conversions && conversions.length > 0) {
-          const dbConv = conversions.find(c => 
-            c.product_id === prod.id &&
-            normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
-            normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
-          );
-          if (dbConv) {
-            conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-            finalUnit = dbConv.to_unit || prod.unit_of_measure;
-            foundDbConversion = true;
+        if (!foundDbConversion) {
+          if (prod && conversions && conversions.length > 0) {
+            const dbConv = conversions.find(c => 
+              c.product_id === prod.id &&
+              normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
+              normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
+            );
+            if (dbConv) {
+              conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+              finalUnit = dbConv.to_unit || prod.unit_of_measure;
+              foundDbConversion = true;
+            }
           }
         }
 
