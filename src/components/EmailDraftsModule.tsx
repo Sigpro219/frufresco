@@ -3563,9 +3563,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           backgroundColor: 'rgba(0,0,0,0.5)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: showFloatingEmail ? 'flex-start' : 'center',
           zIndex: 9999,
-          padding: '1rem'
+          padding: showFloatingEmail ? '1rem 0 1rem 24px' : '1rem',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <style>{`
             /* Estilos para Scrollbar Premium */
@@ -3614,16 +3615,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: showFloatingEmail ? (isFloatingExpanded ? '38%' : '68%') : '94%',
-            maxWidth: showFloatingEmail ? (isFloatingExpanded ? '600px' : '1100px') : '1400px',
+            width: showFloatingEmail ? (isFloatingExpanded ? 'calc(100% - 872px)' : 'calc(100% - 472px)') : '94%',
+            maxWidth: '1400px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             position: 'relative',
             overflow: 'hidden',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            marginRight: showFloatingEmail ? (isFloatingExpanded ? '840px' : '440px') : '0'
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
             {/* Modal Header */}
             <div style={{
