@@ -1054,6 +1054,94 @@ function CreateOrderContent() {
                 throw new Error(data.error || 'Error en la API de extracción');
             }
             
+            // Helper para detectar unidad desde el texto del item
+            const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
+                const cleanName = originalName.toLowerCase();
+                
+                // 1. Obtener todas las unidades posibles para este producto
+                const possibleUnits: { unit: string; factor: number }[] = [];
+                
+                if (product.web_unit && product.web_conversion_factor) {
+                    possibleUnits.push({
+                        unit: product.web_unit,
+                        factor: parseFloat(product.web_conversion_factor) || 1
+                    });
+                }
+                
+                if (product.unit_of_measure) {
+                    possibleUnits.push({
+                        unit: product.unit_of_measure,
+                        factor: 1
+                    });
+                }
+                
+                productConversions.forEach(c => {
+                    if (!possibleUnits.some(u => u.unit.toLowerCase() === c.from_unit.toLowerCase())) {
+                        possibleUnits.push({
+                            unit: c.from_unit,
+                            factor: parseFloat(c.conversion_factor) || 1
+                        });
+                    }
+                });
+                
+                // También agregar variantes del options_config
+                if (product.options_config) {
+                    product.options_config.forEach((opt: any) => {
+                        if (opt.name.toLowerCase().includes('presentaci')) {
+                            opt.values?.forEach((val: string) => {
+                                const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                                if (!possibleUnits.some(u => u.unit.toLowerCase() === cleanUnit.toLowerCase())) {
+                                    let factor = 1;
+                                    const defaultUnit = product.web_unit || product.unit_of_measure;
+                                    if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                                        factor = parseFloat(product.web_conversion_factor) || 1;
+                                    } else {
+                                        // Intentar calcular factor dinámico usando parseWeight
+                                        if (cleanUnit.includes('|')) {
+                                            const grams = parseFloat(cleanUnit.split('|')[1]);
+                                            if (!isNaN(grams) && grams > 0) factor = grams / 1000;
+                                        } else {
+                                            const clean = cleanUnit.toLowerCase();
+                                            const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+                                            if (kgMatch) factor = parseFloat(kgMatch[1]);
+                                            const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+                                            if (gMatch) factor = parseFloat(gMatch[1]) / 1000;
+                                            if (clean.includes('libra') || clean.includes('lb')) factor = 0.5;
+                                        }
+                                    }
+                                    possibleUnits.push({ unit: cleanUnit, factor });
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                // 2. Buscar en originalName qué unidad coincide mejor
+                for (const u of possibleUnits) {
+                    const unitLower = u.unit.toLowerCase();
+                    if (unitLower.length > 2) {
+                        if (cleanName.includes(unitLower)) {
+                            return u;
+                        }
+                    }
+                }
+                
+                if (cleanName.includes('libra') || cleanName.includes('lb')) {
+                    const lbUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('libra') || u.unit.toLowerCase().includes('lb'));
+                    if (lbUnit) return lbUnit;
+                }
+                if (cleanName.includes('kilo') || cleanName.includes('kg')) {
+                    const kgUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('kilo') || u.unit.toLowerCase().includes('kg'));
+                    if (kgUnit) return kgUnit;
+                }
+                if (cleanName.includes('unidad') || cleanName.includes('ud') || cleanName.includes('und')) {
+                    const undUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('unidad') || u.unit.toLowerCase().includes('und') || u.unit.toLowerCase().includes('ud'));
+                    if (undUnit) return undUnit;
+                }
+                
+                return null;
+            };
+
             // Intentamos encontrar el mejor SKU sugerido para cada item extraído por la IA
             const suggested = data.items.map((item: any) => {
                 // Algoritmo de Fuzzy Match simple
@@ -1061,13 +1149,33 @@ function CreateOrderContent() {
                     item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
                     p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
                 );
+
+                const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
+                const detectedUnit = match ? detectUnitFromName(item.originalName, match, productConversions) : null;
+                
                 return {
                     id: crypto.randomUUID(),
                     originalName: item.originalName,
-                    quantity: item.quantity,
+                    quantity: detectedUnit ? parseFloat((item.quantity * detectedUnit.factor).toFixed(2)) : item.quantity,
                     originalQtyInFile: item.quantity,
+                    originalQty: item.quantity,
+                    originalUnit: detectedUnit ? detectedUnit.unit : (match?.unit_of_measure || 'Kg'),
+                    conversion_factor: detectedUnit ? detectedUnit.factor : 1,
                     suggestedProduct: match || null,
-                    status: match ? 'MATCH' : 'PENDING'
+                    status: match ? 'MATCH' : 'PENDING',
+                    selected_options: (detectedUnit && match.options_config) ? (() => {
+                        const opts: any = {};
+                        match.options_config.forEach((opt: any) => {
+                            if (opt.name.toLowerCase().includes('presentaci')) {
+                                const matchedVal = opt.values?.find((v: string) => {
+                                    const clean = v.includes('|') ? v.split('|')[0] : v;
+                                    return clean.toLowerCase() === detectedUnit.unit.toLowerCase();
+                                });
+                                if (matchedVal) opts[opt.name] = matchedVal;
+                            }
+                        });
+                        return opts;
+                    })() : {}
                 };
             });
 
@@ -1102,15 +1210,19 @@ function CreateOrderContent() {
         // Inyectamos los items validados al carrito real
         const itemsToInject = stagedItems
             .filter(item => item.suggestedProduct)
-            .map(item => ({
-                product: item.suggestedProduct,
-                qty: item.quantity,
-                variant_label: item.variant_label,
-                selected_options: item.selected_options,
-                originalQty: item.originalQty,
-                originalUnit: item.originalUnit,
-                conversion_factor: item.conversion_factor
-            }));
+            .map(item => {
+                const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
+                const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : undefined);
+                return {
+                    product: item.suggestedProduct,
+                    qty: item.quantity,
+                    variant_label: variantLabel,
+                    selected_options: item.selected_options,
+                    originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
+                    originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
+                    conversion_factor: item.conversion_factor || 1
+                };
+            });
 
         setCart(prev => [...itemsToInject, ...prev]);
         setIsStaging(false);
