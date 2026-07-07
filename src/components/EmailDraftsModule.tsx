@@ -363,6 +363,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   }, [selectedDraft, activeTab, selectedAttachmentIndex]);
 
+  const handleSelectAttachment = (idx: number) => {
+    if (!selectedDraft) return;
+    
+    // Save current changes to the previous index
+    const metadata = getDraftMetadata(selectedDraft);
+    if (metadata.attachments && Array.isArray(metadata.attachments)) {
+      const updatedAttachments = [...metadata.attachments];
+      if (updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot,
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+      }
+      
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            attachments: updatedAttachments
+          };
+        }
+        return itm;
+      });
+      
+      // Update local state without hitting DB yet (we will persist when they approve the order)
+      setSelectedDraft((prev: any) => ({
+        ...prev,
+        extracted_items: updatedExtractedItems
+      }));
+      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+    }
+    
+    // Switch to new attachment index
+    setSelectedAttachmentIndex(idx);
+  };
+
   const getMinDeliveryDate = () => {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -1394,7 +1441,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
       
       // Initialize editable items
-      const rawItems = getDraftItems(selectedDraft);
+      const rawItems = (() => {
+        if (meta.attachments && Array.isArray(meta.attachments) && meta.attachments[selectedAttachmentIndex]) {
+          return meta.attachments[selectedAttachmentIndex].items || [];
+        }
+        return getDraftItems(selectedDraft);
+      })();
       const initialEdits = rawItems.map((item: any) => {
         let cleanName = item.originalName || item.name || '';
         const rawOriginalName = cleanName;
@@ -1625,12 +1677,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Initialize delivery date from metadata if present
       const metadata = getDraftMetadata(selectedDraft);
+      const currentAtt = metadata.attachments && Array.isArray(metadata.attachments) ? metadata.attachments[selectedAttachmentIndex] : null;
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
-      setEditableDeliverySlot(computedSlot || metadata.deliverySlot || '');
+      setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || metadata.deliverySlot || '');
       setPriceList(metadata.priceList || '');
       setOrderDocument(metadata.orderDocument || 'Remisión');
       setPurchaseOrder(metadata.purchaseOrder || '');
-      let initialDateStr = metadata.deliveryDate || minDeliveryDate;
+      let initialDateStr = currentAtt?.deliveryDate || metadata.deliveryDate || minDeliveryDate;
       if (initialDateStr < minDeliveryDate) {
         initialDateStr = minDeliveryDate;
       }
@@ -1655,7 +1708,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPurchaseOrder('');
       setDeliveryDate(minDeliveryDate);
     }
-  }, [selectedDraft, products, aliases, conversions, profiles]);
+  }, [selectedDraft, products, aliases, conversions, profiles, selectedAttachmentIndex]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -2472,6 +2525,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // 3. Update the draft's extracted_items to include our manual edits
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      
+      let updatedAttachments = metaItem.attachments && Array.isArray(metaItem.attachments) ? [...metaItem.attachments] : [];
+      if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot || metaItem.deliverySlot || 'AM',
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+      }
+
       const updatedMetaItem = {
         ...metaItem,
         address: editableAddress,
@@ -2481,12 +2554,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         orderDocument: orderDocument,
         purchaseOrder: purchaseOrder,
         latitude: draftCoordinates?.lat || metaItem.latitude || null,
-        longitude: draftCoordinates?.lng || metaItem.longitude || null
+        longitude: draftCoordinates?.lng || metaItem.longitude || null,
+        attachments: updatedAttachments.length > 0 ? updatedAttachments : undefined
       };
-      const updatedExtractedItems = [
-        updatedMetaItem,
-        ...editableItems
-      ];
+      
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return updatedMetaItem;
+        }
+        return itm;
+      });
 
       await supabase
         .from('order_drafts')
@@ -2643,11 +2720,66 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         throw new Error('Error al registrar ítems: ' + itemsError.message);
       }
 
-      // 4. Update the draft status to approved
-      await supabase
-        .from('order_drafts')
-        .update({ status: 'approved' })
-        .eq('id', selectedDraft.id);
+      // 4. Update the draft status to approved and save updated attachments list
+      const updatedAttachments = metadata.attachments && Array.isArray(metadata.attachments) ? [...metadata.attachments] : [];
+      let isLastAttachment = true;
+      let nextUnprocessedIdx = -1;
+
+      if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          processed: true,
+          orderId: order.id,
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+
+        for (let i = 0; i < updatedAttachments.length; i++) {
+          if (!updatedAttachments[i].processed) {
+            isLastAttachment = false;
+            if (nextUnprocessedIdx === -1) {
+              nextUnprocessedIdx = i;
+            }
+          }
+        }
+      }
+
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            attachments: updatedAttachments
+          };
+        }
+        return itm;
+      });
+
+      if (isLastAttachment) {
+        await supabase
+          .from('order_drafts')
+          .update({ 
+            status: 'approved',
+            extracted_items: updatedExtractedItems
+          })
+          .eq('id', selectedDraft.id);
+      } else {
+        await supabase
+          .from('order_drafts')
+          .update({ 
+            extracted_items: updatedExtractedItems
+          })
+          .eq('id', selectedDraft.id);
+      }
 
       // 5. Send confirmation email (queue in mail table)
       if (selectedDraft.source_email && sendConfirmationEmail) {
@@ -2678,9 +2810,29 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         });
       }
 
-      showToast('Pedido registrado exitosamente ✅', 'success');
-      setShowConfirmModal(false);
-      setSelectedDraft(null);
+      if (isLastAttachment) {
+        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅', 'success');
+        setShowConfirmModal(false);
+        setSelectedDraft(null);
+      } else {
+        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+        setShowConfirmModal(false);
+        
+        // Update local selectedDraft state with updated attachments
+        const localDraftUpdated = {
+          ...selectedDraft,
+          extracted_items: updatedExtractedItems
+        };
+        setSelectedDraft(localDraftUpdated);
+        
+        // Update draft in parent drafts list
+        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
+        
+        // Advance to next unprocessed attachment index
+        if (nextUnprocessedIdx !== -1) {
+          setSelectedAttachmentIndex(nextUnprocessedIdx);
+        }
+      }
       fetchDrafts();
     } catch (e: any) {
       console.error('Error creating order directly:', e);
@@ -5399,18 +5551,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       }} className="premium-scrollbar">
                         {metadata.attachments.map((att: any, idx: number) => {
                           const isActive = idx === selectedAttachmentIndex;
+                          const isProcessed = att.processed === true;
                           return (
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setSelectedAttachmentIndex(idx)}
+                              onClick={() => handleSelectAttachment(idx)}
                               style={{
                                 padding: '6px 12px',
                                 borderRadius: '20px',
                                 border: '1px solid',
-                                borderColor: isActive ? '#2563EB' : '#CBD5E1',
-                                backgroundColor: isActive ? '#EFF6FF' : 'white',
-                                color: isActive ? '#2563EB' : '#475569',
+                                borderColor: isActive ? '#2563EB' : (isProcessed ? '#10B981' : '#CBD5E1'),
+                                backgroundColor: isActive ? '#EFF6FF' : (isProcessed ? '#ECFDF5' : 'white'),
+                                color: isActive ? '#2563EB' : (isProcessed ? '#047857' : '#475569'),
                                 fontSize: '0.725rem',
                                 fontWeight: isActive ? 800 : 500,
                                 cursor: 'pointer',
@@ -5420,7 +5573,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 gap: '4px'
                               }}
                             >
-                              <span>📎</span>
+                              <span>{isProcessed ? '✅' : '📎'}</span>
                               <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
                                 {att.name}
                               </span>
