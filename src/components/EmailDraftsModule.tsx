@@ -154,6 +154,46 @@ const getAccountingIdDisplay = (product: any) => {
     return product.id || '';
 };
 
+const formatDetectedUnit = (qty: number, unit: string) => {
+    const u = (unit || '').toLowerCase();
+    let cleanUnit = u;
+    let suffix = 'detectados';
+    
+    if (u.includes('libra') || u.includes('lb')) {
+        cleanUnit = qty === 1 ? 'libra' : 'libras';
+        suffix = 'detectadas';
+    } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = 'detectadas';
+    } else if (u.includes('kilo') || u.includes('kg')) {
+        cleanUnit = qty === 1 ? 'kilo' : 'kilos';
+        suffix = 'detectados';
+    } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
+        cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
+        suffix = 'detectados';
+    } else if (u.includes('litro') || u.includes('lt')) {
+        cleanUnit = qty === 1 ? 'litro' : 'litros';
+        suffix = 'detectados';
+    } else if (u.includes('frasco')) {
+        cleanUnit = qty === 1 ? 'frasco' : 'frascos';
+        suffix = 'detectados';
+    } else if (u.includes('bolsa')) {
+        cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
+        suffix = 'detectadas';
+    } else if (u.includes('caja')) {
+        cleanUnit = qty === 1 ? 'caja' : 'cajas';
+        suffix = 'detectadas';
+    } else if (u.includes('atado')) {
+        cleanUnit = qty === 1 ? 'atado' : 'atados';
+        suffix = 'detectados';
+    } else {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = 'detectadas';
+    }
+    
+    return `✨ ${qty} ${cleanUnit} ${suffix}`;
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -4105,17 +4145,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       }}>
                                         {item.originalName || item.name || item.producto || item.item || ''}
                                       </div>
-                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1 }}>
+                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1, display: 'flex', alignItems: 'center' }}>
                                         <span style={{
-                                          padding: '4px 10px',
-                                          backgroundColor: '#EFF6FF',
-                                          color: '#2563EB',
-                                          borderRadius: '20px',
+                                          padding: '2px 8px',
+                                          backgroundColor: '#FFFBEB',
+                                          color: '#B45309',
+                                          border: '1.5px solid #FBBF24',
+                                          boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)',
+                                          borderRadius: '6px',
                                           fontSize: '0.75rem',
-                                          fontWeight: 700,
+                                          fontWeight: 900,
                                           textDecoration: item.isDeleted ? 'line-through' : 'none'
                                         }}>
-                                          {item.originalQuantity || item.quantity || 1} unidades detectadas
+                                          {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
                                         </span>
                                       </div>
                                     </td>
@@ -6133,8 +6175,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
-                    <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
-                      {editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity} {editableItems[selectedRowForVariant].originalUnit || 'uds'} detectadas
+                    <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
+                      {formatDetectedUnit(editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity, editableItems[selectedRowForVariant].originalUnit || 'uds')}
                     </span>
                   </div>
                   <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={editableItems[selectedRowForVariant].originalName}>
