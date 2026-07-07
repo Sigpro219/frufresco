@@ -77,7 +77,7 @@ const formatDetectedUnit = (qty: number, unit: string) => {
         suffix = 'detectadas';
     }
     
-    return `${qty} ${cleanUnit} ${suffix}`;
+    return `✨ ${qty} ${cleanUnit} ${suffix}`;
 };
 
 function CreateOrderContent() {
@@ -2631,7 +2631,7 @@ function CreateOrderContent() {
                                                         <td style={{ padding: '1rem 2rem', width: '30%' }}>
                                                              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
                                                              <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
-                                                                 <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                 <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900' }}>
                                                                      {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
                                                                  </span>
                                                              </div>
@@ -3413,7 +3413,7 @@ function CreateOrderContent() {
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                                             <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
-                                            <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
+                                            <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
                                                 {formatDetectedUnit(stagedItem.originalQtyInFile || stagedItem.quantity, stagedItem.originalUnit)}
                                             </span>
                                         </div>
