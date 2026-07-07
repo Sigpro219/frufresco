@@ -1084,8 +1084,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     } else if (val === '') {
                                                         updateOption(idx, '', '');
                                                     } else {
-                                                        const master = masterAttributes.find(a => a.name === val);
-                                                        updateOption(idx, val, master?.values.join(', ') || '');
+                                                        updateOption(idx, val, '');
                                                     }
                                                 }}
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', color: '#1F2937', cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236B7280%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.8rem center', backgroundSize: '1.2em' }}
@@ -1102,7 +1101,11 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             
                                             {masterAttributes.some(a => a.name === opt.name) ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
-                                                    {masterAttributes.find(a => a.name === opt.name)?.values.map(val => (
+                                                    {masterAttributes.find(a => a.name === opt.name)?.values.slice().sort((a, b) => {
+                                                        const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                                                        const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                                                        return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                                    }).map(val => (
                                                         <label 
                                                             key={val} 
                                                             style={{ 

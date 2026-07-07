@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense, useEffect, useRef } from 'react';
 import { Search, X, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { translations, Locale } from '../lib/translations';
@@ -16,6 +16,24 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     const [query, setQuery] = useState(searchParams.get('q') || '');
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
+    const [activeIndex, setActiveIndex] = useState<number | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Reset activeIndex when suggestions change
+    useEffect(() => {
+        setActiveIndex(null);
+    }, [suggestions]);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // 1. Detect page reload ONCE on mount
     useEffect(() => {
@@ -106,7 +124,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     };
 
     return (
-        <div style={{ position: 'relative', width: '100%', maxWidth: '750px', margin: '0 auto 2.5rem' }}>
+        <div ref={containerRef} style={{ position: 'relative', width: '100%', maxWidth: '750px', margin: '0 auto 2.5rem' }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                     type="text"
@@ -127,15 +145,48 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        if (e.key === 'ArrowDown') {
                             e.preventDefault();
-                            handleSearch();
+                            if (showDropdown && suggestions.length > 0) {
+                                setActiveIndex(prev => {
+                                    if (prev === null || prev === undefined) return 0;
+                                    const next = prev + 1;
+                                    return next > suggestions.length ? 0 : next;
+                                });
+                            }
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            if (showDropdown && suggestions.length > 0) {
+                                setActiveIndex(prev => {
+                                    if (prev === null || prev === undefined || prev <= 0) return suggestions.length;
+                                    return prev - 1;
+                                });
+                            }
+                        } else if (e.key === 'Enter') {
+                            if (showDropdown && activeIndex !== null && activeIndex !== undefined && activeIndex >= 0) {
+                                e.preventDefault();
+                                if (activeIndex < suggestions.length) {
+                                    const activeProduct = suggestions[activeIndex];
+                                    setShowDropdown(false);
+                                    router.push(`/products/${activeProduct.id}`);
+                                } else {
+                                    handleSearch();
+                                }
+                            } else {
+                                e.preventDefault();
+                                handleSearch();
+                            }
+                        } else if (e.key === 'Escape') {
+                            setShowDropdown(false);
                         }
                     }}
                     onFocus={(e) => {
                         e.currentTarget.style.borderColor = 'rgba(26, 77, 46, 0.2)';
                         e.currentTarget.style.boxShadow = '0 15px 40px rgba(26, 77, 46, 0.06), 0 0 0 4px rgba(26, 77, 46, 0.04)';
                         e.currentTarget.style.transform = 'translateY(-1px)';
+                        if (query.trim().length >= 2) {
+                            setShowDropdown(true);
+                        }
                     }}
                     onBlur={(e) => {
                         e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)';
@@ -229,7 +280,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     }}>
                         {/* Section 1: Product Previews */}
                         <div style={{ padding: '10px' }}>
-                            {suggestions.map(p => (
+                            {suggestions.map((p, idx) => (
                                 <div 
                                     key={`prod-${p.id}`}
                                     className="suggestion-row"
@@ -244,10 +295,17 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                         padding: '12px', 
                                         borderRadius: '16px',
                                         cursor: 'pointer',
-                                        transition: 'all 0.25s ease'
+                                        transition: 'all 0.25s ease',
+                                        backgroundColor: activeIndex === idx ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.02)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    onMouseEnter={(e) => {
+                                        setActiveIndex(idx);
+                                        e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.04)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        setActiveIndex(null);
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                    }}
                                 >
                                     <div style={{ width: '50px', height: '50px', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#f3f4f6', flexShrink: 0 }}>
                                         <img className="suggestion-thumb" src={p.image_url || '/placeholder.png'} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -268,7 +326,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                             style={{ 
                                 padding: '15px', 
                                 textAlign: 'center', 
-                                backgroundColor: 'rgba(0,0,0,0.01)', 
+                                backgroundColor: activeIndex === suggestions.length ? 'rgba(0, 0, 0, 0.04)' : 'rgba(0,0,0,0.01)', 
                                 borderTop: '1px solid rgba(0,0,0,0.03)',
                                 color: '#6b7280', 
                                 fontSize: '0.85rem', 
@@ -276,8 +334,14 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                 cursor: 'pointer',
                                 transition: 'background 0.2s'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.03)'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.01)'}
+                            onMouseEnter={(e) => {
+                                setActiveIndex(suggestions.length);
+                                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.04)';
+                            }}
+                            onMouseLeave={(e) => {
+                                setActiveIndex(null);
+                                e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.01)';
+                            }}
                         >
                             Ver todos los resultados para "{query}"
                         </div>
