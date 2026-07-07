@@ -157,38 +157,38 @@ const getAccountingIdDisplay = (product: any) => {
 const formatDetectedUnit = (qty: number, unit: string) => {
     const u = (unit || '').toLowerCase();
     let cleanUnit = u;
-    let suffix = 'detectados';
+    let suffix = qty === 1 ? 'detectado' : 'detectados';
     
     if (u.includes('libra') || u.includes('lb')) {
         cleanUnit = qty === 1 ? 'libra' : 'libras';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('kilo') || u.includes('kg')) {
         cleanUnit = qty === 1 ? 'kilo' : 'kilos';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
         cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('litro') || u.includes('lt')) {
         cleanUnit = qty === 1 ? 'litro' : 'litros';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('frasco')) {
         cleanUnit = qty === 1 ? 'frasco' : 'frascos';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('bolsa')) {
         cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('caja')) {
         cleanUnit = qty === 1 ? 'caja' : 'cajas';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('atado')) {
         cleanUnit = qty === 1 ? 'atado' : 'atados';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     }
     
     return `✨ ${qty} ${cleanUnit} ${suffix}`;
@@ -297,6 +297,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
+  const [showFloatingEmail, setShowFloatingEmail] = useState(true);
   const getMinDeliveryDate = () => {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -3562,14 +3563,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: '94%',
-            maxWidth: '1400px',
+            width: showFloatingEmail ? '68%' : '94%',
+            maxWidth: showFloatingEmail ? '1100px' : '1400px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             position: 'relative',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            marginRight: showFloatingEmail ? '440px' : '0'
           }}>
             {/* Modal Header */}
             <div style={{
@@ -3604,6 +3607,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowFloatingEmail(prev => !prev)}
+                  style={{
+                    backgroundColor: showFloatingEmail ? '#EFF6FF' : '#F1F5F9',
+                    color: showFloatingEmail ? '#2563EB' : '#475569',
+                    border: `1.5px solid ${showFloatingEmail ? '#BFDBFE' : '#E2E8F0'}`,
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Mail size={14} />
+                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
+                </button>
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
                 </button>
@@ -5084,6 +5108,127 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
             </div>
           </div>
+
+          {/* Ventana flotante premium con el cuerpo del correo original */}
+          {showFloatingEmail && (
+            <div style={{
+              position: 'fixed',
+              right: '24px',
+              top: '5vh',
+              width: '400px',
+              height: '90vh',
+              backgroundColor: 'white',
+              borderRadius: THEME.radius.xl,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+              zIndex: 10000,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }} onClick={e => e.stopPropagation()}>
+              {/* Header de la ventana flotante */}
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: '#F8FAFC',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Mail size={16} color="#2563EB" />
+                  <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Cuerpo del Correo</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFloatingEmail(false)}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    color: '#64748B',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Asunto del correo */}
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: '#EFF6FF',
+                borderBottom: '1px solid #DBEAFE',
+                fontSize: '0.8rem',
+                color: '#1E40AF',
+                fontWeight: 700
+              }}>
+                Asunto: {selectedDraft.email_subject || '(Sin Asunto)'}
+              </div>
+
+              {/* Cuerpo del correo con scrollbar premium */}
+              <div 
+                className="premium-scrollbar"
+                style={{
+                  padding: '16px',
+                  overflowY: 'auto',
+                  flex: 1,
+                  fontSize: '0.825rem',
+                  color: '#334155',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                  backgroundColor: '#FCFDFE',
+                  fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
+                }}
+              >
+                {selectedDraft.email_body || '(Sin cuerpo de correo)'}
+              </div>
+
+              {/* Barra de archivo adjunto si existe */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                if (!metadata.attachmentUrl) return null;
+                return (
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#F1F5F9',
+                    borderTop: '1px solid #E2E8F0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={metadata.attachmentName}>
+                      📎 {metadata.attachmentName || 'Documento adjunto'}
+                    </span>
+                    <a
+                      href={metadata.attachmentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '0.75rem',
+                        color: '#2563EB',
+                        fontWeight: 800,
+                        textDecoration: 'none',
+                        padding: '4px 8px',
+                        backgroundColor: 'white',
+                        borderRadius: '6px',
+                        border: '1px solid #BFDBFE'
+                      }}
+                    >
+                      Ver original
+                    </a>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 

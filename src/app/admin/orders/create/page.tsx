@@ -43,38 +43,38 @@ import VariantModal from '@/components/VariantModal';
 const formatDetectedUnit = (qty: number, unit: string) => {
     const u = (unit || '').toLowerCase();
     let cleanUnit = u;
-    let suffix = 'detectados';
+    let suffix = qty === 1 ? 'detectado' : 'detectados';
     
     if (u.includes('libra') || u.includes('lb')) {
         cleanUnit = qty === 1 ? 'libra' : 'libras';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('kilo') || u.includes('kg')) {
         cleanUnit = qty === 1 ? 'kilo' : 'kilos';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
         cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('litro') || u.includes('lt')) {
         cleanUnit = qty === 1 ? 'litro' : 'litros';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('frasco')) {
         cleanUnit = qty === 1 ? 'frasco' : 'frascos';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('bolsa')) {
         cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('caja')) {
         cleanUnit = qty === 1 ? 'caja' : 'cajas';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('atado')) {
         cleanUnit = qty === 1 ? 'atado' : 'atados';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     }
     
     return `✨ ${qty} ${cleanUnit} ${suffix}`;
