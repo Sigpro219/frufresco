@@ -1271,6 +1271,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const prod = products.find(p => p.id === matchedId);
         
         const parsedUnit = (() => {
+          const origLower = rawOriginalName.toLowerCase();
+          
+          // Priorizar unidades explícitas en el nombre original del producto (por ejemplo "1000 G", "Lb", "Kilo", "500g")
+          // sobre lo que sea que haya detectado el parser IA por defecto, ya que a veces detecta "Unidad" para nombres que terminan en "1000 G".
+          if (origLower.includes('libra') || origLower.includes(' lb ')) return 'Lb';
+          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos') || origLower.includes('500 gms') || origLower.includes('500 gr')) return 'Paquete 500 gramos';
+          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos') || origLower.includes('250 gms') || origLower.includes('250 gr')) return 'Paquete 250 gramos';
+          if (origLower.includes('1000 g') || origLower.includes('1000g') || origLower.includes('1000 gramos') || origLower.includes('1000 gms') || origLower.includes('1000 gr') || origLower.includes('1000gms') || origLower.includes('1000gr')) return 'Kg';
+          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
+          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilos') || origLower.includes('kilogramo') || origLower.includes('kilogramos')) return 'Kg';
+
           const u = (item.unit || '').toLowerCase().trim();
           if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
           if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
@@ -1294,12 +1305,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             return prod?.unit_of_measure || 'Kg';
           }
           
-          const origLower = rawOriginalName.toLowerCase();
-          if (origLower.includes('libra')) return 'Lb';
-          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos')) return 'Paquete 500 gramos';
-          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos')) return 'Paquete 250 gramos';
-          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
-          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilogramo') || origLower.includes('gramo') || origLower.includes(' g ')) return 'Kg';
           if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
             return prod?.unit_of_measure || 'Kg';
           }
