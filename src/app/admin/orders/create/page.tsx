@@ -35,7 +35,9 @@ import {
     Coins,
     Scale,
     User,
-    UploadCloud
+    UploadCloud,
+    Maximize2,
+    Minimize2
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -357,6 +359,8 @@ function CreateOrderContent() {
     }>({ clientInDocument: '', isMatch: true, documentType: null });
     const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [showFloatingDoc, setShowFloatingDoc] = useState(false);
+    const [isFloatingDocExpanded, setIsFloatingDocExpanded] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -1091,6 +1095,8 @@ function CreateOrderContent() {
             const url = URL.createObjectURL(file);
             setUploadedFileUrl(url);
             setUploadedFile(file);
+            setShowFloatingDoc(true);
+            setIsFloatingDocExpanded(false);
 
             const formData = new FormData();
             formData.append('file', file);
@@ -1735,7 +1741,14 @@ function CreateOrderContent() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
-            <div style={{ maxWidth: '1700px', margin: '0 auto', padding: '1rem 2rem' }}>
+            <div style={{
+                width: showFloatingDoc ? (isFloatingDocExpanded ? 'calc(100% - 998px)' : 'calc(100% - 598px)') : '100%',
+                maxWidth: showFloatingDoc ? 'none' : '1700px',
+                margin: showFloatingDoc ? '0' : '0 auto',
+                padding: '1rem 2rem',
+                transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxSizing: 'border-box'
+            }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{
                         display: 'inline-flex',
@@ -2566,7 +2579,7 @@ function CreateOrderContent() {
                                             <button 
                                                 onClick={() => {
                                                     if (uploadedFileUrl) {
-                                                        window.open(uploadedFileUrl, '_blank');
+                                                        setShowFloatingDoc(prev => !prev);
                                                     }
                                                 }}
                                                 title="Click para ver documento original"
@@ -4435,6 +4448,114 @@ function CreateOrderContent() {
                     >
                         <X size={16} />
                     </button>
+                </div>
+            )}
+
+            {/* Ventana flotante premium con el documento original */}
+            {showFloatingDoc && uploadedFileUrl && (
+                <div style={{
+                    position: 'fixed',
+                    right: '24px',
+                    top: '5vh',
+                    width: isFloatingDocExpanded ? '950px' : '550px',
+                    height: '90vh',
+                    backgroundColor: 'white',
+                    borderRadius: THEME.radius.xl,
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+                }} onClick={e => e.stopPropagation()}>
+                    <style>{`
+                        @keyframes fadeInUp {
+                            from { opacity: 0; transform: translateY(8px) scale(0.99); }
+                            to { opacity: 1; transform: translateY(0) scale(1); }
+                        }
+                    `}</style>
+                    {/* Header de la ventana flotante */}
+                    <div style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#F8FAFC',
+                        borderBottom: '1px solid #E2E8F0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FileText size={16} color="#2563EB" />
+                            <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>
+                                Documento Original ({importValidation.documentType || 'DOCUMENTO'})
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsFloatingDocExpanded(prev => !prev)}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    color: '#64748B',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background-color 0.2s, color 0.2s',
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                    e.currentTarget.style.color = '#2563EB';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                    e.currentTarget.style.color = '#64748B';
+                                }}
+                                title={isFloatingDocExpanded ? "Contraer visor" : "Expandir visor"}
+                            >
+                                {isFloatingDocExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                            </button>
+                            
+                            <button
+                                type="button"
+                                onClick={() => setShowFloatingDoc(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    color: '#64748B',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background-color 0.2s, color 0.2s'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                    e.currentTarget.style.color = '#EF4444';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                    e.currentTarget.style.color = '#64748B';
+                                }}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Visor del Documento */}
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: '#F1F5F9' }}>
+                        <iframe 
+                            src={uploadedFileUrl} 
+                            style={{ width: '100%', height: '100%', border: 'none' }}
+                            title="Visor de Documento Original"
+                        />
+                    </div>
                 </div>
             )}
         </main>
