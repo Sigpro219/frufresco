@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { createPortal } from 'react-dom';
 import { useCart } from '../lib/cartContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
+import { useAuth } from '../lib/authContext';
 
 // Keep interface consistent with usage
 interface Product {
@@ -32,7 +33,7 @@ interface QuickViewModalProps {
     onUpdateQuantity?: (qty: number) => void;
 }
 
-const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initialQuantity, onUpdateQuantity }) => {
+const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, onClose, initialQuantity, onUpdateQuantity }) => {
     const { addItem } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -40,6 +41,26 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
     const t = translations[locale];
     const [quantity, setQuantity] = useState(initialQuantity !== undefined ? initialQuantity : 1);
     const [inputValue, setInputValue] = useState(initialQuantity !== undefined ? String(initialQuantity).replace('.', ',') : '1');
+
+    const { profile } = useAuth();
+    const [product, setProduct] = useState<Product>(initialProduct);
+
+    useEffect(() => {
+        const fetchFreshProduct = async () => {
+            const pricingModelId = profile?.pricing_model_id || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+            const { data, error } = await supabase
+                .from('products')
+                .select('*, pricing_model_prices(price)')
+                .eq('id', initialProduct.id)
+                .eq('pricing_model_prices.model_id', pricingModelId)
+                .single();
+                
+            if (!error && data) {
+                setProduct(data as Product);
+            }
+        };
+        fetchFreshProduct();
+    }, [initialProduct.id, profile?.pricing_model_id]);
 
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
 
@@ -54,41 +75,53 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose, initial
     }, []);
 
     // Normalizar las opciones
-    const displayOptions = product.options_config && product.options_config.length > 0
-        ? product.options_config
-            .filter((opt: any) => {
-                const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
-                return master ? master.show_on_web !== false : true;
-            })
-            .reduce((acc: any, opt: any) => {
-                let values = opt.values || [];
-                if (opt.name.toLowerCase().includes('presentaci') && ((product as any).web_unit || product.unit_of_measure)) {
-                    const defaultVal = (product as any).web_unit || product.unit_of_measure;
-                    if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
-                        values = [defaultVal, ...values];
+    const displayOptions = useMemo(() => {
+        return product.options_config && product.options_config.length > 0
+            ? product.options_config
+                .filter((opt: any) => {
+                    const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
+                    return master ? master.show_on_web !== false : true;
+                })
+                .reduce((acc: any, opt: any) => {
+                    let values = opt.values || [];
+                    if (opt.name.toLowerCase().includes('presentaci') && ((product as any).web_unit || product.unit_of_measure)) {
+                        const defaultVal = (product as any).web_unit || product.unit_of_measure;
+                        if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                            values = [defaultVal, ...values];
+                        }
                     }
-                }
-                return { ...acc, [opt.name]: values };
-            }, {})
-        : product.options || {};
+                    return { ...acc, [opt.name]: values };
+                }, {})
+            : product.options || {};
+    }, [product, masterAttributes]);
 
     // Initialize selections with the first option of each category (sorted alphabetically)
-    const initialSelections: Record<string, string> = {};
-    Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
-        if (Array.isArray(values) && values.length > 0) {
-            const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-            const sortedValues = values.slice().sort((valA, valB) => {
-                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
-                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
-                if (cleanA.toLowerCase() === defaultUnit) return -1;
-                if (cleanB.toLowerCase() === defaultUnit) return 1;
-                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
-            });
-            initialSelections[key] = sortedValues[0];
-        }
-    });
+    const initialSelections = useMemo(() => {
+        const selections: Record<string, string> = {};
+        Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
+            if (Array.isArray(values) && values.length > 0) {
+                const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+                const sortedValues = values.slice().sort((valA, valB) => {
+                    const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                    const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                    if (cleanA.toLowerCase() === defaultUnit) return -1;
+                    if (cleanB.toLowerCase() === defaultUnit) return 1;
+                    return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                });
+                selections[key] = sortedValues[0];
+            }
+        });
+        return selections;
+    }, [displayOptions, product]);
 
     const [selections, setSelections] = useState(initialSelections);
+
+    useEffect(() => {
+        setSelections(prev => {
+            const hasChanges = Object.keys(initialSelections).some(k => prev[k] !== initialSelections[k]);
+            return hasChanges ? { ...prev, ...initialSelections } : prev;
+        });
+    }, [initialSelections]);
 
     const visibleVariants = (product.variants || []).filter(v => v.show_on_web !== false);
 
