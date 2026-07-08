@@ -13,6 +13,7 @@ export interface CartItem {
     image_url?: string;
     variant_label?: string;
     selected_options?: Record<string, string>;
+    weight_kg?: number;
 }
 
 interface CartContextType {
@@ -20,8 +21,10 @@ interface CartContextType {
     addItem: (item: CartItem) => void;
     removeItem: (id: string, name: string) => void;
     clearCart: () => void;
+    updateItemQuantity: (id: string, name: string, quantity: number) => void;
     totalItems: number;
     totalPrice: number;
+    totalWeight: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -90,11 +93,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('frufresco_cart');
     };
 
+    const updateItemQuantity = (id: string, name: string, quantity: number) => {
+        setItems((prev) =>
+            prev.map((i) =>
+                (i.id === id && i.name === name)
+                    ? { ...i, quantity: quantity }
+                    : i
+            )
+        );
+    };
+
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
     const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const totalWeight = items.reduce((sum, item) => {
+        const unitLower = (item.unit || '').toLowerCase();
+        const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
+        const isLibra = ['libra', 'libras'].includes(unitLower);
+        const uw = item.weight_kg !== undefined ? item.weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0);
+        return sum + uw * item.quantity;
+    }, 0);
 
     return (
-        <CartContext.Provider value={{ items, addItem, removeItem, clearCart, totalItems, totalPrice }}>
+        <CartContext.Provider value={{ items, addItem, removeItem, clearCart, updateItemQuantity, totalItems, totalPrice, totalWeight }}>
             {children}
         </CartContext.Provider>
     );

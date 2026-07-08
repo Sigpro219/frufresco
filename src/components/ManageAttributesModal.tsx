@@ -8,6 +8,7 @@ interface MasterAttribute {
     id: string;
     name: string;
     suggested_values: string[];
+    show_on_web?: boolean;
 }
 
 interface ManageAttributesModalProps {
@@ -35,7 +36,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             
             if (error) throw error;
             setDbAttributes(data || []);
-            setLocalAttributes(JSON.parse(JSON.stringify(data || [])));
+            const sortedData = JSON.parse(JSON.stringify(data || [])).sort((a: any, b: any) => a.name.localeCompare(b.name));
+            setLocalAttributes(sortedData);
         } catch (error: any) {
             console.error('❌ Error fetching attributes:', error.message);
         } finally {
@@ -52,10 +54,15 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
         const newAttr: MasterAttribute = {
             id: `temp-${Math.random().toString(36).substr(2, 9)}`,
             name: newAttrName,
-            suggested_values: []
+            suggested_values: [],
+            show_on_web: true
         };
-        setLocalAttributes([...localAttributes, newAttr]);
+        setLocalAttributes([...localAttributes, newAttr].sort((a, b) => a.name.localeCompare(b.name)));
         setNewAttrName('');
+    };
+
+    const handleToggleShowOnWeb = (id: string, show: boolean) => {
+        setLocalAttributes(localAttributes.map(a => a.id === id ? { ...a, show_on_web: show } : a));
     };
 
     const handleRenameLocal = (id: string) => {
@@ -74,10 +81,25 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             return;
         }
 
+        const attr = localAttributes.find(a => a.id === attrId);
+        const isPresentacion = attr?.name.toLowerCase().includes('presentaci');
+
+        let finalVal = val;
+        if (isPresentacion) {
+            const grams = prompt(`⚠️ EQUIVALENCIA EN GRAMOS:\n\nIngrese la equivalencia en gramos para "${val}" (ej: 250):`);
+            if (grams === null) return; // Operator clicked cancel
+            const gramsNum = parseInt(grams.trim());
+            if (isNaN(gramsNum) || gramsNum <= 0) {
+                alert('🛑 Error: Debe ingresar un número de gramos válido (mayor a 0).');
+                return;
+            }
+            finalVal = `${val}|${gramsNum}`;
+        }
+
         setLocalAttributes(localAttributes.map(a => {
             if (a.id === attrId) {
-                if (a.suggested_values.includes(val)) return a;
-                return { ...a, suggested_values: [...a.suggested_values, val] };
+                if (a.suggested_values.includes(finalVal)) return a;
+                return { ...a, suggested_values: [...a.suggested_values, finalVal] };
             }
             return a;
         }));
@@ -112,27 +134,42 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             const eliminados = dbAttributes.filter(a => !idsEnLocal.includes(a.id));
             
             for (const del of eliminados) {
-                await supabase.from('product_attributes_master').delete().eq('id', del.id);
+                const { error } = await supabase.from('product_attributes_master').delete().eq('id', del.id);
+                if (error) throw error;
             }
 
             for (const attr of localAttributes) {
+                const sortedValues = attr.suggested_values.slice().sort((a, b) => {
+                    const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                    const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                    return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                });
                 const payload: any = { 
                     name: attr.name, 
-                    suggested_values: attr.suggested_values 
+                    suggested_values: sortedValues,
+                    show_on_web: attr.show_on_web !== false
                 };
                 
                 if (attr.id.startsWith('temp-')) {
-                    await supabase.from('product_attributes_master').insert([payload]);
+                    const { error } = await supabase.from('product_attributes_master').insert([payload]);
+                    if (error) throw error;
                 } else {
-                    await supabase.from('product_attributes_master').update(payload).eq('id', attr.id);
+                    const { error } = await supabase.from('product_attributes_master').update(payload).eq('id', attr.id);
+                    if (error) throw error;
                 }
             }
 
             await fetchAttributes();
-            if ((window as any).showToast) (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
-        } catch (err) {
+            if ((window as any).showToast) {
+                (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
+            } else {
+                alert('Gobernanza actualizada con éxito ✅');
+            }
+            onClose(); // Cerrar el modal al guardar exitosamente
+        } catch (err: any) {
             console.error('Save error:', err);
-            alert('Error al guardar los cambios.');
+            const errMsg = err.message || err.details || 'Error desconocido de permisos de base de datos.';
+            alert(`Error al guardar los cambios: ${errMsg}`);
         } finally {
             setSaving(false);
         }
@@ -227,6 +264,15 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 >
                                                     <Edit3 size={14} />
                                                 </button>
+                                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginLeft: '12px', fontSize: '0.8rem', color: '#6B7280', userSelect: 'none' }}>
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={attr.show_on_web !== false}
+                                                        onChange={(e) => handleToggleShowOnWeb(attr.id, e.target.checked)}
+                                                        style={{ accentColor: '#10B981', cursor: 'pointer' }}
+                                                    />
+                                                    <span>Mostrar en la web</span>
+                                                </label>
                                             </div>
                                         )}
                                         
@@ -249,14 +295,18 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
                                     <div style={{ backgroundColor: '#F9FAFB', padding: '8px 10px', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                            {attr.suggested_values.map(val => (
+                                            {attr.suggested_values.slice().sort((a, b) => {
+                                                const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                                                const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                                                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                            }).map(val => (
                                                 <span key={val} style={{ 
                                                     display: 'inline-flex', alignItems: 'center', gap: '5px', 
                                                     backgroundColor: 'white', border: '1.5px solid #E5E7EB', 
                                                     padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
                                                     fontWeight: '700', color: '#374151' 
                                                 }}>
-                                                    {val}
+                                                     {val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]}g)` : val}
                                                     <button 
                                                         onClick={() => handleRemoveValueLocal(attr.id, val)}
                                                         style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}

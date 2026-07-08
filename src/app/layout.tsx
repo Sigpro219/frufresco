@@ -62,7 +62,7 @@ export default function RootLayout({
 
           const isAuthError = (e) => {
             const msg = String(e?.message || e?.reason?.message || e || '').toLowerCase();
-            return msg.includes('refresh token') || msg.includes('invalid refresh token');
+            return msg.includes('refresh token') || msg.includes('invalid refresh token') || msg.includes('jwt expired') || msg.includes('token expired') || msg.includes('jwt');
           };
 
           const isAbort = (e) => {

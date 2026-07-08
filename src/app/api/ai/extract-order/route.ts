@@ -72,11 +72,31 @@ export async function POST(req: Request) {
       requestContents = [{ text: prompt }];
     } else {
       const base64Data = Buffer.from(arrayBuffer).toString('base64');
+      let resolvedMimeType = file.type || '';
+      if (!resolvedMimeType || resolvedMimeType === 'application/octet-stream') {
+        const fileNameLower = file.name.toLowerCase();
+        if (fileNameLower.endsWith('.pdf')) {
+          resolvedMimeType = 'application/pdf';
+        } else if (fileNameLower.endsWith('.png')) {
+          resolvedMimeType = 'image/png';
+        } else if (fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg')) {
+          resolvedMimeType = 'image/jpeg';
+        } else if (fileNameLower.endsWith('.webp')) {
+          resolvedMimeType = 'image/webp';
+        } else if (fileNameLower.endsWith('.xlsx')) {
+          resolvedMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (fileNameLower.endsWith('.xls')) {
+          resolvedMimeType = 'application/vnd.ms-excel';
+        } else {
+          // Default fallback
+          resolvedMimeType = 'application/pdf';
+        }
+      }
       requestContents = [
         {
           inlineData: {
             data: base64Data,
-            mimeType: file.type
+            mimeType: resolvedMimeType
           }
         },
         { text: prompt }
@@ -84,7 +104,7 @@ export async function POST(req: Request) {
     }
 
     // Modelos alternativos en caso de indisponibilidad por alta demanda
-    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash"];
     let result = null;
     let lastError = null;
 

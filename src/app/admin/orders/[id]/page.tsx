@@ -257,6 +257,7 @@ export default function OrderDetailPage() {
         const { data } = await supabase
             .from('products')
             .select('id, name, image_url, unit_of_measure, base_price, options_config, variants')
+            .eq('is_active', true)
             .ilike('name', `%${term}%`)
             .limit(5);
         setSearchResults(data || []);

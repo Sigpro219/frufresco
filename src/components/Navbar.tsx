@@ -13,7 +13,7 @@ import { SYNC_METADATA } from '@/lib/sync-status';
 import { translations, Locale } from '@/lib/translations';
 
 export default function Navbar() {
-    const { totalItems, totalPrice } = useCart();
+    const { totalItems, totalPrice, totalWeight, items } = useCart();
     const { user, profile, signOut, loading } = useAuth();
     const pathname = usePathname();
     // Cart only visible on shopping-context pages (not admin or ops)
@@ -123,6 +123,17 @@ export default function Navbar() {
             document.title = `${appName} | ${locale === 'es' ? 'Proveedor de Alimentos' : 'Food Provider'}`;
         }
     }, [appName, locale]);
+
+    useEffect(() => {
+        if (mobileOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [mobileOpen]);
 
     // Persistent Language Logic
     useEffect(() => {
@@ -348,6 +359,9 @@ export default function Navbar() {
                             <Link href="/" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2} /> {t.navHome}
                             </Link>
+                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <ShoppingBag size={18} strokeWidth={2} /> {t.navCatalog || 'Catálogo'}
+                            </Link>
                             {hasPermission('commercial') && (
                                 <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <Building2 size={18} strokeWidth={2} /> {t.navInstitutional}
@@ -561,14 +575,33 @@ export default function Navbar() {
                                 fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
                             }}>
                                 <ShoppingCart size={20} color="var(--primary)" strokeWidth={2} /> 
-                                <span style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '1rem' }}>{mounted ? totalItems : 0}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '0.95rem' }}>
+                                    {mounted ? `$${totalPrice.toLocaleString('es-CO')}` : '$0'}
+                                </span>
                             </button>
                         </Link>
-                        {mounted && totalItems > 0 && (
-                            <div className="cart-tooltip">
-                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px', fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>Total Estimado</div>
-                                <div style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--primary)', fontFamily: THEME.typography.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-                                    ${mounted ? totalPrice.toLocaleString() : '0'}
+                        {mounted && items.length > 0 && (
+                            <div className="cart-tooltip" style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                padding: '12px 16px',
+                                minWidth: '180px',
+                                textAlign: 'left'
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Refs. Únicas</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>{items.length} {items.length === 1 ? 'referencia' : 'referencias'}</div>
+                                </div>
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '6px' }}>
+                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Peso Total</div>
+                                    <div style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>{parseFloat(totalWeight.toFixed(2)).toString().replace('.', ',')} Kg</div>
+                                </div>
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '6px' }}>
+                                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Estimado</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--primary)' }}>
+                                        ${totalPrice.toLocaleString('es-CO')}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -797,7 +830,7 @@ export default function Navbar() {
                         borderBottom: `1px solid ${THEME.colors.border}`,
                         boxShadow: THEME.shadow.lg,
                         zIndex: 200,
-                        maxHeight: 'calc(100vh - 85px)',
+                        maxHeight: 'calc(100dvh - 95px)',
                         overflowY: 'auto',
                     }}
                 >
@@ -807,6 +840,24 @@ export default function Navbar() {
                             <User size={16} color={THEME.colors.primary} />
                             <span style={{ fontWeight: '600', fontSize: '0.9rem', color: THEME.colors.textMain }}>{profile?.contact_name || profile?.company_name || user.email?.split('@')[0]}</span>
                         </div>
+                    )}
+
+                    {/* General navigation links (Visible to all users) */}
+                    {mounted && (
+                        <>
+                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
+                            </Link>
+                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
+                            </Link>
+                            {/* B2B Institutional link for staff with commercial permissions */}
+                            {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && hasPermission('commercial') && (
+                                <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Building2 size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navInstitutional}
+                                </Link>
+                            )}
+                        </>
                     )}
 
                     {/* Navigation links for admin/employee */}
@@ -886,20 +937,14 @@ export default function Navbar() {
                         </>
                     )}
 
-                    {/* Guest links */}
-                    {mounted && !user && (
-                        <>
-                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
-                            </Link>
-                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
-                            </Link>
-                        </>
-                    )}
-
                     {/* Auth actions */}
-                    <div style={{ padding: '16px 20px', display: 'flex', gap: '12px', borderTop: `2px solid ${THEME.colors.border}` }}>
+                    <div style={{ 
+                        padding: '16px 20px 40px 20px', 
+                        display: 'flex', 
+                        gap: '12px', 
+                        borderTop: `2px solid ${THEME.colors.border}`,
+                        backgroundColor: 'white'
+                    }}>
                         {mounted && user ? (
                             <button
                                 onClick={() => { signOut(); setMobileOpen(false); }}

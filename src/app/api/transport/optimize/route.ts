@@ -507,7 +507,7 @@ async function generateAiExplanation(orders: any[], vehicles: any[], assignments
         const genAI = new GoogleGenerativeAI(apiKey);
         
         // Try models in order of preference
-        const modelsToTry = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
+        const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash'];
         let explanation = "";
         let errorDetails = "";
 

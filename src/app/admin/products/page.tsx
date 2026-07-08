@@ -409,46 +409,42 @@ export default function AdminProductsPage() {
 
         if (!query) return filtered;
 
-        // Separar términos normales de etiquetas con @
-        const parts = query.split(/\s+/);
-        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
-        const searchTerms = parts.filter(p => !p.startsWith('@'));
+        // Separar factores por comas
+        const factors = query.split(',').map(f => f.trim()).filter(Boolean);
 
         return filtered.filter(p => {
-            // 1. Lógica de TEXTO (AND: debe cumplir todos los términos escritos)
-            const matchesText = searchTerms.every(term => 
-                p.name?.toLowerCase().includes(term) ||
-                p.sku?.toLowerCase().includes(term)
-            );
+            return factors.every(factor => {
+                if (factor.startsWith('@')) {
+                    const tag = factor.slice(1);
+                    
+                    // Filtro IVA (@19, @19%, @0...)
+                    if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
+                        const rate = parseInt(tag.replace('%', ''));
+                        return (p.iva_rate ?? 19) === rate;
+                    }
 
-            if (!matchesText && searchTerms.length > 0) return false;
+                    // Filtro Web/Active (@web, @virtual, @oculto)
+                    if (tag === 'web' || tag === 'virtual' || tag === 'on') return p.show_on_web;
+                    if (tag === 'oculto' || tag === 'hidden' || tag === 'off') return !p.show_on_web;
 
-            // 2. Lógica de ETIQUETAS (AND: debe cumplir todos los filtros @)
-            const matchesTags = tags.every(tag => {
-                // Filtro IVA (@19, @19%, @0...)
-                if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
-                    const rate = parseInt(tag.replace('%', ''));
-                    return (p.iva_rate ?? 19) === rate;
+                    // Filtro Categoría (@frutas, @despensa...)
+                    const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                        label.toLowerCase().startsWith(tag)
+                    );
+                    if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                    // Filtro Logística/Compras (@alistamiento, @equipo...)
+                    if (p.buying_team?.toLowerCase().includes(tag)) return true;
+                    if (p.procurement_method?.toLowerCase().includes(tag)) return true;
+
+                    return false;
                 }
 
-                // Filtro Web/Active (@web, @virtual, @oculto)
-                if (tag === 'web' || tag === 'virtual' || tag === 'on') return p.show_on_web;
-                if (tag === 'oculto' || tag === 'hidden' || tag === 'off') return !p.show_on_web;
-
-                // Filtro Categoría (@frutas, @despensa...)
-                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
-                    label.toLowerCase().startsWith(tag)
+                return (
+                    p.name?.toLowerCase().includes(factor) ||
+                    p.sku?.toLowerCase().includes(factor)
                 );
-                if (categoryEntry && p.category === categoryEntry[0]) return true;
-
-                // Filtro Logística/Compras (@alistamiento, @equipo...)
-                if (p.buying_team?.toLowerCase().includes(tag)) return true;
-                if (p.procurement_method?.toLowerCase().includes(tag)) return true;
-
-                return false;
             });
-
-            return matchesTags;
         });
     }, [products, searchQuery, statusFilter, categoryFilter]);
 
@@ -939,7 +935,7 @@ export default function AdminProductsPage() {
                                         ))}
                                     </div>
                                     <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: `1px solid ${THEME.colors.border}`, fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', textAlign: 'center' }}>
-                                        Combinar: &quot;Papa @web @fresco&quot;
+                                        Combinar: &quot;Papa, @web, @fresco&quot;
                                     </div>
                                 </div>
                             )}

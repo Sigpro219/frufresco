@@ -180,6 +180,35 @@ export default function ProductCard({ product }: { product: Product }) {
                             );
                         })}
                     </div>
+
+                    {/* Official Brand Watermark Overlay */}
+                    {product.image_url && imageLoaded && (product.image_url.includes('clean') || product.image_url.includes('overlay')) && (
+                        <div style={{
+                            position: 'absolute',
+                            bottom: '4%',
+                            right: '4%',
+                            width: '18%',
+                            height: '18%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 8,
+                            pointerEvents: 'none'
+                        }}>
+                            <img 
+                                src="/logo_simbolo.png" 
+                                alt="FruFresco" 
+                                style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'contain' 
+                                }} 
+                                onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                }}
+                            />
+                        </div>
+                    )}
                 </Link>
 
                 {/* CONTENT */}

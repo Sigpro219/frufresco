@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../lib/supabase';
 import { createPortal } from 'react-dom';
 import { useCart } from '../lib/cartContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
+import { useAuth } from '../lib/authContext';
 
 // Keep interface consistent with usage
 interface Product {
@@ -27,29 +29,115 @@ interface Product {
 interface QuickViewModalProps {
     product: Product;
     onClose: () => void;
+    initialQuantity?: number;
+    onUpdateQuantity?: (qty: number) => void;
 }
 
-const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
+const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, onClose, initialQuantity, onUpdateQuantity }) => {
     const { addItem } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
-    const [quantity, setQuantity] = useState(1);
+    const [quantity, setQuantity] = useState(initialQuantity !== undefined ? initialQuantity : 1);
+    const [inputValue, setInputValue] = useState(initialQuantity !== undefined ? String(initialQuantity).replace('.', ',') : '1');
+
+    const { profile } = useAuth();
+    const [product, setProduct] = useState<Product>(initialProduct);
+
+    useEffect(() => {
+        const fetchFreshProduct = async () => {
+            const pricingModelId = profile?.pricing_model_id || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+            const { data, error } = await supabase
+                .from('products')
+                .select('*, pricing_model_prices(price)')
+                .eq('id', initialProduct.id)
+                .eq('pricing_model_prices.model_id', pricingModelId)
+                .single();
+                
+            if (!error && data) {
+                setProduct(data as Product);
+            }
+        };
+        fetchFreshProduct();
+    }, [initialProduct.id, profile?.pricing_model_id]);
+
+    const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchMaster = async () => {
+            const { data } = await supabase
+                .from('product_attributes_master')
+                .select('name, show_on_web');
+            if (data) setMasterAttributes(data);
+        };
+        fetchMaster();
+    }, []);
 
     // Normalizar las opciones
-    const displayOptions = product.options_config && product.options_config.length > 0
-        ? product.options_config.reduce((acc, opt) => ({ ...acc, [opt.name]: opt.values }), {})
-        : product.options || {};
+    const displayOptions = useMemo(() => {
+        const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+        const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
 
-    const initialSelections: Record<string, string> = {};
-    Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
-        if (Array.isArray(values) && values.length > 0) {
-            initialSelections[key] = values[0];
+        let opts = product.options_config && product.options_config.length > 0
+            ? product.options_config
+                .filter((opt: any) => {
+                    const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
+                    return master ? master.show_on_web !== false : true;
+                })
+                .reduce((acc: any, opt: any) => {
+                    let values = opt.values || [];
+                    if (opt.name.toLowerCase().includes('presentaci')) {
+                        const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Kg';
+                        if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                            values = [defaultVal, ...values];
+                        }
+                        if (isBaseInKg && !values.some((v: string) => v.toLowerCase().includes('libra') || v.toLowerCase().includes('lb'))) {
+                            values = [...values, 'Libra|500'];
+                        }
+                    }
+                    return { ...acc, [opt.name]: values };
+                }, {})
+            : product.options || {};
+
+        const hasPresentationKey = Object.keys(opts).some(k => k.toLowerCase().includes('presentaci'));
+        if (isBaseInKg && !hasPresentationKey) {
+            const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Kg';
+            opts = {
+                ...opts,
+                'Presentación': [defaultVal, 'Libra|500']
+            };
         }
-    });
+        return opts;
+    }, [product, masterAttributes]);
+
+    // Initialize selections with the first option of each category (sorted alphabetically)
+    const initialSelections = useMemo(() => {
+        const selections: Record<string, string> = {};
+        Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
+            if (Array.isArray(values) && values.length > 0) {
+                const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+                const sortedValues = values.slice().sort((valA, valB) => {
+                    const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                    const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                    if (cleanA.toLowerCase() === defaultUnit) return -1;
+                    if (cleanB.toLowerCase() === defaultUnit) return 1;
+                    return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                });
+                selections[key] = sortedValues[0];
+            }
+        });
+        return selections;
+    }, [displayOptions, product]);
 
     const [selections, setSelections] = useState(initialSelections);
+
+    useEffect(() => {
+        setSelections(prev => {
+            const hasChanges = Object.keys(initialSelections).some(k => prev[k] !== initialSelections[k]);
+            return hasChanges ? { ...prev, ...initialSelections } : prev;
+        });
+    }, [initialSelections]);
 
     const visibleVariants = (product.variants || []).filter(v => v.show_on_web !== false);
 
@@ -57,30 +145,90 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
         Object.entries(selections).every(([key, value]) => v.options[key] === value)
     );
 
-    const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
+    // Helper para extraer peso en Kg
+    const getParsedWeight = (text: string): number | null => {
+        if (!text) return null;
+        if (text.includes('|')) {
+            const parts = text.split('|');
+            const grams = parseFloat(parts[1]);
+            if (!isNaN(grams) && grams > 0) return grams / 1000;
+        }
+        const clean = text.toLowerCase();
+        const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+        if (kgMatch) {
+            const val = parseFloat(kgMatch[1]);
+            if (!isNaN(val) && val > 0) return val;
+        }
+        const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+        if (gMatch) {
+            const val = parseFloat(gMatch[1]);
+            if (!isNaN(val) && val > 0) return val / 1000;
+        }
+        if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+        return null;
+    };
+
+    // Obtener la presentación seleccionada
+    let selectedPresentationVal: string | null = null;
+    Object.entries(selections).forEach(([key, val]) => {
+        if (key.toLowerCase().includes('presentaci')) {
+            selectedPresentationVal = val;
+        }
+    });
+
+    const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+    const isDefaultSelected = selectedPresentationVal?.toLowerCase() === defaultUnit;
+    const parsedWeight = selectedPresentationVal && !isDefaultSelected ? getParsedWeight(selectedPresentationVal) : null;
+    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
+    const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : ((product as any).web_unit || product.unit_of_measure);
+
+    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
+    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;
     
     // Aplicar factor de conversión y redondeo a 50
-    const rawPrice = currentVariant ? currentVariant.price : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
-    const currentPrice = Math.ceil((rawPrice * (product.web_conversion_factor || 1)) / 50) * 50;
+    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price || 0) : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
+    
+    // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
+    const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;
+    const priceWithAdjustment = rawPrice * (1 + adjustmentPercent / 100);
+
+    const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
-            .map(([key, value]) => `${key}: ${value}`)
+            .map(([key, value]) => {
+                const displayKey = key.toLowerCase().includes('presentaci') ? 'Presentación' : key;
+                const displayVal = value.includes('|') ? value.split('|')[0] : value;
+                return `${displayKey}: ${displayVal}`;
+            })
             .join(', ');
         const baseName = locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name);
         return optionString ? `${baseName} (${optionString})` : baseName;
     };
 
     const handleAddToCart = () => {
-        addItem({
-            id: product.id,
-            name: getFormattedName(),
-            price: currentPrice,
-            iva_rate: product.iva_rate,
-            unit: product.unit_of_measure,
-            quantity: quantity,
-            image_url: product.image_url
-        });
+        if (onUpdateQuantity) {
+            onUpdateQuantity(quantity);
+        } else {
+            const unitLower = (product.unit_of_measure || '').toLowerCase();
+            const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
+            const isLibra = ['libra', 'libras'].includes(unitLower);
+
+            const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+            let unitWeight = parsedWeight !== null ? parsedWeight : ((product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0));
+            let cartUnit = activeUnit;
+
+            addItem({
+                id: product.id,
+                name: getFormattedName(),
+                price: currentPrice,
+                iva_rate: product.iva_rate,
+                unit: cartUnit,
+                quantity: quantity,
+                image_url: product.image_url,
+                weight_kg: unitWeight
+            });
+        }
         onClose();
     };
 
@@ -174,7 +322,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             margin: 0
                         }}>
                             ${(currentPrice || 0).toLocaleString('es-CO')}
-                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '500' }}> / {product.unit_of_measure}</span>
+                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '500' }}> / {activeUnit}</span>
                         </p>
                     </div>
                 </div>
@@ -182,34 +330,52 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                 <div style={{ height: '1px', backgroundColor: '#F3F4F6', margin: '1.5rem 0' }}></div>
 
                 <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1.5rem', paddingRight: '0.5rem' }}>
-                    {Object.entries(displayOptions).map(([optionName, values]: [string, any]) => (
-                        <div key={optionName} style={{ marginBottom: '1.25rem' }}>
-                            <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
-                                {optionName}
-                            </label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                                {Array.isArray(values) && values.map((val) => (
-                                    <button
-                                        key={val}
-                                        onClick={() => setSelections({ ...selections, [optionName]: val })}
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: '10px',
-                                            border: selections[optionName] === val ? '2px solid var(--primary)' : '1px solid #E5E7EB',
-                                            backgroundColor: selections[optionName] === val ? 'var(--primary)' : 'white',
-                                            color: selections[optionName] === val ? 'white' : '#4B5563',
-                                            fontWeight: '700',
-                                            fontSize: '0.85rem',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                                        }}
-                                    >
-                                        {val}
-                                    </button>
-                                ))}
+                    {Object.entries(displayOptions)
+                        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+                        .map(([optionName, values]: [string, any]) => {
+                            const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                            return (
+                                <div key={optionName} style={{ marginBottom: '1.25rem' }}>
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
+                                        {displayOptionName}
+                                    </label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                                        {Array.isArray(values) && values
+                                            .slice()
+                                            .sort((valA, valB) => {
+                                                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
+                                                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                                                const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+                                                if (cleanA.toLowerCase() === defaultUnit) return -1;
+                                                if (cleanB.toLowerCase() === defaultUnit) return 1;
+                                                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                            })
+                                            .map((val) => {
+                                        const displayVal = val.includes('|') ? val.split('|')[0] : val;
+                                        return (
+                                            <button
+                                                key={val}
+                                                onClick={() => setSelections({ ...selections, [optionName]: val })}
+                                                style={{
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '10px',
+                                                    border: selections[optionName] === val ? '2px solid var(--primary)' : '1px solid #E5E7EB',
+                                                    backgroundColor: selections[optionName] === val ? 'var(--primary)' : 'white',
+                                                    color: selections[optionName] === val ? 'white' : '#4B5563',
+                                                    fontWeight: '700',
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                }}
+                                            >
+                                                {displayVal}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <div style={{ marginBottom: '2rem' }}>
@@ -226,7 +392,14 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             backgroundColor: '#F9FAFB'
                         }}>
                             <button
-                                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                onClick={() => {
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
+                                    const step = isWeightUnit ? 0.5 : 1;
+                                    const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
+                                    setQuantity(newQty);
+                                    setInputValue(String(newQty).replace('.', ','));
+                                }}
                                 style={{
                                     width: '44px', height: '44px',
                                     border: 'none',
@@ -241,9 +414,35 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >−</button>
                             <input
-                                type="number"
-                                value={quantity}
-                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                type="text"
+                                value={inputValue}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                        setInputValue('');
+                                        setQuantity(0);
+                                        return;
+                                    }
+                                    const cleanVal = val.replace(',', '.');
+                                    if (/^\d*\.?\d*$/.test(cleanVal)) {
+                                        setInputValue(val);
+                                        const num = parseFloat(cleanVal);
+                                        if (!isNaN(num) && num > 0) {
+                                            setQuantity(num);
+                                        }
+                                    }
+                                }}
+                                onBlur={() => {
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
+                                    const step = isWeightUnit ? 0.5 : 1;
+                                    if (quantity <= 0) {
+                                        setQuantity(step);
+                                        setInputValue(String(step).replace('.', ','));
+                                    } else {
+                                        setInputValue(String(quantity).replace('.', ','));
+                                    }
+                                }}
                                 style={{
                                     width: '60px',
                                     textAlign: 'center',
@@ -256,7 +455,14 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                 }}
                             />
                             <button
-                                onClick={() => setQuantity(quantity + 1)}
+                                onClick={() => {
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
+                                    const step = isWeightUnit ? 0.5 : 1;
+                                    const newQty = parseFloat((quantity + step).toFixed(2));
+                                    setQuantity(newQty);
+                                    setInputValue(String(newQty).replace('.', ','));
+                                }}
                                 style={{
                                     width: '44px', height: '44px',
                                     border: 'none',
@@ -271,6 +477,22 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >+</button>
                         </div>
+
+                        <span style={{ 
+                            fontSize: '0.9rem', 
+                            fontWeight: '800', 
+                            color: 'var(--primary)', 
+                            textTransform: 'lowercase', 
+                            backgroundColor: 'rgba(34, 197, 94, 0.08)', 
+                            padding: '6px 12px', 
+                            borderRadius: '10px', 
+                            border: '1px solid rgba(34, 197, 94, 0.15)',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                        }}>
+                            {activeUnit}
+                        </span>
+
                         <div style={{ flex: 1, textAlign: 'right' }}>
                              <span style={{ fontSize: '0.9rem', color: '#9CA3AF', fontWeight: '600' }}>{t.total}</span>
                              <div style={{ fontSize: '1.35rem', fontWeight: '900', color: isAvailable ? '#111827' : '#9CA3AF' }}>
@@ -324,39 +546,43 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             }
                         }}
                     >
-                        {isAvailable ? t.addToOrder : t.unavailable}
+                        {onUpdateQuantity 
+                            ? (locale === 'en' ? 'Update Quantity' : 'Actualizar Cantidad') 
+                            : (isAvailable ? t.addToOrder : t.unavailable)}
                     </button>
-                    <button
-                        onClick={handleBuyNow}
-                        disabled={!isAvailable}
-                        style={{
-                            width: '100%',
-                            padding: '1.15rem',
-                            borderRadius: '15px',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            cursor: isAvailable ? 'pointer' : 'not-allowed',
-                            backgroundColor: isAvailable ? 'var(--primary)' : '#F3F4F6',
-                            color: isAvailable ? 'white' : '#9CA3AF',
-                            border: 'none',
-                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                            boxShadow: isAvailable ? '0 10px 20px rgba(26, 77, 46, 0.2)' : 'none'
-                        }}
-                        onMouseEnter={(e) => {
-                            if(isAvailable) {
-                                e.currentTarget.style.transform = 'scale(1.02)';
-                                e.currentTarget.style.boxShadow = '0 15px 30px rgba(26, 77, 46, 0.3)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if(isAvailable) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = '0 10px 20px rgba(26, 77, 46, 0.2)';
-                            }
-                        }}
-                    >
-                        {isAvailable ? t.payNow : t.outOfStock}
-                    </button>
+                    {!onUpdateQuantity && (
+                        <button
+                            onClick={handleBuyNow}
+                            disabled={!isAvailable}
+                            style={{
+                                width: '100%',
+                                padding: '1.15rem',
+                                borderRadius: '15px',
+                                fontSize: '1rem',
+                                fontWeight: '800',
+                                cursor: isAvailable ? 'pointer' : 'not-allowed',
+                                backgroundColor: isAvailable ? 'var(--primary)' : '#F3F4F6',
+                                color: isAvailable ? 'white' : '#9CA3AF',
+                                border: 'none',
+                                transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                boxShadow: isAvailable ? '0 10px 20px rgba(26, 77, 46, 0.2)' : 'none'
+                            }}
+                            onMouseEnter={(e) => {
+                                if(isAvailable) {
+                                    e.currentTarget.style.transform = 'scale(1.02)';
+                                    e.currentTarget.style.boxShadow = '0 15px 30px rgba(26, 77, 46, 0.3)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if(isAvailable) {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.boxShadow = '0 10px 20px rgba(26, 77, 46, 0.2)';
+                                }
+                            }}
+                        >
+                            {isAvailable ? t.payNow : t.outOfStock}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
