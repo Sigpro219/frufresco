@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { verifySessionAndRole } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
+    // Validate session and role (staff only)
+    const auth = await verifySessionAndRole(req, [
+      'admin', 
+      'sys_admin', 
+      'web_admin', 
+      'operations', 
+      'GESTION DE PEDIDOS'
+    ]);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const { draftId, address, sourceEmail, reason } = await req.json();
     if (!draftId || !sourceEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });

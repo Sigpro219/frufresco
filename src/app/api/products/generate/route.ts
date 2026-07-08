@@ -1,9 +1,23 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { verifySessionAndRole } from '@/lib/auth';
 
 const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 export async function POST(req: Request) {
+    // Validate session and role (staff only)
+    const auth = await verifySessionAndRole(req, [
+        'admin', 
+        'sys_admin', 
+        'web_admin', 
+        'operations', 
+        'GESTION DE PEDIDOS',
+        'LIDER DE INVENTARIO'
+    ]);
+    if (!auth.authorized) {
+        return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+    }
+
     let current_description = '';
     try {
         const body = await req.json();
