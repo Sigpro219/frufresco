@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -133,6 +134,154 @@ const getNextAllowedDeliveryDate = (baseDateStr: string, allowedDays: number[]):
   return baseDateStr;
 };
 
+const getAccountingIdDisplay = (product: any) => {
+    if (!product) return '';
+    if (product.accounting_id) {
+        if (typeof product.accounting_id === 'number') {
+            return product.accounting_id.toString();
+        }
+        const match = String(product.accounting_id).match(/\d+/);
+        if (match) {
+            return parseInt(match[0], 10).toString();
+        }
+        return String(product.accounting_id);
+    }
+    if (product.sku) {
+        const skuMatch = product.sku.match(/^[A-Z]{2}-(\d+)/i);
+        if (skuMatch) {
+            return parseInt(skuMatch[1], 10).toString();
+        }
+    }
+    return product.id || '';
+};
+
+const formatDetectedUnit = (qty: number, unit: string) => {
+    const u = (unit || '').toLowerCase();
+    let cleanUnit = u;
+    let suffix = qty === 1 ? 'detectado' : 'detectados';
+    
+    if (u.includes('libra') || u.includes('lb')) {
+        cleanUnit = qty === 1 ? 'libra' : 'libras';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('kilo') || u.includes('kg')) {
+        cleanUnit = qty === 1 ? 'kilo' : 'kilos';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
+        cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('litro') || u.includes('lt')) {
+        cleanUnit = qty === 1 ? 'litro' : 'litros';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('frasco')) {
+        cleanUnit = qty === 1 ? 'frasco' : 'frascos';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('bolsa')) {
+        cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('caja')) {
+        cleanUnit = qty === 1 ? 'caja' : 'cajas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('atado')) {
+        cleanUnit = qty === 1 ? 'atado' : 'atados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    }
+    
+    return `✨ ${qty} ${cleanUnit} ${suffix}`;
+};
+
+const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
+    const cleanName = originalName.toLowerCase();
+    
+    // 1. Obtener todas las unidades posibles para este producto
+    const possibleUnits: { unit: string; factor: number }[] = [];
+    
+    if (product.web_unit && product.web_conversion_factor) {
+        possibleUnits.push({
+            unit: product.web_unit,
+            factor: parseFloat(product.web_conversion_factor) || 1
+        });
+    }
+    
+    if (product.unit_of_measure) {
+        possibleUnits.push({
+            unit: product.unit_of_measure,
+            factor: 1
+        });
+    }
+    
+    productConversions.forEach(c => {
+        if (!possibleUnits.some(u => u.unit.toLowerCase() === c.from_unit.toLowerCase())) {
+            possibleUnits.push({
+                unit: c.from_unit,
+                factor: parseFloat(c.conversion_factor) || 1
+            });
+        }
+    });
+    
+    // También agregar variantes del options_config
+    if (product.options_config) {
+        product.options_config.forEach((opt: any) => {
+            if (opt.name.toLowerCase().includes('presentaci')) {
+                opt.values?.forEach((val: string) => {
+                    const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                    if (!possibleUnits.some(u => u.unit.toLowerCase() === cleanUnit.toLowerCase())) {
+                        let factor = 1;
+                        const defaultUnit = product.web_unit || product.unit_of_measure;
+                        if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                            factor = parseFloat(product.web_conversion_factor) || 1;
+                        } else {
+                            // Intentar calcular factor dinámico usando parseWeight
+                            if (cleanUnit.includes('|')) {
+                                const grams = parseFloat(cleanUnit.split('|')[1]);
+                                if (!isNaN(grams) && grams > 0) factor = grams / 1000;
+                            } else {
+                                const clean = cleanUnit.toLowerCase();
+                                const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+                                if (kgMatch) factor = parseFloat(kgMatch[1]);
+                                const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+                                if (gMatch) factor = parseFloat(gMatch[1]) / 1000;
+                                if (clean.includes('libra') || clean.includes('lb')) factor = 0.5;
+                            }
+                        }
+                        possibleUnits.push({ unit: cleanUnit, factor });
+                    }
+                });
+            }
+        });
+    }
+    
+    // 2. Buscar en originalName qué unidad coincide mejor
+    for (const u of possibleUnits) {
+        const unitLower = u.unit.toLowerCase();
+        if (unitLower.length > 2) {
+            if (cleanName.includes(unitLower)) {
+                return u;
+            }
+        }
+    }
+    
+    if (cleanName.includes('libra') || cleanName.includes('lb')) {
+        const lbUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('libra') || u.unit.toLowerCase().includes('lb'));
+        if (lbUnit) return lbUnit;
+    }
+    if (cleanName.includes('kilo') || cleanName.includes('kg')) {
+        const kgUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('kilo') || u.unit.toLowerCase().includes('kg'));
+        if (kgUnit) return kgUnit;
+    }
+    if (cleanName.includes('unidad') || cleanName.includes('ud') || cleanName.includes('und')) {
+        const undUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('unidad') || u.unit.toLowerCase().includes('und') || u.unit.toLowerCase().includes('ud'));
+        if (undUnit) return undUnit;
+    }
+    
+    return null;
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -149,6 +298,124 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
+  const [duplicateMatchConfirm, setDuplicateMatchConfirm] = useState<{
+    isOpen: boolean;
+    product: any;
+    rowIndex: number;
+    duplicateIndex: number;
+  } | null>(null);
+  const [showFloatingEmail, setShowFloatingEmail] = useState(true);
+  const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
+  const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
+  const [loadingAttachment, setLoadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
+
+  const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
+
+  useEffect(() => {
+    setActiveTab('email');
+    setAttachmentHtml(null);
+    setAttachmentError(null);
+    setIsFloatingExpanded(false);
+    setSelectedAttachmentIndex(0);
+  }, [selectedDraft?.id]);
+
+  useEffect(() => {
+    if (!selectedDraft || activeTab !== 'attachment') return;
+    const metadata = getDraftMetadata(selectedDraft);
+    
+    // Choose correct attachment URL and Name based on selectedAttachmentIndex
+    let currentUrl = metadata.attachmentUrl;
+    let currentName = metadata.attachmentName;
+    if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+      const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+      if (selectedAtt) {
+        currentUrl = selectedAtt.url;
+        currentName = selectedAtt.name;
+      }
+    }
+    
+    if (!currentUrl) return;
+    
+    const attachmentName = currentName || '';
+    const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+    
+    if (ext === 'xlsx' || ext === 'xls') {
+      setLoadingAttachment(true);
+      setAttachmentError(null);
+      setAttachmentHtml(null);
+      
+      fetch(currentUrl)
+        .then(res => {
+          if (!res.ok) throw new Error("No se pudo descargar el archivo Excel.");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const html = XLSX.utils.sheet_to_html(worksheet, { id: 'excel-table' });
+          setAttachmentHtml(html);
+        })
+        .catch(err => {
+          console.error("Error loading attachment:", err);
+          setAttachmentError(err.message || "Error al procesar el archivo Excel.");
+        })
+        .finally(() => {
+          setLoadingAttachment(false);
+        });
+    }
+  }, [selectedDraft, activeTab, selectedAttachmentIndex]);
+
+  const handleSelectAttachment = (idx: number) => {
+    if (!selectedDraft) return;
+    
+    // Save current changes to the previous index
+    const metadata = getDraftMetadata(selectedDraft);
+    if (metadata.attachments && Array.isArray(metadata.attachments)) {
+      const updatedAttachments = [...metadata.attachments];
+      if (updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot,
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+      }
+      
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            attachments: updatedAttachments
+          };
+        }
+        return itm;
+      });
+      
+      // Update local state without hitting DB yet (we will persist when they approve the order)
+      setSelectedDraft((prev: any) => ({
+        ...prev,
+        extracted_items: updatedExtractedItems
+      }));
+      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+    }
+    
+    // Switch to new attachment index
+    setSelectedAttachmentIndex(idx);
+  };
+
   const getMinDeliveryDate = () => {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -372,6 +639,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   };
 
   const selectProduct = (product: any, rowIndex: number) => {
+    // Check if product is already matched in another row
+    const duplicateIndex = editableItems.findIndex((item, idx) =>
+      idx !== rowIndex && !item.isDeleted && !item.isMetadata && item.matched_product_id === product.id
+    );
+
+    if (duplicateIndex >= 0) {
+      setDuplicateMatchConfirm({
+        isOpen: true,
+        product,
+        rowIndex,
+        duplicateIndex
+      });
+      return;
+    }
+
+    executeSelectProduct(product, rowIndex);
+  };
+
+  const executeSelectProduct = (product: any, rowIndex: number) => {
     const newEdits = [...editableItems];
     newEdits[rowIndex].matched_product_id = product.id;
     newEdits[rowIndex].searchQuery = product.name;
@@ -487,6 +773,44 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     setEditableItems(newEdits);
     setActiveSearchRowIndex(null);
+  };
+
+  const handleMergeDuplicateMatch = () => {
+    if (!duplicateMatchConfirm) return;
+    const { product, rowIndex, duplicateIndex } = duplicateMatchConfirm;
+    
+    const newEdits = [...editableItems];
+    
+    const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
+    const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
+    
+    const factor = newEdits[duplicateIndex].conversion_factor || 1;
+    newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
+    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(3));
+    newEdits[duplicateIndex].isConfirmed = true;
+    
+    newEdits[rowIndex].isDeleted = true;
+    newEdits[rowIndex].matched_product_id = null;
+    
+    if (newEdits[rowIndex].observations) {
+      newEdits[duplicateIndex].observations = [
+        newEdits[duplicateIndex].observations,
+        newEdits[rowIndex].observations
+      ].filter(Boolean).join(' | ');
+    }
+    
+    setEditableItems(newEdits);
+    setDuplicateMatchConfirm(null);
+    setActiveSearchRowIndex(null);
+    showToast('Cantidad acumulada en la línea existente y fila duplicada descartada. ✅', 'success');
+  };
+
+  const handleKeepBothMatches = () => {
+    if (!duplicateMatchConfirm) return;
+    const { product, rowIndex } = duplicateMatchConfirm;
+    executeSelectProduct(product, rowIndex);
+    setDuplicateMatchConfirm(null);
   };
 
   const handleProductSearchKeyDown = (e: React.KeyboardEvent, rowIndex: number, filtered: any[]) => {
@@ -1180,7 +1504,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
       
       // Initialize editable items
-      const rawItems = getDraftItems(selectedDraft);
+      const rawItems = (() => {
+        if (meta.attachments && Array.isArray(meta.attachments) && meta.attachments[selectedAttachmentIndex]) {
+          return meta.attachments[selectedAttachmentIndex].items || [];
+        }
+        return getDraftItems(selectedDraft);
+      })();
       const initialEdits = rawItems.map((item: any) => {
         let cleanName = item.originalName || item.name || '';
         const rawOriginalName = cleanName;
@@ -1208,8 +1537,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (matchedProd) matchedId = matchedProd.id;
         }
         const prod = products.find(p => p.id === matchedId);
+        const productConversions = prod ? conversions.filter(c => c.product_id === prod.id) : [];
+        const detectedUnit = prod ? detectUnitFromName(rawOriginalName, prod, productConversions) : null;
         
         const parsedUnit = (() => {
+          if (detectedUnit) return detectedUnit.unit;
+          
+          const origLower = rawOriginalName.toLowerCase();
+          
+          // Priorizar unidades explícitas en el nombre original del producto (por ejemplo "1000 G", "Lb", "Kilo", "500g")
+          // sobre lo que sea que haya detectado el parser IA por defecto, ya que a veces detecta "Unidad" para nombres que terminan en "1000 G".
+          if (origLower.includes('libra') || origLower.includes(' lb ')) return 'Lb';
+          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos') || origLower.includes('500 gms') || origLower.includes('500 gr')) return 'Paquete 500 gramos';
+          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos') || origLower.includes('250 gms') || origLower.includes('250 gr')) return 'Paquete 250 gramos';
+          if (origLower.includes('1000 g') || origLower.includes('1000g') || origLower.includes('1000 gramos') || origLower.includes('1000 gms') || origLower.includes('1000 gr') || origLower.includes('1000gms') || origLower.includes('1000gr')) return 'Kg';
+          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
+          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilos') || origLower.includes('kilogramo') || origLower.includes('kilogramos')) return 'Kg';
+
           const u = (item.unit || '').toLowerCase().trim();
           if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
           if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
@@ -1233,12 +1577,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             return prod?.unit_of_measure || 'Kg';
           }
           
-          const origLower = rawOriginalName.toLowerCase();
-          if (origLower.includes('libra')) return 'Lb';
-          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos')) return 'Paquete 500 gramos';
-          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos')) return 'Paquete 250 gramos';
-          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
-          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilogramo') || origLower.includes('gramo') || origLower.includes(' g ')) return 'Kg';
           if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
             return prod?.unit_of_measure || 'Kg';
           }
@@ -1247,20 +1585,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         })();
 
         const initialQty = parseFloat(item.quantity || 1);
-        let conversionFactor = 1;
+        let conversionFactor = detectedUnit ? detectedUnit.factor : 1;
         let finalUnit = prod?.unit_of_measure || parsedUnit;
-        let foundDbConversion = false;
+        let foundDbConversion = detectedUnit ? true : false;
 
-        if (prod && conversions && conversions.length > 0) {
-          const dbConv = conversions.find(c => 
-            c.product_id === prod.id &&
-            normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
-            normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
-          );
-          if (dbConv) {
-            conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-            finalUnit = dbConv.to_unit || prod.unit_of_measure;
-            foundDbConversion = true;
+        if (!foundDbConversion) {
+          if (prod && conversions && conversions.length > 0) {
+            const dbConv = conversions.find(c => 
+              c.product_id === prod.id &&
+              normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
+              normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
+            );
+            if (dbConv) {
+              conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+              finalUnit = dbConv.to_unit || prod.unit_of_measure;
+              foundDbConversion = true;
+            }
           }
         }
 
@@ -1400,12 +1740,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Initialize delivery date from metadata if present
       const metadata = getDraftMetadata(selectedDraft);
+      const currentAtt = metadata.attachments && Array.isArray(metadata.attachments) ? metadata.attachments[selectedAttachmentIndex] : null;
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
-      setEditableDeliverySlot(computedSlot || metadata.deliverySlot || '');
+      setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || metadata.deliverySlot || '');
       setPriceList(metadata.priceList || '');
       setOrderDocument(metadata.orderDocument || 'Remisión');
       setPurchaseOrder(metadata.purchaseOrder || '');
-      let initialDateStr = metadata.deliveryDate || minDeliveryDate;
+      let initialDateStr = currentAtt?.deliveryDate || metadata.deliveryDate || minDeliveryDate;
       if (initialDateStr < minDeliveryDate) {
         initialDateStr = minDeliveryDate;
       }
@@ -1430,7 +1771,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPurchaseOrder('');
       setDeliveryDate(minDeliveryDate);
     }
-  }, [selectedDraft, products, aliases, conversions, profiles]);
+  }, [selectedDraft, products, aliases, conversions, profiles, selectedAttachmentIndex]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -1496,13 +1837,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       deliverySlot: deliverySlot,
       attachmentUrl: meta?.attachmentUrl || null,
       attachmentName: meta?.attachmentName || null,
+      attachments: meta?.attachments || null,
       rejectReason: meta?.rejectReason || null,
       latitude: meta?.latitude || null,
       longitude: meta?.longitude || null,
       priceList: meta?.priceList || null,
       orderDocument: meta?.orderDocument || null,
       purchaseOrder: meta?.purchaseOrder || null,
-      receiptEmailSent: meta?.receiptEmailSent || false
+      receiptEmailSent: meta?.receiptEmailSent || false,
+      emailHtml: meta?.emailHtml || null
     };
   };
 
@@ -2245,6 +2588,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // 3. Update the draft's extracted_items to include our manual edits
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      
+      let updatedAttachments = metaItem.attachments && Array.isArray(metaItem.attachments) ? [...metaItem.attachments] : [];
+      if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot || metaItem.deliverySlot || 'AM',
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+      }
+
       const updatedMetaItem = {
         ...metaItem,
         address: editableAddress,
@@ -2254,12 +2617,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         orderDocument: orderDocument,
         purchaseOrder: purchaseOrder,
         latitude: draftCoordinates?.lat || metaItem.latitude || null,
-        longitude: draftCoordinates?.lng || metaItem.longitude || null
+        longitude: draftCoordinates?.lng || metaItem.longitude || null,
+        attachments: updatedAttachments.length > 0 ? updatedAttachments : undefined
       };
-      const updatedExtractedItems = [
-        updatedMetaItem,
-        ...editableItems
-      ];
+      
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return updatedMetaItem;
+        }
+        return itm;
+      });
 
       await supabase
         .from('order_drafts')
@@ -2416,11 +2783,66 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         throw new Error('Error al registrar ítems: ' + itemsError.message);
       }
 
-      // 4. Update the draft status to approved
-      await supabase
-        .from('order_drafts')
-        .update({ status: 'approved' })
-        .eq('id', selectedDraft.id);
+      // 4. Update the draft status to approved and save updated attachments list
+      const updatedAttachments = metadata.attachments && Array.isArray(metadata.attachments) ? [...metadata.attachments] : [];
+      let isLastAttachment = true;
+      let nextUnprocessedIdx = -1;
+
+      if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          processed: true,
+          orderId: order.id,
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+
+        for (let i = 0; i < updatedAttachments.length; i++) {
+          if (!updatedAttachments[i].processed) {
+            isLastAttachment = false;
+            if (nextUnprocessedIdx === -1) {
+              nextUnprocessedIdx = i;
+            }
+          }
+        }
+      }
+
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            attachments: updatedAttachments
+          };
+        }
+        return itm;
+      });
+
+      if (isLastAttachment) {
+        await supabase
+          .from('order_drafts')
+          .update({ 
+            status: 'approved',
+            extracted_items: updatedExtractedItems
+          })
+          .eq('id', selectedDraft.id);
+      } else {
+        await supabase
+          .from('order_drafts')
+          .update({ 
+            extracted_items: updatedExtractedItems
+          })
+          .eq('id', selectedDraft.id);
+      }
 
       // 5. Send confirmation email (queue in mail table)
       if (selectedDraft.source_email && sendConfirmationEmail) {
@@ -2451,9 +2873,29 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         });
       }
 
-      showToast('Pedido registrado exitosamente ✅', 'success');
-      setShowConfirmModal(false);
-      setSelectedDraft(null);
+      if (isLastAttachment) {
+        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅', 'success');
+        setShowConfirmModal(false);
+        setSelectedDraft(null);
+      } else {
+        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+        setShowConfirmModal(false);
+        
+        // Update local selectedDraft state with updated attachments
+        const localDraftUpdated = {
+          ...selectedDraft,
+          extracted_items: updatedExtractedItems
+        };
+        setSelectedDraft(localDraftUpdated);
+        
+        // Update draft in parent drafts list
+        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
+        
+        // Advance to next unprocessed attachment index
+        if (nextUnprocessedIdx !== -1) {
+          setSelectedAttachmentIndex(nextUnprocessedIdx);
+        }
+      }
       fetchDrafts();
     } catch (e: any) {
       console.error('Error creating order directly:', e);
@@ -3352,9 +3794,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           backgroundColor: 'rgba(0,0,0,0.5)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: showFloatingEmail ? 'flex-start' : 'center',
           zIndex: 9999,
-          padding: '1rem'
+          padding: showFloatingEmail ? '1rem 0 1rem 24px' : '1rem',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <style>{`
             /* Estilos para Scrollbar Premium */
@@ -3403,14 +3846,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: '94%',
+            width: showFloatingEmail ? (isFloatingExpanded ? 'calc(100% - 1022px)' : 'calc(100% - 622px)') : '94%',
+            minWidth: showFloatingEmail ? '480px' : 'auto',
             maxWidth: '1400px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             position: 'relative',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
             {/* Modal Header */}
             <div style={{
@@ -3445,6 +3890,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowFloatingEmail(prev => !prev)}
+                  style={{
+                    backgroundColor: showFloatingEmail ? '#EFF6FF' : '#F1F5F9',
+                    color: showFloatingEmail ? '#2563EB' : '#475569',
+                    border: `1.5px solid ${showFloatingEmail ? '#BFDBFE' : '#E2E8F0'}`,
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Mail size={14} />
+                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
+                </button>
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
                 </button>
@@ -4084,17 +4550,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       }}>
                                         {item.originalName || item.name || item.producto || item.item || ''}
                                       </div>
-                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1 }}>
+                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1, display: 'flex', alignItems: 'center' }}>
                                         <span style={{
-                                          padding: '4px 10px',
-                                          backgroundColor: '#EFF6FF',
-                                          color: '#2563EB',
-                                          borderRadius: '20px',
+                                          padding: '2px 8px',
+                                          backgroundColor: '#FFFBEB',
+                                          color: '#B45309',
+                                          border: '1.5px solid #FBBF24',
+                                          boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)',
+                                          borderRadius: '6px',
                                           fontSize: '0.75rem',
-                                          fontWeight: 700,
+                                          fontWeight: 900,
                                           textDecoration: item.isDeleted ? 'line-through' : 'none'
                                         }}>
-                                          {item.originalQuantity || item.quantity || 1} unidades detectadas
+                                          {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
                                         </span>
                                       </div>
                                     </td>
@@ -4110,14 +4578,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             <input
                                               ref={el => { productInputRefs.current[i] = el; }}
                                               disabled={!isEditing || item.isDeleted}
-                                              value={matchedProd ? `${matchedProd.name} (${matchedProd.accounting_id || matchedProd.id})` : (item.searchQuery || '')}
+                                              value={matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : (item.searchQuery || '')}
                                               placeholder="Buscar ID..."
                                               list="all-products-list"
                                               onFocus={(e) => e.target.select()}
                                               onKeyDown={(e) => {
                                                 if (e.key === 'Tab') {
                                                   const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                   if (p) {
                                                     e.preventDefault();
                                                     openVariantModalForItem(p, i);
@@ -4125,11 +4593,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 } else if (e.key === 'Enter') {
                                                   e.preventDefault();
                                                   const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                   const newEdits = [...editableItems];
                                                   if (p) {
                                                     newEdits[i].matched_product_id = p.id;
-                                                    newEdits[i].searchQuery = `${p.name} (${p.accounting_id || p.id})`;
+                                                    newEdits[i].searchQuery = `${p.name} (${getAccountingIdDisplay(p)})`;
                                                     newEdits[i].skuQuery = p.sku || '';
                                                   }
                                                   newEdits[i].isConfirmed = true;
@@ -4164,7 +4632,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }}
                                               onChange={(e) => {
                                                 const val = e.target.value;
-                                                const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                 if (p) {
                                                   selectProduct(p, i);
                                                 } else {
@@ -4788,9 +5256,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     );
                   })()}
-                  <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: getDraftMetadata(selectedDraft).attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: getDraftMetadata(selectedDraft).attachmentUrl ? '12px' : '0' }}>
-                    {selectedDraft.email_body || '(Sin cuerpo)'}
-                  </div>
+                  {(() => {
+                    const metadata = getDraftMetadata(selectedDraft);
+                    if (metadata.emailHtml) {
+                      return (
+                        <div style={{ borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0', height: '350px', backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                          <iframe
+                            srcDoc={metadata.emailHtml}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              border: 'none',
+                              backgroundColor: 'white'
+                            }}
+                            sandbox="allow-same-origin allow-popups"
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0' }}>
+                        {selectedDraft.email_body || '(Sin cuerpo)'}
+                      </div>
+                    );
+                  })()}
                 </div>
               </details>
 
@@ -4921,6 +5410,584 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Ventana flotante premium con el cuerpo del correo original */}
+          {showFloatingEmail && (
+            <div style={{
+              position: 'fixed',
+              right: '24px',
+              top: '5vh',
+              width: isFloatingExpanded ? '950px' : '550px',
+              height: '90vh',
+              backgroundColor: 'white',
+              borderRadius: THEME.radius.xl,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+              zIndex: 10000,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }} onClick={e => e.stopPropagation()}>
+              {/* Header de la ventana flotante */}
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: '#F8FAFC',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Mail size={16} color="#2563EB" />
+                  <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Cuerpo del Correo</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsFloatingExpanded(prev => !prev)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      color: '#64748B',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background-color 0.2s, color 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#EFF6FF';
+                      e.currentTarget.style.color = '#2563EB';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#64748B';
+                    }}
+                    title={isFloatingExpanded ? "Contraer visor" : "Expandir visor"}
+                  >
+                    {isFloatingExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowFloatingEmail(false)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      color: '#64748B',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background-color 0.2s, color 0.2s'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#FEF2F2';
+                      e.currentTarget.style.color = '#EF4444';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#64748B';
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Asunto del correo */}
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: '#EFF6FF',
+                borderBottom: '1px solid #DBEAFE',
+                fontSize: '0.8rem',
+                color: '#1E40AF',
+                fontWeight: 700
+              }}>
+                Asunto: {selectedDraft.email_subject || '(Sin Asunto)'}
+              </div>
+
+              {/* Selector de Pestañas (Tabs) */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                if (!metadata.attachmentUrl) return null;
+                return (
+                  <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid #E2E8F0',
+                    backgroundColor: '#F8FAFC',
+                    padding: '0 8px',
+                    gap: '4px'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('email')}
+                      style={{
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: activeTab === 'email' ? 800 : 500,
+                        color: activeTab === 'email' ? '#2563EB' : '#64748B',
+                        borderBottom: activeTab === 'email' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Mail size={14} />
+                      Correo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('attachment')}
+                      style={{
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: activeTab === 'attachment' ? 800 : 500,
+                        color: activeTab === 'attachment' ? '#2563EB' : '#64748B',
+                        borderBottom: activeTab === 'attachment' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Paperclip size={14} />
+                      Adjunto
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Contenido Dinámico de la Pestaña */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                
+                // PESTAÑA: Adjunto
+                if (activeTab === 'attachment') {
+                  let currentUrl = metadata.attachmentUrl;
+                  let currentName = metadata.attachmentName;
+                  if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                    const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                    if (selectedAtt) {
+                      currentUrl = selectedAtt.url;
+                      currentName = selectedAtt.name;
+                    }
+                  }
+
+                  if (!currentUrl) {
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', backgroundColor: '#F8FAFC', color: '#64748B' }}>
+                        <span>No hay documentos adjuntos.</span>
+                      </div>
+                    );
+                  }
+
+                  const attachmentName = currentName || '';
+                  const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+
+                  // Inline helper for multiple attachments selectors
+                  const renderSelector = () => {
+                    if (!metadata.attachments || !Array.isArray(metadata.attachments) || metadata.attachments.length <= 1) return null;
+                    return (
+                      <div style={{
+                        display: 'flex',
+                        gap: '6px',
+                        padding: '8px 12px',
+                        backgroundColor: '#F1F5F9',
+                        borderBottom: '1px solid #E2E8F0',
+                        overflowX: 'auto',
+                        whiteSpace: 'nowrap'
+                      }} className="premium-scrollbar">
+                        {metadata.attachments.map((att: any, idx: number) => {
+                          const isActive = idx === selectedAttachmentIndex;
+                          const isProcessed = att.processed === true;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSelectAttachment(idx)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                border: '1px solid',
+                                borderColor: isActive ? '#2563EB' : (isProcessed ? '#10B981' : '#CBD5E1'),
+                                backgroundColor: isActive ? '#EFF6FF' : (isProcessed ? '#ECFDF5' : 'white'),
+                                color: isActive ? '#2563EB' : (isProcessed ? '#047857' : '#475569'),
+                                fontSize: '0.725rem',
+                                fontWeight: isActive ? 800 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <span>{isProcessed ? '✅' : '📎'}</span>
+                              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
+                                {att.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  };
+
+                  const wrapContent = (content: React.ReactNode) => {
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                        {renderSelector()}
+                        {content}
+                      </div>
+                    );
+                  };
+
+                  // 1. Caso: Excel (.xlsx, .xls)
+                  if (ext === 'xlsx' || ext === 'xls') {
+                    if (loadingAttachment) {
+                      return wrapContent(
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
+                          <style>{`
+                            @keyframes spin {
+                              from { transform: rotate(0deg); }
+                              to { transform: rotate(360deg); }
+                            }
+                          `}</style>
+                          <Loader2 size={32} color="#2563EB" style={{ animation: 'spin 1.2s linear infinite' }} />
+                          <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Cargando tabla Excel...</span>
+                        </div>
+                      );
+                    }
+                    if (attachmentError) {
+                      return wrapContent(
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                          <AlertTriangle size={32} color="#EF4444" />
+                          <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: 700 }}>{attachmentError}</span>
+                          <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#2563EB', fontWeight: 800, textDecoration: 'underline', marginTop: '4px' }}>
+                            Descargar archivo original
+                          </a>
+                        </div>
+                      );
+                    }
+                    if (attachmentHtml) {
+                      return wrapContent(
+                        <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '12px' }}>
+                          <style>{`
+                            #excel-table {
+                              border-collapse: collapse;
+                              width: max-content;
+                              min-width: 100%;
+                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                              font-size: 0.725rem;
+                              color: #334155;
+                              background-color: white;
+                              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                              border-radius: 8px;
+                              overflow: hidden;
+                              border: 1px solid #E2E8F0;
+                            }
+                            #excel-table td, #excel-table th {
+                              border: 1px solid #E2E8F0;
+                              padding: 8px 10px;
+                              min-width: 60px;
+                              white-space: nowrap;
+                              text-align: left;
+                            }
+                            #excel-table tr:first-child {
+                              background-color: #F1F5F9;
+                              font-weight: 800;
+                              color: #1E293B;
+                              position: sticky;
+                              top: 0;
+                              border-bottom: 2px solid #CBD5E1;
+                            }
+                            #excel-table tr:nth-child(even) {
+                              background-color: #F8FAFC;
+                            }
+                            #excel-table tr:hover {
+                              background-color: #EFF6FF;
+                            }
+                          `}</style>
+                          <div dangerouslySetInnerHTML={{ __html: attachmentHtml }} />
+                        </div>
+                      );
+                    }
+                    return null;
+                  }
+
+                  // 2. Caso: PDF (.pdf)
+                  if (ext === 'pdf') {
+                    return wrapContent(
+                      <div style={{ flex: 1, backgroundColor: 'white', position: 'relative' }}>
+                        <iframe
+                          src={currentUrl}
+                          style={{ width: '100%', height: '100%', border: 'none' }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // 3. Caso: Otros (Word .docx, .doc, etc.)
+                  return wrapContent(
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                      <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', width: '85%', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                        <FileText size={48} color="#2563EB" />
+                        <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#1E293B', wordBreak: 'break-all' }}>{attachmentName}</span>
+                        <span style={{ fontSize: '0.725rem', color: '#64748B' }}>Documento de oficina u otro formato adjunto</span>
+                        <a
+                          href={currentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            marginTop: '8px',
+                            backgroundColor: '#2563EB',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                          }}
+                        >
+                          <Download size={14} />
+                          Descargar Documento
+                        </a>
+                      </div>
+                      
+                      <a 
+                        href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(currentUrl)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: '0.75rem',
+                          color: '#2563EB',
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                          borderBottom: '1px dashed #2563EB'
+                        }}
+                      >
+                        Abrir en Visor de Office Online ↗
+                      </a>
+                    </div>
+                  );
+                }
+
+                // PESTAÑA: Correo (Default)
+                if (metadata.emailHtml) {
+                  return (
+                    <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
+                      <iframe
+                        srcDoc={metadata.emailHtml}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          backgroundColor: 'white'
+                        }}
+                        sandbox="allow-same-origin allow-popups"
+                      />
+                    </div>
+                  );
+                }
+                return (
+                  <div 
+                    className="premium-scrollbar"
+                    style={{
+                      padding: '16px',
+                      overflowY: 'auto',
+                      flex: 1,
+                      fontSize: '0.825rem',
+                      color: '#334155',
+                      lineHeight: '1.6',
+                      whiteSpace: 'pre-wrap',
+                      backgroundColor: '#FCFDFE',
+                      fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
+                    }}
+                  >
+                    {selectedDraft.email_body || '(Sin cuerpo de correo)'}
+                  </div>
+                );
+              })()}
+
+              {/* Barra de archivo adjunto si existe */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                let currentUrl = metadata.attachmentUrl;
+                let currentName = metadata.attachmentName;
+                if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                  const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                  if (selectedAtt) {
+                    currentUrl = selectedAtt.url;
+                    currentName = selectedAtt.name;
+                  }
+                }
+                
+                if (!currentUrl) return null;
+                return (
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#F1F5F9',
+                    borderTop: '1px solid #E2E8F0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={currentName}>
+                      📎 {currentName || 'Documento adjunto'}
+                    </span>
+                    <a
+                      href={currentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '0.75rem',
+                        color: '#2563EB',
+                        fontWeight: 800,
+                        textDecoration: 'none',
+                        padding: '4px 8px',
+                        backgroundColor: 'white',
+                        borderRadius: '6px',
+                        border: '1px solid #BFDBFE'
+                      }}
+                    >
+                      Ver original
+                    </a>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {duplicateMatchConfirm && duplicateMatchConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(17, 24, 39, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 16000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            width: '90%',
+            maxWidth: '480px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            padding: '24px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#FEF3C7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: '#D97706'
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 8px 0'
+            }}>
+              Producto Duplicado Detectado
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#4B5563',
+              margin: '0 0 24px 0',
+              lineHeight: '1.6'
+            }}>
+              El producto <strong>{duplicateMatchConfirm.product.name}</strong> 
+              {(() => {
+                const acctId = getAccountingIdDisplay(duplicateMatchConfirm.product);
+                return acctId && acctId !== duplicateMatchConfirm.product.id ? ` (ID Contable: ${acctId})` : '';
+              })()} 
+              ya está asignado a otra línea activa de este pedido. ¿Cómo deseas proceder?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleMergeDuplicateMatch}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#10B981',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                }}
+              >
+                Sumar y unificar cantidades
+              </button>
+              <button
+                type="button"
+                onClick={handleKeepBothMatches}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#2563EB',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                }}
+              >
+                Mantener filas separadas
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateMatchConfirm(null)}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
@@ -6112,8 +7179,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
-                    <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
-                      {editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity} {editableItems[selectedRowForVariant].originalUnit || 'uds'} detectadas
+                    <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
+                      {formatDetectedUnit(editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity, editableItems[selectedRowForVariant].originalUnit || 'uds')}
                     </span>
                   </div>
                   <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={editableItems[selectedRowForVariant].originalName}>
@@ -6575,7 +7642,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       )}
       <datalist id="all-products-list">
         {products.map(p => (
-          <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
+          <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
         ))}
       </datalist>
     </div>

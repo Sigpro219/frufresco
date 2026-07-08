@@ -16,7 +16,44 @@ export function Providers({ children }: { children: React.ReactNode }) {
             return false;
         };
 
+        const handleAuthError = (error: unknown) => {
+            if (!error) return false;
+            const msg = String(
+                (error as any)?.message || 
+                (error as any)?.reason?.message || 
+                error
+            ).toLowerCase();
+            
+            if (
+                msg.includes('jwt expired') || 
+                msg.includes('token expired') || 
+                msg.includes('refresh token') || 
+                msg.includes('invalid refresh token') ||
+                msg.includes('jwt')
+            ) {
+                console.warn('🚨 Auth/JWT Error detected. Resetting session and redirecting...');
+                if (typeof window !== 'undefined') {
+                    localStorage.clear();
+                    // Clear all supabase auth tokens
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && (key.includes('sb-') || key.includes('supabase'))) {
+                            localStorage.removeItem(key);
+                        }
+                    }
+                    window.location.href = '/login?error=reset';
+                }
+                return true;
+            }
+            return false;
+        };
+
         const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+            if (handleAuthError(event.reason)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                return;
+            }
             if (handleAbortError(event.reason)) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
@@ -24,6 +61,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
         };
 
         const onError = (event: ErrorEvent) => {
+            if (handleAuthError(event.error) || handleAuthError(event.message)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                return;
+            }
             if (handleAbortError(event.error) || handleAbortError(event.message)) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
@@ -34,10 +76,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // as the Turbopack overlay sometimes triggers on logged errors.
         const originalConsoleError = console.error;
         console.error = (...args) => {
+            let isJWTExpired = false;
             if (args.some(arg => {
                 if (!arg) return false;
                 if (isAbortError(arg)) return true;
-                const argStr = String(arg);
+                const argStr = String((arg as any)?.message || arg);
+                if (argStr.toLowerCase().includes('jwt expired')) {
+                    isJWTExpired = true;
+                    return true;
+                }
                 if (
                     argStr.includes('Failed to fetch') || 
                     argStr.includes('TypeError: Failed to fetch') || 
@@ -48,7 +95,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     return true;
                 }
                 return false;
-            })) return;
+            })) {
+                if (isJWTExpired) {
+                    handleAuthError('jwt expired');
+                }
+                return;
+            }
             originalConsoleError.apply(console, args);
         };
 
