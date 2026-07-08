@@ -167,7 +167,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 20000,
             padding: '1rem'
         }}>
             <div style={{
