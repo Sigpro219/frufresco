@@ -32,6 +32,8 @@ export default function DeliveryConfirmationPage() {
     const [canastillasDelivered, setCanastillasDelivered] = useState(0);
     const [canastillasReceived, setCanastillasReceived] = useState(0);
     const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
+    const [collectedAmount, setCollectedAmount] = useState<number | ''>('');
+    const [collectedMethod, setCollectedMethod] = useState<'efectivo' | 'transferencia'>('efectivo');
 
     const RETURN_REASONS = [
         "Producto en mal estado",
@@ -75,6 +77,7 @@ export default function DeliveryConfirmationPage() {
                 };
                 const data = mockStops[id];
                 setStop(data);
+                setCollectedAmount(150000);
                 
                 // Populate items for mock data
                 if (data.orders?.order_items) {
@@ -97,7 +100,7 @@ export default function DeliveryConfirmationPage() {
                 .select(`
                     id, route_id, status,
                     orders:order_id (
-                        id, shipping_address,
+                        id, shipping_address, payment_method, payment_status, total,
                         profiles:profile_id (
                             id, company_name, contact_name, role
                         ),
@@ -125,6 +128,9 @@ export default function DeliveryConfirmationPage() {
             }
 
             setStop(data);
+            if (data?.orders) {
+                setCollectedAmount((data.orders as any).total || 0);
+            }
             
             // Initialize items with 0 returned_qty
             const order = (data as any).orders;
@@ -265,9 +271,19 @@ export default function DeliveryConfirmationPage() {
             }
             
             // 1. Update stop status
+            const isContraEntrega = stop?.orders?.payment_method === 'contra_entrega';
+            const finalCollectedAmount = (isContraEntrega && !isTotalCancellation) 
+                ? (collectedAmount === '' ? 0 : collectedAmount) 
+                : 0;
+            const finalCollectedMethod = (isContraEntrega && !isTotalCancellation) 
+                ? collectedMethod 
+                : 'none';
+
             await supabase.from('route_stops').update({
                 status: isTotalCancellation ? 'failed' : 'delivered',
-                completion_time: new Date().toISOString()
+                completion_time: new Date().toISOString(),
+                collected_amount: finalCollectedAmount,
+                collected_method: finalCollectedMethod
             }).eq('id', id);
 
             // Check if this was the last pending stop on this route to complete the route
@@ -388,6 +404,31 @@ export default function DeliveryConfirmationPage() {
                     <span>{stop?.orders?.shipping_address || 'Sin dirección'}</span>
                 </div>
 
+                {/* Alerta Cobro Contra Entrega */}
+                {stop?.orders?.payment_method === 'contra_entrega' && (
+                    <div style={{
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        marginBottom: '1.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        textAlign: 'left'
+                    }}>
+                        <AlertTriangle size={24} color="#F59E0B" />
+                        <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#F59E0B', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                PAGO CONTRA ENTREGA REQUERIDO
+                            </div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'white', marginTop: '2px', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                Cobrar: ${(stop?.orders?.total || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Photo Evidence Section */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', marginBottom: '0.6rem', letterSpacing: '0.5px' }}>EVIDENCIA (FOTO)</div>
@@ -467,6 +508,68 @@ export default function DeliveryConfirmationPage() {
                         />
                     </div>
                 </div>
+
+                {/* Cobro Contra Entrega Form */}
+                {stop?.orders?.payment_method === 'contra_entrega' && (
+                    <div style={{
+                        padding: '1.25rem',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(5, 150, 105, 0.2)',
+                        backgroundColor: 'rgba(5, 150, 105, 0.03)',
+                        marginBottom: '1.5rem',
+                        textAlign: 'left'
+                    }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', marginBottom: '0.8rem', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-inter), sans-serif' }}>
+                            REGISTRO DE RECAUDO (CONTRA ENTREGA)
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px', fontFamily: 'var(--font-inter), sans-serif' }}>VALOR COBRADO ($)</div>
+                                <input 
+                                    type="number" 
+                                    className="input-op" 
+                                    placeholder="0"
+                                    value={collectedAmount}
+                                    onChange={(e) => setCollectedAmount(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '0.8rem', 
+                                        borderRadius: '12px', 
+                                        border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                        backgroundColor: 'rgba(9, 13, 22, 0.5)', 
+                                        color: 'white',
+                                        outline: 'none',
+                                        fontWeight: 'bold',
+                                        fontSize: '1rem',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px', fontFamily: 'var(--font-inter), sans-serif' }}>MÉTODO DE COBRO</div>
+                                <select 
+                                    value={collectedMethod}
+                                    onChange={(e: any) => setCollectedMethod(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '0.8rem', 
+                                        borderRadius: '12px', 
+                                        border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                        backgroundColor: 'rgba(9, 13, 22, 0.5)', 
+                                        color: 'white',
+                                        outline: 'none',
+                                        fontWeight: '600',
+                                        height: '46px',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    <option value="efectivo">Efectivo</option>
+                                    <option value="transferencia">Transferencia</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Novedades Switch */}
                 <div style={{ marginBottom: '1.5rem' }}>

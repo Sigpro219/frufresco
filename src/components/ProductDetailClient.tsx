@@ -53,8 +53,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         fetchMaster();
     }, []);
 
+    const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+    const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
+
     // Normalizar las opciones (viniendo de options o de options_config del Admin)
-    const displayOptions = product.options_config && product.options_config.length > 0
+    let displayOptions = product.options_config && product.options_config.length > 0
         ? product.options_config
             .filter((opt: any) => {
                 const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
@@ -62,15 +65,27 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             })
             .reduce((acc: any, opt: any) => {
                 let values = opt.values || [];
-                if (opt.name.toLowerCase().includes('presentaci') && (product.web_unit || product.unit_of_measure)) {
-                    const defaultVal = product.web_unit || product.unit_of_measure;
+                if (opt.name.toLowerCase().includes('presentaci')) {
+                    const defaultVal = product.web_unit || product.unit_of_measure || 'Kg';
                     if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
                         values = [defaultVal, ...values];
+                    }
+                    if (isBaseInKg && !values.some((v: string) => v.toLowerCase().includes('libra') || v.toLowerCase().includes('lb'))) {
+                        values = [...values, 'Libra|500'];
                     }
                 }
                 return { ...acc, [opt.name]: values };
             }, {})
         : product.options || {};
+
+    const hasPresentationKey = Object.keys(displayOptions).some(k => k.toLowerCase().includes('presentaci'));
+    if (isBaseInKg && !hasPresentationKey) {
+        const defaultVal = product.web_unit || product.unit_of_measure || 'Kg';
+        displayOptions = {
+            ...displayOptions,
+            'Presentación': [defaultVal, 'Libra|500']
+        };
+    }
 
     // Helper para extraer peso en Kg
     const getParsedWeight = (text: string): number | null => {
@@ -136,7 +151,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         Object.entries(selections).every(([key, value]) => v.options[key] === value)
     );
 
-    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected ? true : !!currentVariant) : true;
+    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
+    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;
     
     // Aplicar factor de conversión comercial
     const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price) : (product.pricing_model_prices?.[0]?.price || product.base_price);

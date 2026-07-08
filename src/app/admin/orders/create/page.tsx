@@ -35,7 +35,9 @@ import {
     Coins,
     Scale,
     User,
-    UploadCloud
+    UploadCloud,
+    Maximize2,
+    Minimize2
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -43,41 +45,62 @@ import VariantModal from '@/components/VariantModal';
 const formatDetectedUnit = (qty: number, unit: string) => {
     const u = (unit || '').toLowerCase();
     let cleanUnit = u;
-    let suffix = 'detectados';
+    let suffix = qty === 1 ? 'detectado' : 'detectados';
     
     if (u.includes('libra') || u.includes('lb')) {
         cleanUnit = qty === 1 ? 'libra' : 'libras';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('kilo') || u.includes('kg')) {
         cleanUnit = qty === 1 ? 'kilo' : 'kilos';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
         cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('litro') || u.includes('lt')) {
         cleanUnit = qty === 1 ? 'litro' : 'litros';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('frasco')) {
         cleanUnit = qty === 1 ? 'frasco' : 'frascos';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else if (u.includes('bolsa')) {
         cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('caja')) {
         cleanUnit = qty === 1 ? 'caja' : 'cajas';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (u.includes('atado')) {
         cleanUnit = qty === 1 ? 'atado' : 'atados';
-        suffix = 'detectados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
     } else {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = 'detectadas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     }
     
-    return `${qty} ${cleanUnit} ${suffix}`;
+    return `✨ ${qty} ${cleanUnit} ${suffix}`;
+};
+
+const getAccountingIdDisplay = (product: any) => {
+    if (!product) return '';
+    if (product.accounting_id) {
+        if (typeof product.accounting_id === 'number') {
+            return product.accounting_id.toString();
+        }
+        const match = String(product.accounting_id).match(/\d+/);
+        if (match) {
+            return parseInt(match[0], 10).toString();
+        }
+        return String(product.accounting_id);
+    }
+    if (product.sku) {
+        const skuMatch = product.sku.match(/^[A-Z]{2}-(\d+)/i);
+        if (skuMatch) {
+            return parseInt(skuMatch[1], 10).toString();
+        }
+    }
+    return product.id || '';
 };
 
 function CreateOrderContent() {
@@ -310,6 +333,17 @@ function CreateOrderContent() {
         onConfirm: () => void;
     } | null>(null);
 
+    const [duplicateConfirm, setDuplicateConfirm] = useState<{
+        isOpen: boolean;
+        product: any;
+        qty: number;
+        variantLabel?: string;
+        optionsRaw?: any;
+        unit?: string;
+        factor?: number;
+        existingIndex: number;
+    } | null>(null);
+
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
     useEffect(() => {
@@ -336,6 +370,8 @@ function CreateOrderContent() {
     }>({ clientInDocument: '', isMatch: true, documentType: null });
     const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [showFloatingDoc, setShowFloatingDoc] = useState(false);
+    const [isFloatingDocExpanded, setIsFloatingDocExpanded] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -740,7 +776,8 @@ function CreateOrderContent() {
         variantLabel?: string, 
         optionsRaw?: any,
         unit?: string,
-        factor?: number
+        factor?: number,
+        bypassDuplicateCheck = false
     ) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
         let finalLabel = variantLabel || '';
@@ -750,37 +787,66 @@ function CreateOrderContent() {
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
         const baseQty = parseFloat((qty * resolvedFactor).toFixed(2));
 
-        setCart(prev => {
-            const existingIndex = prev.findIndex(item =>
+        if (!bypassDuplicateCheck) {
+            const existingIndex = cart.findIndex(item =>
                 item.product.id === product.id && item.variant_label === finalLabel && item.originalUnit === resolvedUnit
             );
 
-            const resolvedPrice = contractPrices[product.id] || 0;
-
             if (existingIndex >= 0) {
-                const newCart = [...prev];
+                setDuplicateConfirm({
+                    isOpen: true,
+                    product,
+                    qty,
+                    variantLabel,
+                    optionsRaw,
+                    unit,
+                    factor,
+                    existingIndex
+                });
+                return;
+            }
+        }
+
+        const resolvedPrice = contractPrices[product.id] || 0;
+        setCart(prev => [{ 
+            product, 
+            qty: baseQty, 
+            price: resolvedPrice,
+            originalQty: qty,
+            originalUnit: resolvedUnit,
+            conversion_factor: resolvedFactor,
+            variant_label: finalLabel || undefined, 
+            selected_options: optionsRaw || {},
+            nickname: finalNickname,
+            picking_note: exc?.picking_note || undefined,
+            delivery_note: exc?.delivery_note || undefined
+        }, ...prev]);
+    };
+
+    const handleMergeDuplicateItem = () => {
+        if (!duplicateConfirm) return;
+        const { existingIndex, qty, factor } = duplicateConfirm;
+        const resolvedFactor = factor || 1;
+        setCart(prev => {
+            const newCart = [...prev];
+            if (newCart[existingIndex]) {
                 const item = { ...newCart[existingIndex] };
                 item.originalQty = parseFloat(((item.originalQty || 0) + qty).toFixed(2));
-                item.qty = parseFloat((item.originalQty * resolvedFactor).toFixed(2));
-                
-                const filteredCart = newCart.filter((_, i) => i !== existingIndex);
-                return [item, ...filteredCart];
-            } else {
-                return [{ 
-                    product, 
-                    qty: baseQty, 
-                    price: resolvedPrice,
-                    originalQty: qty,
-                    originalUnit: resolvedUnit,
-                    conversion_factor: resolvedFactor,
-                    variant_label: finalLabel || undefined, 
-                    selected_options: optionsRaw || {},
-                    nickname: finalNickname,
-                    picking_note: exc?.picking_note || undefined,
-                    delivery_note: exc?.delivery_note || undefined
-                }, ...prev];
+                item.qty = parseFloat((item.originalQty * (item.conversion_factor || resolvedFactor)).toFixed(2));
+                newCart[existingIndex] = item;
             }
+            return newCart;
         });
+        setDuplicateConfirm(null);
+        showToast('Cantidad acumulada en la línea existente. ✅', 'success');
+    };
+
+    const handleKeepDuplicateAsSeparate = () => {
+        if (!duplicateConfirm) return;
+        const { product, qty, variantLabel, optionsRaw, unit, factor } = duplicateConfirm;
+        addToCartDirectly(product, qty, variantLabel, optionsRaw, unit, factor, true);
+        setDuplicateConfirm(null);
+        showToast('Producto agregado como una fila separada. ✅', 'success');
     };
 
     const handleSaveVariantsFromOrder = async (productId: string, optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
@@ -1070,6 +1136,8 @@ function CreateOrderContent() {
             const url = URL.createObjectURL(file);
             setUploadedFileUrl(url);
             setUploadedFile(file);
+            setShowFloatingDoc(true);
+            setIsFloatingDocExpanded(false);
 
             const formData = new FormData();
             formData.append('file', file);
@@ -1182,23 +1250,33 @@ function CreateOrderContent() {
                 return null;
             };
 
+            // Ensure data is structured correctly
+            if (!data) {
+                throw new Error('La respuesta de la API está vacía');
+            }
+            const rawItems = Array.isArray(data.items) ? data.items : [];
+
             // Intentamos encontrar el mejor SKU sugerido para cada item extraído por la IA
-            const suggested = data.items.map((item: any) => {
+            const suggested = rawItems.map((item: any) => {
+                if (!item) return null;
+                const originalName = item.originalName || 'Producto Desconocido';
+                const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
+
                 // Algoritmo de Fuzzy Match simple
                 const match = products.find(p => 
-                    item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
-                    p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
+                    originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                    p.name.toLowerCase().includes(originalName.toLowerCase().split(' ')[0])
                 );
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
-                const detectedUnit = match ? detectUnitFromName(item.originalName, match, productConversions) : null;
+                const detectedUnit = match ? detectUnitFromName(originalName, match, productConversions) : null;
                 
                 return {
                     id: crypto.randomUUID(),
-                    originalName: item.originalName,
-                    quantity: detectedUnit ? parseFloat((item.quantity * detectedUnit.factor).toFixed(2)) : item.quantity,
-                    originalQtyInFile: item.quantity,
-                    originalQty: item.quantity,
+                    originalName: originalName,
+                    quantity: detectedUnit ? parseFloat((quantity * detectedUnit.factor).toFixed(2)) : quantity,
+                    originalQtyInFile: quantity,
+                    originalQty: quantity,
                     originalUnit: detectedUnit ? detectedUnit.unit : (match?.unit_of_measure || 'Kg'),
                     conversion_factor: detectedUnit ? detectedUnit.factor : 1,
                     suggestedProduct: match || null,
@@ -1217,18 +1295,20 @@ function CreateOrderContent() {
                         return opts;
                     })() : {}
                 };
-            });
+            }).filter(Boolean);
 
             // Lógica de Validación de Cliente (Auditoría)
             const selectedDetails = clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails();
-            const clientInFile = data.clientInDocument;
+            const clientInFile = data.clientInDocument || 'Cliente Desconocido';
             
             // Verificamos si hay coincidencia entre el documento y el sistema
             const selectedName = (selectedDetails?.company_name || selectedDetails?.contact_name || '').toUpperCase();
             const detectedName = clientInFile.toUpperCase();
             
-            const isMatch = selectedName.includes(detectedName.split(' ')[0]) || 
-                            detectedName.includes(selectedName.split(' ')[0]);
+            const isMatch = selectedName && detectedName && (
+                selectedName.includes(detectedName.split(' ')[0]) || 
+                detectedName.includes(selectedName.split(' ')[0])
+            );
 
             setImportValidation({
                 clientInDocument: clientInFile,
@@ -1714,7 +1794,14 @@ function CreateOrderContent() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
-            <div style={{ maxWidth: '1700px', margin: '0 auto', padding: '1rem 2rem' }}>
+            <div style={{
+                width: showFloatingDoc ? (isFloatingDocExpanded ? 'calc(100% - 998px)' : 'calc(100% - 598px)') : '100%',
+                maxWidth: showFloatingDoc ? 'none' : '1700px',
+                margin: showFloatingDoc ? '0' : '0 auto',
+                padding: showFloatingDoc ? '1rem 2rem 8rem 2rem' : '1rem 2rem',
+                transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxSizing: 'border-box'
+            }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{
                         display: 'inline-flex',
@@ -1734,7 +1821,7 @@ function CreateOrderContent() {
                     </Link>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: showFloatingDoc ? '1fr' : 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
 
                     {/* LEFT COLUMN: FORM */}
                     <div style={{ backgroundColor: THEME.colors.surface, padding: '2rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
@@ -2423,7 +2510,7 @@ function CreateOrderContent() {
                                 {/* Global Datalist for SKUs to improve performance */}
                                 <datalist id="all-products-list">
                                     {products.map(p => (
-                                        <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
+                                        <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
                                     ))}
                                 </datalist>
 
@@ -2545,7 +2632,7 @@ function CreateOrderContent() {
                                             <button 
                                                 onClick={() => {
                                                     if (uploadedFileUrl) {
-                                                        window.open(uploadedFileUrl, '_blank');
+                                                        setShowFloatingDoc(prev => !prev);
                                                     }
                                                 }}
                                                 title="Click para ver documento original"
@@ -2631,7 +2718,7 @@ function CreateOrderContent() {
                                                         <td style={{ padding: '1rem 2rem', width: '30%' }}>
                                                              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
                                                              <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
-                                                                 <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                 <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900' }}>
                                                                      {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
                                                                  </span>
                                                              </div>
@@ -2640,7 +2727,7 @@ function CreateOrderContent() {
                                                              <input 
                                                                  type="text"
                                                                  placeholder="Buscar ID..."
-                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.accounting_id || item.suggestedProduct.id})` : ''}
+                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${getAccountingIdDisplay(item.suggestedProduct)})` : ''}
                                                                  list="all-products-list"
                                                                  onFocus={(e) => e.target.select()}
                                                                  className="sku-search-input"
@@ -2648,7 +2735,7 @@ function CreateOrderContent() {
                                                                  onKeyDown={(e) => {
                                                                      if (e.key === 'Tab') {
                                                                          const val = e.currentTarget.value;
-                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                                          if (p) {
                                                                              e.preventDefault(); 
                                                                              openModalForStagedItem(
@@ -2665,7 +2752,7 @@ function CreateOrderContent() {
                                                                      } else if (e.key === 'Enter') {
                                                                          e.preventDefault();
                                                                          const val = e.currentTarget.value;
-                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
                                                                          if (p) {
                                                                              updateStagedItem(item.id, 'product', p);
                                                                          }
@@ -2835,7 +2922,7 @@ function CreateOrderContent() {
                                                 backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                             }}
                                         >
-                                            <span style={{ fontWeight: '600' }}>{p.name} {p.accounting_id && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.accounting_id})</span>}</span>
+                                            <span style={{ fontWeight: '600' }}>{p.name} <span style={{fontSize: '0.8em', color: '#6B7280'}}>({getAccountingIdDisplay(p)})</span></span>
                                             <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
                                                 {formatMoney(p.base_price)}/{p.unit_of_measure}
                                                 {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
@@ -2909,7 +2996,7 @@ function CreateOrderContent() {
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                                                             <span style={{ fontSize: '0.75rem', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '700' }}>
-                                                                ID: {item.product.accounting_id || 'N/A'}
+                                                                ID: {getAccountingIdDisplay(item.product)}
                                                             </span>
                                                             <span>•</span>
                                                             <button
@@ -3189,38 +3276,40 @@ function CreateOrderContent() {
                     </div>
 
                     {/* RIGHT COLUMN: SUMMARY */}
-                    <div>
-                        <div style={{ position: 'sticky', top: '2rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem', color: '#111827' }}>Resumen</h3>
+                    {!showFloatingDoc && (
+                        <div>
+                            <div style={{ position: 'sticky', top: '2rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem', color: '#111827' }}>Resumen</h3>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                <span style={{ color: '#6B7280' }}>Total Items:</span>
-                                <span style={{ fontWeight: 'bold' }}>{cart.length}</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                    <span style={{ color: '#6B7280' }}>Total Items:</span>
+                                    <span style={{ fontWeight: 'bold' }}>{cart.length}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
+                                    <span>TOTAL:</span>
+                                    <span>{formatMoney(calculateTotal())}</span>
+                                </div>
+
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={loading || cart.length === 0}
+                                    style={{
+                                        width: '100%', padding: '1rem', borderRadius: '12px',
+                                        backgroundColor: '#111827', color: 'white', border: 'none',
+                                        fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer',
+                                        opacity: (loading || cart.length === 0) ? 0.5 : 1,
+                                        marginBottom: '1rem'
+                                    }}
+                                >
+                                    {loading ? 'Creando...' : 'CONFIRMAR PEDIDO'}
+                                </button>
+
+                                <p style={{ fontSize: '0.8rem', color: '#9CA3AF', textAlign: 'center', lineHeight: '1.4' }}>
+                                    Al confirmar, el pedido entrará a la Mesa de Control en estado &quot;Recibido&quot; para su revisión y aprobación.
+                                </p>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
-                                <span>TOTAL:</span>
-                                <span>{formatMoney(calculateTotal())}</span>
-                            </div>
-
-                            <button
-                                onClick={handleSubmit}
-                                disabled={loading || cart.length === 0}
-                                style={{
-                                    width: '100%', padding: '1rem', borderRadius: '12px',
-                                    backgroundColor: '#111827', color: 'white', border: 'none',
-                                    fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer',
-                                    opacity: (loading || cart.length === 0) ? 0.5 : 1,
-                                    marginBottom: '1rem'
-                                }}
-                            >
-                                {loading ? 'Creando...' : 'CONFIRMAR PEDIDO'}
-                            </button>
-
-                            <p style={{ fontSize: '0.8rem', color: '#9CA3AF', textAlign: 'center', lineHeight: '1.4' }}>
-                                Al confirmar, el pedido entrará a la Mesa de Control en estado &quot;Recibido&quot; para su revisión y aprobación.
-                            </p>
                         </div>
-                    </div>
+                    )}
 
                 </div>
             </div>
@@ -3355,7 +3444,7 @@ function CreateOrderContent() {
                     <div style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 1000, backdropFilter: 'blur(3px)'
+                        zIndex: 12000, backdropFilter: 'blur(3px)'
                     }} onClick={() => closeProductModal()}>
 
                         <div
@@ -3413,7 +3502,7 @@ function CreateOrderContent() {
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                                             <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
-                                            <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
+                                            <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
                                                 {formatDetectedUnit(stagedItem.originalQtyInFile || stagedItem.quantity, stagedItem.originalUnit)}
                                             </span>
                                         </div>
@@ -3824,7 +3913,7 @@ function CreateOrderContent() {
                     <div style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 1100, backdropFilter: 'blur(3px)'
+                        zIndex: 13000, backdropFilter: 'blur(3px)'
                     }} onClick={() => setManageConversionsProduct(null)}>
 
                         <div
@@ -4366,6 +4455,116 @@ function CreateOrderContent() {
                 </div>
             )}
 
+            {duplicateConfirm && duplicateConfirm.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 11000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '2rem',
+                        width: '90%',
+                        maxWidth: '480px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FEF3C7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.5rem',
+                            color: '#D97706'
+                        }}>
+                            <AlertTriangle size={28} />
+                        </div>
+                        <h3 style={{
+                            fontSize: '1.25rem',
+                            fontWeight: 800,
+                            color: '#111827',
+                            margin: '0 0 0.5rem 0'
+                        }}>
+                            Producto Duplicado Detectado
+                        </h3>
+                        <p style={{
+                            fontSize: '0.9rem',
+                            color: '#4B5563',
+                            margin: '0 0 1.5rem 0',
+                            lineHeight: '1.6'
+                        }}>
+                            El producto <strong>{duplicateConfirm.product.name}</strong> 
+                            {duplicateConfirm.product.accounting_id ? ` (ID Contable: ${duplicateConfirm.product.accounting_id})` : ''} 
+                            ya está en este pedido. ¿Cómo deseas proceder?
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button
+                                type="button"
+                                onClick={handleMergeDuplicateItem}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#10B981',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                                }}
+                            >
+                                Sumar cantidad a la línea existente (+{duplicateConfirm.qty})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleKeepDuplicateAsSeparate}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#2563EB',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                                }}
+                            >
+                                Agregar como una fila separada
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDuplicateConfirm(null)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#F3F4F6',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: '#4B5563',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {toast && (
                 <div style={{
                     position: 'fixed',
@@ -4414,6 +4613,179 @@ function CreateOrderContent() {
                     >
                         <X size={16} />
                     </button>
+                </div>
+            )}
+
+            {/* Barra de resumen sticky inferior cuando la ventana flotante está activa */}
+            {showFloatingDoc && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    width: isFloatingDocExpanded ? 'calc(100% - 998px)' : 'calc(100% - 598px)',
+                    backgroundColor: 'white',
+                    borderTop: '1px solid #E2E8F0',
+                    boxShadow: '0 -10px 15px -3px rgba(0, 0, 0, 0.05), 0 -4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    padding: '1rem 2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    zIndex: 999,
+                    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxSizing: 'border-box'
+                }}>
+                    {/* Resumen del pedido */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Items</span>
+                            <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1E293B' }}>{cart.length}</span>
+                        </div>
+                        <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total a Pagar</span>
+                            <span style={{ fontSize: '1.5rem', fontWeight: 950, color: '#059669' }}>{formatMoney(calculateTotal())}</span>
+                        </div>
+                    </div>
+
+                    {/* Acciones */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', maxWidth: '220px', textAlign: 'right', lineHeight: '1.3' }}>
+                            El pedido se creará en estado &quot;Recibido&quot; para aprobación.
+                        </span>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading || cart.length === 0}
+                            style={{
+                                padding: '0.75rem 2rem',
+                                borderRadius: '12px',
+                                backgroundColor: '#1E293B',
+                                color: 'white',
+                                border: 'none',
+                                fontWeight: '800',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                opacity: (loading || cart.length === 0) ? 0.5 : 1,
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                            }}
+                            onMouseEnter={e => {
+                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = '#0F172A';
+                            }}
+                            onMouseLeave={e => {
+                                if (!loading && cart.length > 0) e.currentTarget.style.backgroundColor = '#1E293B';
+                            }}
+                        >
+                            {loading ? 'Creando...' : 'Confirmar Pedido'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Ventana flotante premium con el documento original */}
+            {showFloatingDoc && uploadedFileUrl && (
+                <div style={{
+                    position: 'fixed',
+                    right: '24px',
+                    top: '5vh',
+                    width: isFloatingDocExpanded ? '950px' : '550px',
+                    height: '90vh',
+                    backgroundColor: 'white',
+                    borderRadius: THEME.radius.xl,
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+                }} onClick={e => e.stopPropagation()}>
+                    <style>{`
+                        @keyframes fadeInUp {
+                            from { opacity: 0; transform: translateY(8px) scale(0.99); }
+                            to { opacity: 1; transform: translateY(0) scale(1); }
+                        }
+                    `}</style>
+                    {/* Header de la ventana flotante */}
+                    <div style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#F8FAFC',
+                        borderBottom: '1px solid #E2E8F0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FileText size={16} color="#2563EB" />
+                            <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>
+                                Documento Original ({importValidation.documentType || 'DOCUMENTO'})
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsFloatingDocExpanded(prev => !prev)}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    color: '#64748B',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background-color 0.2s, color 0.2s',
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                    e.currentTarget.style.color = '#2563EB';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                    e.currentTarget.style.color = '#64748B';
+                                }}
+                                title={isFloatingDocExpanded ? "Contraer visor" : "Expandir visor"}
+                            >
+                                {isFloatingDocExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                            </button>
+                            
+                            <button
+                                type="button"
+                                onClick={() => setShowFloatingDoc(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    color: '#64748B',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background-color 0.2s, color 0.2s'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                    e.currentTarget.style.color = '#EF4444';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                    e.currentTarget.style.color = '#64748B';
+                                }}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Visor del Documento */}
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: '#F1F5F9' }}>
+                        <iframe 
+                            src={uploadedFileUrl} 
+                            style={{ width: '100%', height: '100%', border: 'none' }}
+                            title="Visor de Documento Original"
+                        />
+                    </div>
                 </div>
             )}
         </main>
