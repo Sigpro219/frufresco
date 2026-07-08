@@ -10,6 +10,11 @@ import { Copy, Check } from 'lucide-react';
 function ResultContent() {
     const searchParams = useSearchParams();
     const transactionId = searchParams.get('id');
+    const codStatus = searchParams.get('status');
+    const reference = searchParams.get('reference');
+    const sequence = searchParams.get('sequence');
+    const createdAt = searchParams.get('created_at');
+    
     const [status, setStatus] = useState<'loading' | 'success' | 'pending' | 'error'>('loading');
     const [transactionData, setTransactionData] = useState<{
         status: string;
@@ -20,6 +25,17 @@ function ResultContent() {
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
+        if (codStatus === 'cod_success' && reference) {
+            setStatus('success');
+            setTransactionData({
+                status: 'APPROVED',
+                order_id: reference,
+                order_sequence: sequence ? parseInt(sequence) : 0,
+                order_created_at: createdAt || new Date().toISOString()
+            });
+            return;
+        }
+
         const checkStatus = async () => {
             if (!transactionId) {
                 setStatus('error');
@@ -42,7 +58,7 @@ function ResultContent() {
         };
 
         checkStatus();
-    }, [transactionId]);
+    }, [transactionId, codStatus, reference, sequence, createdAt]);
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -60,6 +76,7 @@ function ResultContent() {
     };
 
     const renderMessage = () => {
+        if (codStatus === 'cod_success') return '¡Pedido Recibido con Éxito!';
         switch (status) {
             case 'success': return '¡Pago Aprobado!';
             case 'pending': return 'Pago en Proceso';
@@ -91,14 +108,16 @@ function ResultContent() {
             <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem' }}>{renderMessage()}</h1>
 
             <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem', fontSize: '1.1rem' }}>
-                {status === 'success'
-                    ? 'Tu pedido ha sido confirmado y está siendo preparado por nuestro equipo.'
-                    : status === 'pending'
-                        ? 'Estamos esperando la confirmación de tu banco. Te avisaremos cuando el estado cambie.'
-                        : 'La transacción no pudo completarse. Por favor, intenta de nuevo o usa otro medio de pago.'}
+                {codStatus === 'cod_success'
+                    ? 'Tu pedido ha sido registrado con pago contra entrega. Alistaremos tus productos para despacharlos en la fecha indicada.'
+                    : status === 'success'
+                        ? 'Tu pedido ha sido confirmado y está siendo preparado por nuestro equipo.'
+                        : status === 'pending'
+                            ? 'Estamos esperando la confirmación de tu banco. Te avisaremos cuando el estado cambie.'
+                            : 'La transacción no pudo completarse. Por favor, intenta de nuevo o usa otro medio de pago.'}
             </p>
 
-            {transactionId && (
+            {(transactionId || codStatus === 'cod_success') && (
                 <div style={{
                     backgroundColor: '#F3F4F6',
                     padding: '1.25rem',
@@ -110,8 +129,12 @@ function ResultContent() {
                     gap: '0.5rem'
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>ID de Transacción</span>
-                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: '600' }}>{transactionId}</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>
+                            {codStatus === 'cod_success' ? 'Método de Pago' : 'ID de Transacción'}
+                        </span>
+                        <span style={{ fontSize: '0.9rem', fontFamily: codStatus === 'cod_success' ? 'sans-serif' : 'monospace', fontWeight: '600' }}>
+                            {codStatus === 'cod_success' ? 'Contra entrega (Efectivo/Transferencia)' : transactionId}
+                        </span>
                     </div>
                     {friendlyId && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E5E7EB', paddingTop: '0.75rem', marginTop: '0.25rem' }}>

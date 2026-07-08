@@ -39,6 +39,7 @@ const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), 
 export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart, updateItemQuantity } = useCart();
     const [isMounted, setIsMounted] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'wompi' | 'contra_entrega'>('wompi');
     const [name, setName] = useState('');
     const [identification, setIdentification] = useState('');
     const [email, setEmail] = useState('');
@@ -457,7 +458,7 @@ export default function CheckoutPage() {
 
             // Create a Promise race to handle potential Supabase client hangs
             const orderDataToInsert = {
-                type: 'b2c_wompi',
+                type: paymentMethod === 'wompi' ? 'b2c_wompi' : 'b2c',
                 status: 'pending_approval',
                 delivery_date: date,
                 shipping_address: address,
@@ -467,6 +468,8 @@ export default function CheckoutPage() {
                 latitude: safeLat,
                 longitude: safeLng,
                 profile_id: matchedProfileId || null,
+                payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
+                payment_status: 'Pendiente',
                 special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[ORIGIN: web]\n${specialNotes || ''}`
             };
 
@@ -502,6 +505,16 @@ export default function CheckoutPage() {
 
             if (!orderData) throw new Error('No se recibió confirmación del pedido.');
             console.log('✅ Pedido creado:', orderData.id);
+
+            if (paymentMethod === 'contra_entrega') {
+                console.log('3️⃣ Contra entrega selected. Redirecting directly to success result page...');
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('checkout_specialNotes');
+                }
+                clearCart();
+                router.push(`/checkout/result?reference=${orderData.id}&sequence=${orderData.sequence_id}&created_at=${encodeURIComponent(orderData.created_at)}&status=cod_success`);
+                return;
+            }
 
             console.log('3️⃣ Requesting Wompi hash...');
             
@@ -1318,6 +1331,98 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
+                            {/* Método de Pago Selector */}
+                            <div style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                    {locale === 'es' ? 'Método de Pago' : 'Payment Method'}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {/* Opción Wompi */}
+                                    <div 
+                                        onClick={() => setPaymentMethod('wompi')}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '1rem',
+                                            borderRadius: '16px',
+                                            border: `2px solid ${paymentMethod === 'wompi' ? 'var(--primary)' : 'rgba(0,0,0,0.06)'}`,
+                                            backgroundColor: paymentMethod === 'wompi' ? 'rgba(5, 150, 105, 0.03)' : 'white',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: paymentMethod === 'wompi' ? '0 4px 20px rgba(5, 150, 105, 0.05)' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                border: `2px solid ${paymentMethod === 'wompi' ? 'var(--primary)' : '#CBD5E1'}`,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: paymentMethod === 'wompi' ? 'var(--primary)' : 'transparent',
+                                                transition: 'all 0.2s'
+                                            }}>
+                                                {paymentMethod === 'wompi' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                    {locale === 'es' ? 'Pago Seguro Online' : 'Secure Online Payment'}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '500', marginTop: '2px', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                                    {locale === 'es' ? 'Tarjeta de crédito, débito, PSE, Nequi, etc.' : 'Credit card, debit, bank transfer.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <ShieldCheck size={20} color={paymentMethod === 'wompi' ? 'var(--primary)' : '#94A3B8'} style={{ opacity: 0.8 }} />
+                                    </div>
+
+                                    {/* Opción Contra Entrega */}
+                                    <div 
+                                        onClick={() => setPaymentMethod('contra_entrega')}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '1rem',
+                                            borderRadius: '16px',
+                                            border: `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'rgba(0,0,0,0.06)'}`,
+                                            backgroundColor: paymentMethod === 'contra_entrega' ? 'rgba(5, 150, 105, 0.03)' : 'white',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: paymentMethod === 'contra_entrega' ? '0 4px 20px rgba(5, 150, 105, 0.05)' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                border: `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#CBD5E1'}`,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'transparent',
+                                                transition: 'all 0.2s'
+                                            }}>
+                                                {paymentMethod === 'contra_entrega' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                    {locale === 'es' ? 'Pago Contra Entrega' : 'Cash on Delivery'}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '500', marginTop: '2px', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                                    {locale === 'es' ? 'Paga en efectivo o transferencia al recibir' : 'Pay with cash or bank transfer on receipt.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <Truck size={20} color={paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#94A3B8'} style={{ opacity: 0.8 }} />
+                                    </div>
+                                </div>
+                            </div>
+
                             <button
                                 className="btn-premium"
                                 style={{ 
@@ -1347,7 +1452,7 @@ export default function CheckoutPage() {
                                 ) : (outOfZone && !isB2B) ? (
                                     <>{locale === 'es' ? 'Sin Cobertura' : 'No Coverage'} <MapPin size={20} /></>
                                 ) : (
-                                    <>{locale === 'es' ? 'Pagar Pedido' : 'Pay Order'} <Rocket size={20} strokeWidth={2.5} /></>
+                                    <>{paymentMethod === 'wompi' ? (locale === 'es' ? 'Pagar Pedido' : 'Pay Order') : (locale === 'es' ? 'Confirmar Pedido' : 'Confirm Order')} <Rocket size={20} strokeWidth={2.5} /></>
                                 )}
                             </button>
 
