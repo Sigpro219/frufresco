@@ -1467,21 +1467,18 @@ export default function CheckoutPage() {
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center', 
-                                gap: '8px',
-                                padding: '10px 16px',
-                                borderRadius: '12px',
-                                backgroundColor: '#F8FAFC',
-                                border: '1px solid #F1F5F9',
-                                color: '#64748B',
+                                gap: '6px',
+                                color: '#94A3B8',
                                 fontSize: '0.75rem',
-                                fontWeight: '600',
-                                fontFamily: 'var(--font-inter), sans-serif'
+                                fontWeight: '500',
+                                fontFamily: 'var(--font-inter), sans-serif',
+                                opacity: 0.8
                             }}>
-                                <LockIcon size={14} color="#059669" style={{ marginRight: '4px' }} />
+                                <LockIcon size={12} color="#94A3B8" />
                                 <span>
                                     {locale === 'es' 
-                                        ? 'Tus datos están protegidos con seguridad SSL de 256 bits' 
-                                        : 'Your data is secured using 256-bit SSL encryption'}
+                                        ? 'Tus datos están protegidos con cifrado SSL' 
+                                        : 'Your data is secured with SSL encryption'}
                                 </span>
                             </div>
                         </div>
