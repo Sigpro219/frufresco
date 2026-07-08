@@ -8,6 +8,7 @@ import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { ShieldAlert, Loader2 } from 'lucide-react';
 import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
+import VariantModal from '@/components/VariantModal';
 import { 
     MessageSquare, 
     Phone, 
@@ -40,7 +41,8 @@ import {
     Eye,
     MapPin,
     Scale,
-    Send
+    Send,
+    Lock
 } from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
@@ -162,6 +164,11 @@ export default function OrderLoadingPage() {
     const [editMode, setEditMode] = useState(false);
     const [updateLoading, setUpdateLoading] = useState(false);
     
+    const isOrderLocked = () => {
+        if (!selectedOrder) return true;
+        return ['picking', 'shipped', 'in_transit', 'delivered', 'cancelled'].includes(selectedOrder.status);
+    };
+    
     // Bulk Selection State
     const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -183,8 +190,11 @@ export default function OrderLoadingPage() {
 
     // Variant Selection Modal States (For products with options)
     const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
+    const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
+    const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
     // Contract / pricing model states
     const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+    const [customPriceIds, setCustomPriceIds] = useState<Set<string>>(new Set());
     const [activePricingModel, setActivePricingModel] = useState<any>(null);
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
@@ -269,20 +279,49 @@ export default function OrderLoadingPage() {
             setIsB2CDefault(b2cFallback);
             setIsContractExpired(expired);
 
-            // 3. Load prices for the resolved model
+            // 3. Load prices for the resolved model with fallback B2C prices
             if (resolvedModel) {
-                const { data: prices } = await supabase
+                const map: Record<string, number> = {};
+                const customIds = new Set<string>();
+
+                // Fetch B2C prices first if active model is not Clientes B2C
+                if (resolvedModel.name !== 'Clientes B2C') {
+                    const { data: b2cModel } = await supabase
+                        .from('pricing_models')
+                        .select('id')
+                        .eq('name', 'Clientes B2C')
+                        .single();
+                    
+                    if (b2cModel) {
+                        const { data: b2cPrices } = await supabase
+                            .from('pricing_model_prices')
+                            .select('product_id, price')
+                            .eq('model_id', b2cModel.id);
+                        
+                        b2cPrices?.forEach((p: any) => {
+                            map[p.product_id] = p.price;
+                        });
+                    }
+                }
+
+                // Fetch active model prices
+                const { data: activePrices } = await supabase
                     .from('pricing_model_prices')
                     .select('product_id, price')
                     .eq('model_id', resolvedModel.id);
                 
-                const map: Record<string, number> = {};
-                prices?.forEach((p: any) => {
+                activePrices?.forEach((p: any) => {
                     map[p.product_id] = p.price;
+                    if (resolvedModel.name !== 'Clientes B2C') {
+                        customIds.add(p.product_id);
+                    }
                 });
+
                 setContractPrices(map);
+                setCustomPriceIds(customIds);
             } else {
                 setContractPrices({});
+                setCustomPriceIds(new Set());
             }
         }
 
@@ -506,7 +545,7 @@ export default function OrderLoadingPage() {
                 .select(`
                     *,
                     products (
-                        name, sku, accounting_id, unit_of_measure, weight_kg, image_url
+                        name, sku, accounting_id, unit_of_measure, weight_kg, image_url, iva_rate
                     )
                 `)
                 .eq('order_id', order.id);
@@ -526,7 +565,7 @@ export default function OrderLoadingPage() {
                     const productIds = [...new Set(rawItems.map(i => i.product_id))];
                     const { data: rawProducts, error: prodErr } = await supabase
                         .from('products')
-                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url')
+                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url, iva_rate')
                         .in('id', productIds);
                     
                     if (!prodErr && rawProducts) {
@@ -557,6 +596,15 @@ export default function OrderLoadingPage() {
 
     // Real-time calculations
     const currentTotal = orderItems.reduce((acc, item) => acc + ((item.unit_price || 0) * item.quantity), 0);
+    const currentTax = orderItems.reduce((acc, item) => {
+        const price = Number(item.unit_price || 0);
+        const qty = Number(item.quantity || 0);
+        const itemTotal = price * qty;
+        const rate = item.products?.iva_rate !== null && item.products?.iva_rate !== undefined ? Number(item.products.iva_rate) : 19;
+        const ivaAmount = itemTotal * (rate / (100 + rate));
+        return acc + ivaAmount;
+    }, 0);
+    const currentSubtotal = currentTotal - currentTax;
     const currentWeight = orderItems.reduce((acc, item) => {
         const unit = (item.products?.unit_of_measure || '').toLowerCase();
         // Consistente con el creador de pedidos y base de datos: usa weight_kg si está definido, de lo contrario cae a 1 si la unidad es kg
@@ -614,7 +662,7 @@ export default function OrderLoadingPage() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
                     .eq('is_active', true)
                     .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
                     .limit(8);
@@ -761,7 +809,7 @@ export default function OrderLoadingPage() {
             const fetchAndSubstitute = async () => {
                 const { data: subProduct } = await supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
                     .eq('id', exc.substitution_product_id)
                     .single();
                 
@@ -840,7 +888,7 @@ export default function OrderLoadingPage() {
             };
             setOrderItems(newOrderItems);
         } else {
-            const resolvedPrice = contractPrices[product.id] !== undefined && contractPrices[product.id] !== null ? contractPrices[product.id] : product.base_price;
+            const resolvedPrice = contractPrices[product.id] !== undefined && contractPrices[product.id] !== null ? contractPrices[product.id] : 0;
             const newItem = {
                 order_id: selectedOrder.id,
                 product_id: product.id,
@@ -854,7 +902,8 @@ export default function OrderLoadingPage() {
                     sku: product.sku,
                     accounting_id: product.accounting_id,
                     unit_of_measure: product.unit_of_measure,
-                    weight_kg: product.weight_kg
+                    weight_kg: product.weight_kg,
+                    iva_rate: product.iva_rate
                 },
                 isNew: true
             };
@@ -903,7 +952,9 @@ export default function OrderLoadingPage() {
                     status: editStatus,
                     delivery_date: editDeliveryDate,
                     total: currentTotal,
-                    total_weight_kg: currentWeight
+                    total_weight_kg: currentWeight,
+                    subtotal: currentSubtotal,
+                    tax: currentTax
                 })
                 .eq('id', selectedOrder.id);
 
@@ -935,6 +986,10 @@ export default function OrderLoadingPage() {
 
             // Consolidador de Ítems (Bulk Upsert para Nuevos y Modificados)
             const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
+                const rate = item.products?.iva_rate !== null && item.products?.iva_rate !== undefined ? Number(item.products.iva_rate) : 19;
+                const itemTotal = (item.unit_price || 0) * item.quantity;
+                const ivaAmount = itemTotal * (rate / (100 + rate));
+
                 const baseItem: any = {
                     order_id: selectedOrder.id,
                     product_id: item.product_id,
@@ -942,7 +997,9 @@ export default function OrderLoadingPage() {
                     unit_price: item.unit_price,
                     variant_label: item.variant_label,
                     selected_options: item.selected_options,
-                    nickname: item.nickname || item.variant_label || null
+                    nickname: item.nickname || item.variant_label || null,
+                    iva_rate: rate,
+                    iva_amount: ivaAmount
                 };
                 if (!item.isNew) {
                     baseItem.id = item.id;
@@ -996,7 +1053,9 @@ export default function OrderLoadingPage() {
                 status: editStatus, 
                 delivery_date: editDeliveryDate, 
                 total: currentTotal,
-                total_weight_kg: currentWeight
+                total_weight_kg: currentWeight,
+                subtotal: currentSubtotal,
+                tax: currentTax
             } : o));
             
             setSelectedOrder({ 
@@ -1004,7 +1063,9 @@ export default function OrderLoadingPage() {
                 status: editStatus, 
                 delivery_date: editDeliveryDate,
                 total: currentTotal,
-                total_weight_kg: currentWeight
+                total_weight_kg: currentWeight,
+                subtotal: currentSubtotal,
+                tax: currentTax
             });
             
             setEditMode(false);
@@ -1844,7 +1905,22 @@ export default function OrderLoadingPage() {
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                    {!editMode ? (
+                                    {isOrderLocked() ? (
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            backgroundColor: '#F1F5F9',
+                                            color: '#64748B',
+                                            padding: '8px 16px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.875rem',
+                                            fontWeight: '700',
+                                            border: '1px solid #CBD5E1'
+                                        }}>
+                                            <Lock size={14} style={{ color: '#EF4444' }} /> Edición Cerrada
+                                        </div>
+                                    ) : !editMode ? (
                                         <button 
                                             onClick={() => setEditMode(true)}
                                             style={{
@@ -2001,7 +2077,7 @@ export default function OrderLoadingPage() {
                                                             </div>
                                                             <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                 <span>
-                                                                    {formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0))}/{prod.unit_of_measure}
+                                                                    {formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : 0)}/{prod.unit_of_measure}
                                                                 </span>
                                                                 {prod.options_config && prod.options_config.length > 0 && (
                                                                     <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
@@ -2070,6 +2146,22 @@ export default function OrderLoadingPage() {
                                                                              <div style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.75rem', backgroundColor: '#EEF2FF', padding: '2px 8px', borderRadius: '4px', border: '1px solid #C7D2FE', display: 'inline-flex', alignItems: 'center' }}>
                                                                                  Entr: {exc.delivery_note}
                                                                              </div>
+                                                                         )}
+                                                                         {/* Pricing Source Badge */}
+                                                                         {contractPrices[item.product_id] !== undefined && contractPrices[item.product_id] !== null ? (
+                                                                             customPriceIds.has(item.product_id) ? (
+                                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                     Tarifa Contrato
+                                                                                 </span>
+                                                                             ) : (
+                                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                     Tarifa B2C (Defecto)
+                                                                                 </span>
+                                                                             )
+                                                                         ) : (
+                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                 ⚠️ Sin Precio
+                                                                             </span>
                                                                          )}
                                                                      </>
                                                                  );
@@ -2224,6 +2316,16 @@ export default function OrderLoadingPage() {
                                     )}
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', marginBottom: '8px' }}>
+                                        <div style={{ fontSize: '0.85rem', color: '#64748B' }}>
+                                            <span>Subtotal (Neto): </span>
+                                            <span style={{ fontWeight: '700', color: '#334155' }}>{formatMoney(currentSubtotal)}</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', color: '#64748B' }}>
+                                            <span>IVA Estimado: </span>
+                                            <span style={{ fontWeight: '700', color: '#334155' }}>{formatMoney(currentTax)}</span>
+                                        </div>
+                                    </div>
                                     <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
                                     <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669', lineHeight: '1' }}>
                                         {formatMoney(currentTotal)}
@@ -2560,6 +2662,53 @@ export default function OrderLoadingPage() {
                                         </select>
                                     </div>
                                 </div>
+
+                                {/* Panel de Equivalencias Premium */}
+                                {itemConversions.length > 0 && (
+                                    <div style={{
+                                        margin: '1.5rem 0',
+                                        padding: '1rem',
+                                        backgroundColor: '#F0FDF4',
+                                        borderRadius: '12px',
+                                        border: '1px solid #DCFCE7',
+                                        textAlign: 'left'
+                                    }}>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#15803D', marginBottom: '8px' }}>
+                                            ⚖️ Conversiones de Equivalencia Sugeridas
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                            {itemConversions.map(c => {
+                                                const isSelected = selectedUnit === c.from_unit;
+                                                return (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedUnit(c.from_unit);
+                                                            setSelectedConversionFactor(parseFloat(c.conversion_factor) || 1);
+                                                        }}
+                                                        style={{
+                                                            backgroundColor: isSelected ? '#DCFCE7' : 'white',
+                                                            border: `1px solid ${isSelected ? '#15803D' : '#CBD5E1'}`,
+                                                            color: isSelected ? '#15803D' : '#334155',
+                                                            padding: '6px 12px',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '700',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        {c.from_unit} ({c.conversion_factor} {c.to_unit})
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Footer buttons */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>

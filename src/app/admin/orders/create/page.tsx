@@ -111,34 +111,66 @@ function CreateOrderContent() {
     // Helpers to format inputs with thousands separator (.) and decimal (,)
     const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
         if (qtyStr === undefined || qtyStr === null) return '';
-        // Remove existing dots and convert comma to dot to check validity
-        const clean = qtyStr.toString().replace(/\./g, '').replace(',', '.');
-        const parsed = parseFloat(clean);
-        if (isNaN(parsed)) return qtyStr.toString();
+        
+        if (typeof qtyStr === 'number') {
+            const parts = qtyStr.toString().split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        }
 
-        // Split by decimal comma of the input
-        const parts = qtyStr.toString().replace(/\./g, '').split(',');
-        const integerPart = parts[0];
-        const decimalPart = parts[1];
+        const str = qtyStr.toString();
+        const hasComma = str.includes(',');
+        const hasDot = str.includes('.');
 
-        // Format integer part with dot for thousands
-        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        if (hasComma) {
+            const parts = str.replace(/\./g, '').split(',');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else if (hasDot) {
+            const parts = str.split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else {
+            return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
     };
 
     const formatPriceDisplay = (price: number | string | undefined | null): string => {
         if (price === undefined || price === null || price === '') return '';
-        const clean = price.toString().replace(/\./g, '').replace(',', '.');
-        const parsed = parseFloat(clean);
-        if (isNaN(parsed)) return price.toString();
+        
+        if (typeof price === 'number') {
+            const parts = price.toString().split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        }
 
-        const parts = price.toString().replace(/\./g, '').split(',');
-        const integerPart = parts[0];
-        const decimalPart = parts[1];
+        const str = price.toString();
+        const hasComma = str.includes(',');
+        const hasDot = str.includes('.');
 
-        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        if (hasComma) {
+            const parts = str.replace(/\./g, '').split(',');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else if (hasDot) {
+            const parts = str.split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else {
+            return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
     };
 
     // Data Sources
