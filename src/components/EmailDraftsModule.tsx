@@ -873,6 +873,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isB2CDefault, setIsB2CDefault] = useState(false);
   const [isContractExpired, setIsContractExpired] = useState(false);
 
+  const currentProfileForContract = selectedDraft ? profiles.find(p => p.id === selectedDraft.profile_id) : null;
+  const contractModelId = currentProfileForContract?.pricing_model_id || null;
+
   useEffect(() => {
     async function resolveContract() {
       if (!selectedDraft) {
@@ -883,19 +886,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return;
       }
 
-      const currentProfile = profiles.find(p => p.id === selectedDraft.profile_id);
-      const modelId = currentProfile?.pricing_model_id || null;
-
       let resolvedModel: any = null;
       let expired = false;
       let b2cFallback = false;
 
       // 1. Fetch current pricing model if defined
-      if (modelId) {
+      if (contractModelId) {
         const { data: pm } = await supabase
           .from('pricing_models')
           .select('*')
-          .eq('id', modelId)
+          .eq('id', contractModelId)
           .single();
         
         if (pm) {
@@ -951,7 +951,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     resolveContract();
-  }, [selectedDraft, deliveryDate, profiles]);
+  }, [selectedDraft?.id, contractModelId, deliveryDate]);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);

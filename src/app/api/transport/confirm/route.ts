@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -7,6 +8,11 @@ const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 export async function POST(request: Request) {
     try {
+        const auth = await verifySessionAndPermission(request, 'admin.transport.edit');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await request.json();
         const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes } = body;
 

@@ -43,6 +43,7 @@ export default function TechUserGovernance() {
     const [pending, setPending] = useState<PendingRequest[]>([]);
     const [activeUsers, setActiveUsers] = useState<ActiveTechUser[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [systemRoles, setSystemRoles] = useState<any[]>([]);
 
     const filteredActiveUsers = useMemo(() => {
         if (!searchQuery.trim()) return activeUsers;
@@ -132,6 +133,7 @@ export default function TechUserGovernance() {
             if (!res.ok) throw new Error(data.error || 'Error al obtener datos');
             setPending(data.pending || []);
             setActiveUsers(data.active || []);
+            setSystemRoles(data.systemRoles || []);
         } catch (err: any) {
             console.error('Error fetching governance:', err);
             setError(err.message || 'Error al conectar con la API de gobernanza');
@@ -1134,10 +1136,17 @@ export default function TechUserGovernance() {
                         </p>
 
                         <div style={{ marginBottom: '1.5rem' }}>
-                            <PermissionTreeEditor 
-                                initialPermissions={tempPermissions} 
-                                onChange={setTempPermissions} 
-                            />
+                            {(() => {
+                                const userRoleObj = systemRoles.find(r => r.value === editingPermissionsUser.profile_role);
+                                const rolePermissions = userRoleObj ? userRoleObj.permissions || [] : [];
+                                return (
+                                    <PermissionTreeEditor 
+                                        initialPermissions={tempPermissions} 
+                                        onChange={setTempPermissions} 
+                                        rolePermissions={rolePermissions}
+                                    />
+                                );
+                            })()}
                         </div>
 
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>

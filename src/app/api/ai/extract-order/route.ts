@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as XLSX from 'xlsx';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
+    const auth = await verifySessionAndPermission(req, 'admin.orders');
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     
