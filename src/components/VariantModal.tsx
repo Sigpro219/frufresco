@@ -315,7 +315,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                                     }}
                                                                     style={{ cursor: 'pointer' }}
                                                                 />
-                                                                {val}
+                                                                {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
                                                             </label>
                                                         );
                                                     })}

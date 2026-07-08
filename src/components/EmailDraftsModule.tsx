@@ -237,8 +237,8 @@ const detectUnitFromName = (originalName: string, product: any, productConversio
                             factor = parseFloat(product.web_conversion_factor) || 1;
                         } else {
                             // Intentar calcular factor dinámico usando parseWeight
-                            if (cleanUnit.includes('|')) {
-                                const grams = parseFloat(cleanUnit.split('|')[1]);
+                            if (val.includes('|')) {
+                                const grams = parseFloat(val.split('|')[1]);
                                 if (!isNaN(grams) && grams > 0) factor = grams / 1000;
                             } else {
                                 const clean = cleanUnit.toLowerCase();
