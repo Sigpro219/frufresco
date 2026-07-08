@@ -1016,7 +1016,7 @@ export async function POST(req: Request) {
             clientType: clientType,
             attachmentUrl: attachmentUrl || null,
             attachmentName: attachmentName || null,
-            attachments: uploadedAttachments,
+            attachments: parsedAttachments,
             emailHtml: htmlText || null
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
