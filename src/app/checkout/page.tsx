@@ -1462,23 +1462,27 @@ export default function CheckoutPage() {
                                 </p>
                             )}
 
-                            <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                                    <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
-                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{locale === 'es' ? 'Pago seguro' : 'Secure Payment'}</span>
-                                    <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                                        <ShieldCheck size={12} color="#10B981" /> Wompi
-                                    </span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                                        <Truck size={12} color="#3B82F6" /> Contraentrega
-                                    </span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                                        <LockIcon size={12} color="#8B5CF6" /> SSL
-                                    </span>
-                                </div>
+                            <div style={{ 
+                                marginTop: '1.5rem', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: '8px',
+                                padding: '10px 16px',
+                                borderRadius: '12px',
+                                backgroundColor: '#F8FAFC',
+                                border: '1px solid #F1F5F9',
+                                color: '#64748B',
+                                fontSize: '0.75rem',
+                                fontWeight: '600',
+                                fontFamily: 'var(--font-inter), sans-serif'
+                            }}>
+                                <LockIcon size={14} color="#059669" style={{ marginRight: '4px' }} />
+                                <span>
+                                    {locale === 'es' 
+                                        ? 'Tus datos están protegidos con seguridad SSL de 256 bits' 
+                                        : 'Your data is secured using 256-bit SSL encryption'}
+                                </span>
                             </div>
                         </div>
                     </div>
