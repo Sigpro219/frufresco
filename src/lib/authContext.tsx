@@ -196,27 +196,41 @@ export function checkUserPermission(
     // Super admins always have full access
     if (profile.role === 'admin' || profile.role === 'sys_admin') return true;
 
-    // 1. Check custom profile-level permissions
     const userPerms = profile.custom_permissions || [];
-    if (userPerms.includes('*') || userPerms.includes(requiredPerm)) return true;
-    for (const p of userPerms) {
-        if (p.endsWith('*') && requiredPerm.startsWith(p.slice(0, -1))) return true;
-        if (requiredPerm.startsWith(p + '.') || requiredPerm.startsWith(p + ':')) return true;
-        // Child-to-parent check: if user has a child permission (e.g. 'com.billing'), they can see parent menu ('com')
-        if (p.startsWith(requiredPerm + '.') || p.startsWith(requiredPerm + ':')) return true;
-    }
 
-    // 2. Check role-level base permissions if roles config is provided
+    const matches = (rule: string, target: string): boolean => {
+        const cleanRule = rule.replace(/^[-+]/, '');
+        if (cleanRule === '*' || cleanRule === target) return true;
+        if (cleanRule.endsWith('*') && target.startsWith(cleanRule.slice(0, -1))) return true;
+        if (target.startsWith(cleanRule + '.') || target.startsWith(cleanRule + ':')) return true;
+        return false;
+    };
+
+    // 1. Check explicit denies first (prefix '-')
+    const hasDeny = userPerms.some(p => p.startsWith('-') && matches(p, requiredPerm));
+    if (hasDeny) return false;
+
+    // 2. Check custom profile-level explicit allows (prefix '+' or no prefix)
+    const hasAllow = userPerms.some(p => {
+        const cleanP = p.replace(/^\+/, '');
+        if (matches(cleanP, requiredPerm)) return true;
+        // Child-to-parent check: e.g. if user has 'com.billing', they can see parent 'com'
+        if (cleanP.startsWith(requiredPerm + '.') || cleanP.startsWith(requiredPerm + ':')) return true;
+        return false;
+    });
+    if (hasAllow) return true;
+
+    // 3. Fallback to role-level base permissions
     if (rolesConfig && rolesConfig.length > 0) {
         const userRole = rolesConfig.find(r => r.value === profile.role);
         if (userRole) {
             const rolePerms = userRole.permissions || [];
-            if (rolePerms.includes(requiredPerm)) return true;
-            for (const p of rolePerms) {
-                if (p.endsWith('*') && requiredPerm.startsWith(p.slice(0, -1))) return true;
-                if (requiredPerm.startsWith(p + '.') || requiredPerm.startsWith(p + ':')) return true;
+            const hasRoleAllow = rolePerms.some(p => {
+                if (matches(p, requiredPerm)) return true;
                 if (p.startsWith(requiredPerm + '.') || p.startsWith(requiredPerm + ':')) return true;
-            }
+                return false;
+            });
+            if (hasRoleAllow) return true;
         }
     }
 

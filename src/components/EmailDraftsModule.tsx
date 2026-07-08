@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -133,6 +134,154 @@ const getNextAllowedDeliveryDate = (baseDateStr: string, allowedDays: number[]):
   return baseDateStr;
 };
 
+const getAccountingIdDisplay = (product: any) => {
+    if (!product) return '';
+    if (product.accounting_id) {
+        if (typeof product.accounting_id === 'number') {
+            return product.accounting_id.toString();
+        }
+        const match = String(product.accounting_id).match(/\d+/);
+        if (match) {
+            return parseInt(match[0], 10).toString();
+        }
+        return String(product.accounting_id);
+    }
+    if (product.sku) {
+        const skuMatch = product.sku.match(/^[A-Z]{2}-(\d+)/i);
+        if (skuMatch) {
+            return parseInt(skuMatch[1], 10).toString();
+        }
+    }
+    return product.id || '';
+};
+
+const formatDetectedUnit = (qty: number, unit: string) => {
+    const u = (unit || '').toLowerCase();
+    let cleanUnit = u;
+    let suffix = qty === 1 ? 'detectado' : 'detectados';
+    
+    if (u.includes('libra') || u.includes('lb')) {
+        cleanUnit = qty === 1 ? 'libra' : 'libras';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('kilo') || u.includes('kg')) {
+        cleanUnit = qty === 1 ? 'kilo' : 'kilos';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
+        cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('litro') || u.includes('lt')) {
+        cleanUnit = qty === 1 ? 'litro' : 'litros';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('frasco')) {
+        cleanUnit = qty === 1 ? 'frasco' : 'frascos';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (u.includes('bolsa')) {
+        cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('caja')) {
+        cleanUnit = qty === 1 ? 'caja' : 'cajas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (u.includes('atado')) {
+        cleanUnit = qty === 1 ? 'atado' : 'atados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    }
+    
+    return `✨ ${qty} ${cleanUnit} ${suffix}`;
+};
+
+const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
+    const cleanName = originalName.toLowerCase();
+    
+    // 1. Obtener todas las unidades posibles para este producto
+    const possibleUnits: { unit: string; factor: number }[] = [];
+    
+    if (product.web_unit && product.web_conversion_factor) {
+        possibleUnits.push({
+            unit: product.web_unit,
+            factor: parseFloat(product.web_conversion_factor) || 1
+        });
+    }
+    
+    if (product.unit_of_measure) {
+        possibleUnits.push({
+            unit: product.unit_of_measure,
+            factor: 1
+        });
+    }
+    
+    productConversions.forEach(c => {
+        if (!possibleUnits.some(u => u.unit.toLowerCase() === c.from_unit.toLowerCase())) {
+            possibleUnits.push({
+                unit: c.from_unit,
+                factor: parseFloat(c.conversion_factor) || 1
+            });
+        }
+    });
+    
+    // También agregar variantes del options_config
+    if (product.options_config) {
+        product.options_config.forEach((opt: any) => {
+            if (opt.name.toLowerCase().includes('presentaci')) {
+                opt.values?.forEach((val: string) => {
+                    const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                    if (!possibleUnits.some(u => u.unit.toLowerCase() === cleanUnit.toLowerCase())) {
+                        let factor = 1;
+                        const defaultUnit = product.web_unit || product.unit_of_measure;
+                        if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                            factor = parseFloat(product.web_conversion_factor) || 1;
+                        } else {
+                            // Intentar calcular factor dinámico usando parseWeight
+                            if (val.includes('|')) {
+                                const grams = parseFloat(val.split('|')[1]);
+                                if (!isNaN(grams) && grams > 0) factor = grams / 1000;
+                            } else {
+                                const clean = cleanUnit.toLowerCase();
+                                const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+                                if (kgMatch) factor = parseFloat(kgMatch[1]);
+                                const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+                                if (gMatch) factor = parseFloat(gMatch[1]) / 1000;
+                                if (clean.includes('libra') || clean.includes('lb')) factor = 0.5;
+                            }
+                        }
+                        possibleUnits.push({ unit: cleanUnit, factor });
+                    }
+                });
+            }
+        });
+    }
+    
+    // 2. Buscar en originalName qué unidad coincide mejor
+    for (const u of possibleUnits) {
+        const unitLower = u.unit.toLowerCase();
+        if (unitLower.length > 2) {
+            if (cleanName.includes(unitLower)) {
+                return u;
+            }
+        }
+    }
+    
+    if (cleanName.includes('libra') || cleanName.includes('lb')) {
+        const lbUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('libra') || u.unit.toLowerCase().includes('lb'));
+        if (lbUnit) return lbUnit;
+    }
+    if (cleanName.includes('kilo') || cleanName.includes('kg')) {
+        const kgUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('kilo') || u.unit.toLowerCase().includes('kg'));
+        if (kgUnit) return kgUnit;
+    }
+    if (cleanName.includes('unidad') || cleanName.includes('ud') || cleanName.includes('und')) {
+        const undUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('unidad') || u.unit.toLowerCase().includes('und') || u.unit.toLowerCase().includes('ud'));
+        if (undUnit) return undUnit;
+    }
+    
+    return null;
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -149,7 +298,136 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
-  const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+  const [duplicateMatchConfirm, setDuplicateMatchConfirm] = useState<{
+    isOpen: boolean;
+    product: any;
+    rowIndex: number;
+    duplicateIndex: number;
+  } | null>(null);
+  const [showFloatingEmail, setShowFloatingEmail] = useState(true);
+  const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
+  const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
+  const [loadingAttachment, setLoadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
+
+  const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
+
+  useEffect(() => {
+    setActiveTab('email');
+    setAttachmentHtml(null);
+    setAttachmentError(null);
+    setIsFloatingExpanded(false);
+    setSelectedAttachmentIndex(0);
+  }, [selectedDraft?.id]);
+
+  useEffect(() => {
+    if (!selectedDraft || activeTab !== 'attachment') return;
+    const metadata = getDraftMetadata(selectedDraft);
+    
+    // Choose correct attachment URL and Name based on selectedAttachmentIndex
+    let currentUrl = metadata.attachmentUrl;
+    let currentName = metadata.attachmentName;
+    if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+      const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+      if (selectedAtt) {
+        currentUrl = selectedAtt.url;
+        currentName = selectedAtt.name;
+      }
+    }
+    
+    if (!currentUrl) return;
+    
+    const attachmentName = currentName || '';
+    const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+    
+    if (ext === 'xlsx' || ext === 'xls') {
+      setLoadingAttachment(true);
+      setAttachmentError(null);
+      setAttachmentHtml(null);
+      
+      fetch(currentUrl)
+        .then(res => {
+          if (!res.ok) throw new Error("No se pudo descargar el archivo Excel.");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const html = XLSX.utils.sheet_to_html(worksheet, { id: 'excel-table' });
+          setAttachmentHtml(html);
+        })
+        .catch(err => {
+          console.error("Error loading attachment:", err);
+          setAttachmentError(err.message || "Error al procesar el archivo Excel.");
+        })
+        .finally(() => {
+          setLoadingAttachment(false);
+        });
+    }
+  }, [selectedDraft, activeTab, selectedAttachmentIndex]);
+
+  const handleSelectAttachment = (idx: number) => {
+    if (!selectedDraft) return;
+    
+    // Save current changes to the previous index
+    const metadata = getDraftMetadata(selectedDraft);
+    if (metadata.attachments && Array.isArray(metadata.attachments)) {
+      const updatedAttachments = [...metadata.attachments];
+      if (updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot,
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+      }
+      
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            attachments: updatedAttachments
+          };
+        }
+        return itm;
+      });
+      
+      // Update local state without hitting DB yet (we will persist when they approve the order)
+      setSelectedDraft((prev: any) => ({
+        ...prev,
+        extracted_items: updatedExtractedItems
+      }));
+      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+    }
+    
+    // Switch to new attachment index
+    setSelectedAttachmentIndex(idx);
+  };
+
+  const getMinDeliveryDate = () => {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const bogotaNow = new Date(utc + (3600000 * -5));
+    const currentHour = bogotaNow.getHours();
+    const daysToAdd = currentHour >= 17 ? 2 : 1;
+    const result = new Date(bogotaNow);
+    result.setDate(bogotaNow.getDate() + daysToAdd);
+    return result.toISOString().split('T')[0];
+  };
+  const minDeliveryDate = getMinDeliveryDate();
+  const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
@@ -171,6 +449,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [profiles, setProfiles] = useState<any[]>([]);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const quantityInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [obsModal, setObsModal] = useState<{
     isOpen: boolean;
@@ -219,6 +498,460 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeVariantRow, setActiveVariantRow] = useState<number | null>(null);
   const [activeEquivalenceRow, setActiveEquivalenceRow] = useState<number | null>(null);
+
+  const [activeSearchRowIndex, setActiveSearchRowIndex] = useState<number | null>(null);
+  const [focusedProductIndex, setFocusedProductIndex] = useState<number>(-1);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
+  const [selectedRowForVariant, setSelectedRowForVariant] = useState<number | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [variantQuantity, setVariantQuantity] = useState<string>('1');
+  const [selectedUnit, setSelectedUnit] = useState<string>('Kg');
+  const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
+  const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (selectedProductForVariant) {
+      const timer = setTimeout(() => {
+        if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
+          const firstSelect = document.getElementById('modal-select-0');
+          if (firstSelect) firstSelect.focus();
+        } else {
+          const qtyInput = document.getElementById('modal-qty-input');
+          if (qtyInput) {
+            qtyInput.focus();
+            (qtyInput as HTMLInputElement).select();
+          }
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedProductForVariant]);
+
+  const normalizeUnitName = (u: string): string => {
+    const normalized = (u || '').toLowerCase().trim();
+    if (['libra', 'libras', 'lb', 'lbs', 'libra.', 'libras.'].includes(normalized)) return 'libra';
+    if (['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos'].includes(normalized)) return 'kg';
+    if (['unidad', 'unidades', 'und', 'unds', 'ud', 'uds'].includes(normalized)) return 'unidad';
+    if (['litro', 'litros', 'lt', 'lts', 'l'].includes(normalized)) return 'litro';
+    return normalized;
+  };
+
+  const formatQuantity = (val: number | string | null | undefined): string => {
+    if (val === undefined || val === null || val === '') return '';
+    const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
+    if (isNaN(num)) return '';
+    return num.toLocaleString('es-CO', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 3
+    });
+  };
+
+  const parseQuantity = (val: string): number => {
+    if (!val) return 0;
+    const normalized = val.replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const safeFetchJson = async (res: Response) => {
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      if (!res.ok) {
+        throw new Error(text || `Error de servidor (${res.status})`);
+      }
+      throw new Error(`Respuesta no válida del servidor: ${text.slice(0, 100)}`);
+    }
+    
+    if (!res.ok) {
+      throw new Error(json.error || `Error del servidor (${res.status})`);
+    }
+    
+    return json;
+  };
+
+  useEffect(() => {
+    async function loadClientExceptions() {
+      if (!selectedDraft || !selectedDraft.profile_id) {
+        setClientExceptions([]);
+        return;
+      }
+      const { data: excs } = await supabase
+        .from('product_nicknames')
+        .select('*')
+        .eq('customer_id', selectedDraft.profile_id);
+      if (excs) {
+        setClientExceptions(excs);
+      } else {
+        setClientExceptions([]);
+      }
+    }
+    loadClientExceptions();
+  }, [selectedDraft?.profile_id]);
+
+  const openVariantModalForItem = (product: any, rowIndex: number) => {
+    setSelectedProductForVariant(product);
+    setSelectedRowForVariant(rowIndex);
+    
+    const item = editableItems[rowIndex];
+    setVariantQuantity(item.quantity ? String(item.quantity).replace('.', ',') : '1');
+    setSelectedUnit(item.unit || product.unit_of_measure || 'Kg');
+    setSelectedConversionFactor(item.conversion_factor || 1);
+    setSelectedOptions(item.selected_options || {});
+  };
+
+  const confirmVariantAdd = () => {
+    if (selectedRowForVariant === null || !selectedProductForVariant) return;
+    
+    const idx = selectedRowForVariant;
+    const newEdits = [...editableItems];
+    const qty = parseQuantity(variantQuantity) || 0;
+    
+    newEdits[idx].quantity = qty;
+    newEdits[idx].quantity_text = undefined;
+    newEdits[idx].unit = selectedUnit;
+    newEdits[idx].conversion_factor = selectedConversionFactor;
+    newEdits[idx].selected_options = selectedOptions;
+    newEdits[idx].isConfirmed = true;
+    
+    const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 1);
+    if (newEdits[idx].originalQuantity) {
+      newEdits[idx].conversion_factor = parseFloat((qty / origQty).toFixed(3));
+    }
+    
+    setEditableItems(newEdits);
+    setSelectedProductForVariant(null);
+    setSelectedRowForVariant(null);
+
+    // Auto-focus next row's product input
+    setTimeout(() => {
+      const nextInput = productInputRefs.current[idx + 1];
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+      } else {
+        const approveBtn = document.getElementById('btn-approve-draft');
+        if (approveBtn) approveBtn.focus();
+      }
+    }, 80);
+  };
+
+  const selectProduct = (product: any, rowIndex: number) => {
+    // Check if product is already matched in another row
+    const duplicateIndex = editableItems.findIndex((item, idx) =>
+      idx !== rowIndex && !item.isDeleted && !item.isMetadata && item.matched_product_id === product.id
+    );
+
+    if (duplicateIndex >= 0) {
+      setDuplicateMatchConfirm({
+        isOpen: true,
+        product,
+        rowIndex,
+        duplicateIndex
+      });
+      return;
+    }
+
+    executeSelectProduct(product, rowIndex);
+  };
+
+  const executeSelectProduct = (product: any, rowIndex: number) => {
+    const newEdits = [...editableItems];
+    newEdits[rowIndex].matched_product_id = product.id;
+    newEdits[rowIndex].searchQuery = product.name;
+    newEdits[rowIndex].skuQuery = product.sku || '';
+    newEdits[rowIndex].isConfirmed = false;
+    
+    const currentOriginalUnit = newEdits[rowIndex].originalUnit || newEdits[rowIndex].unit || 'Kg';
+    let conversionFactor = 1;
+    let targetUnit = product.unit_of_measure || 'Kg';
+    let foundDbConversion = false;
+
+    if (conversions && conversions.length > 0) {
+      const dbConv = conversions.find(c => 
+        c.product_id === product.id &&
+        normalizeUnitName(c.from_unit) === normalizeUnitName(currentOriginalUnit) &&
+        normalizeUnitName(c.to_unit) === normalizeUnitName(targetUnit)
+      );
+      if (dbConv) {
+        conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+        targetUnit = dbConv.to_unit || product.unit_of_measure;
+        foundDbConversion = true;
+      }
+    }
+
+    if (!foundDbConversion) {
+      const u = (product.unit_of_measure || '').toLowerCase().trim();
+      let normalizedUnit = 'Kg';
+      if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
+      else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
+      else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
+      else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
+      else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
+      else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
+        normalizedUnit = getSmartFallbackUnit(product.name, 'Kg');
+      }
+      else if (product.unit_of_measure) {
+        normalizedUnit = getSmartFallbackUnit(product.name, product.unit_of_measure);
+      }
+      targetUnit = normalizedUnit;
+
+      const isLibra = currentOriginalUnit === 'Lb';
+      conversionFactor = isLibra ? 0.5 : 1;
+      
+      const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 1);
+      if (origQty >= 100 && !isLibra) {
+        if (targetUnit === 'Kg') {
+          conversionFactor = 0.001;
+        } else if (targetUnit === 'Atado') {
+          conversionFactor = 0.002;
+        }
+      }
+    }
+
+    newEdits[rowIndex].conversion_factor = conversionFactor;
+    newEdits[rowIndex].unit = targetUnit;
+    const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 1);
+    newEdits[rowIndex].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
+    
+    const autoSelectedOptions: Record<string, string> = {};
+    const rawOriginalName = newEdits[rowIndex].originalName || '';
+    let extraDescription = '';
+    if (product && product.name) {
+      const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+      const prodClean = product.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+      const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
+      const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
+      const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+      extraDescription = extraWords.join(' ');
+    }
+    let finalObservations = [newEdits[rowIndex].observations || '', extraDescription].filter(Boolean).join(' ').trim();
+    
+    if (product.variants && product.variants.length > 0) {
+      const variantOptionNames = new Set<string>();
+      let isOldFormat = false;
+      product.variants.forEach((v: any) => {
+        if (v.name && Array.isArray(v.options)) {
+          isOldFormat = true;
+        } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+          Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+        }
+      });
+
+      let variantOptionsList = product.variants;
+      if (!isOldFormat) {
+        variantOptionsList = Array.from(variantOptionNames).map(name => {
+          const values = new Set<string>();
+          product.variants.forEach((v: any) => {
+            if (v.options && v.options[name]) values.add(v.options[name]);
+          });
+          return { name, options: Array.from(values) };
+        });
+      }
+      
+      const searchText = `${rawOriginalName} ${finalObservations}`.toLowerCase();
+      variantOptionsList.forEach((v: any) => {
+        if (Array.isArray(v.options)) {
+          for (const optVal of v.options) {
+            const matchResult = matchVariantOption(searchText, String(optVal));
+            if (matchResult.matched && matchResult.matchedTextInSearch) {
+              autoSelectedOptions[v.name] = optVal;
+              const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+              const regex = new RegExp(`\\b${escapeRegex(matchResult.matchedTextInSearch)}\\b`, 'gi');
+              finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
+              break;
+            }
+          }
+        }
+      });
+    }
+    
+    newEdits[rowIndex].selected_options = autoSelectedOptions;
+    newEdits[rowIndex].observations = finalObservations;
+    
+    setEditableItems(newEdits);
+    setActiveSearchRowIndex(null);
+  };
+
+  const handleMergeDuplicateMatch = () => {
+    if (!duplicateMatchConfirm) return;
+    const { product, rowIndex, duplicateIndex } = duplicateMatchConfirm;
+    
+    const newEdits = [...editableItems];
+    
+    const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
+    const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
+    
+    const factor = newEdits[duplicateIndex].conversion_factor || 1;
+    newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
+    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(3));
+    newEdits[duplicateIndex].isConfirmed = true;
+    
+    newEdits[rowIndex].isDeleted = true;
+    newEdits[rowIndex].matched_product_id = null;
+    
+    if (newEdits[rowIndex].observations) {
+      newEdits[duplicateIndex].observations = [
+        newEdits[duplicateIndex].observations,
+        newEdits[rowIndex].observations
+      ].filter(Boolean).join(' | ');
+    }
+    
+    setEditableItems(newEdits);
+    setDuplicateMatchConfirm(null);
+    setActiveSearchRowIndex(null);
+    showToast('Cantidad acumulada en la línea existente y fila duplicada descartada. ✅', 'success');
+  };
+
+  const handleKeepBothMatches = () => {
+    if (!duplicateMatchConfirm) return;
+    const { product, rowIndex } = duplicateMatchConfirm;
+    executeSelectProduct(product, rowIndex);
+    setDuplicateMatchConfirm(null);
+  };
+
+  const handleProductSearchKeyDown = (e: React.KeyboardEvent, rowIndex: number, filtered: any[]) => {
+    if (filtered.length === 0) return;
+    
+    let nextIndex = focusedProductIndex;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = focusedProductIndex < filtered.length - 1 ? focusedProductIndex + 1 : focusedProductIndex;
+      setFocusedProductIndex(nextIndex);
+      setTimeout(() => {
+        const el = document.getElementById(`search-item-${rowIndex}-${nextIndex}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }, 10);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = focusedProductIndex > 0 ? focusedProductIndex - 1 : focusedProductIndex;
+      setFocusedProductIndex(nextIndex);
+      setTimeout(() => {
+        const el = document.getElementById(`search-item-${rowIndex}-${nextIndex}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }, 10);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (focusedProductIndex >= 0 && focusedProductIndex < filtered.length) {
+        e.preventDefault();
+        selectProduct(filtered[focusedProductIndex], rowIndex);
+        setFocusedProductIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      setActiveSearchRowIndex(null);
+      setFocusedProductIndex(-1);
+    }
+  };
+
+  const optionsList = (() => {
+    if (!selectedProductForVariant) return [];
+    const list = [{ unit: selectedProductForVariant.unit_of_measure || 'Kg', factor: 1, label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)` }];
+    const prodConvs = conversions ? conversions.filter(c => c.product_id === selectedProductForVariant.id) : [];
+    prodConvs.forEach(c => {
+      let displayUnit = c.from_unit || '';
+      const norm = normalizeUnitName(displayUnit);
+      if (norm === 'libra') displayUnit = 'libra';
+      else if (norm === 'kg') displayUnit = 'Kg';
+      else if (norm === 'unidad') displayUnit = 'Unidad';
+      else if (norm === 'litro') displayUnit = 'Litro';
+
+      if (!list.some(l => normalizeUnitName(l.unit) === norm)) {
+        list.push({
+          unit: displayUnit,
+          factor: parseFloat(c.conversion_factor) || 1,
+          label: `${displayUnit} (${parseFloat(c.conversion_factor)} ${selectedProductForVariant.unit_of_measure || 'Kg'})`
+        });
+      }
+    });
+    return list;
+  })();
+
+  const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+  const [activePricingModel, setActivePricingModel] = useState<any>(null);
+  const [isB2CDefault, setIsB2CDefault] = useState(false);
+  const [isContractExpired, setIsContractExpired] = useState(false);
+
+  const currentProfileForContract = selectedDraft ? profiles.find(p => p.id === selectedDraft.profile_id) : null;
+  const contractModelId = currentProfileForContract?.pricing_model_id || null;
+
+  useEffect(() => {
+    async function resolveContract() {
+      if (!selectedDraft) {
+        setContractPrices({});
+        setActivePricingModel(null);
+        setIsB2CDefault(false);
+        setIsContractExpired(false);
+        return;
+      }
+
+      let resolvedModel: any = null;
+      let expired = false;
+      let b2cFallback = false;
+
+      // 1. Fetch current pricing model if defined
+      if (contractModelId) {
+        const { data: pm } = await supabase
+          .from('pricing_models')
+          .select('*')
+          .eq('id', contractModelId)
+          .single();
+        
+        if (pm) {
+          resolvedModel = pm;
+          // Validate expiration against deliveryDate
+          if (deliveryDate) {
+            const delivery = deliveryDate.split('T')[0];
+            const start = pm.start_date?.split('T')[0];
+            const end = pm.end_date?.split('T')[0];
+            if (start && start > delivery) {
+              expired = true;
+            }
+            if (end && end < delivery) {
+              expired = true;
+            }
+          }
+        }
+      }
+
+      // 2. Fallback to Clientes B2C if no model or if expired
+      if (!resolvedModel || expired) {
+        b2cFallback = true;
+        const { data: b2cModel } = await supabase
+          .from('pricing_models')
+          .select('*')
+          .eq('name', 'Clientes B2C')
+          .single();
+        
+        if (b2cModel) {
+          resolvedModel = b2cModel;
+        }
+      }
+
+      setActivePricingModel(resolvedModel);
+      setIsB2CDefault(b2cFallback);
+      setIsContractExpired(expired);
+
+      // 3. Load prices for the resolved model
+      if (resolvedModel) {
+        const { data: prices } = await supabase
+          .from('pricing_model_prices')
+          .select('product_id, price')
+          .eq('model_id', resolvedModel.id);
+        
+        const map: Record<string, number> = {};
+        prices?.forEach((p: any) => {
+          map[p.product_id] = p.price;
+        });
+        setContractPrices(map);
+      } else {
+        setContractPrices({});
+      }
+    }
+
+    resolveContract();
+  }, [selectedDraft?.id, contractModelId, deliveryDate]);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);
@@ -237,8 +970,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
 
   const getRowBgColor = (idx: number) => {
-    if (focusedRowIndex === idx) return '#EFF6FF'; // Soft blue for currently focused/edited row
-    if (activeEquivalenceRow === idx) return '#EEF2FF'; // Soft indigo for equivalence row
+    if (editableItems[idx]?.isConfirmed) return '#F0FDF4'; // Soft green for confirmed row
+    if (focusedRowIndex === idx) return THEME.colors.primaryLight; // Soft brand green for currently focused/edited row
+    if (activeEquivalenceRow === idx) return THEME.colors.primaryLight; // Soft brand green for equivalence row
     if (activeVariantRow === idx) return '#F0FDF4'; // Soft green for variant row
     return null;
   };
@@ -296,6 +1030,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     fetchAliases();
     fetchGeofence();
     fetchProfiles();
+    fetchPricingData();
 
     const channel = supabase.channel('realtime-drafts')
       .on(
@@ -391,10 +1126,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Error en el servidor');
-          }
+          await safeFetchJson(res);
 
           showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️', 'success');
           setSelectedDraft(null);
@@ -431,13 +1163,71 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department')
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id')
         .eq('is_active', true)
         .order('company_name', { ascending: true });
       if (data) setProfiles(data);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const [pricingModels, setPricingModels] = useState<any[]>([]);
+  const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
+
+  const fetchPricingData = async () => {
+    try {
+      const { data: models } = await supabase.from('pricing_models').select('*');
+      if (models) setPricingModels(models);
+
+      const { data: prices } = await supabase.from('pricing_model_prices').select('*');
+      const map: Record<string, Record<string, number>> = {};
+      prices?.forEach((row: any) => {
+        if (!map[row.model_id]) {
+          map[row.model_id] = {};
+        }
+        map[row.model_id][row.product_id] = row.price;
+      });
+      setAllModelPrices(map);
+    } catch (e) {
+      console.error('Error fetching pricing data:', e);
+    }
+  };
+  const getResolvedPriceForDraft = (draft: any, productId: string) => {
+    const profile = profiles.find(p => p.id === draft.profile_id);
+    const modelId = profile?.pricing_model_id || null;
+
+    let resolvedModelId = modelId;
+    let expired = false;
+
+    // Verify expiration of pricing model
+    if (modelId && pricingModels.length > 0) {
+      const pm = pricingModels.find(m => m.id === modelId);
+      if (pm) {
+        const metadata = getDraftMetadata(draft);
+        const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
+        if (deliveryDateStr) {
+          const delivery = deliveryDateStr.split('T')[0];
+          const start = pm.start_date?.split('T')[0];
+          const end = pm.end_date?.split('T')[0];
+          if (start && start > delivery) expired = true;
+          if (end && end < delivery) expired = true;
+        }
+      }
+    }
+
+    if (!resolvedModelId || expired) {
+      const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
+      resolvedModelId = b2cModel?.id || null;
+    }
+
+    if (resolvedModelId && allModelPrices[resolvedModelId]) {
+      const pr = allModelPrices[resolvedModelId][productId];
+      if (pr !== undefined && pr !== null) return pr;
+    }
+
+    const prod = products.find(p => p.id === productId);
+    return prod?.base_price || 0;
   };
   const handleToggleEdit = async () => {
     if (isEditing) {
@@ -555,10 +1345,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Error en el servidor');
-          }
+          await safeFetchJson(res);
 
           setRecentlyDeletedItems([]);
           setSelectedDraft((prev: any) => ({
@@ -664,7 +1451,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setGeocoding(true);
       setDraftCoordinates(null);
       fetch(`/api/geocode?address=${encodeURIComponent(addressVal)}&city=Bogotá`)
-        .then(res => res.json())
+        .then(async res => {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (!res.ok) throw new Error(data.error || `Error (${res.status})`);
+            return data;
+          } catch {
+            if (!res.ok) throw new Error(text || `Error (${res.status})`);
+            throw new Error('Respuesta no válida del geocodificador');
+          }
+        })
         .then(data => {
           if (data.status === 'OK' && data.results && data.results.length > 0) {
             const loc = data.results[0].geometry.location;
@@ -707,7 +1504,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
       
       // Initialize editable items
-      const rawItems = getDraftItems(selectedDraft);
+      const rawItems = (() => {
+        if (meta.attachments && Array.isArray(meta.attachments) && meta.attachments[selectedAttachmentIndex]) {
+          return meta.attachments[selectedAttachmentIndex].items || [];
+        }
+        return getDraftItems(selectedDraft);
+      })();
       const initialEdits = rawItems.map((item: any) => {
         let cleanName = item.originalName || item.name || '';
         const rawOriginalName = cleanName;
@@ -735,8 +1537,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (matchedProd) matchedId = matchedProd.id;
         }
         const prod = products.find(p => p.id === matchedId);
+        const productConversions = prod ? conversions.filter(c => c.product_id === prod.id) : [];
+        const detectedUnit = prod ? detectUnitFromName(rawOriginalName, prod, productConversions) : null;
         
         const parsedUnit = (() => {
+          if (detectedUnit) return detectedUnit.unit;
+          
+          const origLower = rawOriginalName.toLowerCase();
+          
+          // Priorizar unidades explícitas en el nombre original del producto (por ejemplo "1000 G", "Lb", "Kilo", "500g")
+          // sobre lo que sea que haya detectado el parser IA por defecto, ya que a veces detecta "Unidad" para nombres que terminan en "1000 G".
+          if (origLower.includes('libra') || origLower.includes(' lb ')) return 'Lb';
+          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos') || origLower.includes('500 gms') || origLower.includes('500 gr')) return 'Paquete 500 gramos';
+          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos') || origLower.includes('250 gms') || origLower.includes('250 gr')) return 'Paquete 250 gramos';
+          if (origLower.includes('1000 g') || origLower.includes('1000g') || origLower.includes('1000 gramos') || origLower.includes('1000 gms') || origLower.includes('1000 gr') || origLower.includes('1000gms') || origLower.includes('1000gr')) return 'Kg';
+          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
+          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilos') || origLower.includes('kilogramo') || origLower.includes('kilogramos')) return 'Kg';
+
           const u = (item.unit || '').toLowerCase().trim();
           if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
           if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
@@ -760,12 +1577,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             return prod?.unit_of_measure || 'Kg';
           }
           
-          const origLower = rawOriginalName.toLowerCase();
-          if (origLower.includes('libra')) return 'Lb';
-          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos')) return 'Paquete 500 gramos';
-          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos')) return 'Paquete 250 gramos';
-          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
-          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilogramo') || origLower.includes('gramo') || origLower.includes(' g ')) return 'Kg';
           if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
             return prod?.unit_of_measure || 'Kg';
           }
@@ -774,20 +1585,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         })();
 
         const initialQty = parseFloat(item.quantity || 1);
-        let conversionFactor = 1;
+        let conversionFactor = detectedUnit ? detectedUnit.factor : 1;
         let finalUnit = prod?.unit_of_measure || parsedUnit;
-        let foundDbConversion = false;
+        let foundDbConversion = detectedUnit ? true : false;
 
-        if (prod && conversions && conversions.length > 0) {
-          const dbConv = conversions.find(c => 
-            c.product_id === prod.id &&
-            c.from_unit.toLowerCase().trim() === parsedUnit.toLowerCase().trim() &&
-            c.to_unit.toLowerCase().trim() === prod.unit_of_measure.toLowerCase().trim()
-          );
-          if (dbConv) {
-            conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-            finalUnit = dbConv.to_unit || prod.unit_of_measure;
-            foundDbConversion = true;
+        if (!foundDbConversion) {
+          if (prod && conversions && conversions.length > 0) {
+            const dbConv = conversions.find(c => 
+              c.product_id === prod.id &&
+              normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
+              normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
+            );
+            if (dbConv) {
+              conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+              finalUnit = dbConv.to_unit || prod.unit_of_measure;
+              foundDbConversion = true;
+            }
           }
         }
 
@@ -927,12 +1740,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Initialize delivery date from metadata if present
       const metadata = getDraftMetadata(selectedDraft);
+      const currentAtt = metadata.attachments && Array.isArray(metadata.attachments) ? metadata.attachments[selectedAttachmentIndex] : null;
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
-      setEditableDeliverySlot(computedSlot || metadata.deliverySlot || '');
+      setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || metadata.deliverySlot || '');
       setPriceList(metadata.priceList || '');
       setOrderDocument(metadata.orderDocument || 'Remisión');
       setPurchaseOrder(metadata.purchaseOrder || '');
-      let initialDateStr = metadata.deliveryDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      let initialDateStr = currentAtt?.deliveryDate || metadata.deliveryDate || minDeliveryDate;
+      if (initialDateStr < minDeliveryDate) {
+        initialDateStr = minDeliveryDate;
+      }
       if (matchedProfile?.logistics_data) {
         const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
         if (allowedDays && allowedDays.length > 0) {
@@ -940,11 +1757,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
       setDeliveryDate(initialDateStr);
-      
-      setEditableClientName('');
-      setEditableClientPhone('');
-      setEditableClientNit('');
-      setEditableClientType('b2c_client');
     } else {
       setDraftCoordinates(null);
       setGeocoding(false);
@@ -957,9 +1769,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPriceList('');
       setOrderDocument('Remisión');
       setPurchaseOrder('');
-      setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+      setDeliveryDate(minDeliveryDate);
     }
-  }, [selectedDraft, products, aliases, conversions]);
+  }, [selectedDraft, products, aliases, conversions, profiles, selectedAttachmentIndex]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -1025,13 +1837,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       deliverySlot: deliverySlot,
       attachmentUrl: meta?.attachmentUrl || null,
       attachmentName: meta?.attachmentName || null,
+      attachments: meta?.attachments || null,
       rejectReason: meta?.rejectReason || null,
       latitude: meta?.latitude || null,
       longitude: meta?.longitude || null,
       priceList: meta?.priceList || null,
       orderDocument: meta?.orderDocument || null,
       purchaseOrder: meta?.purchaseOrder || null,
-      receiptEmailSent: meta?.receiptEmailSent || false
+      receiptEmailSent: meta?.receiptEmailSent || false,
+      emailHtml: meta?.emailHtml || null
     };
   };
 
@@ -1426,7 +2240,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return;
     }
 
-    const hasUnmatchedProducts = editableItems.some(item => !item.isMetadata && !item.matched_product_id);
+    const hasUnmatchedProducts = editableItems.some(item => !item.isDeleted && !item.isMetadata && !item.matched_product_id);
     if (hasUnmatchedProducts) {
       showToast('Error: Existen productos sin emparejar. Por favor, asocia todos los productos a nuestro catálogo o elimínalos.', 'error');
       return;
@@ -1507,19 +2321,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           let totalWeight = 0;
           const itemsData: any[] = [];
 
-          editableItems.forEach(item => {
+          editableItems.filter(item => !item.isDeleted).forEach(item => {
             if (item.matched_product_id) {
               const prod = products.find(p => p.id === item.matched_product_id);
               if (prod) {
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-                totalAmount += prod.base_price * qtyNum;
+                const resolvedPrice = getResolvedPriceForDraft(selectedDraft, prod.id);
+                totalAmount += resolvedPrice * qtyNum;
                 const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
                 totalWeight += qtyNum * w;
 
                 itemsData.push({
                   product_id: prod.id,
                   quantity: qtyNum,
-                  unit_price: prod.base_price,
+                  unit_price: resolvedPrice,
                   nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
                   variant_label: item.observations || null,
                   unit: item.unit || prod.unit_of_measure || 'Kg',
@@ -1571,7 +2386,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
           // E. Guardar nuevos aliases/mapeos
           const newAliases: Record<string, string> = {};
-          editableItems.forEach(item => {
+          editableItems.filter(item => !item.isDeleted).forEach(item => {
             const originalText = item.originalName?.toLowerCase()?.trim();
             if (originalText && item.matched_product_id) {
               if (aliases[originalText] !== item.matched_product_id) {
@@ -1615,7 +2430,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             .eq('id', selectedDraft.id);
 
           // G. Enviar correo HTML de acuse de recibo con resumen de pedido
-          const itemsHtml = editableItems.map((item: any) => {
+          const itemsHtml = editableItems.filter((item: any) => !item.isDeleted).map((item: any) => {
             const prod = products.find(p => p.id === item.matched_product_id);
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             const unitPrice = prod?.base_price || 0;
@@ -1722,7 +2537,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     // 2. Validación de Productos Emparejados
-    const hasUnmatchedProducts = editableItems.some(item => !item.isMetadata && !item.matched_product_id);
+    const hasUnmatchedProducts = editableItems.some(item => !item.isDeleted && !item.isMetadata && !item.matched_product_id);
     if (hasUnmatchedProducts) {
       showToast('Error: Existen productos sin emparejar. Por favor, asocia todos los productos a nuestro catálogo o elimínalos.', 'error');
       return;
@@ -1751,7 +2566,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     // 1. Prepare new aliases to save
     const newAliases: Record<string, string> = {};
-    editableItems.forEach(item => {
+    editableItems.filter(item => !item.isDeleted).forEach(item => {
       const originalText = item.originalName?.toLowerCase()?.trim();
       if (originalText && item.matched_product_id) {
         // Solo guardamos si no estaba en la memoria o si cambió
@@ -1773,6 +2588,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // 3. Update the draft's extracted_items to include our manual edits
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      
+      let updatedAttachments = metaItem.attachments && Array.isArray(metaItem.attachments) ? [...metaItem.attachments] : [];
+      if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot || metaItem.deliverySlot || 'AM',
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+      }
+
       const updatedMetaItem = {
         ...metaItem,
         address: editableAddress,
@@ -1782,12 +2617,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         orderDocument: orderDocument,
         purchaseOrder: purchaseOrder,
         latitude: draftCoordinates?.lat || metaItem.latitude || null,
-        longitude: draftCoordinates?.lng || metaItem.longitude || null
+        longitude: draftCoordinates?.lng || metaItem.longitude || null,
+        attachments: updatedAttachments.length > 0 ? updatedAttachments : undefined
       };
-      const updatedExtractedItems = [
-        updatedMetaItem,
-        ...editableItems
-      ];
+      
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return updatedMetaItem;
+        }
+        return itm;
+      });
 
       await supabase
         .from('order_drafts')
@@ -1867,20 +2706,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let totalAmount = 0;
       let totalWeight = 0;
       const itemsData: any[] = [];
+      let hasZeroPriceItem = false;
+      let zeroPriceItemName = '';
 
-      editableItems.forEach(item => {
+      for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
+            const resolvedPrice = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : prod.base_price;
+            if (!resolvedPrice || parseFloat(resolvedPrice.toString()) === 0) {
+              hasZeroPriceItem = true;
+              zeroPriceItemName = prod.name;
+              break;
+            }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-            totalAmount += prod.base_price * qtyNum;
+            totalAmount += resolvedPrice * qtyNum;
             const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
             totalWeight += qtyNum * w;
 
             itemsData.push({
               product_id: prod.id,
               quantity: qtyNum,
-              unit_price: prod.base_price,
+              unit_price: resolvedPrice,
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
               variant_label: item.observations || null,
               unit: item.unit || prod.unit_of_measure || 'Kg',
@@ -1888,7 +2735,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             });
           }
         }
-      });
+      }
+
+      if (hasZeroPriceItem) {
+        setConfirmingOrder(false);
+        showToast(`❌ Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Por favor asigne precio manualmente antes de aprobar.`, 'error');
+        return;
+      }
 
       // 2. Create the order
       const { data: order, error: orderError } = await supabase
@@ -1930,18 +2783,73 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         throw new Error('Error al registrar ítems: ' + itemsError.message);
       }
 
-      // 4. Update the draft status to approved
-      await supabase
-        .from('order_drafts')
-        .update({ status: 'approved' })
-        .eq('id', selectedDraft.id);
+      // 4. Update the draft status to approved and save updated attachments list
+      const updatedAttachments = metadata.attachments && Array.isArray(metadata.attachments) ? [...metadata.attachments] : [];
+      let isLastAttachment = true;
+      let nextUnprocessedIdx = -1;
+
+      if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+        updatedAttachments[selectedAttachmentIndex] = {
+          ...updatedAttachments[selectedAttachmentIndex],
+          processed: true,
+          orderId: order.id,
+          deliveryDate: deliveryDate,
+          deliverySlot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+          items: editableItems.map(itm => ({
+            name: itm.name || itm.originalName,
+            originalName: itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit,
+            matched_product_id: itm.matched_product_id,
+            observations: itm.observations,
+            selected_options: itm.selected_options,
+            isDeleted: itm.isDeleted
+          }))
+        };
+
+        for (let i = 0; i < updatedAttachments.length; i++) {
+          if (!updatedAttachments[i].processed) {
+            isLastAttachment = false;
+            if (nextUnprocessedIdx === -1) {
+              nextUnprocessedIdx = i;
+            }
+          }
+        }
+      }
+
+      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            attachments: updatedAttachments
+          };
+        }
+        return itm;
+      });
+
+      if (isLastAttachment) {
+        await supabase
+          .from('order_drafts')
+          .update({ 
+            status: 'approved',
+            extracted_items: updatedExtractedItems
+          })
+          .eq('id', selectedDraft.id);
+      } else {
+        await supabase
+          .from('order_drafts')
+          .update({ 
+            extracted_items: updatedExtractedItems
+          })
+          .eq('id', selectedDraft.id);
+      }
 
       // 5. Send confirmation email (queue in mail table)
       if (selectedDraft.source_email && sendConfirmationEmail) {
         const formattedItems = editableItems.map(item => {
           const prod = products.find(p => p.id === item.matched_product_id);
           const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-          const unitPrice = prod?.base_price || 0;
+          const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
           return {
             name: prod?.name || item.originalName || 'Producto',
             quantity: qtyNum,
@@ -1965,9 +2873,29 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         });
       }
 
-      showToast('Pedido registrado exitosamente ✅', 'success');
-      setShowConfirmModal(false);
-      setSelectedDraft(null);
+      if (isLastAttachment) {
+        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅', 'success');
+        setShowConfirmModal(false);
+        setSelectedDraft(null);
+      } else {
+        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+        setShowConfirmModal(false);
+        
+        // Update local selectedDraft state with updated attachments
+        const localDraftUpdated = {
+          ...selectedDraft,
+          extracted_items: updatedExtractedItems
+        };
+        setSelectedDraft(localDraftUpdated);
+        
+        // Update draft in parent drafts list
+        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
+        
+        // Advance to next unprocessed attachment index
+        if (nextUnprocessedIdx !== -1) {
+          setSelectedAttachmentIndex(nextUnprocessedIdx);
+        }
+      }
       fetchDrafts();
     } catch (e: any) {
       console.error('Error creating order directly:', e);
@@ -2053,12 +2981,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const totalValue = editableItems.reduce((acc, item) => {
+  const totalValue = editableItems.filter(item => !item.isDeleted).reduce((acc, item) => {
     const matchedProd = products.find(p => p.id === item.matched_product_id);
-    return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+    const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
+    return acc + (matchedProd ? (resolvedPrice * (item.quantity || 0)) : 0);
   }, 0);
 
-  const hasUnmatchedItems = editableItems.some(item => !item.matched_product_id);
+  const hasUnmatchedItems = editableItems.some(item => !item.isDeleted && !item.matched_product_id);
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
@@ -2197,7 +3126,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           padding: '0.4rem 0.8rem',
           gap: '8px'
         }}>
-          <Calendar size={16} color="#6B7280" />
+          <Calendar size={16} color={THEME.colors.textSecondary} />
           <input 
             type="date"
             value={selectedDate}
@@ -2207,7 +3136,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               outline: 'none',
               fontWeight: 800,
               fontSize: '0.85rem',
-              color: '#111827',
+              color: THEME.colors.textMain,
               fontFamily: 'inherit',
               cursor: 'pointer'
             }}
@@ -2219,7 +3148,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#9CA3AF',
+                color: THEME.colors.textSecondary,
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
@@ -2235,13 +3164,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           flex: 1, 
           display: 'flex', 
           alignItems: 'center', 
-          backgroundColor: '#F9FAFB', 
+          backgroundColor: THEME.colors.background, 
           border: 'none', 
           borderRadius: THEME.radius.md,
           padding: '0.6rem 1rem',
           gap: '8px'
         }}>
-          <Search size={16} color="#6B7280" />
+          <Search size={16} color={THEME.colors.textSecondary} />
           <input 
             id="search-input"
             type="text" 
@@ -2254,7 +3183,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               outline: 'none', 
               width: '100%', 
               fontSize: '0.85rem',
-              color: '#4B5563',
+              color: THEME.colors.textMain,
               fontWeight: 600
             }} 
           />
@@ -2265,7 +3194,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#9CA3AF',
+                color: THEME.colors.textSecondary,
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
@@ -2290,11 +3219,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               gap: '6px',
               padding: '0.5rem 1rem',
               backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : 'white',
-              border: selectedStatus === 'pending' ? '2px solid #D97706' : '1px solid #E5E7EB',
+              border: selectedStatus === 'pending' ? '2px solid #D97706' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'pending' ? '#B45309' : '#4B5563',
+              color: selectedStatus === 'pending' ? '#B45309' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'pending' ? '0 2px 4px rgba(217, 119, 6, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2307,8 +3236,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'pending' ? '#FBBF24' : '#F3F4F6',
-              color: selectedStatus === 'pending' ? '#78350F' : '#6B7280',
+              backgroundColor: selectedStatus === 'pending' ? '#FBBF24' : THEME.colors.background,
+              color: selectedStatus === 'pending' ? '#78350F' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2325,11 +3254,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               gap: '6px',
               padding: '0.5rem 1rem',
               backgroundColor: selectedStatus === 'approved' ? '#ECFDF5' : 'white',
-              border: selectedStatus === 'approved' ? '2px solid #059669' : '1px solid #E5E7EB',
+              border: selectedStatus === 'approved' ? '2px solid #059669' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'approved' ? '#047857' : '#4B5563',
+              color: selectedStatus === 'approved' ? '#047857' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'approved' ? '0 2px 4px rgba(5, 150, 105, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2342,8 +3271,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'approved' ? '#A7F3D0' : '#F3F4F6',
-              color: selectedStatus === 'approved' ? '#064E3B' : '#6B7280',
+              backgroundColor: selectedStatus === 'approved' ? '#A7F3D0' : THEME.colors.background,
+              color: selectedStatus === 'approved' ? '#064E3B' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2360,11 +3289,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               gap: '6px',
               padding: '0.5rem 1rem',
               backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : 'white',
-              border: selectedStatus === 'rejected' ? '2px solid #DC2626' : '1px solid #E5E7EB',
+              border: selectedStatus === 'rejected' ? '2px solid #DC2626' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'rejected' ? '#B91C1C' : '#4B5563',
+              color: selectedStatus === 'rejected' ? '#B91C1C' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'rejected' ? '0 2px 4px rgba(220, 38, 38, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2377,8 +3306,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'rejected' ? '#FCA5A5' : '#F3F4F6',
-              color: selectedStatus === 'rejected' ? '#7F1D1D' : '#6B7280',
+              backgroundColor: selectedStatus === 'rejected' ? '#FCA5A5' : THEME.colors.background,
+              color: selectedStatus === 'rejected' ? '#7F1D1D' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2394,12 +3323,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               alignItems: 'center',
               gap: '6px',
               padding: '0.5rem 1rem',
-              backgroundColor: selectedStatus === 'all' ? '#F3F4F6' : 'white',
-              border: selectedStatus === 'all' ? '2px solid #4B5563' : '1px solid #E5E7EB',
+              backgroundColor: selectedStatus === 'all' ? THEME.colors.background : 'white',
+              border: selectedStatus === 'all' ? '2px solid #4B5563' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'all' ? '#1F2937' : '#4B5563',
+              color: selectedStatus === 'all' ? '#1F2937' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'all' ? '0 2px 4px rgba(75, 85, 99, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2411,8 +3340,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'all' ? '#D1D5DB' : '#F3F4F6',
-              color: selectedStatus === 'all' ? '#1F2937' : '#6B7280',
+              backgroundColor: selectedStatus === 'all' ? '#D1D5DB' : THEME.colors.background,
+              color: selectedStatus === 'all' ? '#1F2937' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2430,17 +3359,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            backgroundColor: '#F3E8FF', 
+            backgroundColor: THEME.colors.primaryLight, 
             borderRadius: THEME.radius.md,
             width: '38px',
             height: '38px',
             cursor: 'pointer',
             transition: 'background-color 0.15s'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E9D5FF'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F3E8FF'}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
         >
-          <Keyboard size={20} color="#9333EA" strokeWidth={2.5} />
+          <Keyboard size={20} color={THEME.colors.primary} strokeWidth={2.5} />
         </div>
 
         {/* Info Icon */}
@@ -2451,24 +3380,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            backgroundColor: '#EFF6FF', 
+            backgroundColor: THEME.colors.primaryLight, 
             borderRadius: THEME.radius.md,
             width: '38px',
             height: '38px',
             cursor: 'pointer',
             transition: 'background-color 0.15s'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
         >
-          <Info size={20} color="#3B82F6" strokeWidth={3} />
+          <Info size={20} color={THEME.colors.primary} strokeWidth={3} />
         </div>
 
         {/* View Toggle */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          backgroundColor: '#F3F4F6', 
+          backgroundColor: THEME.colors.background, 
           borderRadius: THEME.radius.md,
           padding: '4px',
           gap: '4px'
@@ -2487,7 +3416,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               opacity: viewMode === 'list' ? 1 : 0.5
             }}
           >
-            <List size={16} color={viewMode === 'list' ? "#111827" : "#6B7280"} />
+            <List size={16} color={viewMode === 'list' ? THEME.colors.textMain : THEME.colors.textSecondary} />
           </div>
           <div 
             onClick={() => setViewMode('grid')}
@@ -2503,7 +3432,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               opacity: viewMode === 'grid' ? 1 : 0.5
             }}
           >
-            <Grid size={16} color={viewMode === 'grid' ? "#111827" : "#6B7280"} />
+            <Grid size={16} color={viewMode === 'grid' ? THEME.colors.textMain : THEME.colors.textSecondary} />
           </div>
         </div>
       </div>
@@ -2556,13 +3485,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   let matchedProd = products.find(p => p.id === item.matched_product_id);
                   if (!matchedProd && !item.matched_product_id && item.originalName) {
                     matchedProd = findMatchedProduct(item.originalName);
-                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} matched dynamically to: ${matchedProd ? matchedProd.name : 'NULL'} (Price: ${matchedProd ? matchedProd.base_price : 0})`);
-                  } else if (matchedProd) {
-                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} matched from DB to: ${matchedProd.name} (Price: ${matchedProd.base_price})`);
-                  } else {
-                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} has NO MATCH (matched_product_id: ${item.matched_product_id})`);
                   }
-                  return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                  const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+                  return acc + (resolvedPrice * (item.quantity || 0));
                 }, 0);
 
                 const estimatedWeight = items.reduce((acc: number, item: any) => {
@@ -2805,7 +3730,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           if (!matchedProd && !item.matched_product_id && item.originalName) {
                             matchedProd = findMatchedProduct(item.originalName);
                           }
-                          return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                          const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+                          return acc + (resolvedPrice * (item.quantity || 0));
                         }, 0);
                         return formatMoney(estimatedTotal);
                       })()}
@@ -2868,9 +3794,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           backgroundColor: 'rgba(0,0,0,0.5)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: showFloatingEmail ? 'flex-start' : 'center',
           zIndex: 9999,
-          padding: '1rem'
+          padding: showFloatingEmail ? '1rem 0 1rem 24px' : '1rem',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <style>{`
             /* Estilos para Scrollbar Premium */
@@ -2905,18 +3832,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             .scroll-row-animate {
               animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
             }
+            
+            /* Hide spin buttons in number inputs */
+            input::-webkit-outer-spin-button,
+            input::-webkit-inner-spin-button {
+              -webkit-appearance: none;
+              margin: 0;
+            }
+            input[type=number] {
+              -moz-appearance: textfield;
+            }
           `}</style>
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
-            width: '100%',
-            maxWidth: '1300px',
+            width: showFloatingEmail ? (isFloatingExpanded ? 'calc(100% - 1022px)' : 'calc(100% - 622px)') : '94%',
+            minWidth: showFloatingEmail ? '480px' : 'auto',
+            maxWidth: '1400px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             position: 'relative',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
             {/* Modal Header */}
             <div style={{
@@ -2951,6 +3890,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowFloatingEmail(prev => !prev)}
+                  style={{
+                    backgroundColor: showFloatingEmail ? '#EFF6FF' : '#F1F5F9',
+                    color: showFloatingEmail ? '#2563EB' : '#475569',
+                    border: `1.5px solid ${showFloatingEmail ? '#BFDBFE' : '#E2E8F0'}`,
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Mail size={14} />
+                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
+                </button>
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
                 </button>
@@ -3324,9 +4284,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <input 
                             type="date" 
                             value={deliveryDate} 
+                            min={minDeliveryDate}
                             disabled={!isEditing} 
                             onChange={(e) => {
                               const newDate = e.target.value;
+                              const minDate = getMinDeliveryDate();
+                              if (newDate < minDate) {
+                                showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
+                                setDeliveryDate(minDate);
+                                return;
+                              }
                               const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
                               if (matchedProfile?.logistics_data) {
                                 const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
@@ -3517,14 +4484,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>PRODUCTO ORIGINAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '6%' }}>CANT. ORIG.</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em', width: '130px' }}>UNIDADES</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '80px' }}>OBS.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '40%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3533,7 +4496,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <>
                             {editableItems.map((item: any, i: number) => {
                               const matchedProd = products.find(p => p.id === item.matched_product_id);
-                              const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0;
+                              const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
+                              const itemTotal = resolvedPrice * (item.quantity || 0);
 
                               return (
                                 <React.Fragment key={i}>
@@ -3542,465 +4506,351 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     style={{ 
                                       borderBottom: `1px solid ${THEME.colors.border}`,
                                       animationDelay: `${i * 0.04}s`,
-                                      backgroundColor: getRowBgColor(i) || 'transparent',
-                                      transition: 'background-color 0.2s'
+                                      backgroundColor: item.isDeleted ? '#FEF2F2' : (getRowBgColor(i) || 'transparent'),
+                                      transition: 'all 0.2s'
                                     }}
                                   >
-                                      {isEditing && (
-                                        <td style={{ 
-                                          padding: '1rem 0.5rem', 
-                                          textAlign: 'center', 
-                                          width: '40px', 
-                                          backgroundColor: getCellBgColor(i, true),
-                                          transition: 'background-color 0.2s'
-                                        }}>
-                                          <input
-                                            type="checkbox"
-                                            checked={selectedRowIndices.includes(i)}
-                                            onChange={(e) => {
-                                              if (e.target.checked) {
-                                                setSelectedRowIndices(prev => [...prev, i]);
-                                              } else {
-                                                setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
-                                              }
-                                            }}
-                                            style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
-                                          />
-                                        </td>
-                                      )}
-                                      <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        width: '15%', 
-                                        backgroundColor: getCellBgColor(i, true),
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
-                                          {item.originalName || item.name || item.producto || item.item || ''}
-                                        </div>
-                                      </td>
+                                    {isEditing && (
                                       <td style={{ 
                                         padding: '1rem 0.5rem', 
                                         textAlign: 'center', 
-                                        width: '6%', 
+                                        width: '40px', 
                                         backgroundColor: getCellBgColor(i, true),
-                                        transition: 'background-color 0.2s'
+                                        transition: 'background-color 0.2s',
+                                        opacity: item.isDeleted ? 0.5 : 1
                                       }}>
-                                        <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
-                                          {item.originalQuantity || item.quantity || item.cant || item.cantidad || ''}
-                                        </div>
+                                        <input
+                                          type="checkbox"
+                                          disabled={item.isDeleted}
+                                          checked={selectedRowIndices.includes(i)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedRowIndices(prev => [...prev, i]);
+                                            } else {
+                                              setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
+                                            }
+                                          }}
+                                          style={{ transform: 'scale(1.2)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
+                                        />
                                       </td>
+                                    )}
                                     <td style={{ 
-                                      padding: '1rem 0.5rem', 
+                                      padding: '1rem 1rem', 
                                       width: '30%', 
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <div style={{ 
+                                        fontSize: '0.9rem', 
+                                        color: '#1E293B', 
+                                        textTransform: 'uppercase', 
+                                        fontWeight: 800,
+                                        textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                        opacity: item.isDeleted ? 0.5 : 1
+                                      }}>
+                                        {item.originalName || item.name || item.producto || item.item || ''}
+                                      </div>
+                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1, display: 'flex', alignItems: 'center' }}>
+                                        <span style={{
+                                          padding: '2px 8px',
+                                          backgroundColor: '#FFFBEB',
+                                          color: '#B45309',
+                                          border: '1.5px solid #FBBF24',
+                                          boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)',
+                                          borderRadius: '6px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: 900,
+                                          textDecoration: item.isDeleted ? 'line-through' : 'none'
+                                        }}>
+                                          {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      width: '40%', 
                                       backgroundColor: getCellBgColor(i, false),
                                       transition: 'background-color 0.2s'
                                     }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          <input
-                                            ref={el => { productInputRefs.current[i] = el; }}
-                                            list={`products-list-${i}`}
-                                            disabled={!isEditing}
-                                            value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
-                                            placeholder="-- Buscar Producto --"
-                                            onFocus={() => setFocusedRowIndex(i)}
-                                            onBlur={() => setFocusedRowIndex(null)}
-                                            onChange={(e) => {
-                                              const val = e.target.value;
-                                              const found = products.find(p => p.name === val);
+                                          <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+                                            <input
+                                              ref={el => { productInputRefs.current[i] = el; }}
+                                              disabled={!isEditing || item.isDeleted}
+                                              value={matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : (item.searchQuery || '')}
+                                              placeholder="Buscar ID..."
+                                              list="all-products-list"
+                                              onFocus={(e) => e.target.select()}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Tab') {
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                                  if (p) {
+                                                    e.preventDefault();
+                                                    openVariantModalForItem(p, i);
+                                                  }
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const val = e.currentTarget.value;
+                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                                  const newEdits = [...editableItems];
+                                                  if (p) {
+                                                    newEdits[i].matched_product_id = p.id;
+                                                    newEdits[i].searchQuery = `${p.name} (${getAccountingIdDisplay(p)})`;
+                                                    newEdits[i].skuQuery = p.sku || '';
+                                                  }
+                                                  newEdits[i].isConfirmed = true;
+                                                  setEditableItems(newEdits);
+                                                  
+                                                  // Jump focus to the next product input
+                                                  setTimeout(() => {
+                                                    const nextInput = productInputRefs.current[i + 1];
+                                                    if (nextInput) {
+                                                      nextInput.focus();
+                                                      nextInput.select();
+                                                    } else {
+                                                      const approveBtn = document.getElementById('btn-approve-draft');
+                                                      if (approveBtn) approveBtn.focus();
+                                                    }
+                                                  }, 50);
+                                                } else if (e.key === 'ArrowDown') {
+                                                  e.preventDefault();
+                                                  const nextInput = productInputRefs.current[i + 1];
+                                                  if (nextInput) {
+                                                    nextInput.focus();
+                                                    nextInput.select();
+                                                  }
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  const prevInput = productInputRefs.current[i - 1];
+                                                  if (prevInput) {
+                                                    prevInput.focus();
+                                                    prevInput.select();
+                                                  }
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                                if (p) {
+                                                  selectProduct(p, i);
+                                                } else {
+                                                  const newEdits = [...editableItems];
+                                                  newEdits[i].matched_product_id = null;
+                                                  newEdits[i].searchQuery = val;
+                                                  newEdits[i].skuQuery = '';
+                                                  newEdits[i].selected_options = {};
+                                                  setEditableItems(newEdits);
+                                                }
+                                              }}
+                                              style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                fontSize: '1rem',
+                                                fontWeight: '700',
+                                                backgroundColor: item.isDeleted ? '#F1F5F9' : (item.matched_product_id ? '#FFFFFF' : '#FFFBEB'),
+                                                color: item.isDeleted ? '#94A3B8' : '#1E293B',
+                                                textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                                cursor: item.isDeleted ? 'not-allowed' : 'text',
+                                                outline: 'none',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                transition: 'all 0.2s'
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      width: '25%', 
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <input 
+                                           ref={el => { quantityInputRefs.current[i] = el; }}
+                                           type="text"
+                                           disabled={!isEditing || item.isDeleted}
+                                           value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                           onFocus={(e) => {
+                                             setFocusedRowIndex(i);
+                                             e.target.select();
+                                           }}
+                                           onBlur={() => {
+                                             setFocusedRowIndex(null);
+                                             const newEdits = [...editableItems];
+                                             newEdits[i].quantity_text = undefined;
+                                             setEditableItems(newEdits);
+                                           }}
+                                           onChange={(e) => {
+                                             const rawVal = e.target.value;
+                                             const parsed = parseQuantity(rawVal);
+                                             const newEdits = [...editableItems];
+                                             newEdits[i].quantity_text = rawVal;
+                                             newEdits[i].quantity = parsed;
+                                             setEditableItems(newEdits);
+                                           }}
+                                           onKeyDown={(e) => {
+                                             if (e.key === '.' || e.key === ',') {
+                                               e.preventDefault();
+                                               const input = e.currentTarget;
+                                               const start = input.selectionStart ?? 0;
+                                               const end = input.selectionEnd ?? 0;
+                                               const val = input.value;
+                                               const newVal = val.substring(0, start) + ',' + val.substring(end);
+                                               
+                                               const parsed = parseQuantity(newVal);
+                                               const newEdits = [...editableItems];
+                                               newEdits[i].quantity_text = newVal;
+                                               newEdits[i].quantity = parsed;
+                                               setEditableItems(newEdits);
+                                               
+                                               setTimeout(() => {
+                                                 input.setSelectionRange(start + 1, start + 1);
+                                               }, 10);
+                                             } else if (e.key === 'Enter') {
+                                               e.preventDefault();
+                                               if (i < editableItems.length - 1) {
+                                                 const nextInput = productInputRefs.current[i + 1];
+                                                 if (nextInput) {
+                                                   nextInput.focus();
+                                                   nextInput.select();
+                                                 }
+                                               } else {
+                                                 const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                                                 setEditableItems(newEdits);
+                                                 setTimeout(() => {
+                                                   const nextInput = productInputRefs.current[i + 1];
+                                                   if (nextInput) {
+                                                     nextInput.focus();
+                                                     nextInput.select();
+                                                   }
+                                                 }, 50);
+                                               }
+                                             } else if (e.key === 'ArrowDown') {
+                                               e.preventDefault();
+                                               const nextQty = quantityInputRefs.current[i + 1];
+                                               if (nextQty) {
+                                                 nextQty.focus();
+                                                 nextQty.select();
+                                               }
+                                             } else if (e.key === 'ArrowUp') {
+                                               e.preventDefault();
+                                               const prevQty = quantityInputRefs.current[i - 1];
+                                               if (prevQty) {
+                                                 prevQty.focus();
+                                                 prevQty.select();
+                                               }
+                                             }
+                                           }}
+                                          style={{
+                                            width: '130px',
+                                            padding: '8px',
+                                            textAlign: 'center',
+                                            borderRadius: '8px',
+                                            border: '2px solid #E2E8F0',
+                                            fontWeight: 800,
+                                            fontSize: '1.1rem',
+                                            backgroundColor: item.isDeleted ? '#F1F5F9' : '#FFFFFF',
+                                            color: item.isDeleted ? '#94A3B8' : '#1E293B',
+                                            textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                            cursor: item.isDeleted ? 'not-allowed' : 'text',
+                                            outline: 'none'
+                                          }}
+                                        />
+                                        <span style={{ 
+                                          fontWeight: 'bold', 
+                                          color: '#64748B', 
+                                          fontSize: '0.95rem', 
+                                          minWidth: '35px', 
+                                          textAlign: 'left',
+                                          textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                          opacity: item.isDeleted ? 0.5 : 1
+                                        }}>
+                                          {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td style={{ 
+                                      padding: '1rem 0.5rem', 
+                                      textAlign: 'center', 
+                                      width: '5%',
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      {isEditing && (
+                                        item.isDeleted ? (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
                                               const newEdits = [...editableItems];
-                                              if (found) {
-                                                newEdits[i].matched_product_id = found.id;
-                                                newEdits[i].searchQuery = found.name;
-                                                newEdits[i].skuQuery = found.sku || '';
-                                                
-                                                const currentOriginalUnit = newEdits[i].originalUnit || newEdits[i].unit || 'Kg';
-                                                let conversionFactor = 1;
-                                                let targetUnit = found.unit_of_measure || 'Kg';
-                                                let foundDbConversion = false;
-
-                                                if (conversions && conversions.length > 0) {
-                                                  const dbConv = conversions.find(c => 
-                                                    c.product_id === found.id &&
-                                                    c.from_unit.toLowerCase().trim() === currentOriginalUnit.toLowerCase().trim() &&
-                                                    c.to_unit.toLowerCase().trim() === targetUnit.toLowerCase().trim()
-                                                  );
-                                                  if (dbConv) {
-                                                    conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-                                                    targetUnit = dbConv.to_unit || found.unit_of_measure;
-                                                    foundDbConversion = true;
-                                                  }
-                                                }
-
-                                                if (!foundDbConversion) {
-                                                  const u = (found.unit_of_measure || '').toLowerCase().trim();
-                                                  let normalizedUnit = 'Kg';
-                                                  if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
-                                                  else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
-                                                  else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
-                                                  else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
-                                                  else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
-                                                  else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
-                                                    normalizedUnit = getSmartFallbackUnit(found.name, 'Kg');
-                                                  }
-                                                  else if (found.unit_of_measure) {
-                                                    normalizedUnit = getSmartFallbackUnit(found.name, found.unit_of_measure);
-                                                  }
-                                                  targetUnit = normalizedUnit;
-
-                                                  const isLibra = currentOriginalUnit === 'Lb';
-                                                  conversionFactor = isLibra ? 0.5 : 1;
-                                                  
-                                                  const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].quantity || 1);
-                                                  if (origQty >= 100 && !isLibra) {
-                                                    if (targetUnit === 'Kg') {
-                                                      conversionFactor = 0.001;
-                                                    } else if (targetUnit === 'Atado') {
-                                                      conversionFactor = 0.002;
-                                                    }
-                                                  }
-                                                }
-
-                                                newEdits[i].conversion_factor = conversionFactor;
-                                                newEdits[i].unit = targetUnit;
-                                                const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].quantity || 1);
-                                                newEdits[i].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
-                                                
-                                                // Extract variants from observations/originalName
-                                                const autoSelectedOptions: Record<string, string> = {};
-                                                const rawOriginalName = newEdits[i].originalName || '';
-                                                let extraDescription = '';
-                                                if (found && found.name) {
-                                                  const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
-                                                  const prodClean = found.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
-                                                  const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
-                                                  const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
-                                                  const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
-                                                  extraDescription = extraWords.join(' ');
-                                                }
-                                                let finalObservations = [newEdits[i].observations || '', extraDescription].filter(Boolean).join(' ').trim();
-                                                
-                                                if (found.variants && found.variants.length > 0) {
-                                                  const variantOptionNames = new Set<string>();
-                                                  let isOldFormat = false;
-                                                  found.variants.forEach((v: any) => {
-                                                    if (v.name && Array.isArray(v.options)) {
-                                                      isOldFormat = true;
-                                                    } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
-                                                      Object.keys(v.options).forEach(k => variantOptionNames.add(k));
-                                                    }
-                                                  });
-
-                                                  let variantOptionsList = found.variants;
-                                                  if (!isOldFormat) {
-                                                    variantOptionsList = Array.from(variantOptionNames).map(name => {
-                                                      const values = new Set<string>();
-                                                      found.variants.forEach((v: any) => {
-                                                        if (v.options && v.options[name]) values.add(v.options[name]);
-                                                      });
-                                                      return { name, options: Array.from(values) };
-                                                    });
-                                                  }
-                                                  
-                                                  const searchText = `${rawOriginalName} ${finalObservations}`.toLowerCase();
-                                                  variantOptionsList.forEach((v: any) => {
-                                                    if (Array.isArray(v.options)) {
-                                                      for (const optVal of v.options) {
-                                                        const matchResult = matchVariantOption(searchText, String(optVal));
-                                                        if (matchResult.matched && matchResult.matchedTextInSearch) {
-                                                          autoSelectedOptions[v.name] = optVal;
-                                                          const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                                                          const regex = new RegExp(`\\b${escapeRegex(matchResult.matchedTextInSearch)}\\b`, 'gi');
-                                                          finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
-                                                          break;
-                                                        }
-                                                      }
-                                                    }
-                                                  });
-                                                }
-                                                
-                                                newEdits[i].selected_options = autoSelectedOptions;
-                                                newEdits[i].observations = finalObservations;
-                                              } else {
-                                                newEdits[i].matched_product_id = null;
-                                                newEdits[i].searchQuery = val;
-                                                newEdits[i].skuQuery = '';
-                                                newEdits[i].selected_options = {};
-                                              }
+                                              newEdits[i].isDeleted = false;
                                               setEditableItems(newEdits);
                                             }}
-
                                             style={{
-                                              flex: 1,
-                                              padding: '0.5rem',
-                                              borderRadius: '6px',
-                                              border: '1px solid #D1D5DB',
-                                              fontSize: '0.9rem',
-                                              backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
-                                              fontWeight: 600,
-                                              color: '#111827',
-                                              minWidth: '0'
-                                            }}
-                                          />
-                                          
-
-                                        </div>
-                                      </div>
-                                      <datalist id={`products-list-${i}`}>
-                                        {products
-                                          .filter(p => {
-                                            const query = (matchedProd ? matchedProd.name : (item.searchQuery || '')).toLowerCase().trim();
-                                            if (!query) return true;
-                                            return p.name.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query);
-                                          })
-                                          .slice(0, 15)
-                                          .map(p => (
-                                            <option key={p.id} value={p.name} />
-                                          ))
-                                        }
-                                      </datalist>
-                                    </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '130px' }}>
-                                      {isEditing ? (
-                                        <select
-                                          value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                          onFocus={() => setFocusedRowIndex(i)}
-                                          onBlur={() => setFocusedRowIndex(null)}
-                                          onChange={(e) => {
-                                            const newEdits = [...editableItems];
-                                            newEdits[i].unit = e.target.value;
-                                            setEditableItems(newEdits);
-                                          }}
-                                          style={{
-                                            width: '100%',
-                                            padding: '0.5rem 0.25rem',
-                                            borderRadius: '6px',
-                                            border: '1px solid #D1D5DB',
-                                            fontSize: '0.9rem',
-                                            backgroundColor: 'white',
-                                            fontWeight: 600,
-                                            color: '#111827'
-                                          }}
-                                        >
-                                          {Array.from(new Set(['Kg', 'Lb', 'Unidad', 'Litro', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 600 }}>
-                                          {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
-                                      <input 
-                                        type="number"
-                                        disabled={!isEditing}
-                                        value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
-                                        onFocus={() => setFocusedRowIndex(i)}
-                                        onBlur={() => setFocusedRowIndex(null)}
-                                        onChange={(e) => {
-                                          const newEdits = [...editableItems];
-                                          newEdits[i].quantity = parseFloat(e.target.value) || 0;
-                                          setEditableItems(newEdits);
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            // Añadir nueva fila
-                                            const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                                            setEditableItems(newEdits);
-                                            // Focus el nuevo input en el siguiente render
-                                            setTimeout(() => {
-                                              const nextInput = productInputRefs.current[i + 1];
-                                              if (nextInput) nextInput.focus();
-                                            }, 50);
-                                          }
-                                        }}
-                                        style={{
-                                          width: '90px',
-                                          padding: '0.5rem 0.25rem',
-                                          textAlign: 'center',
-                                          borderRadius: '6px',
-                                          border: '1px solid #10B981',
-                                          fontWeight: 800,
-                                          fontSize: '1rem'
-                                        }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
-                                      {matchedProd ? formatMoney(matchedProd.base_price || 0) : '-'}
-                                    </td>
-                                    <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
-                                      {matchedProd ? formatMoney(itemTotal) : '-'}
-                                    </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: 'auto' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-                                        {/* Botón de Equivalencias */}
-                                        {isEditing && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setActiveEquivalenceRow(prev => prev === i ? null : i);
-                                              setActiveVariantRow(null);
-                                              setTimeout(() => {
-                                                const equivInput = document.getElementById(`equiv-input-${i}`);
-                                                if (equivInput) equivInput.focus();
-                                              }, 50);
-                                            }}
-                                            style={{
-                                              padding: '0.25rem 0.5rem',
-                                              backgroundColor: activeEquivalenceRow === i
-                                                ? '#4338CA'
-                                                : item.conversion_factor && item.conversion_factor !== 1
-                                                  ? '#EEF2FF'
-                                                  : '#F3F4F6',
-                                              color: activeEquivalenceRow === i
-                                                ? '#FFFFFF'
-                                                : item.conversion_factor && item.conversion_factor !== 1
-                                                  ? '#4338CA'
-                                                  : '#4B5563',
-                                              border: activeEquivalenceRow === i
-                                                ? '1px solid #4338CA'
-                                                : item.conversion_factor && item.conversion_factor !== 1
-                                                  ? '1px solid #C7D2FE'
-                                                  : '1px solid #D1D5DB',
-                                              borderRadius: '6px',
+                                              background: 'none',
+                                              border: 'none',
+                                              color: '#10B981',
                                               cursor: 'pointer',
-                                              display: 'inline-flex',
-                                              alignItems: 'center',
-                                              gap: '4px',
-                                              transition: 'all 0.2s',
-                                              outline: 'none',
-                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                            onFocus={(e) => {
-                                              e.currentTarget.style.borderColor = '#6366F1';
-                                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.2)';
-                                            }}
-                                            onBlur={(e) => {
-                                              e.currentTarget.style.borderColor = activeEquivalenceRow === i ? '#4338CA' : item.conversion_factor && item.conversion_factor !== 1 ? '#C7D2FE' : '#D1D5DB';
-                                              e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-                                            }}
-                                            title="Equivalencias (Alt+E)"
-                                          >
-                                            <span style={{ fontSize: '0.95rem' }}>⚖️</span>
-                                            <span style={{ 
-                                              fontSize: '0.75rem', 
-                                              fontWeight: 700,
-                                              color: activeEquivalenceRow === i ? '#FFFFFF' : '#4338CA'
-                                            }}>Equivalencias</span>
-                                            {item.conversion_factor && item.conversion_factor !== 1 && (
-                                              <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                                                x{item.conversion_factor}
-                                              </span>
-                                            )}
-                                          </button>
-                                        )}
-
-                                        {/* Botón de variantes si aplica */}
-                                        {isEditing && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setActiveVariantRow(prev => prev === i ? null : i);
-                                              setTimeout(() => {
-                                                const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                if (firstSelect) firstSelect.focus();
-                                              }, 50);
-                                            }}
-                                            style={{
-                                              padding: '0.2rem 0.4rem',
-                                              backgroundColor: activeVariantRow === i
-                                                ? '#059669'
-                                                : Object.keys(item.selected_options || {}).length > 0 
-                                                  ? '#ECFDF5' 
-                                                  : '#F3F4F6',
-                                              color: activeVariantRow === i
-                                                ? '#FFFFFF'
-                                                : Object.keys(item.selected_options || {}).length > 0 
-                                                  ? '#047857' 
-                                                  : '#374151',
-                                              border: activeVariantRow === i
-                                                ? '1px solid #047857'
-                                                : Object.keys(item.selected_options || {}).length > 0 
-                                                  ? '1px solid #A7F3D0' 
-                                                  : '1px solid #D1D5DB',
-                                              borderRadius: '20px',
-                                              fontSize: '0.75rem',
-                                              fontWeight: 700,
-                                              cursor: 'pointer',
-                                              whiteSpace: 'nowrap',
+                                              padding: '6px',
+                                              borderRadius: '6px',
                                               display: 'flex',
                                               alignItems: 'center',
-                                              gap: '4px',
-                                              transition: 'all 0.2s',
-                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                              justifyContent: 'center',
+                                              transition: 'all 0.2s'
                                             }}
-                                            title="Ver / Modificar Variantes (Alt + V)"
+                                            title="Restaurar registro"
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = '#D1FAE5';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
                                           >
-                                            <span style={{ fontSize: '0.9rem' }}>⚡</span>
-                                            {Object.keys(item.selected_options || {}).length > 0 ? (
-                                              <span>
-                                                {Object.values(item.selected_options).join(', ')}
-                                              </span>
-                                            ) : (
-                                              <span style={{ fontSize: '0.75rem' }}>Variantes</span>
-                                            )}
+                                            <RotateCcw size={18} />
                                           </button>
-                                        )}
-
-                                        {/* En modo lectura, si tiene opciones elegidas, las mostramos como etiqueta */}
-                                        {!isEditing && item.selected_options && Object.keys(item.selected_options).length > 0 && (
-                                          <span style={{
-                                            padding: '4px 8px',
-                                            backgroundColor: '#E6F4EA',
-                                            color: '#137333',
-                                            borderRadius: '6px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 700,
-                                            whiteSpace: 'nowrap',
-                                            display: 'inline-flex',
-                                            alignItems: 'center'
-                                          }}>
-                                            {Object.values(item.selected_options).join(' | ')}
-                                          </span>
-                                        )}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setObsModal({
-                                            isOpen: true,
-                                            rowIndex: i,
-                                            text: item.observations || ''
-                                          });
-                                        }}
-                                        title={item.observations ? `Observaciones: ${item.observations}` : 'Agregar observaciones'}
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          color: item.observations ? THEME.colors.primary : '#9CA3AF',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          padding: '4px',
-                                          borderRadius: '6px',
-                                          backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
-                                          transition: 'all 0.2s',
-                                          borderWidth: '1px',
-                                          borderStyle: item.observations ? 'solid' : 'dashed',
-                                          borderColor: item.observations ? THEME.colors.primary : '#D1D5DB'
-                                        }}
-                                      >
-                                        <MessageSquare size={18} fill={item.observations ? THEME.colors.primary : 'none'} />
-                                      </button>
-                                      </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              const newEdits = [...editableItems];
+                                              newEdits[i].isDeleted = true;
+                                              setEditableItems(newEdits);
+                                            }}
+                                            style={{
+                                              background: 'none',
+                                              border: 'none',
+                                              color: '#64748B',
+                                              cursor: 'pointer',
+                                              padding: '6px',
+                                              borderRadius: '6px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              transition: 'all 0.2s'
+                                            }}
+                                            title="Limpiar/Eliminar registro"
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
+                                          >
+                                            <Eraser size={18} />
+                                          </button>
+                                        )
+                                      )}
                                     </td>
                                   </tr>
                                   
-                                  {/* Fila Inline de Expansión para Selección de Variantes */}
-                                  {isEditing && activeVariantRow === i && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
+                                  {false && (
                                     <tr style={{ backgroundColor: '#F0FDF4' }}>
                                       <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{
@@ -4126,8 +4976,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </tr>
                                   )}
 
-                                  {/* Fila Inline de Expansión para Equivalencias */}
-                                  {isEditing && activeEquivalenceRow === i && (
+                                  {false && (
                                     <tr style={{ backgroundColor: '#EEF2FF' }}>
                                       <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{
@@ -4290,10 +5139,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   })
                                 });
 
-                                if (!res.ok) {
-                                  const errData = await res.json();
-                                  throw new Error(errData.error || 'Error en el servidor');
-                                }
+                                await safeFetchJson(res);
+
 
                                 setRecentlyDeletedItems([]);
                                 showToast('Novedades notificadas consolidadas al cliente por correo. ✉️', 'success');
@@ -4409,9 +5256,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     );
                   })()}
-                  <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: getDraftMetadata(selectedDraft).attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: getDraftMetadata(selectedDraft).attachmentUrl ? '12px' : '0' }}>
-                    {selectedDraft.email_body || '(Sin cuerpo)'}
-                  </div>
+                  {(() => {
+                    const metadata = getDraftMetadata(selectedDraft);
+                    if (metadata.emailHtml) {
+                      return (
+                        <div style={{ borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0', height: '350px', backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                          <iframe
+                            srcDoc={metadata.emailHtml}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              border: 'none',
+                              backgroundColor: 'white'
+                            }}
+                            sandbox="allow-same-origin allow-popups"
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0' }}>
+                        {selectedDraft.email_body || '(Sin cuerpo)'}
+                      </div>
+                    );
+                  })()}
                 </div>
               </details>
 
@@ -4542,6 +5410,584 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Ventana flotante premium con el cuerpo del correo original */}
+          {showFloatingEmail && (
+            <div style={{
+              position: 'fixed',
+              right: '24px',
+              top: '5vh',
+              width: isFloatingExpanded ? '950px' : '550px',
+              height: '90vh',
+              backgroundColor: 'white',
+              borderRadius: THEME.radius.xl,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+              zIndex: 10000,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }} onClick={e => e.stopPropagation()}>
+              {/* Header de la ventana flotante */}
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: '#F8FAFC',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Mail size={16} color="#2563EB" />
+                  <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Cuerpo del Correo</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsFloatingExpanded(prev => !prev)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      color: '#64748B',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background-color 0.2s, color 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#EFF6FF';
+                      e.currentTarget.style.color = '#2563EB';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#64748B';
+                    }}
+                    title={isFloatingExpanded ? "Contraer visor" : "Expandir visor"}
+                  >
+                    {isFloatingExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowFloatingEmail(false)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      color: '#64748B',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background-color 0.2s, color 0.2s'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#FEF2F2';
+                      e.currentTarget.style.color = '#EF4444';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#64748B';
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Asunto del correo */}
+              <div style={{
+                padding: '12px 16px',
+                backgroundColor: '#EFF6FF',
+                borderBottom: '1px solid #DBEAFE',
+                fontSize: '0.8rem',
+                color: '#1E40AF',
+                fontWeight: 700
+              }}>
+                Asunto: {selectedDraft.email_subject || '(Sin Asunto)'}
+              </div>
+
+              {/* Selector de Pestañas (Tabs) */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                if (!metadata.attachmentUrl) return null;
+                return (
+                  <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid #E2E8F0',
+                    backgroundColor: '#F8FAFC',
+                    padding: '0 8px',
+                    gap: '4px'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('email')}
+                      style={{
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: activeTab === 'email' ? 800 : 500,
+                        color: activeTab === 'email' ? '#2563EB' : '#64748B',
+                        borderBottom: activeTab === 'email' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Mail size={14} />
+                      Correo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('attachment')}
+                      style={{
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: activeTab === 'attachment' ? 800 : 500,
+                        color: activeTab === 'attachment' ? '#2563EB' : '#64748B',
+                        borderBottom: activeTab === 'attachment' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Paperclip size={14} />
+                      Adjunto
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Contenido Dinámico de la Pestaña */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                
+                // PESTAÑA: Adjunto
+                if (activeTab === 'attachment') {
+                  let currentUrl = metadata.attachmentUrl;
+                  let currentName = metadata.attachmentName;
+                  if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                    const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                    if (selectedAtt) {
+                      currentUrl = selectedAtt.url;
+                      currentName = selectedAtt.name;
+                    }
+                  }
+
+                  if (!currentUrl) {
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', backgroundColor: '#F8FAFC', color: '#64748B' }}>
+                        <span>No hay documentos adjuntos.</span>
+                      </div>
+                    );
+                  }
+
+                  const attachmentName = currentName || '';
+                  const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+
+                  // Inline helper for multiple attachments selectors
+                  const renderSelector = () => {
+                    if (!metadata.attachments || !Array.isArray(metadata.attachments) || metadata.attachments.length <= 1) return null;
+                    return (
+                      <div style={{
+                        display: 'flex',
+                        gap: '6px',
+                        padding: '8px 12px',
+                        backgroundColor: '#F1F5F9',
+                        borderBottom: '1px solid #E2E8F0',
+                        overflowX: 'auto',
+                        whiteSpace: 'nowrap'
+                      }} className="premium-scrollbar">
+                        {metadata.attachments.map((att: any, idx: number) => {
+                          const isActive = idx === selectedAttachmentIndex;
+                          const isProcessed = att.processed === true;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSelectAttachment(idx)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                border: '1px solid',
+                                borderColor: isActive ? '#2563EB' : (isProcessed ? '#10B981' : '#CBD5E1'),
+                                backgroundColor: isActive ? '#EFF6FF' : (isProcessed ? '#ECFDF5' : 'white'),
+                                color: isActive ? '#2563EB' : (isProcessed ? '#047857' : '#475569'),
+                                fontSize: '0.725rem',
+                                fontWeight: isActive ? 800 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <span>{isProcessed ? '✅' : '📎'}</span>
+                              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
+                                {att.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  };
+
+                  const wrapContent = (content: React.ReactNode) => {
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                        {renderSelector()}
+                        {content}
+                      </div>
+                    );
+                  };
+
+                  // 1. Caso: Excel (.xlsx, .xls)
+                  if (ext === 'xlsx' || ext === 'xls') {
+                    if (loadingAttachment) {
+                      return wrapContent(
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
+                          <style>{`
+                            @keyframes spin {
+                              from { transform: rotate(0deg); }
+                              to { transform: rotate(360deg); }
+                            }
+                          `}</style>
+                          <Loader2 size={32} color="#2563EB" style={{ animation: 'spin 1.2s linear infinite' }} />
+                          <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Cargando tabla Excel...</span>
+                        </div>
+                      );
+                    }
+                    if (attachmentError) {
+                      return wrapContent(
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                          <AlertTriangle size={32} color="#EF4444" />
+                          <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: 700 }}>{attachmentError}</span>
+                          <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#2563EB', fontWeight: 800, textDecoration: 'underline', marginTop: '4px' }}>
+                            Descargar archivo original
+                          </a>
+                        </div>
+                      );
+                    }
+                    if (attachmentHtml) {
+                      return wrapContent(
+                        <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '12px' }}>
+                          <style>{`
+                            #excel-table {
+                              border-collapse: collapse;
+                              width: max-content;
+                              min-width: 100%;
+                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                              font-size: 0.725rem;
+                              color: #334155;
+                              background-color: white;
+                              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                              border-radius: 8px;
+                              overflow: hidden;
+                              border: 1px solid #E2E8F0;
+                            }
+                            #excel-table td, #excel-table th {
+                              border: 1px solid #E2E8F0;
+                              padding: 8px 10px;
+                              min-width: 60px;
+                              white-space: nowrap;
+                              text-align: left;
+                            }
+                            #excel-table tr:first-child {
+                              background-color: #F1F5F9;
+                              font-weight: 800;
+                              color: #1E293B;
+                              position: sticky;
+                              top: 0;
+                              border-bottom: 2px solid #CBD5E1;
+                            }
+                            #excel-table tr:nth-child(even) {
+                              background-color: #F8FAFC;
+                            }
+                            #excel-table tr:hover {
+                              background-color: #EFF6FF;
+                            }
+                          `}</style>
+                          <div dangerouslySetInnerHTML={{ __html: attachmentHtml }} />
+                        </div>
+                      );
+                    }
+                    return null;
+                  }
+
+                  // 2. Caso: PDF (.pdf)
+                  if (ext === 'pdf') {
+                    return wrapContent(
+                      <div style={{ flex: 1, backgroundColor: 'white', position: 'relative' }}>
+                        <iframe
+                          src={currentUrl}
+                          style={{ width: '100%', height: '100%', border: 'none' }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // 3. Caso: Otros (Word .docx, .doc, etc.)
+                  return wrapContent(
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                      <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', width: '85%', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                        <FileText size={48} color="#2563EB" />
+                        <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#1E293B', wordBreak: 'break-all' }}>{attachmentName}</span>
+                        <span style={{ fontSize: '0.725rem', color: '#64748B' }}>Documento de oficina u otro formato adjunto</span>
+                        <a
+                          href={currentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            marginTop: '8px',
+                            backgroundColor: '#2563EB',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                          }}
+                        >
+                          <Download size={14} />
+                          Descargar Documento
+                        </a>
+                      </div>
+                      
+                      <a 
+                        href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(currentUrl)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: '0.75rem',
+                          color: '#2563EB',
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                          borderBottom: '1px dashed #2563EB'
+                        }}
+                      >
+                        Abrir en Visor de Office Online ↗
+                      </a>
+                    </div>
+                  );
+                }
+
+                // PESTAÑA: Correo (Default)
+                if (metadata.emailHtml) {
+                  return (
+                    <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
+                      <iframe
+                        srcDoc={metadata.emailHtml}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          backgroundColor: 'white'
+                        }}
+                        sandbox="allow-same-origin allow-popups"
+                      />
+                    </div>
+                  );
+                }
+                return (
+                  <div 
+                    className="premium-scrollbar"
+                    style={{
+                      padding: '16px',
+                      overflowY: 'auto',
+                      flex: 1,
+                      fontSize: '0.825rem',
+                      color: '#334155',
+                      lineHeight: '1.6',
+                      whiteSpace: 'pre-wrap',
+                      backgroundColor: '#FCFDFE',
+                      fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
+                    }}
+                  >
+                    {selectedDraft.email_body || '(Sin cuerpo de correo)'}
+                  </div>
+                );
+              })()}
+
+              {/* Barra de archivo adjunto si existe */}
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                let currentUrl = metadata.attachmentUrl;
+                let currentName = metadata.attachmentName;
+                if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                  const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                  if (selectedAtt) {
+                    currentUrl = selectedAtt.url;
+                    currentName = selectedAtt.name;
+                  }
+                }
+                
+                if (!currentUrl) return null;
+                return (
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#F1F5F9',
+                    borderTop: '1px solid #E2E8F0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={currentName}>
+                      📎 {currentName || 'Documento adjunto'}
+                    </span>
+                    <a
+                      href={currentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '0.75rem',
+                        color: '#2563EB',
+                        fontWeight: 800,
+                        textDecoration: 'none',
+                        padding: '4px 8px',
+                        backgroundColor: 'white',
+                        borderRadius: '6px',
+                        border: '1px solid #BFDBFE'
+                      }}
+                    >
+                      Ver original
+                    </a>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {duplicateMatchConfirm && duplicateMatchConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(17, 24, 39, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 16000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            width: '90%',
+            maxWidth: '480px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            padding: '24px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#FEF3C7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: '#D97706'
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 8px 0'
+            }}>
+              Producto Duplicado Detectado
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#4B5563',
+              margin: '0 0 24px 0',
+              lineHeight: '1.6'
+            }}>
+              El producto <strong>{duplicateMatchConfirm.product.name}</strong> 
+              {(() => {
+                const acctId = getAccountingIdDisplay(duplicateMatchConfirm.product);
+                return acctId && acctId !== duplicateMatchConfirm.product.id ? ` (ID Contable: ${acctId})` : '';
+              })()} 
+              ya está asignado a otra línea activa de este pedido. ¿Cómo deseas proceder?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleMergeDuplicateMatch}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#10B981',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                }}
+              >
+                Sumar y unificar cantidades
+              </button>
+              <button
+                type="button"
+                onClick={handleKeepBothMatches}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#2563EB',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                }}
+              >
+                Mantener filas separadas
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateMatchConfirm(null)}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
@@ -5302,12 +6748,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         })
                       });
 
-                      if (!res.ok) {
-                        const errData = await res.json();
-                        throw new Error(errData.error || 'Error en el servidor');
-                      }
-
-                      const data = await res.json();
+                      const data = await safeFetchJson(res);
                       if (data.warning) {
                         showToast(data.warning, 'info');
                       } else {
@@ -5389,11 +6830,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Client info summary */}
             <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
-              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1E293B', marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1E293B', marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                 <span>CLIENTE DETECTADO</span>
-                <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
-                  {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
-                </span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
+                    {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
+                  </span>
+                  {activePricingModel && (
+                    <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', fontWeight: '900' }}>
+                      🏷️ {isB2CDefault ? 'Tarifa B2C (Defecto)' : `Modelo: ${activePricingModel.name}`}
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem' }}>
                 <div><strong>Nombre:</strong> {selectedDraft.client_detected_name || 'Desconocido'}</div>
@@ -5417,7 +6865,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </tr>
                   </thead>
                   <tbody>
-                    {editableItems.map((item: any, idx: number) => {
+                    {editableItems.filter(item => !item.isDeleted).map((item: any, idx: number) => {
                       if (!item.matched_product_id) return null;
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
@@ -5449,7 +6897,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <input 
                   type="date" 
                   value={deliveryDate} 
-                  onChange={(e) => setDeliveryDate(e.target.value)} 
+                  min={minDeliveryDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    const minDate = getMinDeliveryDate();
+                    if (newDate < minDate) {
+                      showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
+                      setDeliveryDate(minDate);
+                      return;
+                    }
+                    setDeliveryDate(newDate);
+                  }} 
                   style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700 }}
                 />
               </div>
@@ -5614,6 +7072,410 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       )}
 
+      {/* PRODUCT VARIANT CUSTOM SUB-MODAL */}
+      {selectedProductForVariant && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 20000, // Above revision modal (which is 9999)
+          padding: '1rem',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '820px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            position: 'relative',
+            padding: '2.5rem',
+            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <button 
+              onClick={() => {
+                const idx = selectedRowForVariant;
+                setSelectedProductForVariant(null);
+                setSelectedRowForVariant(null);
+                if (idx !== null) {
+                  setTimeout(() => {
+                    const currentInput = productInputRefs.current[idx];
+                    if (currentInput) {
+                      currentInput.focus();
+                      currentInput.select();
+                    }
+                  }, 80);
+                }
+              }}
+              style={{
+                position: 'absolute',
+                top: '1.5rem',
+                right: '1.5rem',
+                border: 'none',
+                background: '#F1F5F9',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                color: '#64748B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+              }}
+            >✕</button>
+
+            {/* Flex container for header */}
+            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                {selectedProductForVariant.image_url ? (
+                  <img 
+                    src={selectedProductForVariant.image_url} 
+                    alt={selectedProductForVariant.name}
+                    style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '16px',
+                    backgroundColor: '#F3F4F6',
+                    border: '1px solid #E5E7EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                  }}>
+                    <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                  </div>
+                )}
+                <div>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
+                  <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                    Personaliza tu producto:
+                  </p>
+                </div>
+              </div>
+
+              {/* Right side: Helper box with detected information */}
+              {selectedRowForVariant !== null && editableItems[selectedRowForVariant] && (
+                <div style={{
+                  backgroundColor: '#F8FAFC',
+                  border: '1px dashed #CBD5E1',
+                  borderRadius: '12px',
+                  padding: '0.8rem 1.2rem',
+                  textAlign: 'left',
+                  fontSize: '0.85rem',
+                  color: '#475569',
+                  minWidth: '280px',
+                  flex: '1 1 auto',
+                  maxWidth: '360px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                    <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
+                    <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
+                      {formatDetectedUnit(editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity, editableItems[selectedRowForVariant].originalUnit || 'uds')}
+                    </span>
+                  </div>
+                  <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={editableItems[selectedRowForVariant].originalName}>
+                    &quot;{editableItems[selectedRowForVariant].originalName}&quot;
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Client notes box */}
+            {(() => {
+              const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
+              if (!exc) return null;
+              return (
+                <div style={{
+                  backgroundColor: '#FEF3C7',
+                  border: '1px solid #FCD34D',
+                  borderRadius: '12px',
+                  padding: '0.8rem 1.2rem',
+                  margin: '0.5rem 0 1.2rem 0',
+                  textAlign: 'left',
+                  fontSize: '0.8rem',
+                  color: '#92400E',
+                  lineHeight: '1.4'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                    📌 REQUERIMIENTOS DEL CLIENTE:
+                  </div>
+                  {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
+                    <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
+                  )}
+                  {exc.picking_note && <div><strong>Nota:</strong> {exc.picking_note}</div>}
+                  {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
+                </div>
+              );
+            })()}
+
+            {/* ACTION BAR */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              fontSize: '0.75rem',
+              color: '#9CA3AF',
+              marginBottom: '1.5rem',
+              fontWeight: '700'
+            }}>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => alert("Para editar las variantes Estructurales, por favor ve al panel de catálogo de productos.")}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#4B5563',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  textDecoration: 'underline'
+                }}
+              >
+                ⚙️ Editar Variantes
+              </button>
+              <span>|</span>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => {
+                  if (window.confirm("¿Quieres crear una nueva equivalencia? Te redirigiremos al catálogo de productos.")) {
+                    setSelectedProductForVariant(null);
+                    window.location.href = '/admin/products';
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#4B5563',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  textDecoration: 'underline'
+                }}
+              >
+                ⚙️ Editar Equivalencias
+              </button>
+            </div>
+
+            {/* Options Rendering */}
+            {selectedProductForVariant.options_config?.map((opt: any, index: number) => (
+              <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {opt.name}
+                </label>
+                <select
+                  id={`modal-select-${index}`}
+                  tabIndex={index + 1}
+                  value={selectedOptions[opt.name] || ''}
+                  onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (index < (selectedProductForVariant.options_config?.length || 0) - 1) {
+                        const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                        if (nextSelect) nextSelect.focus();
+                      } else {
+                        const qtyInput = document.getElementById('modal-qty-input');
+                        if (qtyInput) {
+                          qtyInput.focus();
+                          (qtyInput as HTMLInputElement).select();
+                        }
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    border: '2px solid #E2E8F0',
+                    borderRadius: '10px',
+                    fontSize: '1rem',
+                    backgroundColor: '#F9FAFB',
+                    outline: 'none',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E2E8F0';
+                    e.target.style.backgroundColor = '#F9FAFB';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                >
+                  <option value="">Seleccionar {opt.name}...</option>
+                  {opt.values?.map((val: string) => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+
+            {/* Quantity & Unit select grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Cantidad
+                </label>
+                <input
+                  id="modal-qty-input"
+                  tabIndex={(selectedProductForVariant.options_config?.length || 0) + 1}
+                  type="text"
+                  value={variantQuantity}
+                  onChange={(e) => {
+                    setVariantQuantity(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === '.' || e.key === ',') {
+                      e.preventDefault();
+                      const input = e.currentTarget;
+                      const start = input.selectionStart ?? 0;
+                      const end = input.selectionEnd ?? 0;
+                      const val = input.value;
+                      const newVal = val.substring(0, start) + ',' + val.substring(end);
+                      setVariantQuantity(newVal);
+                      
+                      setTimeout(() => {
+                        input.setSelectionRange(start + 1, start + 1);
+                      }, 10);
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const unitSel = document.getElementById('modal-unit-select');
+                      if (unitSel) {
+                        unitSel.focus();
+                      } else {
+                        confirmVariantAdd();
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.8rem',
+                    borderRadius: '10px',
+                    border: '2px solid #E2E8F0',
+                    fontWeight: '700',
+                    fontSize: '1.1rem',
+                    textAlign: 'center',
+                    outline: 'none',
+                    backgroundColor: '#F9FAFB',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                    e.target.select();
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E2E8F0';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Unidad de Medida
+                </label>
+                <select
+                  id="modal-unit-select"
+                  tabIndex={(selectedProductForVariant.options_config?.length || 0) + 2}
+                  value={selectedUnit}
+                  onChange={(e) => {
+                    const opt = optionsList.find(o => o.unit === e.target.value);
+                    if (opt) {
+                      setSelectedUnit(opt.unit);
+                      setSelectedConversionFactor(opt.factor);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      confirmVariantAdd();
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    border: '2px solid #E2E8F0',
+                    borderRadius: '10px',
+                    fontSize: '1rem',
+                    backgroundColor: '#F9FAFB',
+                    outline: 'none',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#E2E8F0';
+                    e.target.style.backgroundColor = '#F9FAFB';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                >
+                  {optionsList.map(o => (
+                    <option key={o.unit} value={o.unit}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Footer buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+              <button 
+                tabIndex={(selectedProductForVariant.options_config?.length || 0) + 4}
+                onClick={() => {
+                  const idx = selectedRowForVariant;
+                  setSelectedProductForVariant(null);
+                  setSelectedRowForVariant(null);
+                  if (idx !== null) {
+                    setTimeout(() => {
+                      const currentInput = productInputRefs.current[idx];
+                      if (currentInput) {
+                        currentInput.focus();
+                        currentInput.select();
+                      }
+                    }, 80);
+                  }
+                }}
+                style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button 
+                id="modal-add-button"
+                tabIndex={(selectedProductForVariant.options_config?.length || 0) + 3}
+                onClick={confirmVariantAdd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    confirmVariantAdd();
+                  }
+                }}
+                style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div style={{
           position: 'fixed',
@@ -5689,12 +7551,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
           }}>
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FAFAFA' }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Keyboard size={24} color="#9333EA" /> Manual de Atajos
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Keyboard size={24} color={THEME.colors.primary} /> Manual de Atajos
               </h2>
               <button 
                 onClick={() => setShowShortcuts(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', padding: '4px' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', padding: '4px' }}
               >
                 <X size={20} />
               </button>
@@ -5703,62 +7565,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <div style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Cerrar ventanas y modales</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Cerrar ventanas y modales</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Esc</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Esc</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Abrir este manual</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Abrir este manual</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Shift</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>?</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Shift</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>?</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Aprobar y procesar pedido</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Aprobar y procesar pedido</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Enter</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Enter</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Rechazar/Eliminar selección masiva</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Rechazar/Eliminar selección masiva</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Supr / Del</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Supr / Del</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Buscar pedido</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Buscar pedido</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>F</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>F</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Modificar pedido actual</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Modificar pedido actual</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>E</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>E</kbd>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Rechazar pedido actual</span>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Rechazar pedido actual</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Retroceso (Back)</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Retroceso (Back)</kbd>
                   </div>
                 </div>
 
@@ -5769,7 +7631,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <button 
                 onClick={() => setShowShortcuts(false)}
                 style={{
-                  backgroundColor: '#9333EA', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 2rem', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(147, 51, 234, 0.2)'
+                  backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 2rem', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 4px ${THEME.colors.primary}33`
                 }}
               >
                 Entendido
@@ -5778,6 +7640,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         </div>
       )}
+      <datalist id="all-products-list">
+        {products.map(p => (
+          <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
+        ))}
+      </datalist>
     </div>
   );
 }

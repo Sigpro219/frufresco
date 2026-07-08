@@ -87,9 +87,9 @@ export default function BillingDashboard() {
                     setRoles(parsedRoles);
                     
                     if (profile) {
-                        const canInvoice = checkUserPermission(profile, 'commercial.billing.invoicing', parsedRoles);
-                        const canPortfolio = checkUserPermission(profile, 'commercial.billing.portfolio', parsedRoles);
-                        const canConfig = checkUserPermission(profile, 'commercial.billing.config', parsedRoles);
+                        const canInvoice = checkUserPermission(profile, 'admin.commercial.billing.invoicing', parsedRoles);
+                        const canPortfolio = checkUserPermission(profile, 'admin.commercial.billing.portfolio', parsedRoles);
+                        const canConfig = checkUserPermission(profile, 'admin.commercial.billing.config', parsedRoles);
                         
                         setHasInvoicingAccess(canInvoice);
                         setHasPortfolioAccess(canPortfolio);

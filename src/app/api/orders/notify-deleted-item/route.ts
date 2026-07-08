@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
+    const auth = await verifySessionAndPermission(req, 'admin.orders');
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const { draftId, deletedItem, sourceEmail, clientName, dbItems, emailItems } = await req.json();
 
     if (!draftId || !sourceEmail || !deletedItem) {

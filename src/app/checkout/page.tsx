@@ -28,13 +28,18 @@ import {
     X,
     ShieldCheck,
     Truck,
-    Lock as LockIcon
+    Lock as LockIcon,
+    Pencil
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
+import dynamic from 'next/dynamic';
+
+const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), { ssr: false });
 
 export default function CheckoutPage() {
-    const { items, totalPrice, removeItem, clearCart } = useCart();
+    const { items, totalPrice, removeItem, clearCart, updateItemQuantity } = useCart();
     const [isMounted, setIsMounted] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'wompi' | 'contra_entrega'>('wompi');
     const [name, setName] = useState('');
     const [identification, setIdentification] = useState('');
     const [email, setEmail] = useState('');
@@ -44,6 +49,10 @@ export default function CheckoutPage() {
     const [minOrder, setMinOrder] = useState(0);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingCartItem, setEditingCartItem] = useState<any | null>(null);
+    const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
     const [minDeliveryDate, setMinDeliveryDate] = useState('');
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
@@ -52,6 +61,18 @@ export default function CheckoutPage() {
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
     const [specialNotes, setSpecialNotes] = useState('');
+    const [isProfileMatched, setIsProfileMatched] = useState(false);
+    const [isProfileUnlocked, setIsProfileUnlocked] = useState(false);
+    const [maskedName, setMaskedName] = useState('');
+    const [maskedAddress, setMaskedAddress] = useState('');
+    const [lookupLoading, setLookupLoading] = useState(false);
+    const [lookupError, setLookupError] = useState('');
+    const [originalAddress, setOriginalAddress] = useState('');
+    const [originalCoords, setOriginalCoords] = useState<{lat: number, lng: number} | null>(null);
+    const [matchedProfileId, setMatchedProfileId] = useState<string | null>(null);
+    const [unlockedEmail, setUnlockedEmail] = useState('');
+    const [unlockedId, setUnlockedId] = useState('');
+    const [unlockedPhone, setUnlockedPhone] = useState('');
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     
@@ -74,7 +95,193 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         setIsMounted(true);
+        if (typeof window !== 'undefined') {
+            const isAutofilled = localStorage.getItem('checkout_is_profile_autofilled') === 'true';
+            const savedId = localStorage.getItem('checkout_identification');
+            const savedEmail = localStorage.getItem('checkout_email');
+            const savedPhone = localStorage.getItem('checkout_phone');
+            const savedNotes = localStorage.getItem('checkout_specialNotes');
+
+            if (savedId) setIdentification(savedId);
+            if (savedEmail) setEmail(savedEmail);
+            if (savedPhone) setPhone(savedPhone);
+            if (savedNotes) setSpecialNotes(savedNotes);
+
+            const savedName = localStorage.getItem('checkout_name');
+            const savedAddress = localStorage.getItem('checkout_address');
+            const isLuis = savedName && savedName.includes('Luis Fernando');
+            const isCalle127 = savedAddress && savedAddress.includes('Calle 127');
+
+            // ONLY load saved name and address if they were NOT autofilled from a profile
+            if (!isAutofilled && !isLuis && !isCalle127) {
+                if (savedName) setName(savedName);
+                if (savedAddress) setAddress(savedAddress);
+            } else {
+                setName('');
+                setAddress('');
+                localStorage.removeItem('checkout_name');
+                localStorage.removeItem('checkout_address');
+                localStorage.removeItem('checkout_is_profile_autofilled');
+            }
+        }
     }, []);
+
+    const handleNameChange = (val: string) => {
+        setName(val);
+        localStorage.setItem('checkout_name', val);
+    };
+
+    const handleIdChange = (val: string) => {
+        setIdentification(val);
+        localStorage.setItem('checkout_identification', val);
+    };
+
+    const handlePhoneChange = (val: string) => {
+        setPhone(val);
+        localStorage.setItem('checkout_phone', val);
+    };
+
+    const handleEmailChange = (val: string) => {
+        setEmail(val);
+        localStorage.setItem('checkout_email', val);
+    };
+
+    const handleAddressChange = (val: string) => {
+        setAddress(val);
+        localStorage.setItem('checkout_address', val);
+    };
+
+    const handleNotesChange = (val: string) => {
+        setSpecialNotes(val);
+        localStorage.setItem('checkout_specialNotes', val);
+    };
+
+    // Step 1: Automatic B2C profile detection (Debounced)
+    useEffect(() => {
+        setIsProfileMatched(false);
+        setIsProfileUnlocked(false);
+        setMaskedName('');
+        setMaskedAddress('');
+        setLookupError('');
+
+        const emailVal = (email || '').trim();
+        const idVal = (identification || '').trim();
+
+        if (emailVal.includes('@') && emailVal.length > 5 && idVal.length >= 5) {
+            const delayDebounceFn = setTimeout(async () => {
+                setLookupLoading(true);
+                try {
+                    const res = await fetch('/api/checkout/lookup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: emailVal, nit: idVal })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.found) {
+                            setIsProfileMatched(true);
+                            setMaskedName(data.name);
+                            setMaskedAddress(data.address);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error during profile lookup:', err);
+                } finally {
+                    setLookupLoading(false);
+                }
+            }, 600);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [email, identification]);
+
+    // Step 2: Automatic phone verification to unlock details (Debounced)
+    useEffect(() => {
+        const cleanPhoneStr = (p: string) => (p || '').replace(/\D/g, '');
+        const phoneVal = cleanPhoneStr(phone);
+
+        if (isProfileMatched && !isProfileUnlocked && phoneVal.length >= 10) {
+            const delayDebounceFn = setTimeout(async () => {
+                setLookupLoading(true);
+                setLookupError('');
+                try {
+                    const res = await fetch('/api/checkout/lookup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: (email || '').trim(),
+                            nit: (identification || '').trim(),
+                            phone: phoneVal
+                        })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.verified) {
+                            setIsProfileUnlocked(true);
+                            setName(data.name);
+                            localStorage.setItem('checkout_name', data.name);
+                            setAddress(data.address);
+                            localStorage.setItem('checkout_address', data.address);
+                            setPhone(data.phone);
+                            localStorage.setItem('checkout_phone', data.phone);
+                            setOriginalAddress(data.address);
+                            setMatchedProfileId(data.id || null);
+                            localStorage.setItem('checkout_is_profile_autofilled', 'true');
+                            setUnlockedEmail((email || '').trim());
+                            setUnlockedId((identification || '').trim());
+                            setUnlockedPhone(phoneVal);
+                            if (data.latitude && data.longitude) {
+                                const latVal = parseFloat(data.latitude);
+                                const lngVal = parseFloat(data.longitude);
+                                setLatitude(latVal);
+                                setLongitude(lngVal);
+                                setOriginalCoords({ lat: latVal, lng: lngVal });
+                            } else {
+                                setLatitude(null);
+                                setLongitude(null);
+                                setOriginalCoords(null);
+                            }
+                            setIsProfileMatched(false);
+                        } else {
+                            setLookupError(data.error || 'El celular no coincide.');
+                        }
+                    } else {
+                        setLookupError('Error en la verificación.');
+                    }
+                } catch (err) {
+                    console.error('Error during phone verification:', err);
+                    setLookupError('Error en la conexión.');
+                } finally {
+                    setLookupLoading(false);
+                }
+            }, 500);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [phone, isProfileMatched, isProfileUnlocked, email, identification]);
+
+    // Step 3: Monitor lookup fields to clear auto-filled profile details if credentials change/are removed
+    useEffect(() => {
+        if (matchedProfileId) {
+            const currentEmail = (email || '').trim();
+            const currentId = (identification || '').trim();
+            const cleanPhoneStr = (p: string) => (p || '').replace(/\D/g, '');
+            const currentPhone = cleanPhoneStr(phone);
+
+            if (currentEmail !== unlockedEmail || currentId !== unlockedId || currentPhone !== unlockedPhone) {
+                setMatchedProfileId(null);
+                setIsProfileUnlocked(false);
+                setName('');
+                setAddress('');
+                setLatitude(null);
+                setLongitude(null);
+                setUnlockedEmail('');
+                setUnlockedId('');
+                setUnlockedPhone('');
+                localStorage.removeItem('checkout_name');
+                localStorage.removeItem('checkout_address');
+                localStorage.removeItem('checkout_is_profile_autofilled');
+            }
+        }
+    }, [email, identification, phone, matchedProfileId, unlockedEmail, unlockedId, unlockedPhone]);
 
     useEffect(() => {
         async function fetchGeofence() {
@@ -83,6 +290,19 @@ export default function CheckoutPage() {
         }
         fetchGeofence();
     }, []);
+
+    // Monitor changes to delivery address to invalidate coordinates if address changes
+    useEffect(() => {
+        if (originalAddress && address.trim().toLowerCase() !== originalAddress.trim().toLowerCase()) {
+            setLatitude(null);
+            setLongitude(null);
+        } else if (originalAddress && address.trim().toLowerCase() === originalAddress.trim().toLowerCase()) {
+            if (originalCoords) {
+                setLatitude(originalCoords.lat);
+                setLongitude(originalCoords.lng);
+            }
+        }
+    }, [address, originalAddress, originalCoords]);
 
     // Perform validation whenever coordinates change
     useEffect(() => {
@@ -144,8 +364,14 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (profile) {
             // El nombre se deja limpio a propósito para que se llene manualmente
-            if (!email && profile.company_name?.includes('@')) setEmail(profile.company_name);
-            if (!address) setAddress(profile.address_main || '');
+            if (!email && profile.company_name?.includes('@')) {
+                setEmail(profile.company_name);
+                localStorage.setItem('checkout_email', profile.company_name);
+            }
+            if (!address && profile.address_main) {
+                setAddress(profile.address_main);
+                localStorage.setItem('checkout_address', profile.address_main);
+            }
             console.log('👤 profile found, filling member data...');
         }
     }, [profile]);
@@ -176,7 +402,7 @@ export default function CheckoutPage() {
                 const bogotaNow = new Date(utc + (3600000 * -5));
                 const currentHour = bogotaNow.getHours();
 
-                let daysToAdd = cutoffEnabled ? 1 : 0;
+                let daysToAdd = 1;
                 if (cutoffEnabled && currentHour >= DEFAULT_CUTOFF_HOUR) {
                     daysToAdd = 2;
                 }
@@ -214,6 +440,12 @@ export default function CheckoutPage() {
         if (!address) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
         if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
         if (outOfZone) return alert(t.outOfZoneMsg);
+        if (date < minDeliveryDate) {
+            return alert(locale === 'es' 
+                ? `La fecha de entrega seleccionada no es válida. La fecha mínima de entrega permitida es ${minDeliveryDate}.`
+                : `The selected delivery date is not valid. The minimum allowed delivery date is ${minDeliveryDate}.`
+            );
+        }
 
         setLoading(true);
 
@@ -226,7 +458,7 @@ export default function CheckoutPage() {
 
             // Create a Promise race to handle potential Supabase client hangs
             const orderDataToInsert = {
-                type: 'b2c_wompi',
+                type: paymentMethod === 'wompi' ? 'b2c_wompi' : 'b2c',
                 status: 'pending_approval',
                 delivery_date: date,
                 shipping_address: address,
@@ -235,6 +467,9 @@ export default function CheckoutPage() {
                 total: totalPrice,
                 latitude: safeLat,
                 longitude: safeLng,
+                profile_id: matchedProfileId || null,
+                payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
+                payment_status: 'Pendiente',
                 special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[ORIGIN: web]\n${specialNotes || ''}`
             };
 
@@ -270,6 +505,16 @@ export default function CheckoutPage() {
 
             if (!orderData) throw new Error('No se recibió confirmación del pedido.');
             console.log('✅ Pedido creado:', orderData.id);
+
+            if (paymentMethod === 'contra_entrega') {
+                console.log('3️⃣ Contra entrega selected. Redirecting directly to success result page...');
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('checkout_specialNotes');
+                }
+                clearCart();
+                router.push(`/checkout/result?reference=${orderData.id}&sequence=${orderData.sequence_id}&created_at=${encodeURIComponent(orderData.created_at)}&status=cod_success`);
+                return;
+            }
 
             console.log('3️⃣ Requesting Wompi hash...');
             
@@ -327,6 +572,9 @@ export default function CheckoutPage() {
             
             const wompiUrl = `/payments/simulator?reference=${orderData.id}&amount-in-cents=${amountInCents}&currency=COP`;
 
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('checkout_specialNotes');
+            }
             clearCart();
             window.location.href = wompiUrl;
 
@@ -346,13 +594,47 @@ export default function CheckoutPage() {
             setLoading(false);
         }
     };
+    const handleEditItem = async (item: any) => {
+        try {
+            setLoadingProductId(item.id);
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('id', item.id)
+                .single();
+            if (data) {
+                setSelectedProduct({
+                    id: data.id,
+                    name: data.name,
+                    name_en: data.name_en,
+                    base_price: data.base_price,
+                    unit_of_measure: data.unit_of_measure,
+                    image_url: data.image_url,
+                    sku: data.sku,
+                    iva_rate: data.iva_rate,
+                    options: data.options,
+                    options_config: data.options_config,
+                    variants: data.variants,
+                    web_conversion_factor: data.web_conversion_factor,
+                    display_name: data.display_name,
+                    weight_kg: data.weight_kg
+                });
+                setEditingCartItem(item);
+                setIsEditModalOpen(true);
+            }
+        } catch (err) {
+            console.error('Error fetching product for edit:', err);
+        } finally {
+            setLoadingProductId(null);
+        }
+    };
 
     if (!isMounted) return null;
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
 
-            <div className="container mobile-stack" style={{ padding: '2.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '2.5rem' }}>
+            <div className="container mobile-stack" style={{ padding: '2.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 420px', gap: '2.5rem', maxWidth: '1440px' }}>
 
                 {/* LEFT COLUMN: LIST */}
                 <div style={{ position: 'relative', zIndex: 1 }}>
@@ -380,12 +662,9 @@ export default function CheckoutPage() {
                         }}>
                             <ShoppingCart size={24} strokeWidth={2.5} color="var(--primary)" /> {t.checkoutTitle}
                         </h1>
-                        {items.length > 0 && (
-                            <button
-                                onClick={() => {
-                                    clearCart();
-                                    router.push('/');
-                                }}
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <Link
+                                href="/"
                                 style={{
                                     padding: '0.5rem 1rem',
                                     borderRadius: '12px',
@@ -393,19 +672,44 @@ export default function CheckoutPage() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '0.5rem',
-                                    color: '#EF4444',
-                                    backgroundColor: '#FEF2F2',
-                                    border: '1px solid #FEE2E2',
+                                    color: 'var(--primary)',
+                                    backgroundColor: '#ECFDF5',
+                                    border: '1px solid #A7F3D0',
                                     fontWeight: '700',
                                     cursor: 'pointer',
+                                    textDecoration: 'none',
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
                             >
-                                <Trash2 size={14} /> {t.clearCart}
-                            </button>
-                        )}
+                                🛒 {locale === 'es' ? 'Seguir comprando' : 'Continue shopping'}
+                            </Link>
+                            {items.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        clearCart();
+                                        router.push('/');
+                                    }}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '12px',
+                                        fontSize: '0.8rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        color: '#EF4444',
+                                        backgroundColor: '#FEF2F2',
+                                        border: '1px solid #FEE2E2',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                >
+                                    <Trash2 size={14} /> {t.clearCart}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {items.length === 0 ? (
@@ -470,9 +774,43 @@ export default function CheckoutPage() {
                                                 }}>
                                                     ${item.price.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
                                                 </span>
-                                                <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '600' }}>
-                                                    • {item.quantity} {item.unit || ''}
-                                                </span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                        • {String(item.quantity).replace('.', ',')} {item.unit || ''}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleEditItem(item)}
+                                                        disabled={loadingProductId === item.id}
+                                                        style={{
+                                                            border: 'none',
+                                                            backgroundColor: 'rgba(26, 77, 46, 0.08)',
+                                                            cursor: 'pointer',
+                                                            color: 'var(--primary)',
+                                                            padding: '4px 6px',
+                                                            borderRadius: '6px',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s ease',
+                                                            marginLeft: '6px'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'var(--primary)';
+                                                            e.currentTarget.style.color = 'white';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(26, 77, 46, 0.08)';
+                                                            e.currentTarget.style.color = 'var(--primary)';
+                                                        }}
+                                                        title="Editar cantidad"
+                                                    >
+                                                        {loadingProductId === item.id ? (
+                                                            <Loader2 size={13} className="animate-spin" />
+                                                        ) : (
+                                                            <Pencil size={13} />
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -534,110 +872,216 @@ export default function CheckoutPage() {
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.2rem', 
+                            fontSize: '1.25rem', 
                             fontWeight: '900', 
-                            marginBottom: '1rem', 
+                            marginBottom: '1.25rem', 
                             color: 'var(--text-main)', 
                             letterSpacing: '-0.04em',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px'
-                        }}>
-                            <CreditCard size={18} color="var(--primary)" strokeWidth={2.5} /> {t.deliveryDetail}
+                            gap: '10px',
+                            borderBottom: '1px solid #F3F4F6',
+                            paddingBottom: '0.75rem'
+                         }}>
+                            <CreditCard size={20} color="var(--primary)" strokeWidth={2.5} /> {t.deliveryDetail}
                         </h3>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {/* 1. Email */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    {t.fullName}
+                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {t.email}
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <User size={15} />
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
+                                        <Mail size={15} />
                                     </div>
                                     <input
-                                        type="text"
-                                        placeholder={t.fullNamePlaceholder}
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
+                                        type="email"
+                                        placeholder={t.emailPlaceholder}
+                                        value={email}
+                                        onChange={(e) => handleEmailChange(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {/* 2. Identificación */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Identificación (Cédula/NIT)
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
                                         <User size={15} />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Ej: 123456789"
                                         value={identification}
-                                        onChange={(e) => setIdentification(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
+                                        onChange={(e) => handleIdChange(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none', 
+                                            transition: 'all 0.2s ease-in-out' 
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
                             </div>
 
-                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {t.whatsapp}
-                                    </label>
-                                    <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                            <Phone size={15} />
-                                        </div>
-                                        <input
-                                            type="tel"
-                                            placeholder={t.whatsappPlaceholder}
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
-                                            className="checkout-input-modern"
-                                        />
+                            {/* 3. WhatsApp */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {t.whatsapp}
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
+                                        <Phone size={15} />
                                     </div>
+                                    <input
+                                        type="tel"
+                                        placeholder={t.whatsappPlaceholder}
+                                        value={phone}
+                                        onChange={(e) => handlePhoneChange(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
+                                        className="checkout-input-modern"
+                                    />
                                 </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {t.email}
-                                    </label>
-                                    <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                            <Mail size={15} />
+                                {isProfileMatched && (
+                                    <div style={{ 
+                                        backgroundColor: lookupError ? '#FEF2F2' : '#EFF6FF',
+                                        border: `1px solid ${lookupError ? '#FCA5A5' : '#BFDBFE'}`,
+                                        borderRadius: '10px',
+                                        padding: '0.5rem 0.75rem',
+                                        marginTop: '0.4rem',
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '6px'
+                                    }}>
+                                        <AlertCircle size={14} color={lookupError ? '#EF4444' : '#2563EB'} style={{ marginTop: '1px', flexShrink: 0 }} />
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: lookupError ? '#991B1B' : '#1E40AF' }}>
+                                                {lookupError ? 'Error de Validación' : '🔒 Cuenta FruFresco Detectada'}
+                                            </p>
+                                            <p style={{ margin: '1px 0 0 0', fontSize: '0.7rem', fontWeight: '500', color: lookupError ? '#7F1D1D' : '#1E3A8A', lineHeight: '1.25' }}>
+                                                {lookupError || (lookupLoading ? 'Validando...' : 'Digita el celular registrado para autocompletar tu compra.')}
+                                            </p>
                                         </div>
-                                        <input
-                                            type="email"
-                                            placeholder={t.emailPlaceholder}
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
-                                            className="checkout-input-modern"
-                                        />
                                     </div>
+                                )}
+                            </div>
+
+                            {/* 4. Nombre Completo */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {t.fullName}
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ 
+                                        position: 'absolute', 
+                                        left: '12px', 
+                                        top: 0, 
+                                        bottom: 0, 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
+                                        opacity: 0.5, 
+                                        pointerEvents: 'none' 
+                                    }}>
+                                        {isProfileMatched ? <LockIcon size={14} /> : <User size={15} />}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder={t.fullNamePlaceholder}
+                                        value={isProfileMatched ? maskedName : name}
+                                        onChange={(e) => handleNameChange(e.target.value)}
+                                        readOnly={isProfileMatched}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            borderRadius: '12px', 
+                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
+                                            color: isProfileMatched ? '#6B7280' : '#111827',
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none', 
+                                            transition: 'all 0.2s ease-in-out' 
+                                        }}
+                                        className="checkout-input-modern"
+                                    />
                                 </div>
                             </div>
 
+                            {/* 5. Dirección de Entrega */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Dirección de Entrega
                                 </label>
-                                <div style={{ position: 'relative', marginBottom: '0.6rem' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
-                                        <MapPin size={15} />
+                                <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
+                                    <div style={{ 
+                                        position: 'absolute', 
+                                        left: '12px', 
+                                        top: 0, 
+                                        bottom: 0, 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
+                                        opacity: 0.5, 
+                                        pointerEvents: 'none' 
+                                    }}>
+                                        {isProfileMatched ? <LockIcon size={14} /> : <MapPin size={15} />}
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
-                                        value={address}
-                                        onChange={(e) => setAddress(e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        value={isProfileMatched ? maskedAddress : address}
+                                        onChange={(e) => handleAddressChange(e.target.value)}
+                                        readOnly={isProfileMatched}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            borderRadius: '12px', 
+                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E5E7EB', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
+                                            color: isProfileMatched ? '#6B7280' : '#111827',
+                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            outline: 'none' 
+                                        }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -783,7 +1227,7 @@ export default function CheckoutPage() {
                                 <textarea
                                     placeholder={t.specialNotesPlaceholder}
                                     value={specialNotes}
-                                    onChange={(e) => setSpecialNotes(e.target.value.slice(0, 150))}
+                                    onChange={(e) => handleNotesChange(e.target.value.slice(0, 150))}
                                     style={{ 
                                         width: '100%', 
                                         padding: '0.5rem 0.75rem', 
@@ -887,6 +1331,98 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
+                            {/* Método de Pago Selector */}
+                            <div style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                    {locale === 'es' ? 'Método de Pago' : 'Payment Method'}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {/* Opción Wompi */}
+                                    <div 
+                                        onClick={() => setPaymentMethod('wompi')}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '1rem',
+                                            borderRadius: '16px',
+                                            border: `2px solid ${paymentMethod === 'wompi' ? 'var(--primary)' : 'rgba(0,0,0,0.06)'}`,
+                                            backgroundColor: paymentMethod === 'wompi' ? 'rgba(5, 150, 105, 0.03)' : 'white',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: paymentMethod === 'wompi' ? '0 4px 20px rgba(5, 150, 105, 0.05)' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                border: `2px solid ${paymentMethod === 'wompi' ? 'var(--primary)' : '#CBD5E1'}`,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: paymentMethod === 'wompi' ? 'var(--primary)' : 'transparent',
+                                                transition: 'all 0.2s'
+                                            }}>
+                                                {paymentMethod === 'wompi' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                    {locale === 'es' ? 'Pago Seguro Online' : 'Secure Online Payment'}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '500', marginTop: '2px', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                                    {locale === 'es' ? 'Tarjeta de crédito, débito, PSE, Nequi, etc.' : 'Credit card, debit, bank transfer.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <ShieldCheck size={20} color={paymentMethod === 'wompi' ? 'var(--primary)' : '#94A3B8'} style={{ opacity: 0.8 }} />
+                                    </div>
+
+                                    {/* Opción Contra Entrega */}
+                                    <div 
+                                        onClick={() => setPaymentMethod('contra_entrega')}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '1rem',
+                                            borderRadius: '16px',
+                                            border: `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'rgba(0,0,0,0.06)'}`,
+                                            backgroundColor: paymentMethod === 'contra_entrega' ? 'rgba(5, 150, 105, 0.03)' : 'white',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: paymentMethod === 'contra_entrega' ? '0 4px 20px rgba(5, 150, 105, 0.05)' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                border: `2px solid ${paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#CBD5E1'}`,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: paymentMethod === 'contra_entrega' ? 'var(--primary)' : 'transparent',
+                                                transition: 'all 0.2s'
+                                            }}>
+                                                {paymentMethod === 'contra_entrega' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'white' }} />}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                    {locale === 'es' ? 'Pago Contra Entrega' : 'Cash on Delivery'}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '500', marginTop: '2px', fontFamily: 'var(--font-inter), sans-serif' }}>
+                                                    {locale === 'es' ? 'Paga en efectivo o transferencia al recibir' : 'Pay with cash or bank transfer on receipt.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <Truck size={20} color={paymentMethod === 'contra_entrega' ? 'var(--primary)' : '#94A3B8'} style={{ opacity: 0.8 }} />
+                                    </div>
+                                </div>
+                            </div>
+
                             <button
                                 className="btn-premium"
                                 style={{ 
@@ -916,7 +1452,7 @@ export default function CheckoutPage() {
                                 ) : (outOfZone && !isB2B) ? (
                                     <>{locale === 'es' ? 'Sin Cobertura' : 'No Coverage'} <MapPin size={20} /></>
                                 ) : (
-                                    <>{locale === 'es' ? 'Pagar Pedido' : 'Pay Order'} <Rocket size={20} strokeWidth={2.5} /></>
+                                    <>{paymentMethod === 'wompi' ? (locale === 'es' ? 'Pagar Pedido' : 'Pay Order') : (locale === 'es' ? 'Confirmar Pedido' : 'Confirm Order')} <Rocket size={20} strokeWidth={2.5} /></>
                                 )}
                             </button>
 
@@ -926,23 +1462,24 @@ export default function CheckoutPage() {
                                 </p>
                             )}
 
-                            <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                                    <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
-                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{locale === 'es' ? 'Pago seguro' : 'Secure Payment'}</span>
-                                    <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                                        <ShieldCheck size={12} color="#10B981" /> Wompi
-                                    </span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                                        <Truck size={12} color="#3B82F6" /> Contraentrega
-                                    </span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                                        <LockIcon size={12} color="#8B5CF6" /> SSL
-                                    </span>
-                                </div>
+                            <div style={{ 
+                                marginTop: '1.5rem', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: '6px',
+                                color: '#94A3B8',
+                                fontSize: '0.75rem',
+                                fontWeight: '500',
+                                fontFamily: 'var(--font-inter), sans-serif',
+                                opacity: 0.8
+                            }}>
+                                <LockIcon size={12} color="#94A3B8" />
+                                <span>
+                                    {locale === 'es' 
+                                        ? 'Tus datos están protegidos con cifrado SSL' 
+                                        : 'Your data is secured with SSL encryption'}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -1072,6 +1609,23 @@ export default function CheckoutPage() {
                         </div>
                     </div>
                 </div>
+            )}
+            
+            {isEditModalOpen && selectedProduct && (
+                <QuickViewModal
+                    product={selectedProduct}
+                    initialQuantity={editingCartItem?.quantity}
+                    onUpdateQuantity={(qty) => {
+                        if (editingCartItem) {
+                            updateItemQuantity(editingCartItem.id, editingCartItem.name, qty);
+                        }
+                    }}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setSelectedProduct(null);
+                        setEditingCartItem(null);
+                    }}
+                />
             )}
         </main>
     );

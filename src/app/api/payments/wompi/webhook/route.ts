@@ -50,7 +50,7 @@ export async function POST(request: Request) {
             }
 
             // 2. Mapear estado
-            const mappedStatus = status === 'APPROVED' ? 'approved' : status === 'DECLINED' ? 'cancelled' : 'pending_approval';
+            const mappedStatus = status === 'APPROVED' ? 'pending_approval' : status === 'DECLINED' ? 'cancelled' : 'pending_approval';
             
             // 3. Lógica SI el pago es aprobado
             let profileId = order.profile_id;
@@ -100,6 +100,7 @@ export async function POST(request: Request) {
                                 role: 'b2c_client',
                                 company_name: extractedName,
                                 contact_name: extractedName,
+                                phone: extractedPhone,
                                 contact_phone: extractedPhone,
                                 email: extractedEmail,
                                 address: order.shipping_address,
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
                                 longitude: order.longitude,
                                 geocoding_status: order.latitude ? 'verified' : 'pending',
                                 document_id: extractedId,
-                                document_type: 'CC', // Por defecto Cédula para Hogar
+                                document_type: 'invoice', // Factura Digital
                                 nit: extractedId,
                                 delivery_restrictions: '08:00 a 19:00'
                             })

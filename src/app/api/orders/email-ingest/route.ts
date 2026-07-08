@@ -13,7 +13,7 @@ const getSupabaseAdmin = () => {
 };
 
 async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
-  const models = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
   let lastError: any = null;
   for (const model of models) {
     try {
@@ -125,6 +125,7 @@ export async function POST(req: Request) {
           const toField = headers.to || headers.To || envelope.to || '';
           const subject = headers.subject || headers.Subject || '';
           const plainText = payload.plain || '';
+          const htmlText = payload.html || '';
           const attachments = payload.attachments || [];
           
           // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
@@ -219,148 +220,59 @@ export async function POST(req: Request) {
       items: []
     };
 
-    // 2. Parse email body or attachment with Gemini
-    let isExcel = false;
-    let excelTextContext = '';
-    let programmaticExcelItems: any[] = [];
+    // 2. Parse email body or attachment with Gemi    // 2. Parse email body or attachments with Gemini
+    let uploadedAttachments: { name: string, url: string }[] = [];
+    let parsedAttachments: any[] = [];
 
     if (attachments.length > 0) {
-      const attFileName = attachments[0].file_name || attachments[0].filename || 'adjunto.xlsx';
-      console.log(`[Email Inbound] Processing attachment: ${attFileName}`);
-      // CloudMailin attachment format: content is base64 encoded
-      const attachment = attachments[0];
-      const base64Data = attachment.content;
-      const mimeType = attachment.content_type || 'application/pdf';
-      attachmentName = attFileName;
-
-      const lowerMime = mimeType.toLowerCase();
-      const lowerName = attachmentName ? attachmentName.toLowerCase() : '';
-      isExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
-
-      if (isExcel) {
+      // 1. Upload ALL attachments to Supabase Storage
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        const attFileName = att.file_name || att.filename || `adjunto_${i}.bin`;
+        const attBase64 = att.content;
+        const attMime = att.content_type || 'application/octet-stream';
+        
         try {
-          const buffer = Buffer.from(base64Data, 'base64');
-          const workbook = XLSX.read(buffer, { type: 'buffer' });
-          let allRows: any[] = [];
-          for (const sheetName of workbook.SheetNames) {
-            const worksheet = workbook.Sheets[sheetName];
-            const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
-            if (validRows.length > 0) allRows = allRows.concat([[`--- HOJA: ${sheetName} ---`]], validRows);
-          }
-          // Limit rows sent to Gemini to the first 30 rows of the spreadsheet context to keep token sizes tiny and speed up API response times dramatically.
-          const aiRows = allRows.slice(0, 30);
-          excelTextContext = JSON.stringify(aiRows);
-          console.log(`[Email Inbound] Extracted text (limited to 30 rows for Gemini) from all sheets of Excel attachment: ${attachmentName}`);
+          // Ensure order-attachments bucket exists
+          try {
+            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+          } catch (_) {}
 
-          // Lector programático directo para archivos Excel grandes
-          let headerRowIdx = -1;
-          let nameColIdx = -1;
-          let qtyColIdx = -1;
-          let unitColIdx = -1;
-          let obsColIdx = -1;
-
-          for (let r = 0; r < Math.min(allRows.length, 30); r++) {
-            const row = allRows[r];
-            if (!row || !Array.isArray(row)) continue;
-            let nameIdx = -1, qtyIdx = -1, unitIdx = -1, obsIdx = -1;
-            for (let c = 0; c < row.length; c++) {
-              const val = String(row[c] || '').toLowerCase().trim();
-              if (!val) continue;
-              if (val.match(/^(descripci[óo]n|producto|nombre|item|art[íi]culo|detalle|sku|desc|product|name)$/i) || val.match(/(descripci[óo]n\s+de\s+producto|nombre\s+del\s+producto|desc\s+producto)/i)) {
-                if (nameIdx === -1) nameIdx = c;
-              } else if (val.match(/^(cant|cantidad|unidades|qty|quantity|cant\.?|cant\s+pedida)$/i)) {
-                if (qtyIdx === -1 || (val === 'unidades' && qtyIdx !== -1)) {
-                  if (qtyIdx === -1) qtyIdx = c;
-                }
-              } else if (val.match(/^(unidad|uom|medida|unid\.?|unit|presentaci[óo]n)$/i)) {
-                if (unitIdx === -1) unitIdx = c;
-              } else if (val.match(/^(obs|observaci[óo]n|observaciones|notas|nota|obs\.?)$/i)) {
-                if (obsIdx === -1) obsIdx = c;
-              }
-            }
-            if (nameIdx !== -1 && qtyIdx !== -1) {
-              headerRowIdx = r;
-              nameColIdx = nameIdx;
-              qtyColIdx = qtyIdx;
-              if (unitIdx !== -1) unitColIdx = unitIdx;
-              if (obsIdx !== -1) obsColIdx = obsIdx;
-              break;
-            }
-          }
-
-          if (nameColIdx === -1 || qtyColIdx === -1) {
-            for (let r = 0; r < Math.min(allRows.length, 15); r++) {
-              const row = allRows[r];
-              if (!row || row.length < 2) continue;
-              if (typeof row[0] === 'string' && row[0].length > 3 && typeof row[1] === 'number') {
-                headerRowIdx = r - 1;
-                nameColIdx = 0;
-                qtyColIdx = 1;
-                break;
-              }
-              if (typeof row[1] === 'string' && row[1].length > 3 && typeof row[2] === 'number') {
-                headerRowIdx = r - 1;
-                nameColIdx = 1;
-                qtyColIdx = 2;
-                break;
-              }
-            }
-          }
-
-          const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
-          for (let r = startRow; r < allRows.length; r++) {
-            const row = allRows[r];
-            if (!row || !Array.isArray(row)) continue;
-            const rawName = row[nameColIdx !== -1 ? nameColIdx : 0];
-            const rawQty = row[qtyColIdx !== -1 ? qtyColIdx : 1];
-            if (!rawName || String(rawName).trim() === '' || String(rawName).includes('--- HOJA:')) continue;
-            const qtyVal = parseFloat(String(rawQty || '').replace(',', '.'));
-            if (isNaN(qtyVal) || qtyVal <= 0) continue;
-            
-            programmaticExcelItems.push({
-              originalName: String(rawName).trim(),
-              quantity: qtyVal,
-              unit: unitColIdx !== -1 ? String(row[unitColIdx] || '').trim() : 'Unidad',
-              observations: (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null && String(row[obsColIdx]).trim() !== '') ? String(row[obsColIdx]).trim() : null
-            });
-          }
-          console.log(`[Email Inbound] Programmatically parsed ${programmaticExcelItems.length} items from Excel.`);
-        } catch (err) {
-          console.error('[Email Inbound] Error parsing Excel:', err);
-        }
-      }
-
-      try {
-        // Ensure order-attachments bucket exists
-        try {
-          await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
-        } catch (_) {}
-
-        const buffer = Buffer.from(base64Data, 'base64');
-        const sanitizedFilename = (attachmentName || 'unnamed').replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `${draftUuid}_${sanitizedFilename}`;
-        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-          .from('order-attachments')
-          .upload(storagePath, buffer, {
-            contentType: mimeType,
-            upsert: true
-          });
-
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabaseAdmin.storage
+          const buffer = Buffer.from(attBase64, 'base64');
+          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
+          const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
             .from('order-attachments')
-            .getPublicUrl(storagePath);
-          attachmentUrl = publicUrl;
-          console.log(`[Email Inbound] Attachment uploaded to Supabase Storage: ${attachmentUrl}`);
-        } else {
-          console.error('[Email Inbound] Failed to upload attachment:', uploadError);
+            .upload(storagePath, buffer, {
+              contentType: attMime,
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data: { publicUrl } } = supabaseAdmin.storage
+              .from('order-attachments')
+              .getPublicUrl(storagePath);
+            uploadedAttachments.push({
+              name: attFileName,
+              url: publicUrl
+            });
+            console.log(`[Email Inbound] Attachment ${i} (${attFileName}) uploaded to Supabase Storage: ${publicUrl}`);
+          } else {
+            console.error(`[Email Inbound] Failed to upload attachment ${i} (${attFileName}):`, uploadError);
+          }
+        } catch (uploadErr) {
+          console.error(`[Email Inbound] Storage upload handler crashed for attachment ${i}:`, uploadErr);
         }
-      } catch (uploadErr) {
-        console.error('[Email Inbound] Storage upload handler crashed:', uploadErr);
       }
 
-      const prompt = `
+      // Keep compatibility with existing code that references attachmentUrl/attachmentName
+      if (uploadedAttachments.length > 0) {
+        attachmentUrl = uploadedAttachments[0].url;
+        attachmentName = uploadedAttachments[0].name;
+      }
+
+      // Define standard generic extraction prompt template
+      const genericPrompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         
@@ -424,117 +336,205 @@ export async function POST(req: Request) {
         }
       `;
 
-      if (!isExcel) {
-        try {
-          let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
-          text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-          extractedData = JSON.parse(text);
-          if (extractedData.items && !Array.isArray(extractedData.items)) {
-            if (typeof extractedData.items === 'object') {
-              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
-            } else {
-              extractedData.items = [];
+      // 2. Process EACH attachment sequentially or in parallel
+      for (let i = 0; i < attachments.length; i++) {
+        const attachment = attachments[i];
+        const attFileName = attachment.file_name || attachment.filename || `adjunto_${i}.bin`;
+        const base64Data = attachment.content;
+        const mimeType = attachment.content_type || 'application/pdf';
+        const publicUrl = uploadedAttachments[i]?.url || '';
+
+        const lowerMime = mimeType.toLowerCase();
+        const lowerName = attFileName.toLowerCase();
+        const attIsExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
+
+        let attProgrammaticExcelItems: any[] = [];
+        let attExcelTextContext = '';
+
+        if (attIsExcel) {
+          try {
+            const buffer = Buffer.from(base64Data, 'base64');
+            const workbook = XLSX.read(buffer, { type: 'buffer' });
+            let allRows: any[] = [];
+            for (const sheetName of workbook.SheetNames) {
+              const worksheet = workbook.Sheets[sheetName];
+              const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
+              if (validRows.length > 0) allRows = allRows.concat([[`--- HOJA: ${sheetName} ---`]], validRows);
+            }
+            const aiRows = allRows.slice(0, 30);
+            attExcelTextContext = JSON.stringify(aiRows);
+            console.log(`[Email Inbound] Extracted text (limited to 30 rows) from Excel attachment: ${attFileName}`);
+
+            let headerRowIdx = -1, nameColIdx = -1, qtyColIdx = -1, unitColIdx = -1, obsColIdx = -1;
+            for (let r = 0; r < Math.min(allRows.length, 30); r++) {
+              const row = allRows[r];
+              if (!row || !Array.isArray(row)) continue;
+              let nameIdx = -1, qtyIdx = -1, unitIdx = -1, obsIdx = -1;
+              for (let c = 0; c < row.length; c++) {
+                const val = String(row[c] || '').toLowerCase().trim();
+                if (!val) continue;
+                if (val.match(/^(descripci[óo]n|producto|nombre|item|art[íi]culo|detalle|sku|desc|product|name)$/i) || val.match(/(descripci[óo]n\s+de\s+producto|nombre\s+del\s+producto|desc\s+producto)/i)) {
+                  if (nameIdx === -1) nameIdx = c;
+                } else if (val.match(/^(cant|cantidad|unidades|qty|quantity|cant\.?|cant\s+pedida)$/i)) {
+                  if (qtyIdx === -1 || (val === 'unidades' && qtyIdx !== -1)) {
+                    if (qtyIdx === -1) qtyIdx = c;
+                  }
+                } else if (val.match(/^(unidad|uom|medida|unid\.?|unit|presentaci[óo]n)$/i)) {
+                  if (unitIdx === -1) unitIdx = c;
+                } else if (val.match(/^(obs|observaci[óo]n|observaciones|notas|nota|obs\.?)$/i)) {
+                  if (obsIdx === -1) obsIdx = c;
+                }
+              }
+              if (nameIdx !== -1 && qtyIdx !== -1) {
+                headerRowIdx = r;
+                nameColIdx = nameIdx;
+                qtyColIdx = qtyIdx;
+                if (unitIdx !== -1) unitColIdx = unitIdx;
+                if (obsIdx !== -1) obsColIdx = obsIdx;
+                break;
+              }
+            }
+
+            if (nameColIdx === -1 || qtyColIdx === -1) {
+              for (let r = 0; r < Math.min(allRows.length, 15); r++) {
+                const row = allRows[r];
+                if (!row || row.length < 2) continue;
+                if (typeof row[0] === 'string' && row[0].length > 3 && typeof row[1] === 'number') {
+                  headerRowIdx = r - 1;
+                  nameColIdx = 0;
+                  qtyColIdx = 1;
+                  break;
+                }
+                if (typeof row[1] === 'string' && row[1].length > 3 && typeof row[2] === 'number') {
+                  headerRowIdx = r - 1;
+                  nameColIdx = 1;
+                  qtyColIdx = 2;
+                  break;
+                }
+              }
+            }
+
+            const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+            for (let r = startRow; r < allRows.length; r++) {
+              const row = allRows[r];
+              if (!row || !Array.isArray(row)) continue;
+              const rawName = row[nameColIdx !== -1 ? nameColIdx : 0];
+              const rawQty = row[qtyColIdx !== -1 ? qtyColIdx : 1];
+              if (!rawName || String(rawName).trim() === '' || String(rawName).includes('--- HOJA:')) continue;
+              const qtyVal = parseFloat(String(rawQty || '').replace(',', '.'));
+              if (isNaN(qtyVal) || qtyVal <= 0) continue;
+              attProgrammaticExcelItems.push({
+                originalName: String(rawName).trim(),
+                quantity: qtyVal,
+                unit: unitColIdx !== -1 ? String(row[unitColIdx] || '').trim() : 'Unidad',
+                observations: (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null && String(row[obsColIdx]).trim() !== '') ? String(row[obsColIdx]).trim() : null
+              });
+            }
+          } catch (err) {
+            console.error('[Email Inbound] Error parsing Excel:', err);
+          }
+        }
+
+        let attExtractedData: any = { items: [] };
+
+        if (!attIsExcel) {
+          try {
+            let text = await fetchGemini(apiKey, genericPrompt, base64Data, mimeType);
+            text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+            attExtractedData = JSON.parse(text);
+            if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
+              if (typeof attExtractedData.items === 'object') {
+                attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
+              } else {
+                attExtractedData.items = [];
+              }
+            }
+          } catch (e) {
+            console.error('Failed to parse Gemini output for attachment:', e);
+          }
+        } else {
+          const excelPrompt = `
+          Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
+          FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+          ASUNTO DEL CORREO: "${subject}"
+          CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
+          """
+          ${cleanedBodyText}
+          """
+          CONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:
+          ${attExcelTextContext}
+          TAREA:
+          1. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el correo y el Excel.
+          2. IMPORTANTE EN EXCEL: Ya contamos con un lector programático rápido que extraerá la lista de productos del archivo. Por lo tanto, tu prioridad número 1 es extraer los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType'). Puedes dejar la lista de 'items' vacía [] o incluir solo los primeros 2 productos de muestra en el JSON.
+          3. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
+          4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
+          5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" o null.
+          FORMATO DE RESPUESTA ESPERADO:
+          {
+            "clientInDocument": "Nombre o Empresa Detectada",
+            "documentType": "Email con Excel adjunto",
+            "address": "Dirección física limpia extraída o vacio",
+            "phone": "Teléfono extraído o vacio",
+            "nit": "NIT o cédula extraída o vacio",
+            "deliverySlot": "AM / PM / Cualquier hora / null",
+            "deliveryDate": "YYYY-MM-DD o null",
+            "clientType": "b2b_client o b2c_client",
+            "items": []
+          }
+          `;
+          try {
+            let text = await fetchGemini(apiKey, excelPrompt);
+            text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+            attExtractedData = JSON.parse(text);
+            if (attProgrammaticExcelItems.length > 0) {
+              attExtractedData.items = attProgrammaticExcelItems;
+            } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
+              if (typeof attExtractedData.items === 'object') {
+                attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
+              } else {
+                attExtractedData.items = [];
+              }
+            }
+          } catch (e) {
+            console.error('Failed to parse Gemini output for Excel content:', e);
+            if (attProgrammaticExcelItems.length > 0) {
+              attExtractedData.items = attProgrammaticExcelItems;
+              attExtractedData.documentType = 'Email con Excel adjunto';
             }
           }
-        } catch (e) {
-          console.error('Failed to parse Gemini output for attachment:', e);
         }
-      } else {
-        console.log('[Email Inbound] Attachment is Excel. Sending CSV data as text to Gemini.');
-        // We use the same detailed prompt style but adapt it for Excel context
-        const excelPrompt = `
-        Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
-        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
-        
-        ASUNTO DEL CORREO: "${subject}"
-        
-        CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
-        """
-        ${currentPlainText}
-        """
 
-        CONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:
-        ${excelTextContext}
-        
-        TAREA:
-        1. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del correo y del Excel.
-        2. IMPORTANTE EN EXCEL: Ya contamos con un lector programático rápido que extraerá la lista de productos del archivo. Por lo tanto, tu prioridad número 1 es extraer los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType'). Puedes dejar la lista de 'items' vacía [] o incluir solo los primeros 2 productos de muestra en el JSON para agilizar tu velocidad de respuesta dramáticamente.
-           - NOMBRE DEL CLIENTE: Identifica la compañía matriz o razón social principal. NUNCA uses nombres de sucursales o ciudades.
-        3. Identifica la franja u horario de entrega. El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
-        4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/Excel para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/Excel, pon null.
-        6. Extrae todos los productos solicitados y su cantidad numérica.
-             - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
-             - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
-             - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
-             - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
-             - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
-             - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
-             - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
-        7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
-           - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
-           - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
-        
-        REGLAS CRÍTICAS:
-        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
-        - Las cantidades deben ser estrictamente numéricas.
+        parsedAttachments.push({
+          name: attFileName,
+          url: publicUrl,
+          processed: false,
+          orderId: null,
+          deliveryDate: attExtractedData.deliveryDate || null,
+          deliverySlot: attExtractedData.deliverySlot || null,
+          clientInDocument: attExtractedData.clientInDocument || null,
+          documentType: attExtractedData.documentType || (attIsExcel ? 'Email con Excel adjunto' : 'Imagen/WhatsApp/PDF'),
+          address: attExtractedData.address || null,
+          phone: attExtractedData.phone || null,
+          nit: attExtractedData.nit || null,
+          clientType: attExtractedData.clientType || null,
+          items: attExtractedData.items || []
+        });
+      }
 
-        REGLAS DE EXCLUSIÓN CRÍTICA DE PRODUCTOS:
-        * NUNCA extraigas el nombre del cliente, dirección, teléfono, NIT, número de factura o cualquier información de la cabecera/pie de página como si fuera un producto.
-        * Si detectas un texto que coincide con el nombre de la empresa (ej. "CLUB BELLAVISTA", "ADR WORK", etc.) y un valor numérico extremadamente grande al lado (ej. "7900405437", "800234123", etc. que claramente es un teléfono, NIT o código de barra), es información del cliente/documento, NO es un producto del pedido. Queda TERMINANTEMENTE PROHIBIDO incluirlo en la lista de 'items'.
-        * Cualquier cantidad que sea mayor a 5000 (o que parezca un código numérico largo como un teléfono o NIT) debe ser ignorada como producto y NO debe incluirse en la lista de 'items'.
-        
-        FORMATO DE RESPUESTA ESPERADO:
-        {
-          "clientInDocument": "Nombre o Empresa Detectada",
-          "documentType": "Email con Excel adjunto",
-          "address": "Dirección física limpia extraída o vacio",
-          "phone": "Teléfono extraído o vacio",
-          "nit": "NIT o cédula extraída o vacio",
-          "deliverySlot": "AM / PM / Cualquier hora / null",
-          "deliveryDate": "YYYY-MM-DD o null",
-          "clientType": "b2b_client o b2c_client",
-          "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
-          ]
-        }
-        `;
-        try {
-          let text = await fetchGemini(apiKey, excelPrompt);
-          console.log('[Email Inbound] Raw Gemini Excel text:', text);
-          
-          // Extraer bloque de código JSON si existe
-          const jsonMatch = text.match(/```(?:json)?([\s\S]*?)```/);
-          if (jsonMatch) {
-            text = jsonMatch[1];
-          }
-          text = text.trim();
-          
-          // Eliminar posibles caracteres basura comunes al inicio/final
-          if (text.startsWith('```json')) text = text.substring(7);
-          if (text.startsWith('```')) text = text.substring(3);
-          if (text.endsWith('```')) text = text.substring(0, text.length - 3);
-          text = text.trim();
-
-          extractedData = JSON.parse(text);
-          if (programmaticExcelItems.length > 0) {
-            extractedData.items = programmaticExcelItems;
-            console.log(`[Email Inbound] Overwriting items list with ${programmaticExcelItems.length} programmatically parsed items for speed and accuracy.`);
-          } else if (extractedData.items && !Array.isArray(extractedData.items)) {
-            if (typeof extractedData.items === 'object') {
-              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: (extractedData.items as any)[key] }));
-            } else {
-              extractedData.items = [];
-            }
-          }
-        } catch (e) {
-          console.error('Failed to parse Gemini output for Excel content:', e);
-          if (programmaticExcelItems.length > 0) {
-            extractedData.items = programmaticExcelItems;
-            extractedData.documentType = 'Email con Excel adjunto';
-            console.log(`[Email Inbound] Gemini parsing failed, but successfully recovered ${programmaticExcelItems.length} items from Excel programmatically.`);
-          }
-        }
+      // Initialize global extractedData with the first attachment's extraction for backwards compatibility
+      if (parsedAttachments.length > 0) {
+        extractedData = {
+          clientInDocument: parsedAttachments[0].clientInDocument,
+          documentType: parsedAttachments[0].documentType,
+          address: parsedAttachments[0].address,
+          phone: parsedAttachments[0].phone,
+          nit: parsedAttachments[0].nit,
+          deliverySlot: parsedAttachments[0].deliverySlot,
+          deliveryDate: parsedAttachments[0].deliveryDate,
+          clientType: parsedAttachments[0].clientType,
+          items: parsedAttachments[0].items
+        };
       }
     }
     
@@ -1015,7 +1015,9 @@ export async function POST(req: Request) {
             nit: extractedData.nit || null,
             clientType: clientType,
             attachmentUrl: attachmentUrl || null,
-            attachmentName: attachmentName || null
+            attachmentName: attachmentName || null,
+            attachments: uploadedAttachments,
+            emailHtml: htmlText || null
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
             let originalName = String(itm.originalName || itm.name || '').trim();

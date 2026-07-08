@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 
@@ -14,13 +15,7 @@ if (!isUrlValid && typeof window !== 'undefined') {
 
 const createSafeClient = () => {
     if (isUrlValid) {
-        return createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-                persistSession: true,
-                autoRefreshToken: true,
-                detectSessionInUrl: true
-            }
-        });
+        return createBrowserClient(supabaseUrl, supabaseAnonKey);
     }
 
     // Proxy-based "Bunker" to prevent SSR/Build crashes when Env Vars are missing

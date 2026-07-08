@@ -68,8 +68,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     console.warn('EditModal: No master table found, using defaults.');
                     return;
                 }
-                if (data && data.length > 0) {
-                    setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                                if (data && data.length > 0) {
+                    setMasterAttributes(data.map(attr => ({ 
+                        name: attr.name, 
+                        values: attr.suggested_values,
+                        show_on_web: attr.show_on_web !== false
+                    })));
                 }
 
                 // Fetch Dynamic Units from Settings
@@ -287,7 +291,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 inventory_group: formData.inventory_group,
                 purchase_sublist: formData.purchase_sublist,
                 utility_deviation_pct: formData.utility_deviation_pct || 0,
-                options_config: options,
+                options_config: options.map(opt => {
+                    const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
+                    return {
+                        name: opt.name,
+                        values: opt.values,
+                        show_on_web: attr ? attr.show_on_web !== false : true
+                    };
+                }),
                 variants: variants,
                 iva_rate: formData.iva_rate,
                 display_name: formData.display_name,
@@ -389,8 +400,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 backgroundColor: 'white',
                 padding: '2.5rem',
                 borderRadius: '24px',
-                width: '100%',
-                maxWidth: '1100px',
+                width: '92%',
+                maxWidth: '1450px',
                 maxHeight: '90vh',
                 overflowY: 'auto',
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
@@ -1073,27 +1084,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     } else if (val === '') {
                                                         updateOption(idx, '', '');
                                                     } else {
-                                                        const master = masterAttributes.find(a => a.name === val);
-                                                        updateOption(idx, val, master?.values.join(', ') || '');
+                                                        updateOption(idx, val, '');
                                                     }
                                                 }}
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', color: '#1F2937', cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236B7280%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.8rem center', backgroundSize: '1.2em' }}
                                             >
                                                 <option value="">-- Seleccionar --</option>
                                                 {masterAttributes.map(attr => <option key={attr.name} value={attr.name}>{attr.name}</option>)}
-                                                <option value="Personalizado">➕ Otra (Personalizada)...</option>
                                             </select>
-
-                                            {(opt.name !== '' && !masterAttributes.some(a => a.name === opt.name)) && (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre: ej. Calibre, Color..."
-                                                    value={opt.name}
-                                                    onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '2px solid #3B82F6', fontWeight: '800', marginTop: '10px', outline: 'none' }}
-                                                    autoFocus
-                                                />
-                                            )}
                                         </div>
 
                                         <div>
@@ -1103,7 +1101,11 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             
                                             {masterAttributes.some(a => a.name === opt.name) ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
-                                                    {masterAttributes.find(a => a.name === opt.name)?.values.map(val => (
+                                                    {masterAttributes.find(a => a.name === opt.name)?.values.slice().sort((a, b) => {
+                                                        const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                                                        const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                                                        return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                                    }).map(val => (
                                                         <label 
                                                             key={val} 
                                                             style={{ 
@@ -1137,13 +1139,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Verde, Pintón, Maduro"
-                                                    value={opt.values.join(', ')}
-                                                    onChange={(e) => updateOption(idx, opt.name, e.target.value)}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
-                                                />
+                                                <div style={{ fontSize: '0.85rem', color: '#94A3B8', fontWeight: '600', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #D1D5DB', textAlign: 'center' }}>
+                                                    Selecciona una variable de la lista para activar las opciones.
+                                                </div>
                                             )}
                                         </div>
                                     </div>

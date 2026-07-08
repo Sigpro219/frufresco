@@ -53,8 +53,14 @@ const translateDetailsKey = (key: string) => {
     if (k === 'value') return 'Valor';
     if (k === 'id') return 'ID';
     if (k === 'sequence_id') return 'Consecutivo de Pedido';
-    if (k === 'total_price') return 'Precio Total';
+    if (k === 'total' || k === 'total_price') return 'Precio Total';
     if (k === 'status') return 'Estado';
+    if (k === 'base_price') return 'Precio Base';
+    if (k === 'is_active') return '¿Activo?';
+    if (k === 'description') return 'Descripción';
+    if (k === 'category') return 'Categoría';
+    if (k === 'unit_of_measure') return 'Unidad de Medida';
+    if (k === 'image_url') return 'URL de Imagen';
     return key;
 };
 
@@ -63,13 +69,27 @@ const formatDetailsValue = (key: string, value: any) => {
     const k = key.toLowerCase();
     if (k === 'role') return translateRole(String(value));
     if (k === 'status') return translateStatus(String(value));
-    if (k === 'total_price') return `$${Number(value).toLocaleString('es-CO')}`;
+    if (k === 'total' || k === 'total_price') return `$${Number(value).toLocaleString('es-CO')}`;
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
 };
 
-const formatActionName = (action: string) => {
+const formatActionName = (log: any) => {
+    if (!log) return '-';
+    const action = typeof log === 'string' ? log : log.action;
     if (!action) return '-';
+    
+    // Check if it's a profile/user action but targeting a client
+    if (typeof log === 'object' && action.endsWith('_profiles') && log.details) {
+        const role = log.details.role || '';
+        const isClient = role.includes('client') || log.details.company_name;
+        
+        if (isClient) {
+            const op = action.startsWith('INSERT_') ? 'CREAR' : action.startsWith('UPDATE_') ? 'MODIFICAR' : 'ELIMINAR';
+            return `${op} Cliente B2B`;
+        }
+    }
+    
     if (action.startsWith('INSERT_')) {
         return 'CREAR ' + translateTableName(action.replace('INSERT_', ''));
     }
@@ -83,8 +103,20 @@ const formatActionName = (action: string) => {
     return action;
 };
 
-const translateModule = (module: string) => {
+const translateModule = (log: any) => {
+    if (!log) return '-';
+    const module = typeof log === 'string' ? log : log.module;
     if (!module) return '-';
+    
+    // Check if it's a security/profiles module action but targeting a client
+    if (typeof log === 'object' && module === 'SECURITY' && log.details) {
+        const role = log.details.role || '';
+        const isClient = role.includes('client') || log.details.company_name;
+        if (isClient) {
+            return 'CLIENTES';
+        }
+    }
+    
     if (module === 'PRODUCTS') return 'PRODUCTOS';
     if (module === 'SECURITY') return 'SEGURIDAD';
     if (module === 'ORDERS') return 'PEDIDOS';
@@ -124,13 +156,61 @@ const formatDetailsSummary = (log: any) => {
     if (d.total_price) parts.push(`Total: $${Number(d.total_price).toLocaleString('es-CO')}`);
     if (d.status) parts.push(`Estado: ${translateStatus(d.status)}`);
     
-    if (parts.length > 0) return parts.join(' | ');
-    return JSON.stringify(d);
+    const baseInfo = parts.join(' | ');
+
+    if (d.changes && typeof d.changes === 'object' && Object.keys(d.changes).length > 0) {
+        const changeKeys = Object.keys(d.changes);
+        
+        if (changeKeys.length <= 2) {
+            const changeParts = Object.entries(d.changes).map(([key, val]: [string, any]) => {
+                const translatedKey = translateDetailsKey(key);
+                const oldVal = formatDetailsValue(key, val.old);
+                const newVal = formatDetailsValue(key, val.new);
+                return `${translatedKey}: ${oldVal} → ${newVal}`;
+            });
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div>{baseInfo}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: '600' }}>
+                        Cambios: {changeParts.join(', ')}
+                    </div>
+                </div>
+            );
+        } else {
+            return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>{baseInfo}</span>
+                    <span 
+                        style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            padding: '0.15rem 0.45rem', 
+                            borderRadius: '12px', 
+                            backgroundColor: '#E0E7FF', 
+                            color: '#4338CA', 
+                            fontWeight: '700', 
+                            fontSize: '0.75rem',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        {changeKeys.length} modificaciones
+                    </span>
+                </div>
+            );
+        }
+    }
+    
+    return baseInfo || JSON.stringify(d);
 };
 
 export default function AuditLogPage() {
     const { profile, loading: authLoading } = useAuth();
+    const [mounted, setMounted] = useState(false);
     
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
@@ -138,7 +218,49 @@ export default function AuditLogPage() {
     const [exporting, setExporting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [selectedLog, setSelectedLog] = useState<any | null>(null);
+    const [loadingOrderItems, setLoadingOrderItems] = useState(false);
+    const [auditOrderItems, setAuditOrderItems] = useState<any[]>([]);
     const [systemRoles, setSystemRoles] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (selectedLog && selectedLog.module === 'ORDERS' && selectedLog.details?.id) {
+            setLoadingOrderItems(true);
+            setAuditOrderItems([]);
+            supabase
+                .from('order_items')
+                .select(`
+                    quantity,
+                    unit_price,
+                    variant_label,
+                    products (
+                        name,
+                        unit_of_measure,
+                        accounting_id
+                    )
+                `)
+                .eq('order_id', selectedLog.details.id)
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        setAuditOrderItems(data);
+                    }
+                    setLoadingOrderItems(false);
+                });
+        } else {
+            setAuditOrderItems([]);
+            setLoadingOrderItems(false);
+        }
+    }, [selectedLog]);
+
+    useEffect(() => {
+        if (selectedLog) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [selectedLog]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [dateRange, setDateRange] = useState('all');
@@ -300,7 +422,7 @@ export default function AuditLogPage() {
         return { bg: '#E5EDFF', text: '#1E40AF' }; // Security or other
     };
 
-    if (authLoading) {
+    if (!mounted || authLoading) {
         return (
             <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Loader2 size={40} className="animate-spin" color={THEME.colors.primary} />
@@ -492,11 +614,11 @@ export default function AuditLogPage() {
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem' }}>
                                                     <span style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px', backgroundColor: badge.bg, color: badge.text, fontWeight: '700', fontSize: '0.75rem' }}>
-                                                        {formatActionName(log.action)}
+                                                        {formatActionName(log)}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
-                                                    {translateModule(log.module)}
+                                                    {translateModule(log)}
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textSecondary }}>
                                                     {formatDetailsSummary(log)}
@@ -541,7 +663,7 @@ export default function AuditLogPage() {
             {/* Modal: Visor de JSON de Detalles */}
             {selectedLog && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
-                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, maxWidth: '650px', width: '100%', padding: '1.5rem', boxShadow: THEME.shadow.lg }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, maxWidth: '850px', width: '100%', padding: '1.5rem', boxShadow: THEME.shadow.lg, maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.8rem' }}>
                             <h3 style={{ fontSize: '1.2rem', fontFamily: THEME.typography.fontFamilyMain, fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>
                                 Detalles de Auditoría
@@ -557,17 +679,17 @@ export default function AuditLogPage() {
                                 <strong style={{ color: THEME.colors.textSecondary }}>Usuario:</strong> {formatCollaboratorName(selectedLog.collaborator_name)}
                             </div>
                             <div>
-                                <strong style={{ color: THEME.colors.textSecondary }}>Acción:</strong> {formatActionName(selectedLog.action)}
+                                <strong style={{ color: THEME.colors.textSecondary }}>Acción:</strong> {formatActionName(selectedLog)}
                             </div>
                             <div>
-                                <strong style={{ color: THEME.colors.textSecondary }}>Módulo:</strong> {translateModule(selectedLog.module)}
+                                <strong style={{ color: THEME.colors.textSecondary }}>Módulo:</strong> {translateModule(selectedLog)}
                             </div>
                             
                             {selectedLog.details && typeof selectedLog.details === 'object' && Object.keys(selectedLog.details).length > 0 && (
                                 <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.4rem' }}>
                                     <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>Información Procesada:</strong>
                                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '6px', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                                        {Object.entries(selectedLog.details).map(([k, v]) => (
+                                        {Object.entries(selectedLog.details).filter(([k]) => k !== 'changes').map(([k, v]) => (
                                             <React.Fragment key={k}>
                                                 <span style={{ fontWeight: '700', color: THEME.colors.textSecondary }}>{translateDetailsKey(k)}:</span>
                                                 <span style={{ color: THEME.colors.textMain, wordBreak: 'break-all' }}>{formatDetailsValue(k, v)}</span>
@@ -576,6 +698,73 @@ export default function AuditLogPage() {
                                     </div>
                                 </div>
                             )}
+
+                            {selectedLog.details?.changes && typeof selectedLog.details.changes === 'object' && Object.keys(selectedLog.details.changes).length > 0 && (
+                                <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
+                                    <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>Campos Modificados:</strong>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {Object.entries(selectedLog.details.changes).map(([k, val]: [string, any]) => (
+                                            <div key={k} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 20px 1fr', gap: '8px', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '6px 12px', borderRadius: THEME.radius.md, border: '1px solid #FEE2E2' }}>
+                                                <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{translateDetailsKey(k)}</span>
+                                                <span style={{ color: '#EF4444', textDecoration: 'line-through', fontSize: '0.8rem' }}>{formatDetailsValue(k, val.old)}</span>
+                                                <span style={{ color: THEME.colors.textSecondary, textAlign: 'center' }}>→</span>
+                                                <span style={{ color: '#10B981', fontWeight: '700' }}>{formatDetailsValue(k, val.new)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {selectedLog.module === 'ORDERS' && selectedLog.details?.id && (
+                                 <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
+                                     <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>Detalle de Productos en el Pedido:</strong>
+                                     {loadingOrderItems ? (
+                                         <p style={{ color: '#64748B', fontSize: '0.85rem' }}>Cargando productos...</p>
+                                     ) : auditOrderItems.length > 0 ? (
+                                         <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, overflow: 'hidden' }}>
+                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                                 <thead>
+                                                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700' }}>ID</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700' }}>Producto</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700', textAlign: 'center' }}>Cantidad</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700', textAlign: 'right' }}>Precio U.</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700', textAlign: 'right' }}>Subtotal</th>
+                                                     </tr>
+                                                 </thead>
+                                                 <tbody>
+                                                     {auditOrderItems.map((item, index) => {
+                                                         const qty = item.quantity || 0;
+                                                         const price = item.unit_price || 0;
+                                                         const prodName = item.products?.name || 'Desconocido';
+                                                         const prodId = item.products?.accounting_id || '-';
+                                                         const unit = item.products?.unit_of_measure || 'Kg';
+                                                         const subtotal = qty * price;
+                                                         return (
+                                                             <tr key={index} style={{ borderBottom: index < auditOrderItems.length - 1 ? `1px solid #F1F5F9` : 'none' }}>
+                                                                 <td style={{ padding: '6px 12px', color: '#475569', fontWeight: 'bold' }}>{prodId}</td>
+                                                                 <td style={{ padding: '6px 12px', color: '#0F172A' }}>
+                                                                     <div style={{ fontWeight: '600' }}>{prodName}</div>
+                                                                     {item.variant_label && (
+                                                                         <span style={{ fontSize: '0.7rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '3px', marginTop: '2px', display: 'inline-block' }}>
+                                                                             {item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim()}
+                                                                         </span>
+                                                                     )}
+                                                                 </td>
+                                                                 <td style={{ padding: '6px 12px', textAlign: 'center', fontWeight: '700' }}>{qty} {unit}</td>
+                                                                 <td style={{ padding: '6px 12px', textAlign: 'right', color: '#475569' }}>{`$${Number(price).toLocaleString('es-CO')}`}</td>
+                                                                 <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: '700', color: '#059669' }}>{`$${Number(subtotal).toLocaleString('es-CO')}`}</td>
+                                                             </tr>
+                                                         );
+                                                     })}
+                                                 </tbody>
+                                             </table>
+                                         </div>
+                                     ) : (
+                                         <p style={{ color: '#94A3B8', fontSize: '0.85rem', fontStyle: 'italic' }}>Este pedido no contiene productos o ya fue eliminado.</p>
+                                     )}
+                                 </div>
+                             )}
 
                             <div>
                                 <strong style={{ color: THEME.colors.textSecondary }}>Datos del Objeto (JSON original):</strong>

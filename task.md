@@ -1,0 +1,4 @@
+- [x] Aplicar tokens de diseño (THEME) en `EmailOutboxModule.tsx`
+- [x] Aplicar tokens de diseño (THEME) en `EmailDraftsModule.tsx`
+- [x] Compilar y verificar el proyecto Next.js
+- [x] Subir cambios a todas las ramas (Push)

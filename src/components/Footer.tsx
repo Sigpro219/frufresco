@@ -50,15 +50,18 @@ export default function Footer() {
     <footer style={{ 
       background: 'linear-gradient(180deg, #05130e 0%, #020a07 100%)', 
       color: '#F9FAFB', 
-      padding: '1.5rem 0 1rem',
+      padding: '4rem 0 3rem',
       borderTop: '1px solid rgba(255,255,255,0.05)'
     }}>
       <div className="container">
         {/* Compact Tracking in Footer */}
         {/* Compact Tracking in Footer */}
-        <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
-             <OrderTracking />
-         </div>
+        {/* Hiding OrderTracking section as requested by user, keeping code intact for future use */}
+        {false && (
+          <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+               <OrderTracking />
+           </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '3rem', marginBottom: '3rem' }}>
           

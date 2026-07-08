@@ -27,3 +27,8 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 * **Unidades Soportadas:** El sistema mapea estrictamente unidades de medida a los siguientes valores normalizados:
   * `Lb` (Libras), `Litro` (Litros), `Unidad` (Unidades/Huevos/Lechugas), `Paquete 250 gramos`, `Paquete 500 gramos`, `Kg` (Kilogramos), `Atado`, `Bulto`, `Canastilla`.
 * **Regla de Conversión por Defecto:** Si un producto no tiene descripción de unidades en la orden o correo (ej. "12 huevos" o "1 lechuga crespa"), se debe asumir obligatoriamente la unidad de medida como **`Unidad`**.
+
+---
+
+## 3. Reglas de Git y Despliegue
+* **Auto-Push a Remoto:** Siempre ejecuta `git push --all origin` automáticamente después de realizar commits locales tras completar cualquier tarea, sin esperar a que el usuario lo solicite de forma explícita.

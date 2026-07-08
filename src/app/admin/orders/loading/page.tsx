@@ -1,9 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { ShieldAlert, Loader2 } from 'lucide-react';
 import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
 import { 
@@ -74,6 +76,9 @@ const getChannelBadge = (source: string) => {
 };
 
 export default function OrderLoadingPage() {
+    const { profile, loading: authLoading } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
+    const [rolesLoaded, setRolesLoaded] = useState(false);
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -82,10 +87,39 @@ export default function OrderLoadingPage() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [activeTab, setActiveTab] = useState<'orders' | 'emails' | 'outbox'>('orders');
 
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.orders');
+
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => {
             setCurrentUser(user);
         });
+
+        supabase.from('app_settings')
+            .select('key, value')
+            .eq('key', 'system_roles')
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (!error && data?.value) {
+                    try {
+                        setRoles(JSON.parse(data.value));
+                    } catch (e) {
+                        console.error('Error parsing system_roles:', e);
+                    }
+                }
+                setRolesLoaded(true);
+            });
+
+        supabase.from('product_conversions')
+            .select('*')
+            .then(({ data, error }) => {
+                if (!error && data) {
+                    setConversions(data);
+                }
+            });
     }, []);
 
     useEffect(() => {
@@ -133,83 +167,302 @@ export default function OrderLoadingPage() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
 
-    const [variantQuantity, setVariantQuantity] = useState(1);
+    const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     const [selectedChannel, setSelectedChannel] = useState('');
 
-    const filteredOrders = orders.filter(order => {
-        // Filtro por canal dropdown
-        if (selectedChannel && order.origin_source !== selectedChannel) return false;
+    // Edit Fields
+    const [editStatus, setEditStatus] = useState('');
+    const [editDeliveryDate, setEditDeliveryDate] = useState('');
+    
+    // Product Search for adding new items
+    const [productSearch, setProductSearch] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
 
-        if (!searchTerm) return true;
-        
-        const term = searchTerm.toLowerCase().trim();
-        const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
-        const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
-        const friendlyId = getFriendlyOrderId(order).toLowerCase();
+    // Variant Selection Modal States (For products with options)
+    const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
+    // Contract / pricing model states
+    const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+    const [activePricingModel, setActivePricingModel] = useState<any>(null);
+    const [isB2CDefault, setIsB2CDefault] = useState(false);
+    const [isContractExpired, setIsContractExpired] = useState(false);
 
-        // Check for @ commands
-        if (term.startsWith('@')) {
-            const command = term.substring(1).replace(/[\s-]+/g, '_');
-            
-            if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
-            if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
-            if (command === 'b2b') return isB2B;
-            if (command === 'b2c' || command === 'hogar') return !isB2B;
-            const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
-            
-            // Actualizado para buscar en origin_source de forma estructurada con fallback
-            if (command === 'web' || command === '🛒' || command === 'app') {
-                return order.origin_source === 'web_b2c' || order.origin_source === 'web_b2b' || notes.includes('[origin: web]') || order.type === 'b2c_wompi';
+    // Client Exceptions (Product Nicknames & Notes) State
+    const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+    const [conversions, setConversions] = useState<any[]>([]);
+    const [selectedUnit, setSelectedUnit] = useState<string>('');
+    const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
+    const [focusedProductIndex, setFocusedProductIndex] = useState<number>(-1);
+
+    useEffect(() => {
+        async function resolveContract() {
+            if (!selectedOrder) {
+                setContractPrices({});
+                setActivePricingModel(null);
+                setIsB2CDefault(false);
+                setIsContractExpired(false);
+                setClientExceptions([]);
+                return;
             }
-            if (command === 'whatsapp' || command === '💬') {
-                return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
+
+            const profileObj = selectedOrder.profiles;
+            const modelId = profileObj?.pricing_model_id || null;
+            const deliveryDate = editDeliveryDate || selectedOrder.delivery_date;
+
+            // Load Client exceptions for B2B client
+            if (profileObj?.id) {
+                const { data: excs } = await supabase
+                    .from('product_nicknames')
+                    .select('*')
+                    .eq('customer_id', profileObj.id);
+                if (excs) setClientExceptions(excs);
+            } else {
+                setClientExceptions([]);
             }
-            if (command === 'telefono' || command === 'phone' || command === '📞') {
-                return order.origin_source === 'phone' || notes.includes('[origin: phone]');
+
+            let resolvedModel: any = null;
+            let expired = false;
+            let b2cFallback = false;
+
+            // 1. Fetch current pricing model if defined
+            if (modelId) {
+                const { data: pm } = await supabase
+                    .from('pricing_models')
+                    .select('*')
+                    .eq('id', modelId)
+                    .single();
+                
+                if (pm) {
+                    resolvedModel = pm;
+                    // Validate expiration against deliveryDate
+                    if (deliveryDate) {
+                        const delivery = deliveryDate.split('T')[0];
+                        const start = pm.start_date?.split('T')[0];
+                        const end = pm.end_date?.split('T')[0];
+                        if (start && start > delivery) {
+                            expired = true;
+                        }
+                        if (end && end < delivery) {
+                            expired = true;
+                        }
+                    }
+                }
             }
-            if (command === 'email' || command === 'correo') {
-                return order.origin_source === 'email' || notes.includes('[origin: email]');
+
+            // 2. Fallback to Clientes B2C if no model or if expired
+            if (!resolvedModel || expired) {
+                b2cFallback = true;
+                const { data: b2cModel } = await supabase
+                    .from('pricing_models')
+                    .select('*')
+                    .eq('name', 'Clientes B2C')
+                    .single();
+                
+                if (b2cModel) {
+                    resolvedModel = b2cModel;
+                }
             }
-            if (command === 'carga' || command === 'excel' || command === 'ocr') {
-                return order.origin_source === 'file_upload';
+
+            setActivePricingModel(resolvedModel);
+            setIsB2CDefault(b2cFallback);
+            setIsContractExpired(expired);
+
+            // 3. Load prices for the resolved model
+            if (resolvedModel) {
+                const { data: prices } = await supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', resolvedModel.id);
+                
+                const map: Record<string, number> = {};
+                prices?.forEach((p: any) => {
+                    map[p.product_id] = p.price;
+                });
+                setContractPrices(map);
+            } else {
+                setContractPrices({});
             }
-            
-            if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
-            if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
-            if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
-            if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
-            if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
-            if (command === 'incompleto' || command === 'incompletos' || command === 'error' || command === 'alerta') return !order.isComplete;
-            if (command === 'completo' || command === 'completos' || command === 'ok') return order.isComplete;
-            if (command === 'pago' || command === 'pagos' || command === 'con_pago') return !!order.paymentMethod;
-            if (command === 'sin_pago' || command === 'no_pago') return !order.paymentMethod;
-            if (command === 'efectivo' || command === 'cash') return (order.paymentMethod || '').toLowerCase().includes('efectivo');
-            if (command === 'transferencia' || command === 'banco') return (order.paymentMethod || '').toLowerCase().includes('transferencia');
-            if (command === 'contraentrega' || command === 'cobro') return (order.paymentMethod || '').toLowerCase().includes('contraentrega');
         }
 
-        // Generic search normalization
-        const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
-        const normTerm = term.replace(/[_\s-]/g, '');
-        const rawSeqStr = (order.sequence_id || '').toString();
+        resolveContract();
+    }, [selectedOrder, editDeliveryDate]);
 
-        return (
-            friendlyId.includes(term) ||
-            normFriendlyId.includes(normTerm) ||
-            rawSeqStr === term ||
-            order.id.toLowerCase().includes(term) ||
-            (order.customer_name || '').toLowerCase().includes(term) ||
-            (order.customer_nit || '').toLowerCase().includes(term) ||
-            (order.customer_phone || '').toLowerCase().includes(term) ||
-            (order.shipping_address || '').toLowerCase().includes(term) ||
-            (order.status || '').toLowerCase().includes(term) ||
-            (order.paymentMethod || '').toLowerCase().includes(term) ||
-            (order.admin_notes || '').toLowerCase().includes(term) ||
-            (order.special_notes || '').toLowerCase().includes(term)
-        );
-    });
+    useEffect(() => {
+        let active = true;
+
+        const fetchOrders = async () => {
+            setLoading(true);
+            try {
+                let query = supabase
+                    .from('orders')
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
+                    .eq('delivery_date', selectedDate)
+                    .order('created_at', { ascending: false });
+
+                const { data, error } = await query;
+
+                if (error) {
+                    console.error('Error fetching orders:', error);
+                    return;
+                }
+
+                if (active) {
+                    const processedData = (data || []).map(order => {
+                        let name = 'Cliente Desconocido';
+                        let phone = 'Sin Teléfono';
+
+                        if (order.profiles) {
+                            // Unified Profile Logic
+                            if (order.profiles.role === 'b2b_client') {
+                                name = order.profiles.company_name || 'Sin Razón Social';
+                            } else {
+                                // Assume B2C or mixed
+                                name = order.profiles.contact_name || order.profiles.company_name || 'Cliente Registrado';
+                            }
+                            phone = order.profiles.contact_phone || 'Sin Teléfono';
+                        } else {
+                            // FALLBACK: Use data directly from order table if profile is missing
+                            // This happens with new B2C Wompi leads/orders
+                            name = order.customer_name || 'Cliente Desconocido';
+                            phone = order.customer_phone || 'Sin Teléfono';
+
+                            if (name === 'Cliente Desconocido' && order.special_notes) {
+                                const nameMatch = order.special_notes.match(/\[CLIENTE:\s*(.*?)\s*\|/);
+                                const phoneMatch = order.special_notes.match(/Tel:\s*(.*?)\s*\|/);
+                                if (nameMatch) name = nameMatch[1].trim();
+                                if (phoneMatch) phone = phoneMatch[1].trim();
+                            }
+
+                            if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
+                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
+                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
+                                if (nameMatch) name = nameMatch[1];
+                                if (phoneMatch) phone = phoneMatch[1];
+                            }
+                        }
+
+                        let nit = order.profiles?.nit || null;
+                        if (!order.profiles && order.special_notes) {
+                            const nitMatch = order.special_notes.match(/ID:\s*(.*?)(?:\]|\s*\|)/);
+                            if (nitMatch) nit = nitMatch[1].trim();
+                        }
+
+                        // Payment Method Logic
+                        let paymentMethod = order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
+                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null;
+                        
+                        // Auto-detect Wompi if transaction ID exists but tags are missing
+                        if (!paymentMethod && (order.wompi_transaction_id || order.type === 'b2c_wompi')) {
+                            paymentMethod = 'Tarjeta / Wompi';
+                        }
+
+                        return {
+                            ...order,
+                            customer_name: name,
+                            customer_phone: phone,
+                            customer_nit: nit,
+                            paymentMethod: paymentMethod,
+                            isComplete: true
+                        };
+                    });
+                    setOrders(processedData);
+                    // Reset selection on data refresh
+                    setSelectedOrders(new Set());
+                }
+            } catch (err) {
+                console.error('Exception:', err);
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        fetchOrders();
+
+        return () => {
+            active = false;
+        };
+    }, [selectedDate, refreshTrigger]);
+
+
+
+    const filteredOrders = useMemo(() => {
+        return orders.filter(order => {
+            // Filtro por canal dropdown
+            if (selectedChannel && order.origin_source !== selectedChannel) return false;
+
+            if (!searchTerm) return true;
+            
+            const term = searchTerm.toLowerCase().trim();
+            const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
+            const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
+            const friendlyId = getFriendlyOrderId(order).toLowerCase();
+
+            // Check for @ commands
+            if (term.startsWith('@')) {
+                const command = term.substring(1).replace(/[\s-]+/g, '_');
+                
+                if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
+                if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
+                if (command === 'b2b') return isB2B;
+                if (command === 'b2c' || command === 'hogar') return !isB2B;
+                const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+                
+                // Actualizado para buscar en origin_source de forma estructurada con fallback
+                if (command === 'web' || command === '🛒' || command === 'app') {
+                    return order.origin_source === 'web_b2c' || order.origin_source === 'web_b2b' || notes.includes('[origin: web]') || order.type === 'b2c_wompi';
+                }
+                if (command === 'whatsapp' || command === '💬') {
+                    return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
+                }
+                if (command === 'telefono' || command === 'phone' || command === '📞') {
+                    return order.origin_source === 'phone' || notes.includes('[origin: phone]');
+                }
+                if (command === 'email' || command === 'correo') {
+                    return order.origin_source === 'email' || notes.includes('[origin: email]');
+                }
+                if (command === 'carga' || command === 'excel' || command === 'ocr') {
+                    return order.origin_source === 'file_upload';
+                }
+                
+                if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
+                if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
+                if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
+                if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
+                if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
+                if (command === 'incompleto' || command === 'incompletos' || command === 'error' || command === 'alerta') return !order.isComplete;
+                if (command === 'completo' || command === 'completos' || command === 'ok') return order.isComplete;
+                if (command === 'pago' || command === 'pagos' || command === 'con_pago') return !!order.paymentMethod;
+                if (command === 'sin_pago' || command === 'no_pago') return !order.paymentMethod;
+                if (command === 'efectivo' || command === 'cash') return (order.paymentMethod || '').toLowerCase().includes('efectivo');
+                if (command === 'transferencia' || command === 'banco') return (order.paymentMethod || '').toLowerCase().includes('transferencia');
+                if (command === 'contraentrega' || command === 'cobro') return (order.paymentMethod || '').toLowerCase().includes('contraentrega');
+            }
+
+            // Generic search normalization
+            const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
+            const normTerm = term.replace(/[_\s-]/g, '');
+            const rawSeqStr = (order.sequence_id || '').toString();
+
+            return (
+                friendlyId.includes(term) ||
+                normFriendlyId.includes(normTerm) ||
+                rawSeqStr === term ||
+                order.id.toLowerCase().includes(term) ||
+                (order.customer_name || '').toLowerCase().includes(term) ||
+                (order.customer_nit || '').toLowerCase().includes(term) ||
+                (order.customer_phone || '').toLowerCase().includes(term) ||
+                (order.shipping_address || '').toLowerCase().includes(term) ||
+                (order.status || '').toLowerCase().includes(term) ||
+                (order.paymentMethod || '').toLowerCase().includes(term) ||
+                (order.admin_notes || '').toLowerCase().includes(term) ||
+                (order.special_notes || '').toLowerCase().includes(term)
+            );
+        });
+    }, [orders, selectedChannel, searchTerm]);
 
     const toggleSelectAll = () => {
         const completeOrders = filteredOrders.filter(o => o.isComplete);
@@ -230,17 +483,6 @@ export default function OrderLoadingPage() {
         setSelectedOrders(newSet);
     };
 
-    // Edit Fields
-    const [editStatus, setEditStatus] = useState('');
-    const [editDeliveryDate, setEditDeliveryDate] = useState('');
-    
-    // Product Search for adding new items
-    const [productSearch, setProductSearch] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searching, setSearching] = useState(false);
-
-    // Variant Selection Modal States (For products with options)
-    const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
 
     const handleOrderClick = async (order: any) => {
         setSelectedOrder(order);
@@ -264,7 +506,7 @@ export default function OrderLoadingPage() {
                 .select(`
                     *,
                     products (
-                        name, sku, unit_of_measure, weight_kg, image_url
+                        name, sku, accounting_id, unit_of_measure, weight_kg, image_url
                     )
                 `)
                 .eq('order_id', order.id);
@@ -284,7 +526,7 @@ export default function OrderLoadingPage() {
                     const productIds = [...new Set(rawItems.map(i => i.product_id))];
                     const { data: rawProducts, error: prodErr } = await supabase
                         .from('products')
-                        .select('id, name, sku, unit_of_measure, weight_kg, image_url')
+                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url')
                         .in('id', productIds);
                     
                     if (!prodErr && rawProducts) {
@@ -317,64 +559,251 @@ export default function OrderLoadingPage() {
     const currentTotal = orderItems.reduce((acc, item) => acc + ((item.unit_price || 0) * item.quantity), 0);
     const currentWeight = orderItems.reduce((acc, item) => {
         const unit = (item.products?.unit_of_measure || '').toLowerCase();
-        // Si la unidad es Kg, el peso es la cantidad misma. Si es otra unidad, multiplicamos por weight_kg
-        const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (item.products?.weight_kg || 0);
+        // Consistente con el creador de pedidos y base de datos: usa weight_kg si está definido, de lo contrario cae a 1 si la unidad es kg
+        const weightFactor = item.products?.weight_kg || ((unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : 0);
         return acc + (weightFactor * item.quantity);
     }, 0);
 
-    const handleSearchProducts = async (term: string) => {
+    const handleSearchProducts = (term: string) => {
         setProductSearch(term);
-        if (term.length < 3) {
+    };
+
+    const handleProductSearchKeyDown = (e: React.KeyboardEvent) => {
+        if (searchResults.length === 0) return;
+        
+        let nextIndex = focusedProductIndex;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            nextIndex = focusedProductIndex < searchResults.length - 1 ? focusedProductIndex + 1 : focusedProductIndex;
+            setFocusedProductIndex(nextIndex);
+            setTimeout(() => {
+                const el = document.getElementById(`search-item-${nextIndex}`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }, 10);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            nextIndex = focusedProductIndex > 0 ? focusedProductIndex - 1 : focusedProductIndex;
+            setFocusedProductIndex(nextIndex);
+            setTimeout(() => {
+                const el = document.getElementById(`search-item-${nextIndex}`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+            }, 10);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (focusedProductIndex >= 0 && focusedProductIndex < searchResults.length) {
+                e.preventDefault();
+                addProductToOrder(searchResults[focusedProductIndex]);
+                setFocusedProductIndex(-1);
+            }
+        } else if (e.key === 'Escape') {
+            setProductSearch('');
             setSearchResults([]);
+            setFocusedProductIndex(-1);
+        }
+    };
+
+    useEffect(() => {
+        if (productSearch.length < 3) {
+            setSearchResults([]);
+            setSearching(false);
             return;
         }
         
         setSearching(true);
-        console.log('🔍 Buscando productos:', term);
-        try {
-            // Corregido: La columna real es 'base_price', no 'price'. Incluimos options_config para variantes.
-            const { data, error } = await supabase
-                .from('products')
-                .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
-                .or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
-                .limit(8);
-            
-            if (error) {
-                console.error('❌ Error de Supabase:', error.message, error.details, error.hint, error.code);
-                throw error;
+        const delayDebounceFn = setTimeout(async () => {
+            console.log('🔍 Buscando productos (debounced):', productSearch);
+            try {
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .eq('is_active', true)
+                    .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
+                    .limit(8);
+                
+                if (error) {
+                    console.error('❌ Error de Supabase:', error.message, error.details, error.hint, error.code);
+                    throw error;
+                }
+                
+                console.log('✅ Resultados encontrados:', data?.length || 0);
+                setSearchResults(data || []);
+            } catch (err: any) {
+                console.error('💥 Excepción en búsqueda:', err);
+                const msg = err.message || JSON.stringify(err);
+                
+                if (err.code === '42501' || msg.includes('permission denied')) {
+                    alert('⚠️ Error de Permisos (RLS): No tienes permiso para buscar en la tabla "products". Por favor, ejecuta el script SQL de permisos.');
+                }
+            } finally {
+                setSearching(false);
             }
-            
-            console.log('✅ Resultados encontrados:', data?.length || 0);
-            setSearchResults(data || []);
-        } catch (err: any) {
-            console.error('💥 Excepción en búsqueda:', err);
-            const msg = err.message || JSON.stringify(err);
-            
-            if (err.code === '42501' || msg.includes('permission denied')) {
-                alert('⚠️ Error de Permisos (RLS): No tienes permiso para buscar en la tabla "products". Por favor, ejecuta el script SQL de permisos.');
-            } else if (err.code === '42703') {
-                console.error('Columna no encontrada. Verificando esquema...');
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [productSearch]);
+
+    // Autofocus logic for sub-modal
+    useEffect(() => {
+        if (selectedProductForVariant) {
+            const timer = setTimeout(() => {
+                if (selectedProductForVariant.options_config && selectedProductForVariant.options_config.length > 0) {
+                    const firstSelect = document.getElementById('modal-select-0');
+                    if (firstSelect) firstSelect.focus();
+                } else {
+                    const qtyInput = document.getElementById('modal-qty-input');
+                    if (qtyInput) {
+                        (qtyInput as HTMLInputElement).focus();
+                        (qtyInput as HTMLInputElement).select();
+                    }
+                }
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedProductForVariant]);
+
+    // Close sub-modal on Escape keypress globally
+    useEffect(() => {
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (selectedProductForVariant) {
+                    setSelectedProductForVariant(null);
+                }
             }
-        } finally {
-            setSearching(false);
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [selectedProductForVariant]);
+
+    const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (index < totalOptions - 1) {
+                const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                if (nextSelect) (nextSelect as HTMLElement).focus();
+            } else {
+                const qtyInput = document.getElementById('modal-qty-input');
+                if (qtyInput) {
+                    (qtyInput as HTMLElement).focus();
+                    (qtyInput as HTMLInputElement).select();
+                }
+            }
         }
     };
 
+    if (authLoading || !rolesLoaded) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando portal de pedidos...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '0.75rem', fontFamily: THEME.typography.fontFamilyMain }}>
+                        Acceso Restringido
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                        No tienes permisos para visualizar el panel de pedidos. Si consideras que esto es un error, por favor contacta al administrador del sistema.
+                    </p>
+                    <Link href="/" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.75rem 1.5rem',
+                        backgroundColor: THEME.colors.primary,
+                        color: 'white',
+                        fontWeight: '700',
+                        fontSize: '0.875rem',
+                        borderRadius: THEME.radius.md,
+                        textDecoration: 'none',
+                        transition: 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover || '#16a34a'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                    >
+                        Volver al Inicio
+                    </Link>
+                </div>
+            </main>
+        );
+    }
+
     const addProductToOrder = (product: any) => {
+        // 1. Check for product substitution exception
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        if (exc && exc.substitution_product_id) {
+            const fetchAndSubstitute = async () => {
+                const { data: subProduct } = await supabase
+                    .from('products')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .eq('id', exc.substitution_product_id)
+                    .single();
+                
+                if (subProduct) {
+                    const confirmSwap = window.confirm(`El cliente prefiere sustituir "${product.name}" por "${subProduct.name}". ¿Desea aplicar la sustitución?`);
+                    if (confirmSwap) {
+                        addProductToOrder(subProduct);
+                        return;
+                    }
+                }
+                proceedAddProduct(product, exc);
+            };
+            fetchAndSubstitute();
+        } else {
+            proceedAddProduct(product, exc);
+        }
+    };
+
+    const proceedAddProduct = (product: any, exc: any) => {
         // Reset sub-modal states
-        setVariantQuantity(1);
+        setVariantQuantity('1');
         setSelectedOptions({});
 
-        // Check if product has variants/options
-        if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
-            setSelectedProductForVariant(product);
-            setProductSearch('');
-            setSearchResults([]);
-            return;
+        // Pre-populate preferred variant options (if any)
+        const initialOptions: Record<string, string> = {};
+        if (exc && exc.preferred_options && typeof exc.preferred_options === 'object') {
+            Object.entries(exc.preferred_options).forEach(([k, v]) => {
+                initialOptions[k] = String(v);
+            });
         }
+        setSelectedOptions(initialOptions);
 
-        // Direct add if no variants
-        addOrUpdateItemInState(product, 1);
+        // Always open the sub-modal to input quantity/variants (just like create page!)
+        setSelectedProductForVariant(product);
+
+        // Find default unit conversions
+        const hasWebUnit = product.web_unit && product.web_conversion_factor;
+        const defaultUnit = hasWebUnit ? product.web_unit : (product.unit_of_measure || 'Kg');
+        const defaultFactor = hasWebUnit ? parseFloat(product.web_conversion_factor) || 1 : 1;
+        setSelectedUnit(defaultUnit);
+        setSelectedConversionFactor(defaultFactor);
+
         setProductSearch('');
         setSearchResults([]);
     };
@@ -384,14 +813,22 @@ export default function OrderLoadingPage() {
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         
-        addOrUpdateItemInState(selectedProductForVariant, variantQuantity, variantLabel, selectedOptions);
+        const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
+        const baseQty = parseFloat((qtyVal * selectedConversionFactor).toFixed(2));
+        addOrUpdateItemInState(selectedProductForVariant, baseQty, variantLabel, selectedOptions);
         setSelectedProductForVariant(null);
     };
 
+
+
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        const finalLabel = variantLabel || '';
+        const finalNickname = exc?.nickname || product.name;
+
         // Check if item with same product_id AND variant_label exists
         const existsIndex = orderItems.findIndex(item => 
-            item.product_id === product.id && item.variant_label === variantLabel
+            item.product_id === product.id && item.variant_label === (finalLabel || null)
         );
 
         if (existsIndex >= 0) {
@@ -403,16 +840,19 @@ export default function OrderLoadingPage() {
             };
             setOrderItems(newOrderItems);
         } else {
+            const resolvedPrice = contractPrices[product.id] !== undefined && contractPrices[product.id] !== null ? contractPrices[product.id] : product.base_price;
             const newItem = {
                 order_id: selectedOrder.id,
                 product_id: product.id,
                 quantity: qty,
-                unit_price: product.base_price,
-                variant_label: variantLabel,
-                selected_options: optionsRaw,
+                unit_price: resolvedPrice,
+                variant_label: finalLabel || null,
+                selected_options: optionsRaw || {},
+                nickname: finalNickname || null,
                 products: {
                     name: product.name,
                     sku: product.sku,
+                    accounting_id: product.accounting_id,
                     unit_of_measure: product.unit_of_measure,
                     weight_kg: product.weight_kg
                 },
@@ -423,7 +863,7 @@ export default function OrderLoadingPage() {
     };
 
     const updateItemQuantity = (idx: number, newQty: number) => {
-        if (newQty <= 0) return;
+        if (newQty < 0) return;
         const newOrderItems = [...orderItems];
         newOrderItems[idx] = { ...newOrderItems[idx], quantity: newQty, isModified: true };
         setOrderItems(newOrderItems);
@@ -437,6 +877,21 @@ export default function OrderLoadingPage() {
 
     const handleUpdateOrder = async () => {
         if (!selectedOrder) return;
+
+        // Block Zero Margin / Zero Price
+        const zeroPriceItem = orderItems.find(item => !item.unit_price || parseFloat(item.unit_price.toString()) === 0);
+        if (zeroPriceItem) {
+            alert(`❌ No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
+            return;
+        }
+
+        // Block Zero / Negative Quantities
+        const zeroQtyItem = orderItems.find(item => !item.quantity || parseFloat(item.quantity.toString()) <= 0);
+        if (zeroQtyItem) {
+            alert(`❌ No se puede guardar: El producto "${zeroQtyItem.products?.name || 'Item'}" tiene cantidad menor o igual a 0. Si desea eliminarlo, use el icono de la papelera.`);
+            return;
+        }
+
         setUpdateLoading(true);
         console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
         
@@ -478,35 +933,26 @@ export default function OrderLoadingPage() {
                 operations.push(supabase.from('order_items').delete().in('id', idsToDelete));
             }
 
-            // Nuevos ítems (Insertar)
-            const itemsToInsert = orderItems.filter(item => item.isNew).map(item => ({
-                order_id: selectedOrder.id,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                variant_label: item.variant_label,
-                selected_options: item.selected_options
-            }));
+            // Consolidador de Ítems (Bulk Upsert para Nuevos y Modificados)
+            const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
+                const baseItem: any = {
+                    order_id: selectedOrder.id,
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    variant_label: item.variant_label,
+                    selected_options: item.selected_options,
+                    nickname: item.nickname || item.variant_label || null
+                };
+                if (!item.isNew) {
+                    baseItem.id = item.id;
+                }
+                return baseItem;
+            });
 
-            if (itemsToInsert.length > 0) {
-                console.log('➕ Insertando nuevos ítems:', itemsToInsert.length);
-                operations.push(supabase.from('order_items').insert(itemsToInsert));
-            }
-
-            // Ítems existentes (Actualizar cantidades)
-            const itemsToUpdate = orderItems.filter(item => !item.isNew && item.isModified);
-            for (const item of itemsToUpdate) {
-                console.log('🔄 Actualizando ítem:', item.id);
-                operations.push(
-                    supabase.from('order_items')
-                        .update({ 
-                            quantity: item.quantity, 
-                            unit_price: item.unit_price,
-                            variant_label: item.variant_label,
-                            selected_options: item.selected_options
-                        })
-                        .eq('id', item.id)
-                );
+            if (itemsToUpsert.length > 0) {
+                console.log('⚡ Sincronizando ítems en lote (Upsert):', itemsToUpsert.length);
+                operations.push(supabase.from('order_items').upsert(itemsToUpsert));
             }
 
             if (operations.length > 0) {
@@ -606,96 +1052,6 @@ export default function OrderLoadingPage() {
         setSearchTerm('');
     };
 
-    useEffect(() => {
-        let active = true;
-
-        const fetchOrders = async () => {
-            setLoading(true);
-            try {
-                let query = supabase
-                    .from('orders')
-                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email)')
-                    .eq('delivery_date', selectedDate)
-                    .order('created_at', { ascending: false });
-
-                const { data, error } = await query;
-
-                if (error) {
-                    console.error('Error fetching orders:', error);
-                    return;
-                }
-
-                if (active) {
-                    const processedData = (data || []).map(order => {
-                        let name = 'Cliente Desconocido';
-                        let phone = 'Sin Teléfono';
-
-                        if (order.profiles) {
-                            // Unified Profile Logic
-                            if (order.profiles.role === 'b2b_client') {
-                                name = order.profiles.company_name || 'Sin Razón Social';
-                            } else {
-                                // Assume B2C or mixed
-                                name = order.profiles.contact_name || order.profiles.company_name || 'Cliente Registrado';
-                            }
-                            phone = order.profiles.contact_phone || 'Sin Teléfono';
-                        } else {
-                            // FALLBACK: Use data directly from order table if profile is missing
-                            // This happens with new B2C Wompi leads/orders
-                            name = order.customer_name || 'Cliente Desconocido';
-                            phone = order.customer_phone || 'Sin Teléfono';
-
-                            if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
-                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
-                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
-                                if (nameMatch) name = nameMatch[1];
-                                if (phoneMatch) phone = phoneMatch[1];
-                            }
-                        }
-
-                        // Payment Method Logic
-                        let paymentMethod = order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
-                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null;
-                        
-                        // Auto-detect Wompi if transaction ID exists but tags are missing
-                        if (!paymentMethod && (order.wompi_transaction_id || order.type === 'b2c_wompi')) {
-                            paymentMethod = 'Tarjeta / Wompi';
-                        }
-
-                        return {
-                            ...order,
-                            customer_name: name,
-                            customer_phone: phone,
-                            customer_nit: order.profiles?.nit || null,
-                            paymentMethod: paymentMethod,
-                            isComplete: true /* (
-                                name && name !== 'Cliente Desconocido' && name !== 'Sin Razón Social' && name !== 'Cliente Registrado' &&
-                                phone && phone !== 'Sin Teléfono' && phone !== 'Sin tel.' &&
-                                order.shipping_address && order.shipping_address.length > 5 &&
-                                (!order.profiles || order.profiles.role !== 'b2b_client' || (order.profiles.nit && order.profiles.nit !== 'Sin NIT'))
-                            ) */
-                        };
-                    });
-                    setOrders(processedData);
-                    // Reset selection on data refresh
-                    setSelectedOrders(new Set());
-                }
-            } catch (err) {
-                console.error('Exception:', err);
-            } finally {
-                if (active) {
-                    setLoading(false);
-                }
-            }
-        };
-
-        fetchOrders();
-
-        return () => {
-            active = false;
-        };
-    }, [selectedDate, refreshTrigger]);
-
     // Summary Metrics (Dashboard)
     const totalOrders = orders.length;
     const totalSales = orders.reduce((sum, o) => sum + (o.total || 0), 0);
@@ -711,17 +1067,11 @@ export default function OrderLoadingPage() {
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
-            <FileText size={18} strokeWidth={1.5} />
-        </div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Cargue de Pedidos</h1>
-    </div>
-    
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8 }}>
-                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
-                             <span style={{ color: '#94A3B8', fontSize: '0.65rem', fontWeight: '700' }}>/ CARGUE DE PEDIDOS</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
+                                <FileText size={18} strokeWidth={1.5} />
+                            </div>
+                            <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Cargue de Pedidos</h1>
                         </div>
                     </div>
                 </header>
@@ -767,18 +1117,18 @@ export default function OrderLoadingPage() {
                             padding: '0.6rem 0.2rem',
                             border: 'none',
                             background: 'transparent',
-                            color: activeTab === 'emails' ? '#7C3AED' : '#64748B',
+                            color: activeTab === 'emails' ? THEME.colors.primary : '#64748B',
                             fontWeight: '700',
                             fontSize: '0.9rem',
                             cursor: 'pointer',
-                            borderBottom: activeTab === 'emails' ? '3px solid #7C3AED' : '3px solid transparent',
+                            borderBottom: activeTab === 'emails' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px'
                         }}
                     >
-                        <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: '#F5F3FF', color: '#7C3AED', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
+                        <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
                     </button>
                     <button 
                         onClick={() => setActiveTab('outbox')}
@@ -786,18 +1136,18 @@ export default function OrderLoadingPage() {
                             padding: '0.6rem 0.2rem',
                             border: 'none',
                             background: 'transparent',
-                            color: activeTab === 'outbox' ? '#10B981' : '#64748B',
+                            color: activeTab === 'outbox' ? THEME.colors.primary : '#64748B',
                             fontWeight: '700',
                             fontSize: '0.9rem',
                             cursor: 'pointer',
-                            borderBottom: activeTab === 'outbox' ? `3px solid #10B981` : '3px solid transparent',
+                            borderBottom: activeTab === 'outbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px'
                         }}
                     >
-                        <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: '#ECFDF5', color: '#10B981', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
+                        <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
                     </button>
                 </div>
 
@@ -1018,16 +1368,16 @@ export default function OrderLoadingPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
-                            backgroundColor: pendingEmailCount > 0 ? '#F5F3FF' : '#F3F4F6',
-                            color: pendingEmailCount > 0 ? '#7C3AED' : '#4B5563',
-                            border: `1px solid ${pendingEmailCount > 0 ? '#DDD6FE' : '#E5E7EB'}`,
+                            backgroundColor: pendingEmailCount > 0 ? THEME.colors.primaryLight : '#F3F4F6',
+                            color: pendingEmailCount > 0 ? THEME.colors.primary : '#4B5563',
+                            border: `1px solid ${pendingEmailCount > 0 ? 'rgba(13, 122, 87, 0.2)' : '#E5E7EB'}`,
                             padding: '0.5rem 1rem',
                             borderRadius: '8px',
                             fontWeight: '800',
                             fontSize: '0.75rem',
                             transition: 'all 0.2s'
-                        }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? '#EDE9FE' : '#E5E7EB'; }}
-                           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? '#F5F3FF' : '#F3F4F6'; }}>
+                        }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? 'rgba(13, 122, 87, 0.15)' : '#E5E7EB'; }}
+                           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? THEME.colors.primaryLight : '#F3F4F6'; }}>
                             <Mail size={14} />
                             <span>{pendingEmailCount} Pendientes Email</span>
                         </button>
@@ -1590,7 +1940,8 @@ export default function OrderLoadingPage() {
                                                         type="text"
                                                         placeholder="Buscar productos para agregar..."
                                                         value={productSearch}
-                                                        onChange={(e) => handleSearchProducts(e.target.value)}
+                                                        onChange={(e) => { handleSearchProducts(e.target.value); setFocusedProductIndex(-1); }}
+                                                        onKeyDown={handleProductSearchKeyDown}
                                                         style={{
                                                             width: '100%',
                                                             padding: '12px 16px',
@@ -1622,13 +1973,16 @@ export default function OrderLoadingPage() {
                                                     zIndex: 10,
                                                     marginTop: '8px',
                                                     border: '1px solid #E2E8F0',
-                                                    overflow: 'hidden'
+                                                    maxHeight: '280px',
+                                                    overflowY: 'auto'
                                                 }}>
-                                                    {searchResults.map(prod => (
+                                                    {searchResults.map((prod, idx) => (
                                                         <div 
                                                             key={prod.id}
+                                                            id={`search-item-${idx}`}
                                                             onClick={() => addProductToOrder(prod)}
                                                             className="search-item"
+                                                            onMouseEnter={() => setFocusedProductIndex(idx)}
                                                             style={{
                                                                 padding: '12px 16px',
                                                                 cursor: 'pointer',
@@ -1636,17 +1990,24 @@ export default function OrderLoadingPage() {
                                                                 display: 'flex',
                                                                 justifyContent: 'space-between',
                                                                 alignItems: 'center',
-                                                                transition: 'background-color 0.2s'
+                                                                transition: 'background-color 0.2s',
+                                                                backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                         >
                                                             <div>
-                                                                <div style={{ fontWeight: '700', color: '#1E293B' }}>{prod.name}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748B' }}>SKU: {prod.sku} | {prod.unit_of_measure}</div>
+                                                                <div style={{ fontWeight: '700', color: '#1E293B' }}>
+                                                                    {prod.name} {prod.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({prod.accounting_id})</span>}
+                                                                </div>
                                                             </div>
-                                                            <div style={{ fontWeight: '800', color: '#059669' }}>
-                                                                {formatMoney(prod.base_price || 0)}
+                                                            <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span>
+                                                                    {formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0))}/{prod.unit_of_measure}
+                                                                </span>
+                                                                {prod.options_config && prod.options_config.length > 0 && (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                        ⚙️ Opciones
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1665,7 +2026,7 @@ export default function OrderLoadingPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr style={{ textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>SKU</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>ID</th>
                                                 <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'center' }}>CANTIDAD</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>PRECIO U.</th>
@@ -1679,37 +2040,56 @@ export default function OrderLoadingPage() {
                                                     borderBottom: '1px solid #F1F5F9',
                                                     backgroundColor: item.isNew ? '#F0F9FF' : 'transparent'
                                                 }}>
-                                                    <td style={{ padding: '1.25rem 2rem', fontFamily: 'monospace', fontSize: '0.9rem', color: '#475569', fontWeight: 'bold' }}>
-                                                        {item.products?.sku || '-'}
-                                                    </td>
-                                                    <td style={{ padding: '1.25rem 2rem' }}>
-                                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                                            {item.products?.name}
-                                                            {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
-                                                        </div>
-                                                        {item.variant_label && (
-                                                             <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                                                 <Sparkles size={10} strokeWidth={1.5} /> {item.variant_label}
-                                                             </div>
-                                                         )}
+                                                    <td style={{ padding: '1.25rem 2rem', fontSize: '0.95rem', color: '#475569', fontWeight: '800' }}>
+                                                         {item.products?.accounting_id || '-'}
+                                                     </td>
+                                                     <td style={{ padding: '1.25rem 2rem' }}>
+                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                                             {item.products?.name}
+                                                             {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
+                                                         </div>
+                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
+                                                             {item.variant_label && (
+                                                                  <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                      <Sparkles size={10} strokeWidth={1.5} /> {(() => {
+                                                                          const cleaned = item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim();
+                                                                          return cleaned;
+                                                                      })()}
+                                                                  </div>
+                                                             )}
+                                                             {(() => {
+                                                                 const exc = clientExceptions.find(e => e.product_id === (item.product_id || item.products?.id));
+                                                                 return (
+                                                                     <>
+                                                                         {exc?.picking_note && (
+                                                                             <div style={{ fontWeight: '600', color: '#D97706', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center' }}>
+                                                                                 Nota: {exc.picking_note}
+                                                                             </div>
+                                                                         )}
+                                                                         {exc?.delivery_note && (
+                                                                             <div style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.75rem', backgroundColor: '#EEF2FF', padding: '2px 8px', borderRadius: '4px', border: '1px solid #C7D2FE', display: 'inline-flex', alignItems: 'center' }}>
+                                                                                 Entr: {exc.delivery_note}
+                                                                             </div>
+                                                                         )}
+                                                                     </>
+                                                                 );
+                                                             })()}
+                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
                                                         {editMode ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                                <button 
-                                                                    onClick={() => updateItemQuantity(idx, item.quantity - 1)}
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', cursor: 'pointer' }}
-                                                                >-</button>
                                                                 <input 
                                                                     type="number"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => updateItemQuantity(idx, parseInt(e.target.value) || 1)}
-                                                                    style={{ width: '50px', textAlign: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #CBD5E1', fontWeight: '800' }}
+                                                                    step="any"
+                                                                    value={item.quantity === 0 ? '' : item.quantity}
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
+                                                                        updateItemQuantity(idx, val);
+                                                                    }}
+                                                                    style={{ width: '75px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: '800', backgroundColor: 'white' }}
                                                                 />
-                                                                <button 
-                                                                    onClick={() => updateItemQuantity(idx, item.quantity + 1)}
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: 'white', cursor: 'pointer' }}
-                                                                >+</button>
                                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.products?.unit_of_measure}</span>
                                                             </div>
                                                         ) : (
@@ -1729,7 +2109,25 @@ export default function OrderLoadingPage() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#475569', fontWeight: '600' }}>
-                                                        {formatMoney(item.unit_price || 0)}
+                                                        {editMode ? (
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${!(item.unit_price) || parseFloat(item.unit_price.toString()) === 0 ? '#EF4444' : '#CBD5E1'}`, borderRadius: '6px', overflow: 'hidden', padding: '2px 4px', backgroundColor: 'white' }}>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={item.unit_price === 0 ? 0 : (item.unit_price || '')}
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                                                        const newOrderItems = [...orderItems];
+                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val as any, isModified: true };
+                                                                        setOrderItems(newOrderItems);
+                                                                    }}
+                                                                    style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            formatMoney(item.unit_price || 0)
+                                                        )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
                                                         {formatMoney((item.unit_price || 0) * item.quantity)}
@@ -1787,6 +2185,43 @@ export default function OrderLoadingPage() {
                                             </div>
                                         </div>
                                     </div>
+                                    {selectedOrder.document_url && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ color: '#3B82F6' }}><FileText size={24} strokeWidth={1.5} /></div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>DOCUMENTO</div>
+                                                <div style={{ marginTop: '2px' }}>
+                                                    <a 
+                                                        href={selectedOrder.document_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        style={{ 
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            backgroundColor: '#EFF6FF', 
+                                                            color: '#1D4ED8', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '6px', 
+                                                            fontWeight: '800', 
+                                                            fontSize: '0.75rem',
+                                                            border: '1px solid #BFDBFE',
+                                                            textDecoration: 'none',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                        }}
+                                                    >
+                                                        Ver Anexo ↗
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
@@ -1800,113 +2235,361 @@ export default function OrderLoadingPage() {
                 )}
 
                 {/* --- VARIANT SELECTION MODAL (SUB-MODAL) --- */}
-                {selectedProductForVariant && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 3000, 
-                        backdropFilter: 'blur(4px)',
-                        padding: '1rem'
-                    }} onClick={() => setSelectedProductForVariant(null)}>
-                        <div 
-                            style={{ 
-                                backgroundColor: 'white', 
-                                padding: '2.5rem', 
-                                borderRadius: '32px', 
-                                width: '95%', 
-                                maxWidth: '420px', 
-                                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.3)', 
-                                border: '1px solid rgba(255,255,255,0.3)',
-                                position: 'relative'
-                            }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <button 
-                                onClick={() => setSelectedProductForVariant(null)}
-                                style={{
-                                    position: 'absolute',
-                                    top: '1.5rem',
-                                    right: '1.5rem',
-                                    border: 'none',
-                                    background: '#F1F5F9',
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '50%',
-                                    cursor: 'pointer',
-                                    color: '#64748B',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: 'bold'
+                {selectedProductForVariant && (() => {
+                    const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
+                    
+                    // Build full options list for unit selection (web_unit is first, if configured)
+                    const optionsList = [];
+                    const hasWebUnit = selectedProductForVariant.web_unit && selectedProductForVariant.web_conversion_factor;
+                    
+                    if (hasWebUnit) {
+                        optionsList.push({
+                            unit: selectedProductForVariant.web_unit,
+                            factor: parseFloat(selectedProductForVariant.web_conversion_factor) || 1,
+                            label: `${selectedProductForVariant.web_unit} (${selectedProductForVariant.web_conversion_factor} ${selectedProductForVariant.unit_of_measure})`
+                        });
+                    }
+                    
+                    if (!hasWebUnit || selectedProductForVariant.unit_of_measure !== selectedProductForVariant.web_unit) {
+                        optionsList.push({
+                            unit: selectedProductForVariant.unit_of_measure || 'Kg',
+                            factor: 1,
+                            label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)`
+                        });
+                    }
+                    
+                    const itemConversions = conversions.filter(c => c.product_id === selectedProductForVariant.id);
+                    itemConversions.forEach(c => {
+                        const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === c.from_unit.toLowerCase());
+                        if (!isDuplicate) {
+                            optionsList.push({
+                                unit: c.from_unit,
+                                factor: parseFloat(c.conversion_factor) || 1,
+                                label: `${c.from_unit} (${c.conversion_factor} ${c.to_unit})`
+                            });
+                        }
+                    });
+
+                    return (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            zIndex: 3000, 
+                            backdropFilter: 'blur(3px)',
+                            padding: '1rem'
+                        }} onClick={() => setSelectedProductForVariant(null)}>
+                            <div 
+                                style={{ 
+                                    backgroundColor: 'white', 
+                                    padding: '2rem', 
+                                    borderRadius: '24px', 
+                                    width: '95%', 
+                                    maxWidth: '820px', 
+                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', 
+                                    position: 'relative',
+                                    textAlign: 'left'
                                 }}
-                            >✕</button>
-                            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                                {selectedProductForVariant.image_url && (
-                                    <img 
-                                        src={selectedProductForVariant.image_url} 
-                                        alt={selectedProductForVariant.name}
-                                        style={{ width: '100px', height: '100px', borderRadius: '20px', objectFit: 'cover', marginBottom: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                                    />
-                                )}
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.25rem' }}>{selectedProductForVariant.name}</h3>
-                                <p style={{ color: '#64748B', fontSize: '0.875rem' }}>Personaliza las opciones del producto</p>
-                            </div>
-
-                            {/* Options Rendering */}
-                            {selectedProductForVariant.options_config?.map((opt: any) => (
-                                <div key={opt.name} style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {opt.name}
-                                    </label>
-                                    <select
-                                        value={selectedOptions[opt.name] || ''}
-                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                        style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '1rem', backgroundColor: '#F8FAFC', outline: 'none' }}
-                                    >
-                                        <option value="">Seleccionar {opt.name}...</option>
-                                        {opt.values?.map((val: string) => (
-                                            <option key={val} value={val}>{val}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            ))}
-
-                            {/* Quantity in Sub-Modal */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', margin: '2rem 0' }}>
-                                <button 
-                                    onClick={() => setVariantQuantity(Math.max(1, variantQuantity - 1))}
-                                    style={{ width: '45px', height: '45px', borderRadius: '15px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >-</button>
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0F172A' }}>{variantQuantity}</div>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{selectedProductForVariant.unit_of_measure}</div>
-                                </div>
-                                <button 
-                                    onClick={() => setVariantQuantity(variantQuantity + 1)}
-                                    style={{ width: '45px', height: '45px', borderRadius: '15px', border: 'none', backgroundColor: '#059669', color: 'white', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >+</button>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                onClick={e => e.stopPropagation()}
+                            >
                                 <button 
                                     onClick={() => setSelectedProductForVariant(null)}
-                                    style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
-                                >
-                                    Cancelar
-                                </button>
-                                <button 
-                                    onClick={confirmVariantAdd}
-                                    style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
-                                >
-                                    Agregar
-                                </button>
+                                    style={{
+                                        position: 'absolute',
+                                        top: '1.5rem',
+                                        right: '1.5rem',
+                                        border: 'none',
+                                        background: '#F1F5F9',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '50%',
+                                        cursor: 'pointer',
+                                        color: '#64748B',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontWeight: 'bold'
+                                    }}
+                                >✕</button>
+
+                                {/* Flex container for header */}
+                                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                                        {selectedProductForVariant.image_url ? (
+                                            <img 
+                                                src={selectedProductForVariant.image_url} 
+                                                alt={selectedProductForVariant.name}
+                                                style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: '80px',
+                                                height: '80px',
+                                                borderRadius: '16px',
+                                                backgroundColor: '#F3F4F6',
+                                                border: '1px solid #E5E7EB',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                                            }}>
+                                                <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
+                                            <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                                                Personaliza tu producto:
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Client notes box */}
+                                {exc && (
+                                    <div style={{
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FCD34D',
+                                        borderRadius: '12px',
+                                        padding: '0.8rem 1.2rem',
+                                        margin: '0.5rem 0 1.2rem 0',
+                                        textAlign: 'left',
+                                        fontSize: '0.8rem',
+                                        color: '#92400E',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                                            📌 REQUERIMIENTOS DEL CLIENTE:
+                                        </div>
+                                        {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
+                                            <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
+                                        )}
+                                        {exc.picking_note && <div><strong>Nota:</strong> {exc.picking_note}</div>}
+                                        {exc.delivery_note && <div><strong>Nota Entrega:</strong> {exc.delivery_note}</div>}
+                                    </div>
+                                )}
+
+                                {/* DISCRETE PRODUCT CONFIG ACTION BAR */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    gap: '12px',
+                                    fontSize: '0.75rem',
+                                    color: '#9CA3AF',
+                                    marginBottom: '1.5rem',
+                                    fontWeight: '700'
+                                }}>
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => alert("Para editar las variantes Estructurales, por favor ve al panel de catálogo de productos o a la creación del pedido.")}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#4B5563',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        ⚙️ Editar Variantes
+                                    </button>
+                                    <span>|</span>
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => {
+                                            if (window.confirm("¿Quieres crear una nueva equivalencia? Te redirigiremos al catálogo de productos.")) {
+                                                setSelectedProductForVariant(null);
+                                                window.location.href = '/admin/products';
+                                            }
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#4B5563',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        ⚙️ Editar Equivalencias
+                                    </button>
+                                </div>
+
+                                {/* Options Rendering */}
+                                {selectedProductForVariant.options_config?.map((opt: any, index: number) => (
+                                    <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {opt.name}
+                                        </label>
+                                        <select
+                                            id={`modal-select-${index}`}
+                                            value={selectedOptions[opt.name] || ''}
+                                            onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                                            onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForVariant.options_config.length)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.8rem',
+                                                border: '2px solid #E2E8F0',
+                                                borderRadius: '10px',
+                                                fontSize: '1rem',
+                                                backgroundColor: '#F9FAFB',
+                                                outline: 'none',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            <option value="">Seleccionar {opt.name}...</option>
+                                            {opt.values?.map((val: string) => (
+                                                <option key={val} value={val}>{val}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ))}
+
+                                {/* Quantity & Unit select grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Cantidad
+                                        </label>
+                                        <input
+                                            id="modal-qty-input"
+                                            type="text"
+                                            value={variantQuantity}
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(',', '.');
+                                                setVariantQuantity(val);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const unitSel = document.getElementById('modal-unit-select');
+                                                    if (unitSel) {
+                                                        unitSel.focus();
+                                                    } else {
+                                                        confirmVariantAdd();
+                                                    }
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.7rem 0.8rem',
+                                                borderRadius: '10px',
+                                                border: '2px solid #E2E8F0',
+                                                fontWeight: '700',
+                                                fontSize: '1.1rem',
+                                                textAlign: 'center',
+                                                outline: 'none',
+                                                backgroundColor: '#F9FAFB',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                                e.target.select();
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Unidad de Medida
+                                        </label>
+                                        <select
+                                            id="modal-unit-select"
+                                            value={selectedUnit}
+                                            onChange={(e) => {
+                                                const opt = optionsList.find(o => o.unit === e.target.value);
+                                                if (opt) {
+                                                    setSelectedUnit(opt.unit);
+                                                    setSelectedConversionFactor(opt.factor);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Tab' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    const addBtn = document.getElementById('modal-add-button');
+                                                    if (addBtn) addBtn.focus();
+                                                } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    confirmVariantAdd();
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.8rem',
+                                                border: '2px solid #E2E8F0',
+                                                borderRadius: '10px',
+                                                fontSize: '1rem',
+                                                backgroundColor: '#F9FAFB',
+                                                outline: 'none',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            {optionsList.map(o => (
+                                                <option key={o.unit} value={o.unit}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Footer buttons */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                                    <button 
+                                        onClick={() => setSelectedProductForVariant(null)}
+                                        style={{ padding: '12px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        id="modal-add-button"
+                                        onClick={confirmVariantAdd}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === 'Tab') {
+                                                e.preventDefault();
+                                                confirmVariantAdd();
+                                            }
+                                        }}
+                                        style={{ padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+                                    >
+                                        Agregar
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
                     </>
                 ) : activeTab === 'emails' ? (
-                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
                         <EmailDraftsModule onDraftsChange={(count) => setPendingEmailCount(count)} />
                     </div>
                 ) : (

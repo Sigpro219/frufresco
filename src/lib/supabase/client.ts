@@ -1,4 +1,4 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 export function createClient() {
     const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
@@ -6,15 +6,9 @@ export function createClient() {
     const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
     if (supabaseUrl.startsWith('http')) {
-        return createSupabaseClient(
+        return createBrowserClient(
             supabaseUrl,
-            supabaseAnonKey,
-            {
-                auth: {
-                    persistSession: true,
-                    autoRefreshToken: true,
-                }
-            }
+            supabaseAnonKey
         )
     }
 

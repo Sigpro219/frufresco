@@ -241,7 +241,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             height: '38px',
             boxSizing: 'border-box'
           }}>
-            <Calendar size={16} color="#6B7280" />
+            <Calendar size={16} color={THEME.colors.textSecondary} />
             <input 
               type="date"
               value={selectedDate}
@@ -251,7 +251,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 outline: 'none',
                 fontWeight: 800,
                 fontSize: '0.85rem',
-                color: '#111827',
+                color: THEME.colors.textMain,
                 fontFamily: 'inherit',
                 cursor: 'pointer'
               }}
@@ -263,7 +263,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#9CA3AF',
+                  color: THEME.colors.textSecondary,
                   padding: '2px',
                   display: 'flex',
                   alignItems: 'center'
@@ -276,7 +276,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
 
           {/* Search Input */}
           <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
               <Search size={16} />
             </span>
             <input
@@ -294,14 +294,13 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 outline: 'none',
                 transition: 'border-color 0.2s',
                 backgroundColor: 'white',
-                color: '#111827',
+                color: THEME.colors.textMain,
                 height: '38px',
                 boxSizing: 'border-box'
               }}
               onFocus={(e) => e.target.style.borderColor = THEME.colors.primary}
               onBlur={(e) => e.target.style.borderColor = THEME.colors.border}
-            />
-            {searchQuery && (
+            />             {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
                 style={{
@@ -312,7 +311,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#9CA3AF',
+                  color: THEME.colors.textSecondary,
                   padding: '2px',
                   display: 'flex',
                   alignItems: 'center'
@@ -364,13 +363,13 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             borderRadius: '10px',
             fontWeight: 700,
             fontSize: '0.85rem',
-            color: '#4B5563',
+            color: THEME.colors.textSecondary,
             cursor: 'pointer',
             transition: 'all 0.2s',
             height: '38px',
             boxSizing: 'border-box'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -380,27 +379,26 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
 
       {/* Table */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '4rem', color: '#6B7280', fontWeight: 600 }}>
+        <div style={{ textAlign: 'center', padding: '4rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>
           Cargando bandeja de salida...
         </div>
       ) : filteredEmails.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: '4rem 2rem',
-          backgroundColor: '#F9FAFB',
+          backgroundColor: THEME.colors.background,
           borderRadius: '12px',
-          border: '1px dashed #D1D5DB',
-          color: '#9CA3AF'
+          border: `1px dashed ${THEME.colors.border}`,
+          color: THEME.colors.textSecondary
         }}>
-          <Mail size={40} style={{ opacity: 0.3, marginBottom: '1rem', color: '#9CA3AF' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#4B5563', margin: '0 0 4px 0' }}>Bandeja de Salida Vacía</h3>
+          <Mail size={40} style={{ opacity: 0.3, marginBottom: '1rem', color: THEME.colors.textSecondary }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: THEME.colors.textSecondary, margin: '0 0 4px 0' }}>Bandeja de Salida Vacía</h3>
           <p style={{ margin: 0, fontSize: '0.85rem' }}>No se han encontrado correos enviados en el historial.</p>
         </div>
       ) : (
         <div style={{ overflowX: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', backgroundColor: 'white' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#F8FAFB', borderBottom: `2px solid ${THEME.colors.border}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>             <thead>
+              <tr style={{ backgroundColor: THEME.colors.background, borderBottom: `2px solid ${THEME.colors.border}` }}>
                 <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}>
                   <input 
                     type="checkbox"
@@ -415,11 +413,11 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                     style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                   />
                 </th>
-                <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '20%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>FECHA / HORA</th>
-                <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '25%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>DESTINATARIO</th>
-                <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '35%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>ASUNTO</th>
-                <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '12%', textAlign: 'center', fontSize: '0.75rem', letterSpacing: '0.05em' }}>ESTADO</th>
-                <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '8%', textAlign: 'center' }}></th>
+                <th style={{ padding: '1rem', fontWeight: 800, color: THEME.colors.textSecondary, width: '20%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>FECHA / HORA</th>
+                <th style={{ padding: '1rem', fontWeight: 800, color: THEME.colors.textSecondary, width: '25%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>DESTINATARIO</th>
+                <th style={{ padding: '1rem', fontWeight: 800, color: THEME.colors.textSecondary, width: '35%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>ASUNTO</th>
+                <th style={{ padding: '1rem', fontWeight: 800, color: THEME.colors.textSecondary, width: '12%', textAlign: 'center', fontSize: '0.75rem', letterSpacing: '0.05em' }}>ESTADO</th>
+                <th style={{ padding: '1rem', fontWeight: 800, color: THEME.colors.textSecondary, width: '8%', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -428,8 +426,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 const isSimulated = email.subject?.toLowerCase().includes('(simulado)') || email.message?.text?.includes('[SIMULADO]');
                 const status = email.status || 'sent';
 
-                return (
-                  <tr key={email.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                return (                   <tr key={email.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <input 
                         type="checkbox"
@@ -444,13 +441,13 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                         style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                       />
                     </td>
-                    <td style={{ padding: '1rem', fontWeight: 600, color: '#374151' }}>
+                    <td style={{ padding: '1rem', fontWeight: 600, color: THEME.colors.textMain }}>
                       {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td style={{ padding: '1rem', fontWeight: 700, color: '#111827' }}>
+                    <td style={{ padding: '1rem', fontWeight: 700, color: THEME.colors.textMain }}>
                       {email.to_email}
                     </td>
-                    <td style={{ padding: '1rem', color: '#4B5563', fontWeight: 500 }}>
+                    <td style={{ padding: '1rem', color: THEME.colors.textSecondary, fontWeight: 500 }}>
                       {email.subject}
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -535,21 +532,20 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             textAlign: 'left'
           }}>
-            {/* Modal Header */}
-            <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Modal Header */}             <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#111827', fontWeight: 800 }}>{selectedEmail.subject}</h3>
-                <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.8rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
+                <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
               </div>
-              <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
                 <X size={24} />
               </button>
             </div>
 
             {/* Modal Body (Email HTML Preview) */}
-            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, backgroundColor: '#F8FAFC' }}>
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, backgroundColor: THEME.colors.background }}>
               {selectedEmail.message?.html ? (
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden', backgroundColor: 'white' }}>
+                <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', overflow: 'hidden', backgroundColor: 'white' }}>
                   <iframe
                     srcDoc={selectedEmail.message.html}
                     title="Vista previa del correo"
@@ -564,12 +560,12 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
               ) : (
                 <div style={{
                   backgroundColor: 'white',
-                  border: '1px solid #E2E8F0',
+                  border: `1px solid ${THEME.colors.border}`,
                   borderRadius: '12px',
                   padding: '2rem',
                   fontSize: '0.9rem',
                   lineHeight: '1.6',
-                  color: '#334155',
+                  color: THEME.colors.textMain,
                   whiteSpace: 'pre-wrap',
                   minHeight: '200px'
                 }}>
@@ -579,7 +575,7 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', backgroundColor: '#F9FAFB', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', backgroundColor: THEME.colors.background, borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
               <button
                 onClick={() => setSelectedEmail(null)}
                 style={{
@@ -589,11 +585,11 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                   borderRadius: '8px',
                   fontWeight: 700,
                   fontSize: '0.85rem',
-                  color: '#4B5563',
+                  color: THEME.colors.textSecondary,
                   cursor: 'pointer',
                   transition: 'all 0.15s'
                 }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
               >
                 Cerrar
@@ -625,11 +621,10 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             textAlign: 'left',
             padding: '1.5rem'
-          }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#111827', fontWeight: 800 }}>
+          }}>             <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: THEME.colors.textMain, fontWeight: 800 }}>
               ¿Eliminar registro de correo?
             </h3>
-            <p style={{ margin: '0 0 1.5rem 0', color: '#6B7280', fontSize: '0.9rem', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5' }}>
               Esta acción eliminará de forma permanente el registro de este correo enviado de la bandeja de salida. No se puede deshacer.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
@@ -643,11 +638,11 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                   borderRadius: '8px',
                   fontWeight: 700,
                   fontSize: '0.85rem',
-                  color: '#4B5563',
+                  color: THEME.colors.textSecondary,
                   cursor: deleting ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s'
                 }}
-                onMouseEnter={e => !deleting && (e.currentTarget.style.backgroundColor = '#F9FAFB')}
+                onMouseEnter={e => !deleting && (e.currentTarget.style.backgroundColor = THEME.colors.background)}
                 onMouseLeave={e => !deleting && (e.currentTarget.style.backgroundColor = 'white')}
               >
                 Cancelar
@@ -699,10 +694,10 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             textAlign: 'left',
             padding: '1.5rem'
           }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#111827', fontWeight: 800 }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: THEME.colors.textMain, fontWeight: 800 }}>
               ¿Eliminar correos seleccionados?
             </h3>
-            <p style={{ margin: '0 0 1.5rem 0', color: '#6B7280', fontSize: '0.9rem', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5' }}>
               Esta acción eliminará de forma permanente los <strong>{selectedIds.length}</strong> correos seleccionados de la bandeja de salida. No se puede deshacer.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
@@ -716,11 +711,11 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                   borderRadius: '8px',
                   fontWeight: 700,
                   fontSize: '0.85rem',
-                  color: '#4B5563',
+                  color: THEME.colors.textSecondary,
                   cursor: bulkDeleting ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s'
                 }}
-                onMouseEnter={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = '#F9FAFB')}
+                onMouseEnter={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = THEME.colors.background)}
                 onMouseLeave={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = 'white')}
               >
                 Cancelar
