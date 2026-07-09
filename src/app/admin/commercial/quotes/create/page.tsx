@@ -862,9 +862,7 @@ export default function CreateQuotePage() {
                             <p style={{ color: appSettings.secondary_color || '#6B7280', margin: '0.5rem 0' }}>Fecha: {new Date().toLocaleDateString()}</p>
                         </div>
                         <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                            {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
-                                <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo Documento" style={{ maxHeight: '60px', objectFit: 'contain' }} />
-                            )}
+                            <img src="/institutional-logo-large.jpg" alt="Logo Documento" style={{ maxHeight: '75px', objectFit: 'contain' }} />
                             <div style={{ marginTop: 'auto' }}>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: appSettings.primary_color || '#111827' }}>{appSettings.provider_legal_name || appSettings.app_name || 'Empresa Emisora'}</div>
                                 <div style={{ color: appSettings.secondary_color || '#6B7280', fontSize: '0.9rem' }}>Nit: {appSettings.provider_nit || 'Sin NIT'}</div>
@@ -1102,11 +1100,11 @@ export default function CreateQuotePage() {
                         transform: translate(-50%, -50%) rotate(-30deg);
                         width: 500px;
                         height: 500px;
-                        background-image: url('${appSettings.provider_logo_url || appSettings.app_logo_url}');
+                        background-image: url('/institutional-profile.jpg');
                         background-repeat: no-repeat;
                         background-position: center;
                         background-size: contain;
-                        opacity: 0.05;
+                        opacity: 0.03;
                         pointer-events: none;
                         z-index: -1;
                     }
