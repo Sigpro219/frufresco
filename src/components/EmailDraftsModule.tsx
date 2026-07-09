@@ -617,6 +617,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setSelectedOptions(item.selected_options || {});
   };
 
+  const closeVariantModal = () => {
+    const idx = selectedRowForVariant;
+    setSelectedProductForVariant(null);
+    setSelectedRowForVariant(null);
+    if (idx !== null) {
+      setTimeout(() => {
+        const currentInput = productInputRefs.current[idx];
+        if (currentInput) {
+          currentInput.focus();
+          currentInput.select();
+        }
+      }, 80);
+    }
+  };
+
   const confirmVariantAdd = () => {
     if (selectedRowForVariant === null || !selectedProductForVariant) return;
     
@@ -1972,12 +1987,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       obsModal,
       rejectModal,
       showShortcuts,
-      selectedDraftIds
+      selectedDraftIds,
+      selectedProductForVariant,
+      selectedRowForVariant
     };
   }, [
     isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal,
     activeEquivalenceRow, activeVariantRow, actionConfirm, deleteConfirm, obsModal,
-    rejectModal, showShortcuts, selectedDraftIds
+    rejectModal, showShortcuts, selectedDraftIds, selectedProductForVariant, selectedRowForVariant
   ]);
 
   useEffect(() => {
@@ -2008,7 +2025,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         obsModal,
         rejectModal,
         showShortcuts,
-        selectedDraftIds
+        selectedDraftIds,
+        selectedProductForVariant,
+        selectedRowForVariant
       } = stateRef.current;
 
       const isAltShortcut = e.altKey && (
@@ -2133,6 +2152,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       if (e.key === 'Escape') {
+        if (selectedProductForVariant) { closeVariantModal(); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
         if (actionConfirm) { setActionConfirm(null); return; }
         if (deleteConfirm) { setDeleteConfirm(null); return; }
@@ -7039,20 +7059,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             overflowY: 'auto'
           }}>
             <button 
-              onClick={() => {
-                const idx = selectedRowForVariant;
-                setSelectedProductForVariant(null);
-                setSelectedRowForVariant(null);
-                if (idx !== null) {
-                  setTimeout(() => {
-                    const currentInput = productInputRefs.current[idx];
-                    if (currentInput) {
-                      currentInput.focus();
-                      currentInput.select();
-                    }
-                  }, 80);
-                }
-              }}
+              onClick={closeVariantModal}
               style={{
                 position: 'absolute',
                 top: '1.5rem',
