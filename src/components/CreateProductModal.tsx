@@ -19,7 +19,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         name: '',
         sku: '',
         accounting_id: '',
-        category: 'Frutas',
+        category: 'FR',
         unit_of_measure: 'Kg',
         weight_kg: 0.5,
         description: '',
@@ -61,7 +61,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
 
     // Ayudante para generar SKU técnico basado en estándares (CATEGORIA-ID)
     const generateSKU = (category: string, id: string | number) => {
-        const catPrefix = REVERSE_CATEGORY_MAP[category] || 'DE';
+        const catPrefix = category || 'DE';
         const cleanId = id.toString().padStart(5, '0');
         return `${catPrefix}-${cleanId}`;
     };
@@ -186,7 +186,16 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         });
     };
 
-    const categories = ['Frutas', 'Hortalizas', 'Verduras', 'Tubérculos', 'Despensa', 'Lácteos'];
+    const categories = [
+        { id: 'FR', name: 'Frutas' },
+        { id: 'VE', name: 'Verduras' },
+        { id: 'TU', name: 'Tubérculos' },
+        { id: 'HO', name: 'Hortalizas' },
+        { id: 'LA', name: 'Lácteos' },
+        { id: 'DE', name: 'Despensa' },
+        { id: 'CO', name: 'Congelados' },
+        { id: 'PR', name: 'Procesados' }
+    ];
     const baseUnits = ['Kg', 'G', 'Lb', 'Lt', 'Un', 'Atado', 'Bulto'];
 
     // LÓGICA DE VARIANTES (Replicada de VariantModal)
@@ -436,7 +445,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         onChange={(e) => handleMetadataChange('category', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: '600' }}
                                     >
-                                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name} ({cat.id})</option>)}
                                     </select>
                                 </div>
                                 <div>

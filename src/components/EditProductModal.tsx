@@ -42,7 +42,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         { id: 'HO', name: 'Hortalizas' },
         { id: 'LA', name: 'Lácteos' },
         { id: 'DE', name: 'Despensa' },
-        { id: 'CO', name: 'Congelados' }
+        { id: 'CO', name: 'Congelados' },
+        { id: 'PR', name: 'Procesados' }
     ];
 
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];

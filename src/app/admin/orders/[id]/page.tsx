@@ -25,7 +25,8 @@ import {
     AlertTriangle,
     Sparkles,
     Truck,
-    PackageOpen
+    PackageOpen,
+    Printer
 } from 'lucide-react';
 
 export default function OrderDetailPage() {
@@ -73,6 +74,7 @@ export default function OrderDetailPage() {
             base_price: number;
             options_config?: any;
             weight_kg?: number;
+            category?: string;
         };
         selected_options?: any;
         variant_label?: any;
@@ -127,7 +129,7 @@ export default function OrderDetailPage() {
                 .select(`
                     *,
                     product:products (
-                        id, name, unit_of_measure, image_url, base_price, variants, weight_kg
+                        id, name, unit_of_measure, image_url, base_price, variants, weight_kg, category
                     )
                 `)
                 .eq('order_id', id);
@@ -427,6 +429,36 @@ export default function OrderDetailPage() {
                     <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
 
                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                            {(() => {
+                                const processedItemsCount = items.filter(item => item.product?.category === 'PR').length;
+                                if (processedItemsCount > 0 && !isEditing) {
+                                    return (
+                                        <Link
+                                            href={`/admin/orders/${order.id}/print-labels`}
+                                            target="_blank"
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                backgroundColor: '#059669',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '0.5rem 1rem',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.9rem',
+                                                textDecoration: 'none',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                            }}
+                                        >
+                                            <Printer size={15} strokeWidth={1.5} /> Etiquetas ({processedItemsCount})
+                                        </Link>
+                                    );
+                                }
+                                return null;
+                            })()}
+
                             {isEditable ? (
                                 <button
                                     onClick={handleEditToggle}
