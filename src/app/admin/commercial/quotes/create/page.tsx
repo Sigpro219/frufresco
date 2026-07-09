@@ -35,7 +35,6 @@ export default function CreateQuotePage() {
     const [conversions, setConversions] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
-    const [recipientType, setRecipientType] = useState<'client' | 'lead'>('client');
 
     // MODAL STATE FOR NEW CLIENT
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -548,15 +547,12 @@ export default function CreateQuotePage() {
         (l.phone?.toLowerCase().includes(clientSearch.toLowerCase()))
     );
 
-    const dropdownItems = recipientType === 'client' 
-        ? [
-            ...filteredClients.map(c => ({ type: 'client' as const, id: c.id, label: c.company_name || c.contact_name, c })),
-            { type: 'manual' as const, label: `+ Usar "${clientSearch}" como cliente manual` },
-            { type: 'new_client' as const, label: '✨ Registrar cliente nuevo oficial' }
-          ]
-        : [
-            ...filteredLeads.map(l => ({ type: 'lead' as const, id: l.id, label: l.company_name || l.contact_name, l }))
-          ];
+    const dropdownItems = [
+        ...filteredClients.map(c => ({ type: 'client' as const, id: c.id, label: c.company_name || c.contact_name, c })),
+        ...filteredLeads.map(l => ({ type: 'lead' as const, id: l.id, label: l.company_name || l.contact_name, l })),
+        { type: 'manual' as const, label: `+ Usar "${clientSearch}" como cliente manual` },
+        { type: 'new_client' as const, label: '✨ Registrar cliente nuevo oficial' }
+    ];
 
     useEffect(() => {
         setActiveDropdownIndex(-1);
@@ -578,56 +574,9 @@ export default function CreateQuotePage() {
                             <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '800', color: '#111827' }}>Destinatario de la Cotización</h3>
                             {!selectedClientId && !selectedLeadId ? (
                                 <div style={{ position: 'relative' }}>
-                                    {/* Selector de Tipo de Destinatario */}
-                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                                        <button 
-                                            type="button"
-                                            onClick={() => {
-                                                setRecipientType('client');
-                                                setClientSearch('');
-                                                setClientName('');
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                padding: '0.6rem',
-                                                borderRadius: '8px',
-                                                border: `1px solid ${recipientType === 'client' ? (appSettings.primary_color || '#15803D') : '#D1D5DB'}`,
-                                                backgroundColor: recipientType === 'client' ? (appSettings.primary_color || '#15803D') : 'white',
-                                                color: recipientType === 'client' ? 'white' : '#475569',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.85rem',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s'
-                                            }}
-                                        >
-                                            👥 Cliente Existente
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => {
-                                                setRecipientType('lead');
-                                                setClientSearch('');
-                                                setClientName('');
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                padding: '0.6rem',
-                                                borderRadius: '8px',
-                                                border: `1px solid ${recipientType === 'lead' ? (appSettings.primary_color || '#15803D') : '#D1D5DB'}`,
-                                                backgroundColor: recipientType === 'lead' ? (appSettings.primary_color || '#15803D') : 'white',
-                                                color: recipientType === 'lead' ? 'white' : '#475569',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.85rem',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s'
-                                            }}
-                                        >
-                                            🎯 Lead / Prospecto
-                                        </button>
-                                    </div>
                                     <input 
                                         type="text"
-                                        placeholder={recipientType === 'client' ? "🔍 Buscar cliente registrado (Nombre, NIT...)" : "🔍 Buscar lead prospecto (Nombre, Teléfono...)"}
+                                        placeholder="🔍 Buscar cliente o lead (Nombre, NIT, Contacto...)"
                                         value={clientSearch}
                                         onChange={(e) => {
                                             setClientSearch(e.target.value);
@@ -813,27 +762,23 @@ export default function CreateQuotePage() {
                                             })}
                                         </div>
                                     )}
-                                    {recipientType === 'client' && (
-                                        <>
-                                            <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#374151' }}>O escribe nombre manual:</label>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => setIsClientModalOpen(true)}
-                                                    style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: appSettings.primary_color, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                                >
-                                                    + Nuevo Cliente
-                                                </button>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={clientName}
-                                                onChange={e => setClientName(e.target.value)}
-                                                placeholder="Nombre manual"
-                                                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}
-                                            />
-                                        </>
-                                    )}
+                                    <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#374151' }}>O escribe nombre manual:</label>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsClientModalOpen(true)}
+                                            style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: appSettings.primary_color, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                        >
+                                            + Nuevo Cliente
+                                        </button>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={clientName}
+                                        onChange={e => setClientName(e.target.value)}
+                                        placeholder="Nombre manual"
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                                    />
                                 </div>
                             ) : (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1rem', backgroundColor: selectedLeadId ? '#F0FDF4' : '#F8FAFC', borderRadius: '12px', border: `1px solid ${selectedLeadId ? '#16A34A33' : `${appSettings.primary_color}33`}` }}>
