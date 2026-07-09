@@ -15,6 +15,8 @@ export default function CreateQuotePage() {
     const [selectedModelId, setSelectedModelId] = useState('');
     const [items, setItems] = useState<any[]>([]);
     const [paymentTermsDays, setPaymentTermsDays] = useState(30);
+    const [introTitle, setIntroTitle] = useState('Enfoque Lean Agile & Entrega Continua de Valor');
+    const [introDesc, setIntroDesc] = useState('Nuestras cotizaciones combinan el diseño de software de última tecnología con metodologías ágiles. Los servicios se ejecutan y entregan mediante sprints incrementales de valor, garantizando visibilidad y control presupuestario óptimo.');
 
     // DATA STATE
     const [clients, setClients] = useState<any[]>([]);
@@ -474,7 +476,8 @@ export default function CreateQuotePage() {
                     total_amount: totalAmount,
                     status: 'draft',
                     start_date: new Date().toISOString().split('T')[0],
-                    valid_until: null
+                    valid_until: null,
+                    notes: JSON.stringify({ introTitle, introDesc })
                 })
                 .select()
                 .single();
@@ -857,7 +860,7 @@ export default function CreateQuotePage() {
                     backgroundColor: 'white', 
                     minHeight: '800px', 
                     padding: '3.5rem', 
-                    borderRadius: '16px', 
+                    borderRadius: '8px', 
                     border: '1px solid #E2E8F0',
                     boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)',
                     position: 'relative'
@@ -870,7 +873,7 @@ export default function CreateQuotePage() {
                         transform: 'translate(-50%, -50%) rotate(-30deg)',
                         width: '400px',
                         height: '400px',
-                        backgroundImage: `url(${appSettings.provider_logo_url || appSettings.app_logo_url})`,
+                        backgroundImage: "url('/institutional-profile.jpg')",
                         backgroundRepeat: 'no-repeat',
                         backgroundPosition: 'center',
                         backgroundSize: 'contain',
@@ -880,203 +883,223 @@ export default function CreateQuotePage() {
                     }} />
 
                     {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '3rem', borderBottom: '2px double #E2E8F0', paddingBottom: '1.5rem', position: 'relative', zIndex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', position: 'relative', zIndex: 1 }}>
                         <div>
-                            <span style={{ 
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                borderRadius: '9999px',
-                                backgroundColor: '#F0FDF4',
-                                color: '#16A34A',
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                marginBottom: '0.75rem'
-                            }} className="no-print">
-                                {quoteNumber ? 'Cotización Oficial' : 'Nuevo Borrador'}
-                            </span>
-                            <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.04em', color: appSettings.primary_color || '#15803D', lineHeight: 1 }}>
-                                COTIZACIÓN
-                            </h1>
-                            {quoteNumber && (
-                                <p style={{ fontSize: '1rem', color: '#475569', margin: '0.5rem 0 0 0', fontWeight: '600' }}>
-                                    N° #{quoteNumber}
-                                </p>
-                            )}
-                            <p style={{ color: '#64748B', fontSize: '0.85rem', margin: '0.25rem 0 0 0', fontWeight: '500' }}>
-                                Fecha de Emisión: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}
-                            </p>
+                            <img src="/institutional-logo-large.jpg" alt="DeltaCoreTech" style={{ maxHeight: '85px', objectFit: 'contain' }} />
                         </div>
-                        
-                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-                            {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
-                                <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo" style={{ maxHeight: '65px', objectFit: 'contain', marginBottom: '0.25rem' }} />
+                        <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#475569', lineHeight: '1.4' }}>
+                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>Delta Coretech SAS</div>
+                            <div>NIT: 901.654.321-7</div>
+                            <div>Calle 93 # 12-45, Bogotá, Colombia</div>
+                            <div>contacto@deltacoretech.co</div>
+                        </div>
+                    </div>
+
+                    {/* Thick Solid Line Separator */}
+                    <div style={{ borderTop: '3px solid #0F172A', margin: '1.5rem 0 2rem 0', position: 'relative', zIndex: 1 }}></div>
+
+                    {/* Metadata columns: Prepared For & Official Quote */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
+                        <div style={{ width: '50%' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Propuesta para:</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{clientName || 'Cliente General'}</div>
+                            {selectedClientInfo ? (
+                                <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                                    {selectedClientInfo.company_name && <div>{selectedClientInfo.company_name}</div>}
+                                    {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
+                                    {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
+                                    {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
                             )}
-                            <div style={{ lineHeight: 1.3 }}>
-                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E293B' }}>
-                                    {appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}
-                                </div>
-                                <div style={{ color: '#64748B', fontSize: '0.8rem', fontWeight: '600' }}>
-                                    NIT: {appSettings.provider_nit || '901.393.217'}
-                                </div>
+                        </div>
+                        <div style={{ width: '50%', textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización Oficial</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>N° DCT-2026-{quoteNumber || 'XXX'}</div>
+                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                                <div>Fecha: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-')}</div>
+                                <div>Validez: {paymentTermsDays || 30} días</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Prepared For Section */}
+                    {/* Callout box */}
                     <div style={{ 
                         backgroundColor: '#F8FAFC', 
-                        padding: '1.5rem', 
-                        borderRadius: '12px', 
-                        borderLeft: `4px solid ${appSettings.primary_color || '#15803D'}`, 
+                        padding: '1.2rem 1.5rem', 
+                        borderLeft: '5px solid #1E3A8A', 
                         marginBottom: '3rem',
                         position: 'relative',
                         zIndex: 1
                     }}>
-                        <div style={{ fontSize: '0.75rem', color: '#64748B', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                            Preparado para:
+                        <div className="no-print">
+                            <input 
+                                value={introTitle} 
+                                onChange={e => setIntroTitle(e.target.value)} 
+                                style={{ width: '100%', fontWeight: '800', fontSize: '1.05rem', color: '#0F172A', border: 'none', background: 'transparent', outline: 'none', marginBottom: '6px' }} 
+                                placeholder="Título de enfoque..."
+                            />
+                            <textarea 
+                                value={introDesc} 
+                                onChange={e => setIntroDesc(e.target.value)} 
+                                style={{ width: '100%', fontSize: '0.9rem', color: '#475569', border: 'none', background: 'transparent', outline: 'none', resize: 'none', height: '60px', fontFamily: 'inherit', lineHeight: 1.5 }} 
+                                placeholder="Descripción de enfoque..."
+                            />
                         </div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '1rem', letterSpacing: '-0.02em' }}>
-                            {clientName || 'Cliente General / Consumidor Final'}
+                        <div className="only-print">
+                            <div style={{ fontWeight: '800', fontSize: '1.05rem', color: '#0F172A', marginBottom: '6px' }}>{introTitle}</div>
+                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.5 }}>{introDesc}</div>
                         </div>
-                        {selectedClientInfo ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.9rem', color: '#334155' }}>
-                                {selectedClientInfo.nit && (
-                                    <div>
-                                        <span style={{ color: '#64748B', fontWeight: '600' }}>NIT/CC:</span>{' '}
-                                        <span style={{ fontWeight: '700', color: '#1E293B' }}>{selectedClientInfo.nit}</span>
-                                    </div>
-                                )}
-                                {selectedClientInfo.contact_name && (
-                                    <div>
-                                        <span style={{ color: '#64748B', fontWeight: '600' }}>Atención:</span>{' '}
-                                        <span style={{ fontWeight: '700', color: '#1E293B' }}>{selectedClientInfo.contact_name}</span>
-                                    </div>
-                                )}
-                                {selectedClientInfo.phone && (
-                                    <div>
-                                        <span style={{ color: '#64748B', fontWeight: '600' }}>Teléfono:</span>{' '}
-                                        <span style={{ fontWeight: '700', color: '#1E293B' }}>{selectedClientInfo.phone}</span>
-                                    </div>
-                                )}
-                                {selectedClientInfo.address && (
-                                    <div style={{ gridColumn: 'span 2' }}>
-                                        <span style={{ color: '#64748B', fontWeight: '600' }}>Dirección:</span>{' '}
-                                        <span style={{ fontWeight: '700', color: '#1E293B' }}>{selectedClientInfo.address}</span>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>
-                                Ingrese o seleccione un cliente para rellenar los datos institucionales.
-                            </div>
-                        )}
                     </div>
 
                     {/* Table */}
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
                         <thead>
-                            <tr style={{ borderBottom: `2px solid ${appSettings.primary_color || '#15803D'}`, color: '#475569' }}>
-                                <th style={{ padding: '1rem', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '35%' }}>Producto</th>
-                                <th style={{ padding: '1rem', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', width: '15%' }}>Cantidad</th>
-                                <th style={{ padding: '1rem', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', width: '10%' }}>IVA</th>
-                                <th className="no-print" style={{ padding: '1rem', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', width: '12%' }}>Margen (%)</th>
-                                <th style={{ padding: '1rem', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right', width: '13%' }}>Precio Unit.</th>
-                                <th style={{ padding: '1rem', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right', width: '10%' }}>Total</th>
-                                <th className="no-print" style={{ padding: '1rem', width: '5%' }}></th>
+                            <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Descripción del Item</th>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'center' }}>Tipo</th>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Cant.</th>
+                                <th className="no-print" style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
+                                <th className="no-print" style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Margen (%)</th>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Valor Unitario</th>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
+                                <th className="no-print" style={{ padding: '1rem 0.5rem', width: '5%' }}></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {items.map((item, index) => (
-                                <tr key={index} style={{ borderBottom: '1px solid #E2E8F0', transition: 'background 0.2s' }}>
-                                    <td style={{ padding: '1.2rem 1rem' }}>
-                                        <div style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.95rem' }}>{item.name}</div>
-                                        <span className="no-print" style={{ 
-                                            display: 'inline-block',
-                                            padding: '2px 8px',
-                                            borderRadius: '4px',
-                                            backgroundColor: '#F1F5F9',
-                                            color: '#64748B',
-                                            fontSize: '0.7rem',
-                                            fontWeight: 'bold',
-                                            marginTop: '4px'
-                                        }}>
-                                            Costo base: ${Math.ceil(item.cost).toLocaleString()}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '1.2rem 1rem', textAlign: 'center' }}>
-                                        <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                                            <input 
-                                                type="number" 
-                                                value={item.quantity} 
-                                                onChange={e => updateQuantity(index, parseFloat(e.target.value))} 
-                                                style={{ width: '65px', padding: '0.4rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
-                                            />
-                                            <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: '600' }}>{item.unit}</span>
-                                        </div>
-                                        <span className="only-print" style={{ fontWeight: '700', color: '#1E293B' }}>{item.quantity} {item.unit}</span>
-                                    </td>
-                                    <td style={{ padding: '1.2rem 1rem', textAlign: 'center', color: '#475569', fontSize: '0.9rem', fontWeight: '600' }}>{item.iva_rate || 0}%</td>
-                                    <td className="no-print" style={{ padding: '1.2rem 1rem', textAlign: 'center' }}>
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <input 
-                                                type="number" 
-                                                value={Math.round(item.margin * 10) / 10} 
-                                                onChange={e => handleMarginChange(index, parseFloat(e.target.value) || 0)} 
-                                                style={{ width: '65px', padding: '0.4rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
-                                            />
-                                            <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '1.2rem 1rem', textAlign: 'right' }}>
-                                        <div className="no-print">
-                                            <input 
-                                                type="number" 
-                                                value={Math.ceil(item.price)} 
-                                                onChange={e => handlePriceChange(index, parseFloat(e.target.value) || 0)} 
-                                                style={{ width: '90px', padding: '0.4rem', textAlign: 'right', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
-                                            />
-                                        </div>
-                                        <span className="only-print" style={{ fontWeight: '700', color: '#1E293B' }}>${Math.ceil(item.price).toLocaleString()}</span>
-                                    </td>
-                                    <td style={{ padding: '1.2rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                        ${(Math.ceil(item.price) * item.quantity).toLocaleString()}
-                                    </td>
-                                    <td className="no-print" style={{ padding: '1.2rem 1rem', textAlign: 'center' }}>
-                                        <button 
-                                            onClick={() => removeItem(index)} 
-                                            style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '24px', height: '24px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCA5A5'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                        >
-                                            ×
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {items.map((item, index) => {
+                                const isService = item.unit === 'Servicio' || item.unit === 'Hora';
+                                const typeLabel = isService ? 'SERVICIO' : 'BIEN';
+                                const typeColor = isService ? '#1D4ED8' : '#0F766E';
+                                const typeBg = isService ? '#EFF6FF' : '#F0FDFA';
+                                
+                                return (
+                                    <tr key={index} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }}>
+                                        {/* Row Index */}
+                                        <td style={{ padding: '1.2rem 0.5rem', fontSize: '1.1rem', fontWeight: '800', color: '#CBD5E1' }}>
+                                            {String(index + 1).padStart(2, '0')}
+                                        </td>
+                                        
+                                        {/* Description */}
+                                        <td style={{ padding: '1.2rem 0.5rem' }}>
+                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.95rem' }}>{item.name}</div>
+                                            <span className="no-print" style={{ 
+                                                display: 'inline-block',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                backgroundColor: '#F1F5F9',
+                                                color: '#64748B',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 'bold',
+                                                marginTop: '4px'
+                                            }}>
+                                                Costo base: ${Math.ceil(item.cost).toLocaleString()}
+                                            </span>
+                                        </td>
+                                        
+                                        {/* Type Badge */}
+                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
+                                            <span style={{ 
+                                                display: 'inline-block',
+                                                padding: '3px 8px',
+                                                borderRadius: '4px',
+                                                backgroundColor: typeBg,
+                                                color: typeColor,
+                                                fontSize: '0.7rem',
+                                                fontWeight: '800',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.03em'
+                                            }}>{typeLabel}</span>
+                                        </td>
+                                        
+                                        {/* Quantity */}
+                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
+                                            <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                <input 
+                                                    type="number" 
+                                                    value={item.quantity} 
+                                                    onChange={e => updateQuantity(index, parseFloat(e.target.value))} 
+                                                    style={{ width: '60px', padding: '0.35rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
+                                                />
+                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>{item.unit}</span>
+                                            </div>
+                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>{item.quantity}</span>
+                                        </td>
+                                        
+                                        {/* IVA (No-print) */}
+                                        <td className="no-print" style={{ padding: '1.2rem 0.5rem', textAlign: 'center', color: '#475569', fontSize: '0.9rem', fontWeight: '600' }}>
+                                            {item.iva_rate || 0}%
+                                        </td>
+                                        
+                                        {/* Margin (No-print) */}
+                                        <td className="no-print" style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                <input 
+                                                    type="number" 
+                                                    value={Math.round(item.margin * 10) / 10} 
+                                                    onChange={e => handleMarginChange(index, parseFloat(e.target.value) || 0)} 
+                                                    style={{ width: '55px', padding: '0.35rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
+                                                />
+                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
+                                            </div>
+                                        </td>
+                                        
+                                        {/* Unit Price */}
+                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right' }}>
+                                            <div className="no-print">
+                                                <input 
+                                                    type="number" 
+                                                    value={Math.ceil(item.price)} 
+                                                    onChange={e => handlePriceChange(index, parseFloat(e.target.value) || 0)} 
+                                                    style={{ width: '85px', padding: '0.35rem', textAlign: 'right', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
+                                                />
+                                            </div>
+                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>${Math.ceil(item.price).toLocaleString()}</span>
+                                        </td>
+                                        
+                                        {/* Total */}
+                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                            ${(Math.ceil(item.price) * item.quantity).toLocaleString()}
+                                        </td>
+                                        
+                                        {/* Action Button (No-print) */}
+                                        <td className="no-print" style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
+                                            <button 
+                                                onClick={() => removeItem(index)} 
+                                                style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '24px', height: '24px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCA5A5'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                            >
+                                                ×
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                         <tfoot>
-                            <tr style={{ borderTop: `2px solid ${appSettings.primary_color || '#15803D'}`, color: '#475569' }}>
-                                <td colSpan={4}></td>
-                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal antes de impuestos</td>
-                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#1E293B' }}>
+                            <tr style={{ borderTop: '1px solid #E2E8F0', color: '#475569' }}>
+                                <td colSpan={5}></td>
+                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal antes de impuestos</td>
+                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
                                     ${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0).toLocaleString()}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr style={{ color: '#64748B' }}>
-                                <td colSpan={4}></td>
-                                <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
-                                <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
+                                <td colSpan={5}></td>
+                                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
+                                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
                                     ${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0)/100), 0).toLocaleString()}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
-                                <td colSpan={4}></td>
-                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total</td>
-                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
+                                <td colSpan={5}></td>
+                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total</td>
+                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: '#1E3A8A' }}>
                                     ${(
                                         items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0) + 
                                         items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0)
