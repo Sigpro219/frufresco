@@ -329,7 +329,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setAttachmentHtml(null);
     setAttachmentError(null);
     setIsFloatingExpanded(false);
-    setSelectedAttachmentIndex(0);
+    
+    let defaultIndex = 0;
+    if (selectedDraft) {
+      const metadata = getDraftMetadata(selectedDraft);
+      if (metadata.attachments && Array.isArray(metadata.attachments)) {
+        const firstWithItems = metadata.attachments.findIndex((att: any) => att.items && Array.isArray(att.items) && att.items.length > 0 && att.processed !== true);
+        if (firstWithItems !== -1) {
+          defaultIndex = firstWithItems;
+        } else {
+          const firstUnprocessed = metadata.attachments.findIndex((att: any) => att.processed !== true);
+          if (firstUnprocessed !== -1) {
+            defaultIndex = firstUnprocessed;
+          }
+        }
+      }
+    }
+    
+    setSelectedAttachmentIndex(defaultIndex);
     setIsAttachmentZoomed(false);
   }, [selectedDraft?.id]);
 
