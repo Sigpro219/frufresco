@@ -7,6 +7,7 @@ import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Cal
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import VariantModal from './VariantModal';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -321,6 +322,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isAttachmentZoomed, setIsAttachmentZoomed] = useState(false);
 
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
+  const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
 
   const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
 
@@ -622,6 +624,47 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
     loadClientExceptions();
   }, [selectedDraft?.profile_id]);
+
+  const handleSaveVariantsFromEmail = async (productId: string, optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
+    try {
+      const { error: prodError } = await supabase
+        .from('products')
+        .update({
+          options_config: optionsConfig,
+          variants: variants
+        })
+        .eq('id', productId);
+      
+      if (prodError) throw prodError;
+      return true;
+    } catch (e: any) {
+      console.error('Error saving variants:', e);
+      return false;
+    }
+  };
+
+  const handleVariantImageUploadFromEmail = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (e: any) {
+      console.error('Error uploading variant image:', e);
+      return null;
+    }
+  };
 
   const openVariantModalForItem = (product: any, rowIndex: number) => {
     setSelectedProductForVariant(product);
@@ -7195,7 +7238,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <button
                 type="button"
                 tabIndex={-1}
-                onClick={() => alert("Para editar las variantes Estructurales, por favor ve al panel de catálogo de productos.")}
+                onClick={() => setVariantConfigProduct(selectedProductForVariant)}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -7609,6 +7652,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
         ))}
       </datalist>
+      
+      {variantConfigProduct && (
+          <VariantModal
+              product={variantConfigProduct}
+              onClose={() => setVariantConfigProduct(null)}
+              onSave={async (optionsConfig, variants) => {
+                  const success = await handleSaveVariantsFromEmail(variantConfigProduct.id, optionsConfig, variants);
+                  if (success) {
+                      setProducts(prev => prev.map(p => 
+                          p.id === variantConfigProduct.id 
+                              ? { ...p, options_config: optionsConfig, variants: variants } 
+                              : p
+                      ));
+                      if (selectedProductForVariant && selectedProductForVariant.id === variantConfigProduct.id) {
+                          setSelectedProductForVariant((prev: any) => ({ ...prev, options_config: optionsConfig, variants: variants }));
+                      }
+                      showToast('Variantes del producto actualizadas', 'success');
+                  }
+                  return success;
+              }}
+              onUploadImage={handleVariantImageUploadFromEmail}
+              readOnly={false}
+          />
+      )}
     </div>
   );
 }
