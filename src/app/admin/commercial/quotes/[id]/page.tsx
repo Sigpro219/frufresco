@@ -7,6 +7,13 @@ import { THEME } from '@/lib/adminTheme';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function QuoteDetailPage() {
+    const formatPrice = (value: number) => {
+        return new Intl.NumberFormat('es-CO', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        }).format(value);
+    };
+
     const params = useParams();
     const router = useRouter();
     const [quote, setQuote] = useState<any>(null);
@@ -286,7 +293,7 @@ export default function QuoteDetailPage() {
                         </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669' }}>${quote.total_amount?.toLocaleString()}</div>
+                        <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669' }}>${formatPrice(quote.total_amount || 0)}</div>
                         <div style={{ marginBottom: '1rem' }}>Total Ofertado</div>
 
                         {quote.status === 'converted' ? (
@@ -332,11 +339,11 @@ export default function QuoteDetailPage() {
                                 <tr key={item.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
                                     <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.product_name || item.products?.name || 'Producto'}</td>
                                     <td style={{ padding: '1rem' }}>{item.quantity} {item.unit || ''}</td>
-                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${item.cost_basis?.toLocaleString()}</td>
+                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${formatPrice(item.cost_basis || 0)}</td>
                                     <td style={{ padding: '1rem', color: '#2563EB', fontWeight: 'bold' }}>{Math.round((item.margin_percent || 0) * 10) / 10}%</td>
                                     <td style={{ padding: '1rem', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem' }}>{item.iva_rate || 0}%</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${item.unit_price?.toLocaleString()}</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${((item.quantity || 0) * (item.unit_price || 0))?.toLocaleString()}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${formatPrice(item.unit_price || 0)}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${formatPrice((item.quantity || 0) * (item.unit_price || 0))}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -345,21 +352,21 @@ export default function QuoteDetailPage() {
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>Subtotal antes de impuestos</td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                                    ${(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)), 0)).toLocaleString()}
+                                    ${formatPrice(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)), 0))}
                                 </td>
                             </tr>
                             <tr style={{ color: '#4B5563' }}>
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>Impuestos</td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
-                                    ${(quote?.total_tax_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)) * ((i.iva_rate || 0) / 100), 0)).toLocaleString()}
+                                    ${formatPrice(quote?.total_tax_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)) * ((i.iva_rate || 0) / 100), 0))}
                                 </td>
                             </tr>
                             <tr style={{ backgroundColor: '#F9FAFB' }}>
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900' }}>Total</td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.5rem', color: '#059669' }}>
-                                    ${(quote?.total_amount || 0).toLocaleString()}
+                                    ${formatPrice(quote?.total_amount || 0)}
                                 </td>
                             </tr>
                         </tfoot>

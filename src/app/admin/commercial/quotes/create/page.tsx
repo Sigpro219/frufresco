@@ -8,6 +8,13 @@ import { useRouter } from 'next/navigation';
 import { THEME } from '@/lib/adminTheme';
 
 export default function CreateQuotePage() {
+    const formatPrice = (value: number) => {
+        return new Intl.NumberFormat('es-CO', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        }).format(value);
+    };
+
     // FORM STATE
     const [clientName, setClientName] = useState('');
     const [selectedClientId, setSelectedClientId] = useState('');
@@ -947,8 +954,7 @@ export default function CreateQuotePage() {
                         <thead>
                             <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
                                 <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Descripción del Item</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'center' }}>Tipo</th>
+                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '60%' }}>Producto</th>
                                 <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Cant.</th>
                                 <th className="no-print" style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
                                 <th className="no-print" style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Margen (%)</th>
@@ -984,23 +990,8 @@ export default function CreateQuotePage() {
                                                 fontWeight: 'bold',
                                                 marginTop: '4px'
                                             }}>
-                                                Costo base: ${Math.ceil(item.cost).toLocaleString()}
+                                                Costo base: ${formatPrice(Math.ceil(item.cost))}
                                             </span>
-                                        </td>
-                                        
-                                        {/* Type Badge */}
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
-                                            <span style={{ 
-                                                display: 'inline-block',
-                                                padding: '3px 8px',
-                                                borderRadius: '4px',
-                                                backgroundColor: typeBg,
-                                                color: typeColor,
-                                                fontSize: '0.7rem',
-                                                fontWeight: '800',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.03em'
-                                            }}>{typeLabel}</span>
                                         </td>
                                         
                                         {/* Quantity */}
@@ -1045,12 +1036,12 @@ export default function CreateQuotePage() {
                                                     style={{ width: '85px', padding: '0.35rem', textAlign: 'right', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
                                                 />
                                             </div>
-                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>${Math.ceil(item.price).toLocaleString()}</span>
+                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>${formatPrice(Math.ceil(item.price))}</span>
                                         </td>
                                         
                                         {/* Total */}
                                         <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                            ${(Math.ceil(item.price) * item.quantity).toLocaleString()}
+                                            ${formatPrice(Math.ceil(item.price) * item.quantity)}
                                         </td>
                                         
                                         {/* Action Button (No-print) */}
@@ -1070,29 +1061,29 @@ export default function CreateQuotePage() {
                         </tbody>
                         <tfoot>
                             <tr style={{ borderTop: '1px solid #E2E8F0', color: '#475569' }}>
-                                <td colSpan={5}></td>
+                                <td colSpan={4}></td>
                                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal antes de impuestos</td>
                                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
-                                    ${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0).toLocaleString()}
+                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0))}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr style={{ color: '#64748B' }}>
-                                <td colSpan={5}></td>
+                                <td colSpan={4}></td>
                                 <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
                                 <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
-                                    ${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0)/100), 0).toLocaleString()}
+                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0)/100), 0))}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
-                                <td colSpan={5}></td>
+                                <td colSpan={4}></td>
                                 <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total</td>
                                 <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
-                                    ${(
+                                    ${formatPrice(
                                         items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0) + 
                                         items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0)
-                                    ).toLocaleString()}
+                                    )}
                                 </td>
                                 <td></td>
                             </tr>

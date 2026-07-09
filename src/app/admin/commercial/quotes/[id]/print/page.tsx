@@ -5,6 +5,13 @@ import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
 
 export default function PrintQuotePage() {
+    const formatPrice = (value: number) => {
+        return new Intl.NumberFormat('es-CO', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        }).format(value);
+    };
+
     const params = useParams();
     const [quote, setQuote] = useState<any>(null);
     const [lead, setLead] = useState<any>(null);
@@ -73,7 +80,7 @@ export default function PrintQuotePage() {
             // Load Items
             const { data: iData } = await supabase
                 .from('quote_items')
-                .select('*, products(name)')
+                .select('*, products(name, unit_of_measure)')
                 .eq('quote_id', params.id);
 
             if (iData) setItems(iData);
@@ -245,20 +252,15 @@ export default function PrintQuotePage() {
                     <thead>
                         <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
                             <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '50%' }}>Descripción del Item</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'center' }}>Tipo</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Cant.</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'right' }}>Valor Unitario</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'right' }}>Total</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Producto</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'center' }}>Cant.</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Valor Unitario</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
                         </tr>
                     </thead>
                     <tbody>
                         {items.map((item, index) => {
-                            const isService = item.product_name?.toLowerCase().includes('servicio') || item.product_name?.toLowerCase().includes('consultor');
-                            const typeLabel = isService ? 'SERVICIO' : 'BIEN';
-                            const typeColor = isService ? '#475569' : '#16A34A';
-                            const typeBg = isService ? '#F1F5F9' : '#DCFCE7';
-
                             return (
                                 <tr key={item.id || index} className="item-row">
                                     <td style={{ fontSize: '1.1rem', fontWeight: '800', color: '#CBD5E1' }}>
@@ -267,27 +269,17 @@ export default function PrintQuotePage() {
                                     <td>
                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.95rem' }}>{item.product_name || item.products?.name}</div>
                                     </td>
-                                    <td style={{ textAlign: 'center' }}>
-                                        <span style={{ 
-                                            display: 'inline-block',
-                                            padding: '3px 8px',
-                                            borderRadius: '4px',
-                                            backgroundColor: typeBg,
-                                            color: typeColor,
-                                            fontSize: '0.7rem',
-                                            fontWeight: '800',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.03em'
-                                        }}>{typeLabel}</span>
+                                    <td style={{ textAlign: 'center', fontWeight: '700', color: '#0F172A' }}>
+                                        {item.quantity} {item.products?.unit_of_measure || 'Kg'}
                                     </td>
                                     <td style={{ textAlign: 'center', fontWeight: '700', color: '#0F172A' }}>
-                                        {item.quantity}
+                                        {item.iva_rate || 0}%
                                     </td>
                                     <td style={{ textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
-                                        ${Math.ceil(item.unit_price).toLocaleString()}
+                                        ${formatPrice(Math.ceil(item.unit_price))}
                                     </td>
                                     <td style={{ textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
-                                        ${Math.ceil(item.total_price).toLocaleString()}
+                                        ${formatPrice(Math.ceil(item.total_price))}
                                     </td>
                                 </tr>
                             );
@@ -298,21 +290,21 @@ export default function PrintQuotePage() {
                             <td colSpan={4}></td>
                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal</td>
                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
-                                ${Math.ceil(quote.subtotal_amount).toLocaleString()}
+                                ${formatPrice(Math.ceil(quote.subtotal_amount))}
                             </td>
                         </tr>
                         <tr style={{ color: '#64748B' }}>
                             <td colSpan={4}></td>
                             <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
                             <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
-                                ${Math.ceil(quote.total_tax_amount).toLocaleString()}
+                                ${formatPrice(Math.ceil(quote.total_tax_amount))}
                             </td>
                         </tr>
                         <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
                             <td colSpan={4}></td>
                             <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total General</td>
                             <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
-                                ${Math.ceil(quote.total_amount).toLocaleString()}
+                                ${formatPrice(Math.ceil(quote.total_amount))}
                             </td>
                         </tr>
                     </tfoot>
