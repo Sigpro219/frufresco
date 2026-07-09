@@ -1851,8 +1851,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const findMatchedProduct = (originalName: string) => {
     if (!originalName) return null;
-    const cleanName = originalName.toLowerCase().trim();
     
+    // 1. Try to find a numeric token (3 to 9 digits) to match by accounting_id or SKU
+    const numberMatches = originalName.match(/\b\d{3,9}\b/g);
+    if (numberMatches) {
+      for (const numStr of numberMatches) {
+        const num = parseInt(numStr, 10);
+        // Search by accounting_id
+        const matchedById = products.find(p => p.accounting_id === num || String(p.accounting_id) === numStr);
+        if (matchedById) return matchedById;
+        
+        // Search by SKU number suffix (e.g. HO-1149 matching 1149)
+        const matchedBySku = products.find(p => {
+          const skuStr = String(p.sku || '');
+          const skuMatch = skuStr.match(/\d+/);
+          return skuMatch && skuMatch[0] === numStr;
+        });
+        if (matchedBySku) return matchedBySku;
+      }
+    }
+
+    const cleanName = originalName.toLowerCase().trim();
     const aliasMatch = aliases[cleanName];
     if (aliasMatch) {
       const prod = products.find(p => p.id === aliasMatch);

@@ -341,11 +341,20 @@ export async function POST(req: Request) {
         const attachment = attachments[i];
         const attFileName = attachment.file_name || attachment.filename || `adjunto_${i}.bin`;
         const base64Data = attachment.content;
-        const mimeType = attachment.content_type || 'application/pdf';
+        let mimeType = attachment.content_type || 'application/pdf';
+        const lowerName = attFileName.toLowerCase();
+        if (!attachment.content_type || attachment.content_type === 'application/octet-stream') {
+          if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
+          else if (lowerName.endsWith('.png')) mimeType = 'image/png';
+          else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+          else if (lowerName.endsWith('.webp')) mimeType = 'image/webp';
+          else if (lowerName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
+          else if (lowerName.endsWith('.csv')) mimeType = 'text/csv';
+        }
         const publicUrl = uploadedAttachments[i]?.url || '';
 
         const lowerMime = mimeType.toLowerCase();
-        const lowerName = attFileName.toLowerCase();
         const attIsExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
         let attProgrammaticExcelItems: any[] = [];
