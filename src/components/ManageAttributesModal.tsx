@@ -306,7 +306,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                     padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
                                                     fontWeight: '700', color: '#374151' 
                                                 }}>
-                                                     {val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]}g)` : val}
+                                                     {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
                                                     <button 
                                                         onClick={() => handleRemoveValueLocal(attr.id, val)}
                                                         style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}

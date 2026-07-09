@@ -29,8 +29,6 @@ export default function TestPage() {
             } catch (err: any) {
                 if (err.name === 'AbortError') {
                     console.log('ℹ️ Request was aborted (common in Dev mode)');
-                    // Don't set status to failed if it was just an abort, 
-                    // maybe the second request is still coming.
                     return;
                 }
                 console.error('💥 Exception:', err);

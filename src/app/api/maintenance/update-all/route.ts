@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 const execPromise = promisify(exec);
 
-export async function POST() {
+export async function POST(request: Request) {
     const results: { branch: string; success: boolean; message: string }[] = [];
 
     try {
+        const auth = await verifySessionAndPermission(request, 'admin.dashboard');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         console.log('--- INICIANDO DEPLOY MASIVO DESDE CORE ---');
         
         // 0. Verificar rama actual para evitar desvíos

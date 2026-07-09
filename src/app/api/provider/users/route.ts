@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const auth = await verifySessionAndPermission(request, 'admin.dashboard');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const adminSupabase = createAdminClient();
 
         // 1. Fetch all collaborators
@@ -73,7 +79,23 @@ export async function GET() {
             }
         });
 
-        return NextResponse.json({ pending, active }, { status: 200 });
+        // 4. Fetch system roles setting
+        const { data: settingData } = await adminSupabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'system_roles')
+            .maybeSingle();
+
+        let systemRoles: any[] = [];
+        if (settingData?.value) {
+            try {
+                systemRoles = JSON.parse(settingData.value);
+            } catch (e) {
+                console.error('Error parsing system_roles in GET users route:', e);
+            }
+        }
+
+        return NextResponse.json({ pending, active, systemRoles }, { status: 200 });
     } catch (err: any) {
         console.error('Exception in GET users governance:', err.message);
         return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
@@ -82,6 +104,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
+        const auth = await verifySessionAndPermission(request, 'admin.dashboard');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await request.json();
         const { action } = body;
 
