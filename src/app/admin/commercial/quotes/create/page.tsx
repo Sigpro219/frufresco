@@ -14,8 +14,6 @@ export default function CreateQuotePage() {
     const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
     const [selectedModelId, setSelectedModelId] = useState('');
     const [items, setItems] = useState<any[]>([]);
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-    const [validUntil, setValidUntil] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const [paymentTermsDays, setPaymentTermsDays] = useState(30);
 
     // DATA STATE
@@ -74,7 +72,10 @@ export default function CreateQuotePage() {
         }
 
         const { data: mData } = await supabase.from('pricing_models').select('*').order('name');
-        if (mData) setModels(mData);
+        if (mData && mData.length > 0) {
+            setModels(mData);
+            setSelectedModelId(mData[0].id);
+        }
 
         const { data: cData } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
         if (cData) setClients(cData || []);
@@ -158,11 +159,6 @@ export default function CreateQuotePage() {
     const handleTemplateChange = async (templateId: string) => {
         setSelectedTemplateId(templateId);
         if (!templateId) return;
-        if (!selectedModelId) {
-            alert('Por favor selecciona primero un Modelo de Precios para calcular las utilidades.');
-            setSelectedTemplateId('');
-            return;
-        }
 
         setLoadingTemplate(true);
         try {
@@ -477,8 +473,8 @@ export default function CreateQuotePage() {
                     total_tax_amount: totalTax,
                     total_amount: totalAmount,
                     status: 'draft',
-                    start_date: startDate,
-                    valid_until: validUntil
+                    start_date: new Date().toISOString().split('T')[0],
+                    valid_until: null
                 })
                 .select()
                 .single();
@@ -836,26 +832,7 @@ export default function CreateQuotePage() {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Inicio Contrato</label>
-                                    <input 
-                                        type="date" 
-                                        value={startDate} 
-                                        onChange={e => setStartDate(e.target.value)} 
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }} 
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Vencimiento Contrato</label>
-                                    <input 
-                                        type="date" 
-                                        value={validUntil} 
-                                        onChange={e => setValidUntil(e.target.value)} 
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }} 
-                                    />
-                                </div>
-                            </div>
+
 
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
                                 <button
