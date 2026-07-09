@@ -5628,6 +5628,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     );
                   }
 
+                  // 2.5 Caso: Imagen (.png, .jpg, .jpeg, .gif, .webp)
+                  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+                    return wrapContent(
+                      <div style={{ flex: 1, backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '16px' }}>
+                        <img
+                          src={currentUrl}
+                          alt={attachmentName}
+                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        />
+                      </div>
+                    );
+                  }
+
                   // 3. Caso: Otros (Word .docx, .doc, etc.)
                   return wrapContent(
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
