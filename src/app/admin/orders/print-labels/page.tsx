@@ -243,11 +243,11 @@ export default function BulkOrderPrintLabelsPage() {
 
                             {/* Right Column (Logo, SKU & Trace Code) */}
                             <div style={{ width: '22mm', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '2mm', boxSizing: 'border-box' }}>
-                                <div style={{ width: '16mm', height: '16mm', position: 'relative' }}>
+                                <div style={{ width: '20mm', height: '20mm', position: 'relative' }}>
                                     <img 
                                         src="/logo-investments.png" 
                                         alt="Investments Cortés Logo" 
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'grayscale(100%) contrast(1.1)' }}
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'grayscale(100%) contrast(1.3)' }}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
