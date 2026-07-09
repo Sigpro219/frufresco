@@ -273,6 +273,8 @@ export default function AdminSettingsPage() {
             { key: 'min_order_institucional', value: '150000', description: 'Pedido mínimo para la Línea Institucional' },
             { key: 'enable_cutoff_rules', value: 'true', description: 'Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)' },
             { key: 'enable_b2b_lead_capture', value: 'true', description: 'Canal de registro para nuevos clientes institucionales (B2B)' },
+            { key: 'inbox_email_orders', value: 'pedidos@frufresco.com', description: 'Correo de Ingesta de Pedidos (AI)' },
+            { key: 'inbox_email_commercial', value: 'contacto@investmentscortes.com', description: 'Correo Comercial de Negociaciones' },
             { key: 'hero_title', value: 'Excelencia en Frescura \n para tu Negocio y Hogar', description: 'Título principal del banner de inicio' },
             { key: 'hero_description', value: 'Somos el aliado estratégico de los mejores restaurantes y casinos de Bogotá. Llevamos la calidad de Corabastos a tu puerta, con cero desperdicio y puntualidad suiza.', description: 'Texto secundario del banner de inicio' },
             { 
@@ -1096,7 +1098,7 @@ export default function AdminSettingsPage() {
                             border: `1px solid ${THEME.colors.border}`,
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
-                             {settings.filter(s => ['contact_phone', 'contact_email', 'contact_address', 'home_featured_title', 'home_catalog_title', 'footer_description'].includes(s.key)).map((setting) => (
+                             {settings.filter(s => ['contact_phone', 'contact_email', 'contact_address', 'home_featured_title', 'home_catalog_title', 'footer_description', 'inbox_email_orders', 'inbox_email_commercial'].includes(s.key)).map((setting) => (
                                 <div key={setting.key} style={{ 
                                     gridColumn: setting.key === 'footer_description' ? 'span 2' : 'auto', 
                                     backgroundColor: THEME.colors.surface, 

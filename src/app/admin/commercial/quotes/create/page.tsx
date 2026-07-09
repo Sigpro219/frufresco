@@ -11,11 +11,19 @@ export default function CreateQuotePage() {
     // FORM STATE
     const [clientName, setClientName] = useState('');
     const [selectedClientId, setSelectedClientId] = useState('');
+    const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
     const [selectedModelId, setSelectedModelId] = useState('');
     const [items, setItems] = useState<any[]>([]);
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [validUntil, setValidUntil] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    const [paymentTermsDays, setPaymentTermsDays] = useState(30);
 
     // DATA STATE
     const [clients, setClients] = useState<any[]>([]);
+    const [leads, setLeads] = useState<any[]>([]);
+    const [templates, setTemplates] = useState<any[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [loadingTemplate, setLoadingTemplate] = useState(false);
     const [models, setModels] = useState<any[]>([]);
     const [rules, setRules] = useState<any[]>([]); 
     const [clientSearch, setClientSearch] = useState('');
@@ -41,13 +49,15 @@ export default function CreateQuotePage() {
 
     // BRANDING & SETTINGS
     const [appSettings, setAppSettings] = useState<Record<string, string>>({
-        provider_nit: '900.000.000-0',
-        provider_legal_name: '',
-        provider_logo_url: '',
+        provider_nit: '901.393.217',
+        provider_legal_name: 'Investments Cortes S.A.S',
+        provider_logo_url: '/logo-investments.png',
+        provider_address: 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia',
+        provider_email: 'contacto@investmentscortes.com',
         app_name: 'FruFresco',
         app_logo_url: '',
         primary_color: '#111827',
-        secondary_color: '#6B7280'
+        secondary_color: '#64748B'
     });
 
     useEffect(() => {
@@ -66,7 +76,13 @@ export default function CreateQuotePage() {
         if (mData) setModels(mData);
 
         const { data: cData } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
-        if (cData) setClients(cData);
+        if (cData) setClients(cData || []);
+
+        const { data: lData } = await supabase.from('leads').select('id, company_name, contact_name, phone, email').order('company_name');
+        if (lData) setLeads(lData || []);
+
+        const { data: tData } = await supabase.from('quote_templates').select('*').order('name');
+        if (tData) setTemplates(tData || []);
 
         const { data: convData } = await supabase.from('product_conversions').select('*');
         if (convData) setConversions(convData || []);
@@ -106,6 +122,128 @@ export default function CreateQuotePage() {
             setClientName('');
             setSelectedModelId('');
             setNicknames([]);
+        }
+    };
+
+    const handleLeadChange = (leadId: number) => {
+        setSelectedLeadId(leadId);
+        setSelectedClientId('');
+        const lead = leads.find(l => l.id === leadId);
+        if (lead) {
+            setClientName(lead.company_name || lead.contact_name || '');
+        } else {
+            setClientName('');
+        }
+    };
+
+    const handleTemplateChange = async (templateId: string) => {
+        setSelectedTemplateId(templateId);
+        if (!templateId) return;
+        if (!selectedModelId) {
+            alert('Por favor selecciona primero un Modelo de Precios para calcular las utilidades.');
+            setSelectedTemplateId('');
+            return;
+        }
+
+        setLoadingTemplate(true);
+        try {
+            // 1. Fetch template items
+            const { data: itemData, error: itemsErr } = await supabase
+                .from('quote_template_items')
+                .select('product_id')
+                .eq('template_id', templateId);
+
+            if (itemsErr) throw itemsErr;
+            if (!itemData || itemData.length === 0) {
+                alert('La plantilla seleccionada no contiene productos.');
+                setLoadingTemplate(false);
+                return;
+            }
+
+            const productIds = itemData.map((it: any) => it.product_id);
+
+            // 2. Fetch products details
+            const { data: products, error: prodErr } = await supabase
+                .from('products')
+                .select('id, name, unit_of_measure, iva_rate, sku')
+                .in('id', productIds)
+                .eq('is_active', true);
+
+            if (prodErr) throw prodErr;
+
+            // 3. Fetch last 5 purchases for all these products to calculate cost basis in one query!
+            const { data: purchases, error: purErr } = await supabase
+                .from('purchases')
+                .select('product_id, unit_price, purchase_unit, created_at')
+                .in('product_id', productIds)
+                .order('created_at', { ascending: false });
+
+            if (purErr) throw purErr;
+
+            // Group purchases by product_id
+            const purchasesMap = new Map();
+            if (purchases) {
+                purchases.forEach((p: any) => {
+                    if (!purchasesMap.has(p.product_id)) {
+                        purchasesMap.set(p.product_id, []);
+                    }
+                    if (purchasesMap.get(p.product_id).length < 5) {
+                        purchasesMap.get(p.product_id).push(p);
+                    }
+                });
+            }
+
+            // Calculate costs and margins
+            const loadedItems = [];
+            for (const p of products || []) {
+                // Calculate average cost locally using purchasesMap
+                const prodPurchases = purchasesMap.get(p.id) || [];
+                let cost = 0;
+                if (prodPurchases.length > 0) {
+                    let totalNormalizedCost = 0;
+                    let count = 0;
+                    prodPurchases.forEach((pur: any) => {
+                        let purCost = pur.unit_price;
+                        if (pur.purchase_unit && pur.purchase_unit !== p.unit_of_measure) {
+                            const conv = conversions.find((c: any) =>
+                                c.product_id === p.id &&
+                                c.from_unit === pur.purchase_unit &&
+                                c.to_unit === p.unit_of_measure
+                            );
+                            if (conv && conv.conversion_factor) {
+                                purCost = purCost / conv.conversion_factor;
+                            }
+                        }
+                        totalNormalizedCost += purCost;
+                        count++;
+                    });
+                    cost = totalNormalizedCost / count;
+                }
+
+                const baseMargin = getMarginForProduct(p.id, selectedModelId, rules);
+                const finalPrice = calculateFinalPrice(cost, baseMargin);
+
+                loadedItems.push({
+                    product_id: p.id,
+                    variant_id: null,
+                    name: p.name,
+                    sku: p.sku,
+                    unit: p.unit_of_measure,
+                    cost: cost,
+                    margin: baseMargin,
+                    variant_adjustment: 0,
+                    price: finalPrice,
+                    iva_rate: p.iva_rate ?? 0,
+                    quantity: 1
+                });
+            }
+
+            setItems(loadedItems);
+        } catch (err: any) {
+            console.error('Error loading template:', err);
+            alert('Error al cargar plantilla: ' + (err.message || err));
+        } finally {
+            setLoadingTemplate(false);
         }
     };
 
@@ -275,6 +413,24 @@ export default function CreateQuotePage() {
         setItems(newItems);
     };
 
+    const handleMarginChange = (index: number, newMargin: number) => {
+        const newItems = [...items];
+        newItems[index].margin = newMargin;
+        newItems[index].price = newItems[index].cost * (1 + (newMargin / 100));
+        setItems(newItems);
+    };
+
+    const handlePriceChange = (index: number, newPrice: number) => {
+        const newItems = [...items];
+        newItems[index].price = newPrice;
+        if (newItems[index].cost > 0) {
+            newItems[index].margin = ((newPrice / newItems[index].cost) - 1) * 100;
+        } else {
+            newItems[index].margin = 0;
+        }
+        setItems(newItems);
+    };
+
     const router = useRouter();
 
     const saveQuote = async (shouldRedirect = true) => {
@@ -293,7 +449,8 @@ export default function CreateQuotePage() {
             const { data: quote, error: qError } = await supabase
                 .from('quotes')
                 .insert({
-                    client_id: selectedClientId || null, // Standardized column name
+                    client_id: selectedClientId || null,
+                    lead_id: selectedLeadId || null,
                     client_name: clientName,
                     model_id: selectedModelId,
                     model_snapshot_name: selectedModel?.name,
@@ -301,7 +458,8 @@ export default function CreateQuotePage() {
                     total_tax_amount: totalTax,
                     total_amount: totalAmount,
                     status: 'draft',
-                    valid_until: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+                    start_date: startDate,
+                    valid_until: validUntil
                 })
                 .select()
                 .single();
@@ -366,11 +524,11 @@ export default function CreateQuotePage() {
                     <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', alignItems: 'start' }}>
                         <div style={{ position: 'relative' }}>
                             <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '800', color: '#111827' }}>Destinatario de la Cotización</h3>
-                            {!selectedClientId ? (
+                            {!selectedClientId && !selectedLeadId ? (
                                 <div style={{ position: 'relative' }}>
                                     <input 
                                         type="text"
-                                        placeholder="🔍 Buscar cliente (Nombre, NIT, Contacto...)"
+                                        placeholder="🔍 Buscar cliente o lead (Nombre, NIT, Contacto...)"
                                         value={clientSearch}
                                         onChange={(e) => {
                                             setClientSearch(e.target.value);
@@ -390,6 +548,7 @@ export default function CreateQuotePage() {
                                                     key={c.id}
                                                     onClick={() => {
                                                         handleClientChange(c.id);
+                                                        setSelectedLeadId(null);
                                                         setShowClientResults(false);
                                                         setClientSearch('');
                                                     }}
@@ -397,9 +556,32 @@ export default function CreateQuotePage() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                 >
-                                                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{c.company_name || c.contact_name}</div>
+                                                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}><span style={{ color: appSettings.primary_color, marginRight: '4px' }}>[Cliente]</span> {c.company_name || c.contact_name}</div>
                                                     <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
                                                         {c.role === 'b2c_client' ? 'Consumidor Final' : `NIT: ${c.nit || 'Sin registro'}`} • {c.contact_name}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {leads.filter(l => 
+                                                (l.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+                                                (l.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+                                                (l.phone?.toLowerCase().includes(clientSearch.toLowerCase()))
+                                            ).map(l => (
+                                                <div 
+                                                    key={`lead-${l.id}`}
+                                                    onClick={() => {
+                                                        handleLeadChange(l.id);
+                                                        setSelectedClientId('');
+                                                        setShowClientResults(false);
+                                                        setClientSearch('');
+                                                    }}
+                                                    style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                >
+                                                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}><span style={{ color: '#16A34A', marginRight: '4px' }}>[Prospecto]</span> {l.company_name || l.contact_name}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                                                        Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
                                                     </div>
                                                 </div>
                                             ))}
@@ -407,6 +589,7 @@ export default function CreateQuotePage() {
                                                 onClick={() => {
                                                     setClientName(clientSearch);
                                                     setSelectedClientId('');
+                                                    setSelectedLeadId(null);
                                                     setShowClientResults(false);
                                                 }}
                                                 style={{ padding: '0.8rem', cursor: 'pointer', backgroundColor: '#F0FDFA', color: '#0F766E', fontWeight: 'bold', fontSize: '0.85rem', textAlign: 'center' }}
@@ -444,15 +627,24 @@ export default function CreateQuotePage() {
                                     />
                                 </div>
                             ) : (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: `1px solid ${appSettings.primary_color}33` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1rem', backgroundColor: selectedLeadId ? '#F0FDF4' : '#F8FAFC', borderRadius: '12px', border: `1px solid ${selectedLeadId ? '#16A34A33' : `${appSettings.primary_color}33`}` }}>
                                     <div>
-                                        <div style={{ fontSize: '0.7rem', color: appSettings.primary_color, fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>Cliente Seleccionado</div>
+                                        <div style={{ fontSize: '0.7rem', color: selectedLeadId ? '#16A34A' : appSettings.primary_color, fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                            {selectedLeadId ? 'Prospecto Seleccionado (CRM)' : 'Cliente Seleccionado'}
+                                        </div>
                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>{clientName}</div>
-                                        {selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>NIT: {selectedClientInfo.nit}</div>}
+                                        {selectedLeadId ? (
+                                            <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>
+                                                Lead ID: #{selectedLeadId} • Tel: {leads.find(l => l.id === selectedLeadId)?.phone || 'Sin teléfono'}
+                                            </div>
+                                        ) : (
+                                            selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>NIT: {selectedClientInfo.nit}</div>
+                                        )}
                                     </div>
                                     <button 
                                         onClick={() => {
                                             setSelectedClientId('');
+                                            setSelectedLeadId(null);
                                             setClientName('');
                                             setClientSearch('');
                                         }}
@@ -466,18 +658,55 @@ export default function CreateQuotePage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             <h3 style={{ margin: '0 0 0.2rem 0', fontSize: '1rem', fontWeight: '800', color: '#111827' }}>Configuración</h3>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Modelo de Precios</label>
-                                <select
-                                    value={selectedModelId}
-                                    onChange={e => setSelectedModelId(e.target.value)}
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {models.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name} (Base: {m.base_margin_percent}%)</option>
-                                    ))}
-                                </select>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Modelo de Precios</label>
+                                    <select
+                                        value={selectedModelId}
+                                        onChange={e => setSelectedModelId(e.target.value)}
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }}
+                                    >
+                                        <option value="">-- Seleccionar --</option>
+                                        {models.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name} (Base: {m.base_margin_percent}%)</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Preforma (Plantilla)</label>
+                                    <select
+                                        value={selectedTemplateId}
+                                        onChange={e => handleTemplateChange(e.target.value)}
+                                        disabled={loadingTemplate}
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }}
+                                    >
+                                        <option value="">{loadingTemplate ? 'Cargando...' : '-- Ninguna --'}</option>
+                                        {templates.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Inicio Contrato</label>
+                                    <input 
+                                        type="date" 
+                                        value={startDate} 
+                                        onChange={e => setStartDate(e.target.value)} 
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }} 
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#374151', marginBottom: '0.5rem' }}>Vencimiento Contrato</label>
+                                    <input 
+                                        type="date" 
+                                        value={validUntil} 
+                                        onChange={e => setValidUntil(e.target.value)} 
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white' }} 
+                                    />
+                                </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
@@ -536,18 +765,22 @@ export default function CreateQuotePage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '3rem' }}>
                         <thead>
                             <tr style={{ borderBottom: `2px solid ${appSettings.primary_color || '#111827'}`, color: appSettings.primary_color || '#111827' }}>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', width: '50%' }}>Producto</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>Cantidad</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>IVA</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right' }}>Precio Unit.</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right' }}>Total</th>
-                                <th className="no-print" style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}></th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', width: '35%' }}>Producto</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '15%' }}>Cantidad</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '10%' }}>IVA</th>
+                                <th className="no-print" style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '12%' }}>Margen (%)</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right', width: '13%' }}>Precio Unit.</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right', width: '10%' }}>Total</th>
+                                <th className="no-print" style={{ ...THEME.typography?.tableHeader, padding: '1rem', width: '5%' }}></th>
                             </tr>
                         </thead>
                         <tbody>
                             {items.map((item, index) => (
                                 <tr key={index} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                                    <td style={{ padding: '1rem' }}>{item.name}</td>
+                                    <td style={{ padding: '1rem' }}>
+                                        <div>{item.name}</div>
+                                        <div style={{ fontSize: '0.7rem', color: '#94A3B8' }} className="no-print">Costo base: ${Math.ceil(item.cost).toLocaleString()}</div>
+                                    </td>
                                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                                         <div className="no-print">
                                             <input type="number" value={item.quantity} onChange={e => updateQuantity(index, parseFloat(e.target.value))} style={{ width: '60px', padding: '0.3rem', textAlign: 'center' }} />
@@ -556,15 +789,34 @@ export default function CreateQuotePage() {
                                         <span className="only-print" style={{ display: 'none' }}>{item.quantity} {item.unit}</span>
                                     </td>
                                     <td style={{ padding: '1rem', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem' }}>{item.iva_rate || 0}%</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right' }}>${Math.ceil(item.price).toLocaleString()}</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${(Math.ceil(item.price) * item.quantity * (1 + ((item.iva_rate || 0)/100))).toLocaleString()}</td>
-                                    <td className="no-print"><button onClick={() => removeItem(index)} style={{ color: '#EF4444', border: 'none', background: 'none' }}>X</button></td>
+                                    <td className="no-print" style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <input 
+                                            type="number" 
+                                            value={Math.round(item.margin * 10) / 10} 
+                                            onChange={e => handleMarginChange(index, parseFloat(e.target.value) || 0)} 
+                                            style={{ width: '70px', padding: '0.3rem', textAlign: 'center', borderRadius: '4px', border: '1px solid #CBD5E1' }} 
+                                        />
+                                        <span style={{ marginLeft: '4px', fontSize: '0.8rem', color: '#64748B' }}>%</span>
+                                    </td>
+                                    <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                        <div className="no-print">
+                                            <input 
+                                                type="number" 
+                                                value={Math.ceil(item.price)} 
+                                                onChange={e => handlePriceChange(index, parseFloat(e.target.value) || 0)} 
+                                                style={{ width: '90px', padding: '0.3rem', textAlign: 'right', borderRadius: '4px', border: '1px solid #CBD5E1' }} 
+                                            />
+                                        </div>
+                                        <span className="only-print" style={{ display: 'none' }}>${Math.ceil(item.price).toLocaleString()}</span>
+                                    </td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${(Math.ceil(item.price) * item.quantity).toLocaleString()}</td>
+                                    <td className="no-print"><button onClick={() => removeItem(index)} style={{ color: '#EF4444', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>×</button></td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot>
                             <tr style={{ borderTop: `2px solid ${appSettings.primary_color || '#111827'}`, color: appSettings.primary_color || '#111827' }}>
-                                <td colSpan={3}></td>
+                                <td colSpan={4}></td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Subtotal antes de impuestos</td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem' }}>
                                     ${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0).toLocaleString()}
@@ -572,7 +824,7 @@ export default function CreateQuotePage() {
                                 <td></td>
                             </tr>
                             <tr style={{ color: '#4B5563' }}>
-                                <td colSpan={3}></td>
+                                <td colSpan={4}></td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>Impuestos</td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
                                     ${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0)/100), 0).toLocaleString()}
@@ -580,7 +832,7 @@ export default function CreateQuotePage() {
                                 <td></td>
                             </tr>
                             <tr style={{ backgroundColor: '#F9FAFB', color: appSettings.primary_color || '#111827' }}>
-                                <td colSpan={3}></td>
+                                <td colSpan={4}></td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900' }}>Total</td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.5rem' }}>
                                     ${(

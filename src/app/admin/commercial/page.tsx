@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import ClientsModule from '@/components/ClientsModule';
+import CommercialInboxModule from '@/components/CommercialInboxModule';
 import { 
     LayoutDashboard, 
     Users, 
@@ -267,6 +268,26 @@ export default function CommercialDashboard() {
                     >
                         <Users size={18} strokeWidth={1.5} style={{ color: activeMainTab === 'clients' ? THEME.colors.primary : THEME.colors.textSecondary }} /> Gestión de Clientes (CRM)
                     </button>
+                    <button 
+                        onClick={() => setActiveMainTab('inbox')}
+                        style={{
+                            padding: '1rem 0',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeMainTab === 'inbox' ? THEME.colors.textMain : THEME.colors.textSecondary,
+                            fontWeight: activeMainTab === 'inbox' ? '600' : '400',
+                            fontSize: '1rem',
+                            cursor: 'pointer',
+                            borderBottom: activeMainTab === 'inbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s',
+                            fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif'
+                        }}
+                    >
+                        <Mail size={18} strokeWidth={1.5} style={{ color: activeMainTab === 'inbox' ? THEME.colors.primary : THEME.colors.textSecondary }} /> Buzón Comercial (CRM)
+                    </button>
                 </div>
             </div>
 
@@ -477,6 +498,10 @@ export default function CommercialDashboard() {
                         ))}
                     </div>
                     </div>
+                </div>
+            ) : activeMainTab === 'inbox' ? (
+                <div style={{ height: 'calc(100vh - 140px)' }}>
+                    <CommercialInboxModule />
                 </div>
             ) : (
                 <div style={{ height: 'calc(100vh - 140px)' }}>

@@ -180,6 +180,64 @@ export async function POST(req: Request) {
           }
           recipientEmail = recipientEmail.trim().toLowerCase();
 
+          // --- INICIO ENRUTAMIENTO DINÁMICO ---
+          let inboxOrders = 'pedidos@frufresco.com';
+          let inboxCommercial = 'contacto@investmentscortes.com';
+          try {
+            const { data: dbSettings } = await supabaseAdmin
+              .from('app_settings')
+              .select('key, value')
+              .in('key', ['inbox_email_orders', 'inbox_email_commercial']);
+
+            if (dbSettings) {
+              const ordersSetting = dbSettings.find((s: any) => s.key === 'inbox_email_orders');
+              const commSetting = dbSettings.find((s: any) => s.key === 'inbox_email_commercial');
+              if (ordersSetting) inboxOrders = ordersSetting.value;
+              if (commSetting) inboxCommercial = commSetting.value;
+            }
+          } catch (err: any) {
+            console.error('[Email Inbound] Error querying app_settings for routing:', err.message);
+          }
+
+          const cleanInboxOrders = inboxOrders.toLowerCase().trim();
+          const cleanInboxCommercial = inboxCommercial.toLowerCase().trim();
+
+          // Check if matches Commercial Inbox address
+          if (recipientEmail === cleanInboxCommercial) {
+            console.log(`[Email Inbound] Route: COMMERCIAL inbox (${recipientEmail}). Skipping AI extraction.`);
+            if (mailId) {
+              await supabaseAdmin
+                .from('mail')
+                .update({ 
+                  is_inbound: true,
+                  inbox_type: 'commercial',
+                  status: 'received',
+                  to_email: recipientEmail,
+                  sender_email: senderEmail,
+                  message: { text: plainText, html: htmlText }
+                })
+                .eq('id', mailId);
+            }
+            return;
+          }
+
+          // Check if matches Orders Inbox address
+          if (recipientEmail === cleanInboxOrders) {
+            console.log(`[Email Inbound] Route: ORDERS inbox (${recipientEmail}). Running AI extraction.`);
+            if (mailId) {
+              await supabaseAdmin
+                .from('mail')
+                .update({ 
+                  is_inbound: true,
+                  inbox_type: 'orders',
+                  to_email: recipientEmail,
+                  sender_email: senderEmail
+                })
+                .eq('id', mailId);
+            }
+          }
+          // --- FIN ENRUTAMIENTO DINÁMICO ---
+
           const isCorporateRecipient = corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co');
 
           if (isCorporateSender && toField) {
