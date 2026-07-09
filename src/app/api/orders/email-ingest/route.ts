@@ -126,7 +126,27 @@ export async function POST(req: Request) {
           const subject = headers.subject || headers.Subject || '';
           const plainText = payload.plain || '';
           const htmlText = payload.html || '';
-          const attachments = payload.attachments || [];
+          let attachments = payload.attachments || [];
+          
+          // Filter out tiny signature images (typically inline images with cid or very small size)
+          attachments = attachments.filter((att: any) => {
+            if (!att.content) return false;
+            const lowerName = (att.file_name || att.filename || '').toLowerCase();
+            const mimeType = (att.content_type || '').toLowerCase();
+            const isImage = mimeType.startsWith('image/') || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp');
+            
+            // Base64 size estimation
+            const sizeInKB = att.content.length / 1.33 / 1024;
+            const isInline = !!(att.content_id || att.cid || (att.disposition && att.disposition.toLowerCase() === 'inline'));
+            
+            if (isImage) {
+              if ((sizeInKB < 60 && isInline) || sizeInKB < 15) {
+                console.log(`[Email Inbound] Ignorando adjunto de imagen pequeño/firma: ${lowerName} (${Math.round(sizeInKB)}KB, inline: ${isInline})`);
+                return false;
+              }
+            }
+            return true;
+          });
           
           // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
           let cleanedBodyText = plainText;
