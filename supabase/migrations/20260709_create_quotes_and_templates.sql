@@ -65,19 +65,11 @@ CREATE POLICY "Allow read to template items" ON quote_template_items FOR SELECT 
 CREATE POLICY "Allow read to quotes" ON quotes FOR SELECT USING (true);
 CREATE POLICY "Allow read to quote items" ON quote_items FOR SELECT USING (true);
 
--- Allow staff/admin full access
-CREATE POLICY "Allow staff write to templates" ON quote_templates FOR ALL TO authenticated USING (
-    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'staff')
-);
-CREATE POLICY "Allow staff write to template items" ON quote_template_items FOR ALL TO authenticated USING (
-    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'staff')
-);
-CREATE POLICY "Allow staff write to quotes" ON quotes FOR ALL TO authenticated USING (
-    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'staff')
-);
-CREATE POLICY "Allow staff write to quote items" ON quote_items FOR ALL TO authenticated USING (
-    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'staff')
-);
+-- Allow authenticated users to manage templates and quotes (INSERT, UPDATE, DELETE)
+CREATE POLICY "Allow authenticated manage to templates" ON quote_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated manage to template items" ON quote_template_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated manage to quotes" ON quotes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow authenticated manage to quote items" ON quote_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 7. Alter mail table to add inbound routing columns
 ALTER TABLE mail ADD COLUMN IF NOT EXISTS is_inbound BOOLEAN DEFAULT false;
