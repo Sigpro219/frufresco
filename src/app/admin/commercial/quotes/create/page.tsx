@@ -90,6 +90,15 @@ export default function CreateQuotePage() {
 
         const { data: convData } = await supabase.from('product_conversions').select('*');
         if (convData) setConversions(convData || []);
+
+        // Fetch next sequential quote number
+        const { data: latestQuotes } = await supabase
+            .from('quotes')
+            .select('quote_number')
+            .order('quote_number', { ascending: false })
+            .limit(1);
+        const nextNum = latestQuotes && latestQuotes.length > 0 ? (latestQuotes[0].quote_number + 1) : 1;
+        setQuoteNumber(String(nextNum));
     };
 
     useEffect(() => {
@@ -519,10 +528,8 @@ export default function CreateQuotePage() {
 
     const handlePrint = async () => {
         const savedQuote = await saveQuote(false);
-        if (savedQuote) {
-            setTimeout(() => {
-                window.print();
-            }, 500);
+        if (savedQuote && savedQuote.id) {
+            window.open(`/admin/commercial/quotes/${savedQuote.id}/print`, '_blank');
         }
     };
 
@@ -926,34 +933,7 @@ export default function CreateQuotePage() {
                         </div>
                     </div>
 
-                    {/* Callout box */}
-                    <div style={{ 
-                        backgroundColor: '#F8FAFC', 
-                        padding: '1.2rem 1.5rem', 
-                        borderLeft: `5px solid ${appSettings.primary_color || '#15803D'}`, 
-                        marginBottom: '3rem',
-                        position: 'relative',
-                        zIndex: 1
-                    }}>
-                        <div className="no-print">
-                            <input 
-                                value={introTitle} 
-                                onChange={e => setIntroTitle(e.target.value)} 
-                                style={{ width: '100%', fontWeight: '800', fontSize: '1.05rem', color: '#0F172A', border: 'none', background: 'transparent', outline: 'none', marginBottom: '6px' }} 
-                                placeholder="Título de enfoque..."
-                            />
-                            <textarea 
-                                value={introDesc} 
-                                onChange={e => setIntroDesc(e.target.value)} 
-                                style={{ width: '100%', fontSize: '0.9rem', color: '#475569', border: 'none', background: 'transparent', outline: 'none', resize: 'none', height: '60px', fontFamily: 'inherit', lineHeight: 1.5 }} 
-                                placeholder="Descripción de enfoque..."
-                            />
-                        </div>
-                        <div className="only-print">
-                            <div style={{ fontWeight: '800', fontSize: '1.05rem', color: '#0F172A', marginBottom: '6px' }}>{introTitle}</div>
-                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.5 }}>{introDesc}</div>
-                        </div>
-                    </div>
+
 
                     {/* Table */}
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
