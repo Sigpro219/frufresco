@@ -450,24 +450,30 @@ export default function CreateQuotePage() {
         setItems(newItems);
     };
 
-    const updateQuantity = (index: number, val: number) => {
+    const updateQuantity = (index: number, val: any) => {
         const newItems = [...items];
         newItems[index].quantity = val;
         setItems(newItems);
     };
 
-    const handleMarginChange = (index: number, newMargin: number) => {
+    const handleMarginChange = (index: number, newMargin: any) => {
         const newItems = [...items];
         newItems[index].margin = newMargin;
-        newItems[index].price = newItems[index].cost * (1 + (newMargin / 100));
+        const numMargin = parseFloat(newMargin);
+        if (!isNaN(numMargin)) {
+            newItems[index].price = newItems[index].cost * (1 + (numMargin / 100));
+        } else {
+            newItems[index].price = 0;
+        }
         setItems(newItems);
     };
 
-    const handlePriceChange = (index: number, newPrice: number) => {
+    const handlePriceChange = (index: number, newPrice: any) => {
         const newItems = [...items];
         newItems[index].price = newPrice;
-        if (newItems[index].cost > 0) {
-            newItems[index].margin = ((newPrice / newItems[index].cost) - 1) * 100;
+        const numPrice = parseFloat(newPrice);
+        if (!isNaN(numPrice) && newItems[index].cost > 0) {
+            newItems[index].margin = ((numPrice / newItems[index].cost) - 1) * 100;
         } else {
             newItems[index].margin = 0;
         }
@@ -483,8 +489,23 @@ export default function CreateQuotePage() {
 
         setSaving(true);
         try {
-            const subtotal = items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0);
-            const totalTax = items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0);
+            // Sanitizar y limpiar items para asegurar que tengan valores numéricos correctos
+            const sanitizedItems = items.map(item => {
+                const qty = parseFloat(item.quantity) || 0;
+                const price = parseFloat(item.price) || 0;
+                const margin = parseFloat(item.margin) || 0;
+                const cost = parseFloat(item.cost) || 0;
+                return {
+                    ...item,
+                    quantity: qty,
+                    price: price,
+                    margin: margin,
+                    cost: cost
+                };
+            });
+
+            const subtotal = sanitizedItems.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0);
+            const totalTax = sanitizedItems.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0);
             const totalAmount = subtotal + totalTax;
 
             const selectedModel = models.find(m => m.id === selectedModelId);
@@ -509,7 +530,7 @@ export default function CreateQuotePage() {
 
             if (qError) throw qError;
 
-            const quoteItemsArr = items.map(item => ({
+            const quoteItemsArr = sanitizedItems.map(item => ({
                 quote_id: quote.id,
                 product_id: item.product_id,
                 product_name: item.name,
@@ -1122,13 +1143,16 @@ export default function CreateQuotePage() {
                                             <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                 <input 
                                                     type="number" 
-                                                    value={item.quantity} 
-                                                    onChange={e => updateQuantity(index, parseFloat(e.target.value))} 
+                                                    value={item.quantity === undefined || item.quantity === null ? '' : item.quantity} 
+                                                    onChange={e => {
+                                                        const raw = e.target.value;
+                                                        updateQuantity(index, raw === '' ? '' : parseFloat(raw));
+                                                    }} 
                                                     style={{ width: '60px', padding: '0.35rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
                                                 />
                                                 <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>{item.unit}</span>
                                             </div>
-                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>{item.quantity}</span>
+                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>{parseFloat(item.quantity) || 0}</span>
                                         </td>
                                         
                                         {/* IVA (No-print) */}
@@ -1141,8 +1165,22 @@ export default function CreateQuotePage() {
                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                 <input 
                                                     type="number" 
-                                                    value={Math.round(item.margin * 10) / 10} 
-                                                    onChange={e => handleMarginChange(index, parseFloat(e.target.value) || 0)} 
+                                                    value={item.margin === undefined || item.margin === null ? '' : item.margin} 
+                                                    onChange={e => {
+                                                        const raw = e.target.value;
+                                                        if (raw === '') {
+                                                            handleMarginChange(index, '');
+                                                            return;
+                                                        }
+                                                        if (raw === '-') {
+                                                            handleMarginChange(index, '-');
+                                                            return;
+                                                        }
+                                                        const val = parseFloat(raw);
+                                                        if (!isNaN(val)) {
+                                                            handleMarginChange(index, val);
+                                                        }
+                                                    }} 
                                                     style={{ width: '55px', padding: '0.35rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
                                                 />
                                                 <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
@@ -1154,17 +1192,27 @@ export default function CreateQuotePage() {
                                             <div className="no-print">
                                                 <input 
                                                     type="number" 
-                                                    value={Math.ceil(item.price)} 
-                                                    onChange={e => handlePriceChange(index, parseFloat(e.target.value) || 0)} 
+                                                    value={item.price === undefined || item.price === null ? '' : item.price} 
+                                                    onChange={e => {
+                                                        const raw = e.target.value;
+                                                        if (raw === '') {
+                                                            handlePriceChange(index, '');
+                                                            return;
+                                                        }
+                                                        const val = parseFloat(raw);
+                                                        if (!isNaN(val)) {
+                                                            handlePriceChange(index, val);
+                                                        }
+                                                    }} 
                                                     style={{ width: '85px', padding: '0.35rem', textAlign: 'right', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
                                                 />
                                             </div>
-                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>${formatPrice(Math.ceil(item.price))}</span>
+                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>${formatPrice(Math.ceil(parseFloat(item.price) || 0))}</span>
                                         </td>
                                         
                                         {/* Total */}
                                         <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                            ${formatPrice(Math.ceil(item.price) * item.quantity)}
+                                            ${formatPrice(Math.ceil(parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
                                         </td>
                                         
                                         {/* Action Button (No-print) */}
@@ -1187,7 +1235,7 @@ export default function CreateQuotePage() {
                                 <td colSpan={4}></td>
                                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal antes de impuestos</td>
                                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
-                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0))}
+                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0))}
                                 </td>
                                 <td></td>
                             </tr>
@@ -1195,7 +1243,7 @@ export default function CreateQuotePage() {
                                 <td colSpan={4}></td>
                                 <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
                                 <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
-                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0)/100), 0))}
+                                    ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0)/100), 0))}
                                 </td>
                                 <td></td>
                             </tr>
@@ -1204,8 +1252,8 @@ export default function CreateQuotePage() {
                                 <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total</td>
                                 <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
                                     ${formatPrice(
-                                        items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0) + 
-                                        items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0)
+                                        items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0) + 
+                                        items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0) / 100), 0)
                                     )}
                                 </td>
                                 <td></td>
