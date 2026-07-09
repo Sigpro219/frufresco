@@ -2161,6 +2161,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Handle Alt+E shortcut globally
       if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
+        if (selectedProductForVariant) {
+          e.preventDefault();
+          setManageConversionsProduct(selectedProductForVariant);
+          return;
+        }
         if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
           e.preventDefault();
           const i = focusedRowIndex;
@@ -2186,6 +2191,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Handle Alt+V shortcut globally
       if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
+        if (selectedProductForVariant) {
+          e.preventDefault();
+          setVariantConfigProduct(selectedProductForVariant);
+          return;
+        }
         if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
           e.preventDefault();
           const i = focusedRowIndex;
