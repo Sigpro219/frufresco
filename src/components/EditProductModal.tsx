@@ -306,7 +306,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 web_conversion_factor: formData.web_conversion_factor,
                 name_en: formData.name_en,
                 description_en: formData.description_en,
-                tags: formData.tags
+                tags: formData.tags,
+                requires_label: (formData as any).requires_label ?? false
             };
 
             // Intentar incluir inherit_price si está definido
@@ -891,6 +892,38 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             }}
                         >
                             {(formData as any).show_on_web !== false ? 'VISIBLE' : 'OCULTO'}
+                        </button>
+                    </div>
+
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between', 
+                        padding: '1rem', 
+                        backgroundColor: (formData as any).requires_label ? '#ECFDF5' : '#F9FAFB', 
+                        borderRadius: '12px',
+                        border: `1px solid ${(formData as any).requires_label ? '#A7F3D0' : '#D1D5DB'}`,
+                        marginBottom: '1.5rem'
+                    }}>
+                        <div>
+                            <span style={{ fontWeight: '800', color: (formData as any).requires_label ? '#065F46' : '#4B5563' }}>REQUIERE ETIQUETA TÉRMICA</span>
+                            <p style={{ fontSize: '0.75rem', color: '#6B7280' }}>Si está ON, se generarán etiquetas al procesar pedidos.</p>
+                        </div>
+                        <button 
+                            type="button"
+                            onClick={() => setFormData({ ...formData, requires_label: !(formData as any).requires_label } as any)}
+                            style={{
+                                padding: '8px 20px',
+                                borderRadius: '20px',
+                                border: 'none',
+                                backgroundColor: (formData as any).requires_label ? '#059669' : '#9CA3AF',
+                                color: 'white',
+                                fontWeight: '900',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                            }}
+                        >
+                            {(formData as any).requires_label ? 'SÍ' : 'NO'}
                         </button>
                     </div>
 

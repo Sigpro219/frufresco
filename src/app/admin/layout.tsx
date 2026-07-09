@@ -6,14 +6,20 @@ import { useEffect } from 'react';
 import { THEME } from '@/lib/adminTheme';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { profile, loading } = useAuth();
+    const { user, profile, loading } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
         if (!loading) {
-            if (!profile) {
+            // Wait for profile if user is authenticated but profile is not loaded yet
+            if (user && !profile) {
+                return;
+            }
+            if (!user && !profile) {
                 router.push('/');
-            } else {
+                return;
+            }
+            if (profile) {
                 const isStaff = profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client';
                 if (!isStaff) {
                     if (profile.role === 'b2b_client') {
@@ -24,7 +30,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }
             }
         }
-    }, [loading, profile, router]);
+    }, [loading, user, profile, router]);
 
     if (loading || !profile) {
         return (

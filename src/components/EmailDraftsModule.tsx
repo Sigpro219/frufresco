@@ -1851,8 +1851,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const findMatchedProduct = (originalName: string) => {
     if (!originalName) return null;
+
     const cleanName = originalName.toLowerCase().trim();
-    
     const aliasMatch = aliases[cleanName];
     if (aliasMatch) {
       const prod = products.find(p => p.id === aliasMatch);
