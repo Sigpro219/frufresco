@@ -167,7 +167,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 20000,
             padding: '1rem'
         }}>
             <div style={{
@@ -315,7 +315,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                                     }}
                                                                     style={{ cursor: 'pointer' }}
                                                                 />
-                                                                {val}
+                                                                {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
                                                             </label>
                                                         );
                                                     })}

@@ -9,6 +9,7 @@ import GeofencingManager from '@/components/admin/GeofencingManager';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import TechUserGovernance from '@/components/admin/TechUserGovernance';
 import ManageAttributesModal from '@/components/ManageAttributesModal';
+import { THEME } from '@/lib/adminTheme';
 import * as XLSX from 'xlsx';
 
 interface Point {
@@ -740,8 +741,8 @@ export default function CommandCenter() {
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid #E5E7EB', padding: '0 10px', overflowX: 'auto' }}>
                     {[
                         { id: 'governance', label: 'Gobernanza', icon: <Settings size={18}/> },
-                        { id: 'helpdesk', label: 'Mesa de Ayuda', icon: <HelpCircle size={18}/> },
                         { id: 'approvals', label: 'Aprobaciones', icon: <ShieldCheck size={18}/> },
+                        { id: 'helpdesk', label: 'Mesa de Ayuda', icon: <HelpCircle size={18}/> },
                         { id: 'geofencing', label: 'Geocercas', icon: <MapPin size={18}/> },
                         { id: 'fleet', label: 'Flota SaaS', icon: <Activity size={18}/> },
                         { id: 'audit', label: 'Auditoría / Logs', icon: <History size={18}/> }
@@ -755,16 +756,82 @@ export default function CommandCenter() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                     {activeTab === 'governance' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                            <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' }}>
-                                <h2 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '1.5rem' }}>📏 Gobernanza de Unidades</h2>
+                            <section style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', padding: '2rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                                    <span style={{ fontSize: '1.4rem' }}>📏</span>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Gobernanza de Unidades</h2>
+                                </div>
                                 <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
-                                    <input placeholder="+ Registrar nueva unidad técnica..." style={{ flex: 1, padding: '12px 1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontWeight: '600' }} onKeyDown={(e) => { if(e.key==='Enter' && e.currentTarget.value) { addNewUnit(e.currentTarget.value); e.currentTarget.value=''; } }} />
+                                    <input 
+                                        placeholder="+ Registrar nueva unidad técnica..." 
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: '12px 1rem', 
+                                            borderRadius: THEME.radius.lg, 
+                                            border: `1px solid ${THEME.colors.border}`, 
+                                            fontWeight: '600',
+                                            outline: 'none',
+                                            fontSize: '0.85rem',
+                                            transition: 'border-color 0.2s',
+                                            backgroundColor: '#F8FAFC'
+                                        }} 
+                                        onFocus={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                        onBlur={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
+                                        onKeyDown={(e) => { 
+                                            if (e.key === 'Enter' && e.currentTarget.value) { 
+                                                addNewUnit(e.currentTarget.value); 
+                                                e.currentTarget.value = ''; 
+                                            } 
+                                        }} 
+                                    />
                                 </div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
                                     {getActiveUnits().map((u: string) => (
-                                        <div key={u} style={{ backgroundColor: '#F0F9FF', padding: '10px 1.2rem', borderRadius: '15px', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <span style={{ fontWeight: '800', color: '#0369A1' }}>{u}</span>
-                                            <button onClick={() => removeUnitPermanently(u)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '1.2rem' }}> × </button>
+                                        <div 
+                                            key={u} 
+                                            style={{ 
+                                                backgroundColor: THEME.colors.primaryLight, 
+                                                padding: '8px 1.2rem', 
+                                                borderRadius: '12px', 
+                                                border: `1px solid rgba(13, 122, 87, 0.15)`, 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '10px',
+                                                transition: 'all 0.2s ease',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.04)';
+                                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.transform = 'none';
+                                                e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.02)';
+                                                e.currentTarget.style.borderColor = 'rgba(13, 122, 87, 0.15)';
+                                            }}
+                                        >
+                                            <span style={{ fontWeight: '700', color: THEME.colors.primary, fontSize: '0.85rem' }}>{u}</span>
+                                            <button 
+                                                onClick={() => removeUnitPermanently(u)} 
+                                                style={{ 
+                                                    border: 'none', 
+                                                    background: 'none', 
+                                                    cursor: 'pointer', 
+                                                    color: '#EF4444', 
+                                                    fontSize: '1rem',
+                                                    fontWeight: 'bold',
+                                                    padding: '0 2px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    transition: 'transform 0.1s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+                                            > 
+                                                × 
+                                            </button>
                                         </div>
                                     ))}
                                 </div>

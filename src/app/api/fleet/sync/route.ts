@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 interface SyncResult {
     name: string;
@@ -10,6 +11,11 @@ interface SyncResult {
 
 export async function POST(req: Request) {
     try {
+        const auth = await verifySessionAndPermission(req, 'admin.dashboard');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const { selectedIds } = await req.json();
         
         const CORE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;

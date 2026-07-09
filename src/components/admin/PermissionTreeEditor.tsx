@@ -258,33 +258,32 @@ export const permissionTree: TreeNode[] = [
 interface PermissionTreeEditorProps {
   initialPermissions: string[];
   onChange: (permissions: string[]) => void;
+  rolePermissions?: string[];
 }
 
-export default function PermissionTreeEditor({ initialPermissions, onChange }: PermissionTreeEditorProps) {
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+export default function PermissionTreeEditor({ initialPermissions, onChange, rolePermissions = [] }: PermissionTreeEditorProps) {
+  const [overrides, setOverrides] = useState<Set<string>>(new Set());
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(['admin', 'ops', 'b2b']));
 
   useEffect(() => {
-    // Clean and normalize incoming permissions
     const normalized = (initialPermissions || []).map(p => p.trim()).filter(Boolean);
-    setSelectedKeys(new Set(normalized));
+    setOverrides(new Set(normalized));
   }, [initialPermissions]);
 
-  const isAllAccess = selectedKeys.has('*');
+  const isAllAccess = overrides.has('*') || overrides.has('+*');
 
   const handleToggleAllAccess = () => {
     const next = new Set<string>();
     if (isAllAccess) {
-      setSelectedKeys(next);
+      setOverrides(next);
       onChange([]);
     } else {
       next.add('*');
-      setSelectedKeys(next);
+      setOverrides(next);
       onChange(['*']);
     }
   };
 
-  // Recursively fetch all descendant IDs for a node
   const getDescendantIds = (node: TreeNode): string[] => {
     let ids: string[] = [node.id];
     if (node.children) {
@@ -295,36 +294,35 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
     return ids;
   };
 
-  // Find all ancestor IDs for a node (upward traversal path)
-  const findAncestors = (tree: TreeNode[], targetId: string, path: string[] = []): string[] | null => {
-    for (const node of tree) {
-      if (node.id === targetId) {
-        return path;
-      }
-      if (node.children) {
-        const found = findAncestors(node.children, targetId, [...path, node.id]);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  // Helper to check if a node is fully selected
-  const isChecked = (node: TreeNode): boolean => {
-    if (selectedKeys.has(node.id) || selectedKeys.has('*')) return true;
-    if (node.children && node.children.length > 0) {
-      return node.children.every(child => isChecked(child));
-    }
+  const matchesRule = (rule: string, target: string): boolean => {
+    const cleanRule = rule.replace(/^[-+]/, '');
+    if (cleanRule === '*' || cleanRule === target) return true;
+    if (cleanRule.endsWith('*') && target.startsWith(cleanRule.slice(0, -1))) return true;
+    if (target.startsWith(cleanRule + '.') || target.startsWith(cleanRule + ':')) return true;
     return false;
   };
 
-  // Helper to check if a node is indeterminately selected
-  const isIndeterminate = (node: TreeNode): boolean => {
-    if (selectedKeys.has(node.id) || selectedKeys.has('*')) return false;
+  const isNodeChecked = (node: TreeNode): boolean => {
+    if (isAllAccess) return true;
+    if (overrides.has('-*')) return false;
+
+    // 1. Check explicit denies first
+    const isDenied = Array.from(overrides).some(p => p.startsWith('-') && matchesRule(p, node.id));
+    if (isDenied) return false;
+
+    // 2. Check explicit allows
+    const isAllowed = Array.from(overrides).some(p => !p.startsWith('-') && matchesRule(p, node.id));
+    if (isAllowed) return true;
+
+    // 3. Fallback to rolePermissions
+    const roleHasIt = rolePermissions.some(p => matchesRule(p, node.id));
+    return roleHasIt;
+  };
+
+  const isNodeIndeterminate = (node: TreeNode): boolean => {
+    if (isNodeChecked(node)) return false;
     if (node.children && node.children.length > 0) {
-      const someChecked = node.children.some(child => isChecked(child) || isIndeterminate(child));
-      const allChecked = node.children.every(child => isChecked(child));
-      return someChecked && !allChecked;
+      return node.children.some(child => isNodeChecked(child) || isNodeIndeterminate(child));
     }
     return false;
   };
@@ -340,72 +338,45 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
   };
 
   const handleCheckboxClick = (node: TreeNode) => {
-    const nextSelected = new Set(selectedKeys);
-    const nodeChecked = isChecked(node);
+    const nextOverrides = new Set(overrides);
+    const checked = isNodeChecked(node);
     const descendants = getDescendantIds(node);
 
-    if (nodeChecked) {
-      // Uncheck this node and all descendants
-      descendants.forEach(id => nextSelected.delete(id));
-      
-      // Also uncheck all ancestors in the select set
-      const ancestors = findAncestors(permissionTree, node.id);
-      if (ancestors) {
-        ancestors.forEach(id => nextSelected.delete(id));
-      }
-    } else {
-      // Check this node and all descendants
-      descendants.forEach(id => nextSelected.add(id));
-
-      // Check parent nodes if all their children are now checked
-      const ancestors = findAncestors(permissionTree, node.id);
-      if (ancestors) {
-        // Traverse backwards from immediate parent to root
-        for (let i = ancestors.length - 1; i >= 0; i--) {
-          const parentId = ancestors[i];
-          const parentNode = findNodeById(permissionTree, parentId);
-          if (parentNode && parentNode.children) {
-            // Check if all children of this parent will be checked
-            const allChildrenChecked = parentNode.children.every(child => {
-              if (child.id === node.id) return true; // It's being checked now
-              if (descendants.includes(child.id)) return true; // Descendant of target
-              
-              // Verify if the child is already checked in the next selected set
-              const tempSet = new Set(nextSelected);
-              descendants.forEach(id => tempSet.add(id));
-              
-              // Helper to check in tempSet
-              const checkTemp = (n: TreeNode): boolean => {
-                if (tempSet.has(n.id)) return true;
-                if (n.children && n.children.length > 0) {
-                  return n.children.every(childNode => checkTemp(childNode));
-                }
-                return false;
-              };
-              return checkTemp(child);
-            });
-
-            if (allChildrenChecked) {
-              nextSelected.add(parentId);
-            }
-          }
+    if (checked) {
+      // 1. Remove allows
+      descendants.forEach(id => {
+        nextOverrides.delete(id);
+        nextOverrides.delete(`+${id}`);
+      });
+      // 2. Add explicit deny override
+      nextOverrides.add(`-${node.id}`);
+      // Clean duplicate denies on descendants
+      descendants.forEach(id => {
+        if (id !== node.id) {
+          nextOverrides.delete(`-${id}`);
         }
+      });
+    } else {
+      // 1. Remove denies
+      descendants.forEach(id => {
+        nextOverrides.delete(`-${id}`);
+      });
+      // 2. If it was not in the role, add explicit allow override
+      const roleHasIt = rolePermissions.some(p => matchesRule(p, node.id));
+      if (!roleHasIt) {
+        nextOverrides.add(`+${node.id}`);
       }
+      // Clean descendant duplicate allows
+      descendants.forEach(id => {
+        if (id !== node.id) {
+          nextOverrides.delete(id);
+          nextOverrides.delete(`+${id}`);
+        }
+      });
     }
 
-    setSelectedKeys(nextSelected);
-    onChange(Array.from(nextSelected));
-  };
-
-  const findNodeById = (nodes: TreeNode[], id: string): TreeNode | null => {
-    for (const node of nodes) {
-      if (node.id === id) return node;
-      if (node.children) {
-        const found = findNodeById(node.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
+    setOverrides(nextOverrides);
+    onChange(Array.from(nextOverrides));
   };
 
   const getLevelBadge = (level: number) => {
@@ -474,8 +445,57 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const isExpanded = expandedKeys.has(node.id);
     const hasChildren = node.children && node.children.length > 0;
-    const checkedStatus = isChecked(node);
-    const indeterminateStatus = isIndeterminate(node);
+    const checkedStatus = isNodeChecked(node);
+    const indeterminateStatus = isNodeIndeterminate(node);
+
+    let overrideBadge = null;
+    const hasDenyOverride = overrides.has(`-${node.id}`);
+    const hasAllowOverride = overrides.has(node.id) || overrides.has(`+${node.id}`);
+    const roleHasIt = rolePermissions.some(p => matchesRule(p, node.id));
+
+    if (hasDenyOverride) {
+      overrideBadge = (
+        <span style={{
+          fontSize: '9px',
+          fontWeight: '800',
+          padding: '1px 6px',
+          borderRadius: '4px',
+          backgroundColor: '#ffe4e6',
+          color: '#e11d48',
+          border: '1px solid #fda4af'
+        }}>
+          RESTRINGIDO
+        </span>
+      );
+    } else if (hasAllowOverride) {
+      overrideBadge = (
+        <span style={{
+          fontSize: '9px',
+          fontWeight: '800',
+          padding: '1px 6px',
+          borderRadius: '4px',
+          backgroundColor: '#dbeafe',
+          color: '#2563eb',
+          border: '1px solid #93c5fd'
+        }}>
+          ADICIONAL
+        </span>
+      );
+    } else if (roleHasIt && checkedStatus) {
+      overrideBadge = (
+        <span style={{
+          fontSize: '9px',
+          fontWeight: '800',
+          padding: '1px 6px',
+          borderRadius: '4px',
+          backgroundColor: '#d1fae5',
+          color: '#059669',
+          border: '1px solid #6ee7b7'
+        }}>
+          HEREDADO
+        </span>
+      );
+    }
 
     return (
       <div key={node.id} style={{ marginLeft: `${depth * 1.5}rem`, marginBottom: '0.4rem' }}>
@@ -529,7 +549,7 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
             )}
           </div>
 
-          {/* Node label and badge */}
+          {/* Node label and badges */}
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', flex: 1 }}>
             <span style={{ 
               fontWeight: node.level === 1 ? '700' : node.level === 2 ? '600' : '500', 
@@ -542,6 +562,7 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
               ({node.id})
             </span>
             {getLevelBadge(node.level)}
+            {overrideBadge}
           </div>
         </div>
 

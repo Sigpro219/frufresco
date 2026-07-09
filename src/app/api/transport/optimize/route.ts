@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
@@ -13,6 +14,12 @@ const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 // This API serves as a proxy and data-transformer for the Google Maps Route Optimization API
 export async function POST(request: Request) {
     try {
+        // Validate session and permission
+        const auth = await verifySessionAndPermission(request, 'admin.transport.edit');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await request.json();
         const { orders, vehicles, parameters } = body;
 
