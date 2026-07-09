@@ -434,7 +434,7 @@ export default function OrderDetailPage() {
                                 if (processedItemsCount > 0 && !isEditing) {
                                     return (
                                         <Link
-                                            href={`/admin/orders/${order.id}/print-labels`}
+                                            href={`/admin/orders/print-labels?ids=${order.id}`}
                                             target="_blank"
                                             style={{
                                                 display: 'inline-flex',

@@ -24,8 +24,7 @@ import {
     Grid,
     ChevronUp,
     RefreshCw,
-    Sparkles,
-    Printer
+    Sparkles
 } from 'lucide-react';
 
 
@@ -39,7 +38,6 @@ interface PickingItem {
     quality_status?: 'green' | 'yellow' | 'red' | null;
     quality_notes?: string;
     category?: string;
-    technicalCategory?: string;
     available_stock?: number;
 }
 
@@ -271,7 +269,6 @@ export default function PickingExecutionPage() {
                                 quality_notes: item.quality_notes,
                                 unit: product?.unit_of_measure || 'un',
                                 category: product?.buying_team || 'SIN CATEGORÍA',
-                                technicalCategory: product?.category || 'DE',
                                 available_stock: stockMap[item.product_id] || 0
                             };
                         });
@@ -1027,26 +1024,6 @@ export default function PickingExecutionPage() {
                                         <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F8FAFC' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
                                         {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'bold' }}>📍 RUTA: {task.zone.toUpperCase()}</div>}
                                     </div>
-                                    {task.items.some(item => item.technicalCategory === 'PR') && (
-                                        <button 
-                                            onClick={() => window.open(`/admin/orders/${task.id}/print-labels`, '_blank')}
-                                            style={{ 
-                                                fontSize: '0.65rem', 
-                                                backgroundColor: '#0D7A57', 
-                                                color: 'white', 
-                                                padding: '0.4rem 0.6rem', 
-                                                borderRadius: '8px', 
-                                                border: 'none', 
-                                                fontWeight: 'bold', 
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                            }}
-                                        >
-                                            <Printer size={12} /> ETIQUETAS
-                                        </button>
-                                    )}
                                     <button 
                                         onClick={() => setShowCompleted(!showCompleted)}
                                         style={{ fontSize: '0.65rem', backgroundColor: 'rgba(255,255,255,0.05)', color: '#94A3B8', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
