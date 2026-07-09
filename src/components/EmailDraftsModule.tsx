@@ -2030,7 +2030,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     obsModal,
     rejectModal,
     showShortcuts,
-    selectedDraftIds
+    selectedDraftIds,
+    selectedProductForVariant: null as any,
+    selectedRowForVariant: null as any,
+    variantConfigProduct: null as any,
+    manageConversionsProduct: null as any
   });
 
   useEffect(() => {
@@ -2050,12 +2054,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       showShortcuts,
       selectedDraftIds,
       selectedProductForVariant,
-      selectedRowForVariant
+      selectedRowForVariant,
+      variantConfigProduct,
+      manageConversionsProduct
     };
   }, [
     isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal,
     activeEquivalenceRow, activeVariantRow, actionConfirm, deleteConfirm, obsModal,
-    rejectModal, showShortcuts, selectedDraftIds, selectedProductForVariant, selectedRowForVariant
+    rejectModal, showShortcuts, selectedDraftIds, selectedProductForVariant, selectedRowForVariant,
+    variantConfigProduct, manageConversionsProduct
   ]);
 
   useEffect(() => {
@@ -2088,7 +2095,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         showShortcuts,
         selectedDraftIds,
         selectedProductForVariant,
-        selectedRowForVariant
+        selectedRowForVariant,
+        variantConfigProduct,
+        manageConversionsProduct
       } = stateRef.current;
 
       const isAltShortcut = e.altKey && (
@@ -2223,6 +2232,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       if (e.key === 'Escape') {
+        if (variantConfigProduct) { setVariantConfigProduct(null); return; }
+        if (manageConversionsProduct) { setManageConversionsProduct(null); return; }
         if (selectedProductForVariant) { closeVariantModal(); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
         if (actionConfirm) { setActionConfirm(null); return; }
@@ -7723,7 +7734,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <div style={{
                   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                   backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  zIndex: 13000, backdropFilter: 'blur(3px)'
+                  zIndex: 25000, backdropFilter: 'blur(3px)'
               }} onClick={() => setManageConversionsProduct(null)}>
 
                   <div
