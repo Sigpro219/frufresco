@@ -111,34 +111,66 @@ function CreateOrderContent() {
     // Helpers to format inputs with thousands separator (.) and decimal (,)
     const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
         if (qtyStr === undefined || qtyStr === null) return '';
-        // Remove existing dots and convert comma to dot to check validity
-        const clean = qtyStr.toString().replace(/\./g, '').replace(',', '.');
-        const parsed = parseFloat(clean);
-        if (isNaN(parsed)) return qtyStr.toString();
+        
+        if (typeof qtyStr === 'number') {
+            const parts = qtyStr.toString().split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        }
 
-        // Split by decimal comma of the input
-        const parts = qtyStr.toString().replace(/\./g, '').split(',');
-        const integerPart = parts[0];
-        const decimalPart = parts[1];
+        const str = qtyStr.toString();
+        const hasComma = str.includes(',');
+        const hasDot = str.includes('.');
 
-        // Format integer part with dot for thousands
-        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        if (hasComma) {
+            const parts = str.replace(/\./g, '').split(',');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else if (hasDot) {
+            const parts = str.split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else {
+            return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
     };
 
     const formatPriceDisplay = (price: number | string | undefined | null): string => {
         if (price === undefined || price === null || price === '') return '';
-        const clean = price.toString().replace(/\./g, '').replace(',', '.');
-        const parsed = parseFloat(clean);
-        if (isNaN(parsed)) return price.toString();
+        
+        if (typeof price === 'number') {
+            const parts = price.toString().split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        }
 
-        const parts = price.toString().replace(/\./g, '').split(',');
-        const integerPart = parts[0];
-        const decimalPart = parts[1];
+        const str = price.toString();
+        const hasComma = str.includes(',');
+        const hasDot = str.includes('.');
 
-        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        if (hasComma) {
+            const parts = str.replace(/\./g, '').split(',');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else if (hasDot) {
+            const parts = str.split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+        } else {
+            return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
     };
 
     // Data Sources
@@ -147,6 +179,7 @@ function CreateOrderContent() {
     const [products, setProducts] = useState<any[]>([]);
     const [conversions, setConversions] = useState<any[]>([]);
     const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+    const [customPriceIds, setCustomPriceIds] = useState<Set<string>>(new Set());
     const [activePricingModel, setActivePricingModel] = useState<any>(null);
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
@@ -461,20 +494,49 @@ function CreateOrderContent() {
             setIsB2CDefault(b2cFallback);
             setIsContractExpired(expired);
 
-            // 3. Load prices for the resolved model
+            // 3. Load prices for the resolved model with fallback B2C prices
             if (resolvedModel) {
-                const { data: prices } = await supabase
+                const map: Record<string, number> = {};
+                const customIds = new Set<string>();
+
+                // Fetch B2C prices first if active model is not Clientes B2C
+                if (resolvedModel.name !== 'Clientes B2C') {
+                    const { data: b2cModel } = await supabase
+                        .from('pricing_models')
+                        .select('id')
+                        .eq('name', 'Clientes B2C')
+                        .single();
+                    
+                    if (b2cModel) {
+                        const { data: b2cPrices } = await supabase
+                            .from('pricing_model_prices')
+                            .select('product_id, price')
+                            .eq('model_id', b2cModel.id);
+                        
+                        b2cPrices?.forEach((p: any) => {
+                            map[p.product_id] = p.price;
+                        });
+                    }
+                }
+
+                // Fetch active model prices
+                const { data: activePrices } = await supabase
                     .from('pricing_model_prices')
                     .select('product_id, price')
                     .eq('model_id', resolvedModel.id);
                 
-                const map: Record<string, number> = {};
-                prices?.forEach((p: any) => {
+                activePrices?.forEach((p: any) => {
                     map[p.product_id] = p.price;
+                    if (resolvedModel.name !== 'Clientes B2C') {
+                        customIds.add(p.product_id);
+                    }
                 });
+
                 setContractPrices(map);
+                setCustomPriceIds(customIds);
             } else {
                 setContractPrices({});
+                setCustomPriceIds(new Set());
             }
         }
 
@@ -530,7 +592,7 @@ function CreateOrderContent() {
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
                 .from('products')
-                .select('id, accounting_id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
+                .select('id, accounting_id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor, iva_rate')
                 .eq('is_active', true)
                 .order('name');
 
@@ -1099,6 +1161,20 @@ function CreateOrderContent() {
         }, 0);
     };
 
+    const calculateTotalTax = () => {
+        return cart.reduce((acc, item) => {
+            const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+            const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
+            const rate = item.product.iva_rate !== null && item.product.iva_rate !== undefined ? Number(item.product.iva_rate) : 19;
+            const itemTotal = unitPrice * qtyNum;
+            return acc + (itemTotal * (rate / (100 + rate)));
+        }, 0);
+    };
+
+    const calculateSubtotal = () => {
+        return calculateTotal() - calculateTotalTax();
+    };
+
     const selectClient = (client: any) => {
         setSelectedClient(client.id);
         if (client.latitude && client.longitude) {
@@ -1631,6 +1707,8 @@ function CreateOrderContent() {
                     profile_id: finalProfileId,
                     total: calculateTotal(),
                     total_weight_kg: calculateTotalWeight(),
+                    subtotal: calculateSubtotal(),
+                    tax: calculateTotalTax(),
                     status: 'pending_approval',
                     payment_status: 'Pendiente',
                     payment_method: paymentMethod,
@@ -1661,6 +1739,9 @@ function CreateOrderContent() {
             const itemsData = cart.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
                 const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
+                const rate = item.product.iva_rate !== null && item.product.iva_rate !== undefined ? Number(item.product.iva_rate) : 19;
+                const itemTotal = unitPrice * qtyNum;
+                const ivaAmount = itemTotal * (rate / (100 + rate));
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -1669,7 +1750,9 @@ function CreateOrderContent() {
                     nickname: item.nickname || item.variant_label || null,
                     variant_label: item.variant_label || null,
                     unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
-                    selected_options: item.selected_options || {}
+                    selected_options: item.selected_options || {},
+                    iva_rate: rate,
+                    iva_amount: ivaAmount
                 };
             });
 
@@ -2345,7 +2428,6 @@ function CreateOrderContent() {
                                             >
                                                 <option value="phone">Teléfono</option>
                                                 <option value="whatsapp">WhatsApp</option>
-                                                <option value="email">Email</option>
                                                 <option value="file_upload">Documento de compra</option>
                                             </select>
                                         </div>
@@ -2985,9 +3067,15 @@ function CreateOrderContent() {
                                                             )}
                                                             {/* Pricing Source Badge */}
                                                             {contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (
-                                                                <span style={{ fontSize: '0.75rem', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                    {isB2CDefault ? 'Tarifa B2C (Defecto)' : 'Tarifa Contrato'}
-                                                                </span>
+                                                                customPriceIds.has(item.product.id) ? (
+                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                        Tarifa Contrato
+                                                                    </span>
+                                                                ) : (
+                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                        Tarifa B2C (Defecto)
+                                                                    </span>
+                                                                )
                                                             ) : (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                     ⚠️ Sin Precio
@@ -3285,7 +3373,15 @@ function CreateOrderContent() {
                                     <span style={{ color: '#6B7280' }}>Total Items:</span>
                                     <span style={{ fontWeight: 'bold' }}>{cart.length}</span>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                                    <span style={{ color: '#6B7280' }}>Subtotal (Neto):</span>
+                                    <span style={{ fontWeight: '600', color: '#374151' }}>{formatMoney(calculateSubtotal())}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                                    <span style={{ color: '#6B7280' }}>IVA Estimado:</span>
+                                    <span style={{ fontWeight: '600', color: '#374151' }}>{formatMoney(calculateTotalTax())}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827', borderTop: '1px dashed #E5E7EB', paddingTop: '0.5rem' }}>
                                     <span>TOTAL:</span>
                                     <span>{formatMoney(calculateTotal())}</span>
                                 </div>
@@ -4639,6 +4735,16 @@ function CreateOrderContent() {
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Items</span>
                             <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1E293B' }}>{cart.length}</span>
+                        </div>
+                        <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subtotal (Neto)</span>
+                            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#475569' }}>{formatMoney(calculateSubtotal())}</span>
+                        </div>
+                        <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IVA Estimado</span>
+                            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#475569' }}>{formatMoney(calculateTotalTax())}</span>
                         </div>
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>

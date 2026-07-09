@@ -43,6 +43,7 @@ export default function TechUserGovernance() {
     const [pending, setPending] = useState<PendingRequest[]>([]);
     const [activeUsers, setActiveUsers] = useState<ActiveTechUser[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [systemRoles, setSystemRoles] = useState<any[]>([]);
 
     const filteredActiveUsers = useMemo(() => {
         if (!searchQuery.trim()) return activeUsers;
@@ -74,6 +75,16 @@ export default function TechUserGovernance() {
         phone: string;
         qrToken: string;
     } | null>(null);
+
+    const getAuthHeaders = async (baseHeaders: Record<string, string> = {}) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const headers: Record<string, string> = { ...baseHeaders };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    };
 
     // View QR / Details Dialog
     const [viewingUser, setViewingUser] = useState<ActiveTechUser | null>(null);
@@ -127,11 +138,13 @@ export default function TechUserGovernance() {
         try {
             setLoading(true);
             setError(null);
-            const res = await fetch('/api/provider/users');
+            const headers = await getAuthHeaders();
+            const res = await fetch('/api/provider/users', { headers });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Error al obtener datos');
             setPending(data.pending || []);
             setActiveUsers(data.active || []);
+            setSystemRoles(data.systemRoles || []);
         } catch (err: any) {
             console.error('Error fetching governance:', err);
             setError(err.message || 'Error al conectar con la API de gobernanza');
@@ -156,9 +169,10 @@ export default function TechUserGovernance() {
         try {
             setActionLoading(approvingCol.id);
             setError(null);
+            const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
             const res = await fetch('/api/provider/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     action: 'approve',
                     collaboratorId: approvingCol.id,
@@ -197,9 +211,10 @@ export default function TechUserGovernance() {
         try {
             setActionLoading(resettingUser.profile_id);
             setError(null);
+            const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
             const res = await fetch('/api/provider/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     action: 'reset-password',
                     collaboratorId: resettingUser.collaborator_id,
@@ -238,9 +253,10 @@ export default function TechUserGovernance() {
 
         try {
             setActionLoading(user.profile_id);
+            const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
             const res = await fetch('/api/provider/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     action: 'toggle-status',
                     collaboratorId: user.collaborator_id,
@@ -274,9 +290,10 @@ export default function TechUserGovernance() {
 
         try {
             setActionLoading(user.profile_id);
+            const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
             const res = await fetch('/api/provider/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     action: 'delete',
                     collaboratorId: user.collaborator_id,
@@ -306,9 +323,10 @@ export default function TechUserGovernance() {
         if (!editingPermissionsUser) return;
         setIsSavingPermissions(true);
         try {
+            const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
             const res = await fetch('/api/provider/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     action: 'update-permissions',
                     profileId: editingPermissionsUser.profile_id,
@@ -1134,10 +1152,17 @@ export default function TechUserGovernance() {
                         </p>
 
                         <div style={{ marginBottom: '1.5rem' }}>
-                            <PermissionTreeEditor 
-                                initialPermissions={tempPermissions} 
-                                onChange={setTempPermissions} 
-                            />
+                            {(() => {
+                                const userRoleObj = systemRoles.find(r => r.value === editingPermissionsUser.profile_role);
+                                const rolePermissions = userRoleObj ? userRoleObj.permissions || [] : [];
+                                return (
+                                    <PermissionTreeEditor 
+                                        initialPermissions={tempPermissions} 
+                                        onChange={setTempPermissions} 
+                                        rolePermissions={rolePermissions}
+                                    />
+                                );
+                            })()}
                         </div>
 
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>

@@ -167,7 +167,7 @@ export default function OrderDetailPage() {
         if (!order) return false;
 
         // 0. Locked statuses
-        if (['shipped', 'in_transit', 'delivered', 'cancelled'].includes(order.status)) {
+        if (['picking', 'shipped', 'in_transit', 'delivered', 'cancelled'].includes(order.status)) {
             return false;
         }
 

@@ -19,8 +19,26 @@ import {
     Store, 
     Settings, 
     Radio, 
-    ArrowRight 
+    ArrowRight,
+    Scale,
+    Truck
 } from 'lucide-react';
+
+const areOptionsMatching = (itemOpts: any, varOpts: any) => {
+    if (!itemOpts || !varOpts) return false;
+    const varKeys = Object.keys(varOpts);
+    if (varKeys.length === 0) return false;
+    return varKeys.every(k => {
+        const itemKey = Object.keys(itemOpts).find(ik => ik.toLowerCase() === k.toLowerCase());
+        if (!itemKey) return false;
+        const itemVal = itemOpts[itemKey];
+        const varVal = varOpts[k];
+        if (itemVal === undefined || varVal === undefined) return false;
+        const cleanItemVal = String(itemVal).split('|')[0].toLowerCase().trim();
+        const cleanVarVal = String(varVal).split('|')[0].toLowerCase().trim();
+        return cleanItemVal === cleanVarVal;
+    });
+};
 
 export default function AdminDashboard() {
     const { profile } = useAuth();
@@ -55,6 +73,16 @@ export default function AdminDashboard() {
         avgTicket: 0
     });
     const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+
+    const [salesDistribution, setSalesDistribution] = useState({
+        unitsRevenue: 0,
+        unitsVolume: 0,
+        bulkRevenue: 0,
+        bulkVolume: 0
+    });
+    const [avgLogisticsWeight, setAvgLogisticsWeight] = useState(0);
+    const [topVariants, setTopVariants] = useState<any[]>([]);
+    const [loadingKPIs, setLoadingKPIs] = useState(true);
 
     interface RecentOrder {
         id: string;
@@ -136,6 +164,129 @@ export default function AdminDashboard() {
             setRecentOrders(mappedOrders as unknown as RecentOrder[]);
         } else {
             setRecentOrders([]);
+        }
+
+        // 6. Inteligencia de Ventas KPIs (Este Mes)
+        setLoadingKPIs(true);
+        try {
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
+
+            const { data: monthOrders } = await supabase
+                .from('orders')
+                .select('id, total, total_weight_kg, created_at')
+                .gte('created_at', startOfMonth.toISOString());
+
+            if (monthOrders && monthOrders.length > 0) {
+                // Calculate Avg Logistics Weight
+                const totalWeight = monthOrders.reduce((acc, curr) => acc + (curr.total_weight_kg || 0), 0);
+                setAvgLogisticsWeight(totalWeight / monthOrders.length);
+
+                // Fetch order items
+                const orderIds = monthOrders.map(o => o.id);
+                const { data: items } = await supabase
+                    .from('order_items')
+                    .select(`
+                        id, order_id, product_id, quantity, unit_price, unit, selected_options,
+                        products:product_id(name, base_price)
+                    `)
+                    .in('order_id', orderIds);
+
+                if (items && items.length > 0) {
+                    // Fetch product variants
+                    const { data: variantsData } = await supabase
+                        .from('product_variants')
+                        .select('product_id, sku, options, price_adjustment_percent');
+
+                    let unitsRev = 0;
+                    let unitsVol = 0;
+                    let bulkRev = 0;
+                    let bulkVol = 0;
+
+                    const variantMargins: Record<string, { sku: string; label: string; margin: number; count: number }> = {};
+
+                    items.forEach((item: any) => {
+                        const rev = (item.quantity || 0) * (item.unit_price || 0);
+                        const vol = item.quantity || 0;
+                        const unitLower = (item.unit || '').toLowerCase();
+
+                        // 1. Classification (Units vs Bulk)
+                        const isBulk = ['libra', 'libras', 'kg', 'kilo', 'kilos', 'lb', 'lbs'].includes(unitLower);
+                        if (isBulk) {
+                            bulkRev += rev;
+                            bulkVol += vol;
+                        } else {
+                            unitsRev += rev;
+                            unitsVol += vol;
+                        }
+
+                        // 2. Variant Margin calculation
+                        if (variantsData && variantsData.length > 0 && item.selected_options) {
+                            const productVariants = variantsData.filter(v => v.product_id === item.product_id);
+                            const matchedVariant = productVariants.find(v => areOptionsMatching(item.selected_options, v.options));
+
+                            if (matchedVariant && matchedVariant.price_adjustment_percent > 0) {
+                                const pct = matchedVariant.price_adjustment_percent;
+                                const extraMargin = rev * (pct / (100 + pct));
+                                const prodName = item.products?.name || 'Producto';
+                                
+                                // Format readable label for variant
+                                const optValues = Object.values(matchedVariant.options)
+                                    .map((val: any) => String(val).split('|')[0].charAt(0).toUpperCase() + String(val).split('|')[0].slice(1))
+                                    .join(', ');
+                                const label = `${prodName} (${optValues || matchedVariant.sku})`;
+                                const key = matchedVariant.sku || label;
+
+                                if (!variantMargins[key]) {
+                                    variantMargins[key] = {
+                                        sku: matchedVariant.sku || 'N/A',
+                                        label,
+                                        margin: 0,
+                                        count: 0
+                                    };
+                                }
+                                variantMargins[key].margin += extraMargin;
+                                variantMargins[key].count += vol;
+                            }
+                        }
+                    });
+
+                    setSalesDistribution({
+                        unitsRevenue: unitsRev,
+                        unitsVolume: unitsVol,
+                        bulkRevenue: bulkRev,
+                        bulkVolume: bulkVol
+                    });
+
+                    // Top 5 Variants
+                    const sortedVariants = Object.values(variantMargins)
+                        .sort((a, b) => b.margin - a.margin)
+                        .slice(0, 5);
+                    setTopVariants(sortedVariants);
+                } else {
+                    setSalesDistribution({
+                        unitsRevenue: 0,
+                        unitsVolume: 0,
+                        bulkRevenue: 0,
+                        bulkVolume: 0
+                    });
+                    setTopVariants([]);
+                }
+            } else {
+                setAvgLogisticsWeight(0);
+                setSalesDistribution({
+                    unitsRevenue: 0,
+                    unitsVolume: 0,
+                    bulkRevenue: 0,
+                    bulkVolume: 0
+                });
+                setTopVariants([]);
+            }
+        } catch (err) {
+            console.error('Error fetching Sales Intelligence KPIs:', err);
+        } finally {
+            setLoadingKPIs(false);
         }
     }, []); // Removed unused profile dependencies to avoid unnecessary re-creation
 
@@ -267,6 +418,245 @@ export default function AdminDashboard() {
                         icon={<Tag size={20} strokeWidth={1.5} />} 
                         color={THEME.colors.textSecondary} 
                     />
+                </div>
+
+                {/* Inteligencia de Ventas (NUEVO) */}
+                <div style={{ marginBottom: '2.5rem' }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '-0.02em' }}>
+                        <TrendingUp size={20} strokeWidth={2} style={{ color: THEME.colors.primary }} /> Inteligencia de Ventas (Este Mes)
+                    </h2>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
+                        {/* Card 1: Distribución Unidades vs Libras */}
+                        <div style={{
+                            backgroundColor: THEME.colors.surface,
+                            padding: '1.5rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1px solid ${THEME.colors.border}`,
+                            boxShadow: THEME.shadow.sm,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            minHeight: '220px',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.md;
+                            e.currentTarget.style.borderColor = THEME.colors.primary;
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                            e.currentTarget.style.borderColor = THEME.colors.border;
+                        }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>
+                                    Distribución de Presentación
+                                </h3>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Participación</span>
+                            </div>
+                            
+                            {loadingKPIs ? (
+                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#F3F4F6', animation: 'pulse 1.5s infinite' }} />
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flex: 1 }}>
+                                    {/* Donut Chart SVG */}
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <svg width="110" height="110" viewBox="0 0 80 80" style={{ transform: 'rotate(-90deg)' }}>
+                                            <circle cx="40" cy="40" r="30" fill="transparent" stroke="#F59E0B" strokeWidth="9" />
+                                            <circle cx="40" cy="40" r="30" fill="transparent" stroke={THEME.colors.primary} strokeWidth="9"
+                                                strokeDasharray="188.5"
+                                                strokeDashoffset={188.5 * (1 - (salesDistribution.unitsRevenue / ((salesDistribution.unitsRevenue + salesDistribution.bulkRevenue) || 1)))}
+                                                strokeLinecap="round"
+                                                style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+                                            />
+                                        </svg>
+                                        <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                            <span style={{ fontSize: '1.1rem', fontWeight: '850', color: THEME.colors.textMain }}>
+                                                {((salesDistribution.unitsRevenue / ((salesDistribution.unitsRevenue + salesDistribution.bulkRevenue) || 1)) * 100).toFixed(0)}%
+                                            </span>
+                                            <span style={{ fontSize: '0.6rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase' }}>Unidades</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Legends & Details */}
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>
+                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
+                                                Unidades/Empaque
+                                            </div>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '850', color: THEME.colors.textMain, marginLeft: '14px' }}>
+                                                {formatMoney(salesDistribution.unitsRevenue)}
+                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500', marginLeft: '6px' }}>
+                                                    ({formatNumber(salesDistribution.unitsVolume)} und)
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>
+                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#F59E0B' }} />
+                                                Granel/Volumen
+                                            </div>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '850', color: THEME.colors.textMain, marginLeft: '14px' }}>
+                                                {formatMoney(salesDistribution.bulkRevenue)}
+                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500', marginLeft: '6px' }}>
+                                                    ({formatNumber(salesDistribution.bulkVolume)} lb)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Card 2: Carga Logística Promedio */}
+                        <div style={{
+                            backgroundColor: THEME.colors.surface,
+                            padding: '1.5rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1px solid ${THEME.colors.border}`,
+                            boxShadow: THEME.shadow.sm,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            minHeight: '220px',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.md;
+                            e.currentTarget.style.borderColor = THEME.colors.primary;
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                            e.currentTarget.style.borderColor = THEME.colors.border;
+                        }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    Despacho Logístico
+                                </h3>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Carga Promedio</span>
+                            </div>
+
+                            {loadingKPIs ? (
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', justifyContent: 'center' }}>
+                                    <div style={{ height: '24px', width: '60%', backgroundColor: '#F3F4F6', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
+                                    <div style={{ height: '40px', width: '100%', backgroundColor: '#F3F4F6', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1, justifyContent: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                                        <span style={{ fontSize: '1.8rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.03em' }}>
+                                            {avgLogisticsWeight.toFixed(1)}
+                                        </span>
+                                        <span style={{ fontSize: '0.95rem', fontWeight: '700', color: THEME.colors.textSecondary }}>kg / pedido</span>
+                                    </div>
+                                    <p style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, margin: 0, fontWeight: '500', lineHeight: '1.3' }}>
+                                        Peso promedio despachado en órdenes de clientes durante este mes.
+                                    </p>
+                                    
+                                    {/* Stylized Truck Loading Visualizer */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', backgroundColor: '#F9FAFB', padding: '0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                        <Truck size={22} style={{ color: THEME.colors.primary, flexShrink: 0 }} />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                <span>Cubicaje Camión (Cap: 300kg)</span>
+                                                <span>{Math.min((avgLogisticsWeight / 300) * 100, 100).toFixed(0)}%</span>
+                                            </div>
+                                            <div style={{ height: '8px', width: '100%', backgroundColor: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden' }}>
+                                                <div style={{
+                                                    height: '100%',
+                                                    width: `${Math.min((avgLogisticsWeight / 300) * 100, 100)}%`,
+                                                    backgroundColor: THEME.colors.primary,
+                                                    borderRadius: '9999px',
+                                                    transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                }} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Card 3: Top Variantes con Mayor Margen Extra */}
+                        <div style={{
+                            backgroundColor: THEME.colors.surface,
+                            padding: '1.5rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1px solid ${THEME.colors.border}`,
+                            boxShadow: THEME.shadow.sm,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            minHeight: '220px',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.md;
+                            e.currentTarget.style.borderColor = THEME.colors.primary;
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                            e.currentTarget.style.borderColor = THEME.colors.border;
+                        }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>
+                                    Top Variantes con Mayor Margen
+                                </h3>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ajuste %</span>
+                            </div>
+
+                            {loadingKPIs ? (
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem', justifyContent: 'center' }}>
+                                    {[1, 2, 3].map(i => (
+                                        <div key={i} style={{ height: '24px', width: '100%', backgroundColor: '#F3F4F6', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
+                                    ))}
+                                </div>
+                            ) : topVariants.length === 0 ? (
+                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                    No hay variaciones vendidas con margen extra este mes.
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, justifyContent: 'center' }}>
+                                    {topVariants.map((item, idx) => (
+                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0', borderBottom: idx < topVariants.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                                                <span style={{
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: '800',
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '50%',
+                                                    backgroundColor: idx === 0 ? '#FEF3C7' : '#F1F5F9',
+                                                    color: idx === 0 ? '#D97706' : '#64748B',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>{idx + 1}</span>
+                                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {item.label}
+                                                </span>
+                                            </div>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '850', color: '#10B981', flexShrink: 0 }}>
+                                                +{formatMoney(item.margin)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 340px', gap: '1.5rem', marginBottom: '2rem', alignItems: 'start' }}>

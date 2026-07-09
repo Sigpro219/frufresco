@@ -211,21 +211,45 @@ export default function PickingExecutionPage() {
                     const items = (order.order_items as unknown as any[]) || [];
                     
                     const customPerms = profile?.custom_permissions || [];
-                    const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.picking.category:'));
+
+                    const isDenied = (cat: string) => {
+                        const cleanCat = cat.toUpperCase();
+                        return customPerms.includes(`-ops.picking.category:${cleanCat}`) || 
+                               customPerms.includes(`-ops.picking.category:${cat.toLowerCase()}`) ||
+                               customPerms.includes(`-ops.picking.category:${cat}`);
+                    };
+
+                    const hasExplicitAllows = customPerms.some(p => 
+                        (p.startsWith('ops.picking.category:') || p.startsWith('+ops.picking.category:')) && !p.startsWith('-')
+                    );
+
+                    const isAllowedExplicitly = (cat: string) => {
+                        const cleanCat = cat.toUpperCase();
+                        return customPerms.includes(`ops.picking.category:${cleanCat}`) ||
+                               customPerms.includes(`+ops.picking.category:${cleanCat}`) ||
+                               customPerms.includes(`ops.picking.category:${cat.toLowerCase()}`) ||
+                               customPerms.includes(`+ops.picking.category:${cat.toLowerCase()}`) ||
+                               customPerms.includes(`ops.picking.category:${cat}`) ||
+                               customPerms.includes(`+ops.picking.category:${cat}`);
+                    };
 
                     const itemsInCategory = items
                         .filter(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
                             if (!product?.buying_team) return false;
 
-                            const isCatAllowed = !hasCategoryRestrictions || 
-                                customPerms.includes(`ops.picking.category:${product.buying_team}`) || 
-                                customPerms.includes(`ops.picking.category:${product.buying_team.toUpperCase()}`) || 
-                                customPerms.includes(`ops.picking.category:${product.buying_team.toLowerCase()}`) ||
-                                customPerms.includes('*') || 
-                                customPerms.includes('ops.picking') || 
-                                customPerms.includes('ops.picking.*') ||
-                                customPerms.includes('ops.picking.terminal');
+                            const isCatAllowed = (() => {
+                                if (customPerms.includes('*') || customPerms.includes('+*') || profile?.role === 'admin' || profile?.role === 'sys_admin') {
+                                    return true;
+                                }
+                                if (isDenied(product.buying_team)) {
+                                    return false;
+                                }
+                                if (hasExplicitAllows) {
+                                    return isAllowedExplicitly(product.buying_team);
+                                }
+                                return true;
+                            })();
 
                             if (!isCatAllowed) return false;
 

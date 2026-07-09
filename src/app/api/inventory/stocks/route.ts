@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { verifySessionAndPermission } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const auth = await verifySessionAndPermission(request, 'admin.commercial.inventory.stock');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const adminSupabase = createAdminClient();
         
         // Fetch all inventory stocks that are available and active (quantity > 0)
