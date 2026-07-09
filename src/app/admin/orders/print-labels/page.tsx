@@ -245,9 +245,9 @@ export default function BulkOrderPrintLabelsPage() {
                             <div style={{ width: '22mm', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '2mm', boxSizing: 'border-box' }}>
                                 <div style={{ width: '16mm', height: '16mm', position: 'relative' }}>
                                     <img 
-                                        src="/logosimbolo.png" 
-                                        alt="FruFresco Logo" 
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                        src="/logo-investments.png" 
+                                        alt="Investments Cortés Logo" 
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'grayscale(100%) contrast(1.1)' }}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
