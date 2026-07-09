@@ -15,8 +15,8 @@ export default function CreateQuotePage() {
     const [selectedModelId, setSelectedModelId] = useState('');
     const [items, setItems] = useState<any[]>([]);
     const [paymentTermsDays, setPaymentTermsDays] = useState(30);
-    const [introTitle, setIntroTitle] = useState('Enfoque Lean Agile & Entrega Continua de Valor');
-    const [introDesc, setIntroDesc] = useState('Nuestras cotizaciones combinan el diseño de software de última tecnología con metodologías ágiles. Los servicios se ejecutan y entregan mediante sprints incrementales de valor, garantizando visibilidad y control presupuestario óptimo.');
+    const [introTitle, setIntroTitle] = useState('Suministro de Frutas y Verduras de Alta Calidad');
+    const [introDesc, setIntroDesc] = useState('Nuestras cotizaciones combinan frescura, calidad garantizada y entregas puntuales del campo a su negocio. Los productos son seleccionados minuciosamente bajo los estándares óptimos de inocuidad y empaque.');
 
     // DATA STATE
     const [clients, setClients] = useState<any[]>([]);
@@ -873,11 +873,11 @@ export default function CreateQuotePage() {
                         transform: 'translate(-50%, -50%) rotate(-30deg)',
                         width: '400px',
                         height: '400px',
-                        backgroundImage: "url('/institutional-profile.jpg')",
+                        backgroundImage: `url(${appSettings.provider_logo_url || appSettings.app_logo_url})`,
                         backgroundRepeat: 'no-repeat',
                         backgroundPosition: 'center',
                         backgroundSize: 'contain',
-                        opacity: 0.02,
+                        opacity: 0.03,
                         pointerEvents: 'none',
                         zIndex: 0
                     }} />
@@ -885,18 +885,20 @@ export default function CreateQuotePage() {
                     {/* Header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', position: 'relative', zIndex: 1 }}>
                         <div>
-                            <img src="/institutional-logo-large.jpg" alt="DeltaCoreTech" style={{ maxHeight: '85px', objectFit: 'contain' }} />
+                            {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
+                                <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo" style={{ maxHeight: '75px', objectFit: 'contain' }} />
+                            )}
                         </div>
                         <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#475569', lineHeight: '1.4' }}>
-                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>Delta Coretech SAS</div>
-                            <div>NIT: 901.654.321-7</div>
-                            <div>Calle 93 # 12-45, Bogotá, Colombia</div>
-                            <div>contacto@deltacoretech.co</div>
+                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1.1rem' }}>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}</div>
+                            <div>NIT: {appSettings.provider_nit || '901.393.217'}</div>
+                            <div>{appSettings.provider_address || 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C.'}</div>
+                            <div>{appSettings.provider_email || 'contacto@investmentscortes.com'}</div>
                         </div>
                     </div>
 
                     {/* Thick Solid Line Separator */}
-                    <div style={{ borderTop: '3px solid #0F172A', margin: '1.5rem 0 2rem 0', position: 'relative', zIndex: 1 }}></div>
+                    <div style={{ borderTop: `3px solid ${appSettings.primary_color || '#15803D'}`, margin: '1.5rem 0 2rem 0', position: 'relative', zIndex: 1 }}></div>
 
                     {/* Metadata columns: Prepared For & Official Quote */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
@@ -916,7 +918,7 @@ export default function CreateQuotePage() {
                         </div>
                         <div style={{ width: '50%', textAlign: 'right' }}>
                             <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización Oficial</div>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>N° DCT-2026-{quoteNumber || 'XXX'}</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>N° #{quoteNumber || 'Borrador'}</div>
                             <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                                 <div>Fecha: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-')}</div>
                                 <div>Validez: {paymentTermsDays || 30} días</div>
@@ -928,7 +930,7 @@ export default function CreateQuotePage() {
                     <div style={{ 
                         backgroundColor: '#F8FAFC', 
                         padding: '1.2rem 1.5rem', 
-                        borderLeft: '5px solid #1E3A8A', 
+                        borderLeft: `5px solid ${appSettings.primary_color || '#15803D'}`, 
                         marginBottom: '3rem',
                         position: 'relative',
                         zIndex: 1
@@ -972,8 +974,8 @@ export default function CreateQuotePage() {
                             {items.map((item, index) => {
                                 const isService = item.unit === 'Servicio' || item.unit === 'Hora';
                                 const typeLabel = isService ? 'SERVICIO' : 'BIEN';
-                                const typeColor = isService ? '#1D4ED8' : '#0F766E';
-                                const typeBg = isService ? '#EFF6FF' : '#F0FDFA';
+                                const typeColor = isService ? '#475569' : '#16A34A';
+                                const typeBg = isService ? '#F1F5F9' : '#DCFCE7';
                                 
                                 return (
                                     <tr key={index} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }}>
@@ -1099,7 +1101,7 @@ export default function CreateQuotePage() {
                             <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total</td>
-                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: '#1E3A8A' }}>
+                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
                                     ${(
                                         items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0) + 
                                         items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity) * ((i.iva_rate || 0) / 100), 0)
