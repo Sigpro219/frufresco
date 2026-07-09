@@ -297,25 +297,49 @@ export default function QuoteDetailPage() {
                         <div style={{ marginBottom: '1rem' }}>Total Ofertado</div>
 
                         {quote.status === 'converted' ? (
-                            <Link href={quote.order_id ? `/admin/orders/${quote.order_id}` : '/admin/orders'} style={{ textDecoration: 'none' }}>
-                                <button style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    ✓ CONVERTIDA A PEDIDO
-                                    <span style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>Ver documento →</span>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <Link href={quote.order_id ? `/admin/orders/${quote.order_id}` : '/admin/orders'} style={{ textDecoration: 'none' }}>
+                                    <button style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        ✓ CONVERTIDA A PEDIDO
+                                        <span style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>Ver documento →</span>
+                                    </button>
+                                </Link>
+                                <button
+                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    🖨️ Imprimir
                                 </button>
-                            </Link>
+                            </div>
                         ) : quote.status === 'agreement' ? (
-                            <button disabled style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                🤝 ACUERDO COMERCIAL
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>(Vigente)</span>
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <button disabled style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    🤝 ACUERDO COMERCIAL
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>(Vigente)</span>
+                                </button>
+                                <button
+                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
                         ) : (
-                            <button
-                                onClick={handleConvertClick}
-                                disabled={converting}
-                                style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}
-                            >
-                                {converting ? 'Procesando...' : '🚀 Convertir a Pedido'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <button
+                                    onClick={handleConvertClick}
+                                    disabled={converting}
+                                    style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}
+                                >
+                                    {converting ? 'Procesando...' : '🚀 Convertir a Pedido'}
+                                </button>
+                                <button
+                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

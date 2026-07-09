@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 import Link from 'next/link';
@@ -14,6 +14,8 @@ export default function CreateQuotePage() {
             maximumFractionDigits: 2
         }).format(value);
     };
+
+    const printDocRef = useRef<HTMLDivElement>(null);
 
     // FORM STATE
     const [clientName, setClientName] = useState('');
@@ -534,9 +536,88 @@ export default function CreateQuotePage() {
 
     const handlePrint = async () => {
         const savedQuote = await saveQuote(false);
-        if (savedQuote && savedQuote.id) {
-            window.open(`/admin/commercial/quotes/${savedQuote.id}/print`, '_blank');
+        if (!savedQuote || !savedQuote.id) {
+            return;
         }
+
+        // Obtener el HTML puro del contenedor
+        const content = printDocRef.current ? printDocRef.current.innerHTML : '';
+
+        // Abrir una nueva ventana en blanco
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Por favor permite las ventanas emergentes para poder imprimir el documento.');
+            return;
+        }
+
+        // Escribir el documento con su estructura y estilos
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Cotización N° #${savedQuote.quote_number || 'Borrador'}</title>
+                    <style>
+                        body {
+                            background-color: white !important;
+                            margin: 0 !important;
+                            padding: 1.5cm !important;
+                            color: #0F172A !important;
+                            font-family: system-ui, -apple-system, sans-serif !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                        .no-print {
+                            display: none !important;
+                        }
+                        .only-print {
+                            display: block !important;
+                        }
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 2rem;
+                        }
+                        th, td {
+                            padding: 10px 8px;
+                            text-align: left;
+                            border-bottom: 1px solid #E2E8F0;
+                        }
+                        @media print {
+                            body {
+                                padding: 0 !important;
+                            }
+                            @page {
+                                size: letter;
+                                margin: 1.5cm;
+                            }
+                            footer.print-footer {
+                                position: fixed;
+                                bottom: 0;
+                                left: 0;
+                                right: 0;
+                                font-size: 0.75rem;
+                                color: #94A3B8;
+                                text-align: right;
+                                padding-top: 10px;
+                                border-top: 1px solid #E2E8F0;
+                                display: block !important;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div>\${content}</div>
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                                window.close();
+                            }, 800);
+                        };
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
     };
 
     const selectedClientInfo = clients.find(c => c.id === selectedClientId);
@@ -870,7 +951,7 @@ export default function CreateQuotePage() {
                     </div>
                 </div>
 
-                <div id="quote-document" style={{ 
+                <div ref={printDocRef} id="quote-document" style={{ 
                     backgroundColor: 'white', 
                     minHeight: '800px', 
                     padding: '3.5rem', 
