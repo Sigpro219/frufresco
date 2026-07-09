@@ -496,8 +496,25 @@ export async function POST(req: Request) {
             let text = await fetchGemini(apiKey, excelPrompt);
             text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
             attExtractedData = JSON.parse(text);
+            const filterExcelItems = (items: any[], clientName: string) => {
+              if (!items || items.length === 0) return [];
+              return items.filter((itm: any) => {
+                // 1. Exclude transaction numbers, phone numbers, or NITs (> 5000)
+                if (itm.quantity > 5000) return false;
+                // 2. Exclude customer name/header row
+                if (clientName) {
+                  const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  if (cleanClient === cleanProd || cleanProd.includes(cleanClient) || cleanClient.includes(cleanProd)) {
+                    return false;
+                  }
+                }
+                return true;
+              });
+            };
+
             if (attProgrammaticExcelItems.length > 0) {
-              attExtractedData.items = attProgrammaticExcelItems;
+              attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
             } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
                 attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
@@ -508,7 +525,19 @@ export async function POST(req: Request) {
           } catch (e) {
             console.error('Failed to parse Gemini output for Excel content:', e);
             if (attProgrammaticExcelItems.length > 0) {
-              attExtractedData.items = attProgrammaticExcelItems;
+              const filterExcelItems = (items: any[], clientName: string) => {
+                if (!items || items.length === 0) return [];
+                return items.filter((itm: any) => {
+                  if (itm.quantity > 5000) return false;
+                  if (clientName) {
+                    const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                    const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                    if (cleanClient === cleanProd || cleanProd.includes(cleanClient) || cleanClient.includes(cleanProd)) return false;
+                  }
+                  return true;
+                });
+              };
+              attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
               attExtractedData.documentType = 'Email con Excel adjunto';
             }
           }
