@@ -1076,7 +1076,7 @@ export default function CreateQuotePage() {
                     </div>
                 </div>
             )}
-            <style jsx global>{`
+            <style dangerouslySetInnerHTML={{ __html: `
                 @media print { 
                     .no-print { display: none !important; } 
                     .only-print { display: inline !important; }
@@ -1136,7 +1136,7 @@ export default function CreateQuotePage() {
 
                 /* HIDE PRINT FOOTER IN BROWSER */
                 .print-footer { display: none; }
-            `}</style>
+            ` }} />
 
             {/* Print-only Footer for Page Numbers */}
             <footer className="print-footer only-print">

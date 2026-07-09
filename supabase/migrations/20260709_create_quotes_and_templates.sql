@@ -59,11 +59,11 @@ ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quote_items ENABLE ROW LEVEL SECURITY;
 
 -- 6. RLS Policies
--- Allow authenticated users to select templates
-CREATE POLICY "Allow authenticated read to templates" ON quote_templates FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read to template items" ON quote_template_items FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read to quotes" ON quotes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow authenticated read to quote items" ON quote_items FOR SELECT TO authenticated USING (true);
+-- Allow read to templates and quotes (both anon and authenticated)
+CREATE POLICY "Allow read to templates" ON quote_templates FOR SELECT USING (true);
+CREATE POLICY "Allow read to template items" ON quote_template_items FOR SELECT USING (true);
+CREATE POLICY "Allow read to quotes" ON quotes FOR SELECT USING (true);
+CREATE POLICY "Allow read to quote items" ON quote_items FOR SELECT USING (true);
 
 -- Allow staff/admin full access
 CREATE POLICY "Allow staff write to templates" ON quote_templates FOR ALL TO authenticated USING (
