@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, Minimize2 } from 'lucide-react';
@@ -292,6 +292,17 @@ const detectUnitFromName = (originalName: string, product: any, productConversio
     return null;
 };
 
+const ProductsDatalist = React.memo(({ products }: { products: any[] }) => {
+  return (
+    <datalist id="all-products-list">
+      {products.map(p => (
+        <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
+      ))}
+    </datalist>
+  );
+});
+ProductsDatalist.displayName = 'ProductsDatalist';
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -303,9 +314,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
+  const matchCacheRef = useRef<Record<string, any>>({});
+
   const [showMapModal, setShowMapModal] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    matchCacheRef.current = {};
+  }, [products, aliases]);
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
   const [duplicateMatchConfirm, setDuplicateMatchConfirm] = useState<{
@@ -320,6 +337,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isAttachmentZoomed, setIsAttachmentZoomed] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
   const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
@@ -331,6 +349,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setActiveTab('email');
     setAttachmentHtml(null);
     setAttachmentError(null);
+    setPdfBlobUrl(null);
     setIsFloatingExpanded(false);
     
     let defaultIndex = 0;
@@ -377,6 +396,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const attachmentName = currentName || '';
     const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
     
+    let activeBlobUrl: string | null = null;
+
     if (ext === 'xlsx' || ext === 'xls') {
       setLoadingAttachment(true);
       setAttachmentError(null);
@@ -401,7 +422,56 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .finally(() => {
           setLoadingAttachment(false);
         });
+    } else if (ext === 'pdf') {
+      setLoadingAttachment(true);
+      setAttachmentError(null);
+      setPdfBlobUrl(null);
+      
+      fetch(currentUrl)
+        .then(res => {
+          if (!res.ok) throw new Error("No se pudo descargar el archivo PDF.");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          const uint8 = new Uint8Array(buffer);
+          let binary = "";
+          const len = uint8.length;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(uint8[i]);
+          }
+          
+          // Replace auto-print actions 1-to-1 to keep PDF offsets intact
+          binary = binary.replace(/\/S\s*\/Named\s*\/N\s*\/Print/g, '/S /Named /N /P_int');
+          binary = binary.replace(/\/S\s*\/JavaScript\s*\/JS\s*\(([^)]*this\.print[^)]*)\)/gi, (match) => {
+            return match.replace(/this\.print/g, 'this.p_int');
+          });
+          binary = binary.replace(/this\.print\s*\(/g, 'this.p_int(');
+          binary = binary.replace(/\/Print\b/g, '/P_int');
+          
+          const newUint8 = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            newUint8[i] = binary.charCodeAt(i);
+          }
+          
+          const blob = new Blob([newUint8], { type: 'application/pdf' });
+          const blobUrl = URL.createObjectURL(blob);
+          activeBlobUrl = blobUrl;
+          setPdfBlobUrl(blobUrl);
+          setLoadingAttachment(false);
+        })
+        .catch(err => {
+          console.error("Error loading PDF:", err);
+          // Fallback to direct URL (ensures PDF remains visible even if fetch fails due to CORS)
+          setPdfBlobUrl(currentUrl);
+          setLoadingAttachment(false);
+        });
     }
+
+    return () => {
+      if (activeBlobUrl) {
+        URL.revokeObjectURL(activeBlobUrl);
+      }
+    };
   }, [selectedDraft, activeTab, selectedAttachmentIndex]);
 
   const handleSelectAttachment = (idx: number) => {
@@ -1940,73 +2010,82 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     };
   };
 
-  const findMatchedProduct = (originalName: string) => {
+  const findMatchedProduct = useCallback((originalName: string) => {
     if (!originalName) return null;
 
     const cleanName = originalName.toLowerCase().trim();
-    const aliasMatch = aliases[cleanName];
-    if (aliasMatch) {
-      const prod = products.find(p => p.id === aliasMatch);
-      if (prod) return prod;
+    if (matchCacheRef.current[cleanName] !== undefined) {
+      return matchCacheRef.current[cleanName];
     }
 
-    const cleanText = (txt: string) => {
-      return txt
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s]/g, "")
-        .trim();
-    };
-
-    const originalClean = cleanText(originalName);
-    const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
-
-    let bestMatch: any = null;
-    let highestScore = -999;
-
-    for (const p of products) {
-      const productClean = cleanText(p.name);
-      
-      if (productClean === originalClean) {
-        return p;
+    const result = (() => {
+      const aliasMatch = aliases[cleanName];
+      if (aliasMatch) {
+        const prod = products.find(p => p.id === aliasMatch);
+        if (prod) return prod;
       }
 
-      const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
-      const sharedWords = originalWords.filter(w => productWords.includes(w));
-      
-      if (sharedWords.length > 0) {
-        const extraWords = Math.abs(productWords.length - sharedWords.length);
-        const score = sharedWords.length * 10 - extraWords;
-        if (score > highestScore) {
-          highestScore = score;
-          bestMatch = p;
+      const cleanText = (txt: string) => {
+        return txt
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9\s]/g, "")
+          .trim();
+      };
+
+      const originalClean = cleanText(originalName);
+      const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
+
+      let bestMatch: any = null;
+      let highestScore = -999;
+
+      for (const p of products) {
+        const productClean = cleanText(p.name);
+        
+        if (productClean === originalClean) {
+          return p;
+        }
+
+        const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
+        const sharedWords = originalWords.filter(w => productWords.includes(w));
+        
+        if (sharedWords.length > 0) {
+          const extraWords = Math.abs(productWords.length - sharedWords.length);
+          const score = sharedWords.length * 10 - extraWords;
+          if (score > highestScore) {
+            highestScore = score;
+            bestMatch = p;
+          }
         }
       }
-    }
 
-    if (bestMatch) {
-      const hasOnlyGenericSharedWords = originalWords.filter(w => {
-        const productClean = cleanText(bestMatch.name || '');
-        return productClean.split(/\s+/).includes(w);
-      }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en', 'bulto', 'bultos', 'kilo', 'kilos', 'kg', 'g', 'gr', 'gramos', 'libra', 'libras', 'lb', 'litro', 'litros', 'l', 'lt', 'unidad', 'unidades', 'paquete', 'paquetes', 'atado', 'atados', 'canastilla', 'canastillas', 'caja', 'cajas', 'bolsa', 'bolsas', 'x'].includes(w));
+      if (bestMatch) {
+        const hasOnlyGenericSharedWords = originalWords.filter(w => {
+          const productClean = cleanText(bestMatch.name || '');
+          return productClean.split(/\s+/).includes(w);
+        }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en', 'bulto', 'bultos', 'kilo', 'kilos', 'kg', 'g', 'gr', 'gramos', 'libra', 'libras', 'lb', 'litro', 'litros', 'l', 'lt', 'unidad', 'unidades', 'paquete', 'paquetes', 'atado', 'atados', 'canastilla', 'canastillas', 'caja', 'cajas', 'bolsa', 'bolsas', 'x'].includes(w));
 
-      if (highestScore < 8 || hasOnlyGenericSharedWords) {
-        bestMatch = null;
+        if (highestScore < 8 || hasOnlyGenericSharedWords) {
+          bestMatch = null;
+        }
       }
-    }
 
-    if (!bestMatch) {
-      if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
-        bestMatch = products.find((p: any) => {
-          const productClean = cleanText(p.name);
-          return productClean.includes(originalClean) || originalClean.includes(productClean);
-        });
+      if (!bestMatch) {
+        if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
+          bestMatch = products.find((p: any) => {
+            const productClean = cleanText(p.name);
+            return productClean.includes(originalClean) || originalClean.includes(productClean);
+          });
+        }
       }
-    }
 
-    return bestMatch;
-  };
+      return bestMatch;
+    })();
+
+    matchCacheRef.current[cleanName] = result;
+    return result;
+  }, [products, aliases]);
 
   // --- INVOICE FLOATING APPROVAL MODAL ---
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -2078,6 +2157,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   }, [selectedDraft, showConfirmModal, rejectModal, obsModal, actionConfirm, deleteConfirm, showShortcuts]);
 
   useEffect(() => {
+    if (manageConversionsProduct) {
+      setTimeout(() => {
+        const qty1 = document.getElementById('new-conv-qty-1') as HTMLInputElement | null;
+        if (qty1) {
+          qty1.focus();
+          qty1.select();
+        }
+      }, 100);
+    }
+  }, [manageConversionsProduct]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
 
@@ -2099,6 +2190,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         variantConfigProduct,
         manageConversionsProduct
       } = stateRef.current;
+
+      if (variantConfigProduct || manageConversionsProduct) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (variantConfigProduct) setVariantConfigProduct(null);
+          else if (manageConversionsProduct) setManageConversionsProduct(null);
+        }
+        return;
+      }
 
       const isAltShortcut = e.altKey && (
         e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
@@ -5376,7 +5476,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 )}
 
                 {(() => {
-                  if (!metadata.attachments || !Array.isArray(metadata.attachments)) return null;
+                  const metadata = getDraftMetadata(selectedDraft);
+                  if (!metadata || !metadata.attachments || !Array.isArray(metadata.attachments)) return null;
                   const pendingDocs = metadata.attachments.filter((a: any) => !a.processed).length;
                   if (pendingDocs > 1) {
                     return (
@@ -5750,7 +5851,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     return wrapContent(
                       <div style={{ flex: 1, backgroundColor: 'white', position: 'relative' }}>
                         <iframe
-                          src={currentUrl}
+                          src={pdfBlobUrl || currentUrl}
                           style={{ width: '100%', height: '100%', border: 'none' }}
                         />
                       </div>
@@ -7686,11 +7787,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         </div>
       )}
-      <datalist id="all-products-list">
-        {products.map(p => (
-          <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
-        ))}
-      </datalist>
+      <ProductsDatalist products={products} />
 
       {/* --- CONVERSIONS MANAGEMENT MODAL --- */}
       {manageConversionsProduct && (() => {
@@ -7707,6 +7804,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   .eq('id', id);
               if (!error) {
                   setConversions(prev => prev.filter(c => c.id !== id));
+                  supabase.channel('master_conversions_changes').send({
+                      type: 'broadcast',
+                      event: 'conversion_update',
+                      payload: { action: 'refresh' }
+                  });
               }
           };
 
@@ -7747,6 +7849,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   qty1Input.value = '1';
                   unit1Input.value = '';
                   qty2Input.value = '';
+                  supabase.channel('master_conversions_changes').send({
+                      type: 'broadcast',
+                      event: 'conversion_update',
+                      payload: { action: 'refresh' }
+                  });
               } else {
                   alert('Ocurrió un error al guardar la equivalencia.');
               }
@@ -7852,10 +7959,37 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <div style={{ flex: 1 }}>
-                                      <input id="new-conv-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                      <input 
+                                          id="new-conv-qty-1" 
+                                          type="number" 
+                                          defaultValue="1" 
+                                          onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                                                  e.preventDefault();
+                                                  document.getElementById('new-conv-unit-1')?.focus();
+                                              }
+                                          }}
+                                          style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} 
+                                      />
                                   </div>
                                   <div style={{ flex: 2 }}>
-                                      <select id="new-conv-unit-1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}>
+                                      <select 
+                                          id="new-conv-unit-1" 
+                                          onKeyDown={(e) => {
+                                              if (e.key === 'Enter' || e.key === 'ArrowRight') {
+                                                  e.preventDefault();
+                                                  const qty2 = document.getElementById('new-conv-qty-2');
+                                                  if (qty2) {
+                                                      qty2.focus();
+                                                      (qty2 as HTMLInputElement).select();
+                                                  }
+                                              } else if (e.key === 'ArrowLeft') {
+                                                  e.preventDefault();
+                                                  document.getElementById('new-conv-qty-1')?.focus();
+                                              }
+                                          }}
+                                          style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}
+                                      >
                                           <option value="">Selecciona unidad</option>
                                           {DYNAMIC_UNITS.map(u => (
                                               <option key={u} value={u}>{u}</option>
@@ -7870,7 +8004,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <div style={{ flex: 1 }}>
-                                      <input id="new-conv-qty-2" type="number" placeholder="Ej: 0.3" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                      <input 
+                                          id="new-conv-qty-2" 
+                                          type="number" 
+                                          placeholder="Ej: 0.3" 
+                                          onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  handleAdd();
+                                              } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  document.getElementById('new-conv-unit-1')?.focus();
+                                              }
+                                          }}
+                                          style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} 
+                                      />
                                   </div>
                                   <div style={{ flex: 2 }}>
                                       <div style={{ width: '100%', padding: '0.5rem', backgroundColor: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', fontWeight: '800', textAlign: 'center', color: '#15803D', fontSize: '0.9rem' }}>

@@ -159,6 +159,24 @@ export default function MasterProductsPage() {
         fetchProducts();
     }, [fetchProducts]);
 
+    // Realtime subscription for conversions
+    useEffect(() => {
+        const fetchConversions = () => {
+            supabase.from('product_conversions').select('*').then(({ data }) => {
+                if (data) setConversions(data as ProductConversion[]);
+            });
+        };
+
+        const channel = supabase.channel('master_conversions_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'product_conversions' }, fetchConversions)
+            .on('broadcast', { event: 'conversion_update' }, fetchConversions)
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [supabase]);
+
     // Resetear a página 1 cuando se busca algo
     useEffect(() => {
         setCurrentPage(1);
