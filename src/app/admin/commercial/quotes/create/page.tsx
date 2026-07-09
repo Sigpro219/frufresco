@@ -572,6 +572,15 @@ export default function CreateQuotePage() {
         // Obtener el HTML puro del contenedor
         const content = printDocRef.current ? printDocRef.current.innerHTML : '';
 
+        // Obtener todas las hojas de estilo del documento actual
+        let stylesHTML = '';
+        if (typeof document !== 'undefined') {
+            const styleNodes = document.querySelectorAll('link[rel="stylesheet"], style');
+            styleNodes.forEach(node => {
+                stylesHTML += node.outerHTML;
+            });
+        }
+
         // Abrir una nueva ventana en blanco
         const printWindow = window.open('', '_blank');
         if (!printWindow) {
@@ -583,14 +592,15 @@ export default function CreateQuotePage() {
         printWindow.document.write(`
             <html>
                 <head>
+                    <base href="${window.location.origin}">
                     <title>\${formatQuoteNumber(savedQuote.quote_number)}</title>
+                    \${stylesHTML}
                     <style>
                         body {
                             background-color: white !important;
                             margin: 0 !important;
                             padding: 1.5cm !important;
                             color: #0F172A !important;
-                            font-family: system-ui, -apple-system, sans-serif !important;
                             -webkit-print-color-adjust: exact !important;
                             print-color-adjust: exact !important;
                         }
@@ -599,16 +609,6 @@ export default function CreateQuotePage() {
                         }
                         .only-print {
                             display: block !important;
-                        }
-                        table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-bottom: 2rem;
-                        }
-                        th, td {
-                            padding: 10px 8px;
-                            text-align: left;
-                            border-bottom: 1px solid #E2E8F0;
                         }
                         @media print {
                             body {
