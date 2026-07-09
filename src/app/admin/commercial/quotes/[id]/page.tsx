@@ -14,6 +14,14 @@ export default function QuoteDetailPage() {
         }).format(value);
     };
 
+    const formatQuoteNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `COT ${day}${month} ${paddedSeq}`;
+    };
+
     const params = useParams();
     const router = useRouter();
     const [quote, setQuote] = useState<any>(null);
@@ -285,7 +293,7 @@ export default function QuoteDetailPage() {
                 {/* HEADER CARD */}
                 <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div style={{ textTransform: 'uppercase', fontSize: '0.8rem', color: '#6B7280', fontWeight: 'bold' }}>Cotización #{quote.quote_number || '---'}</div>
+                        <div style={{ textTransform: 'uppercase', fontSize: '0.8rem', color: '#6B7280', fontWeight: 'bold' }}>{quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'Cotización'}</div>
                         <h1 style={{ fontSize: '2rem', margin: '0.5rem 0', fontWeight: '900' }}>{quote.client_name}</h1>
                         <div style={{ display: 'flex', gap: '1rem', color: '#4B5563' }}>
                             <span>Modelo: <strong>{quote.model_snapshot_name}</strong></span>

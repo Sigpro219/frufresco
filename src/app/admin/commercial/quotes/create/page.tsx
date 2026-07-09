@@ -17,6 +17,14 @@ export default function CreateQuotePage() {
 
     const printDocRef = useRef<HTMLDivElement>(null);
 
+    const formatQuoteNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `COT ${day}${month} ${paddedSeq}`;
+    };
+
     // FORM STATE
     const [clientName, setClientName] = useState('');
     const [selectedClientId, setSelectedClientId] = useState('');
@@ -554,7 +562,7 @@ export default function CreateQuotePage() {
         printWindow.document.write(`
             <html>
                 <head>
-                    <title>Cotización N° #${savedQuote.quote_number || 'Borrador'}</title>
+                    <title>\${formatQuoteNumber(savedQuote.quote_number)}</title>
                     <style>
                         body {
                             background-color: white !important;
@@ -618,6 +626,7 @@ export default function CreateQuotePage() {
             </html>
         `);
         printWindow.document.close();
+        router.push('/admin/commercial/quotes');
     };
 
     const selectedClientInfo = clients.find(c => c.id === selectedClientId);
@@ -935,16 +944,49 @@ export default function CreateQuotePage() {
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
                                 <button
                                     onClick={handlePrint}
-                                    style={{ flex: 1, padding: '0.8rem', backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                    disabled={saving}
+                                    style={{ 
+                                        flex: 1.5, 
+                                        padding: '0.8rem', 
+                                        backgroundColor: appSettings.primary_color || '#15803D', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        borderRadius: '8px', 
+                                        fontWeight: 'bold', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        gap: '0.5rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                                 >
-                                    🖨️ PDF
+                                    🖨️ Guardar e Imprimir
                                 </button>
                                 <button
                                     onClick={() => saveQuote(true)}
                                     disabled={saving}
-                                    style={{ flex: 1.5, padding: '0.8rem', backgroundColor: appSettings.primary_color || '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                    style={{ 
+                                        flex: 1, 
+                                        padding: '0.8rem', 
+                                        backgroundColor: 'white', 
+                                        color: '#4B5563', 
+                                        border: '1px solid #D1D5DB', 
+                                        borderRadius: '8px', 
+                                        fontWeight: 'bold', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        gap: '0.5rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
                                 >
-                                    {saving ? '...' : '💾 Guardar'}
+                                    {saving ? '...' : '💾 Solo Guardar'}
                                 </button>
                             </div>
                         </div>
@@ -1019,8 +1061,8 @@ export default function CreateQuotePage() {
                             )}
                         </div>
                         <div style={{ width: '50%', textAlign: 'right' }}>
-                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización Oficial</div>
-                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>N° #{quoteNumber || 'Borrador'}</div>
+                            <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{quoteNumber ? formatQuoteNumber(Number(quoteNumber)) : 'Borrador'}</div>
                             <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                                 <div>Fecha: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-')}</div>
                                 <div>Validez: {paymentTermsDays || 30} días</div>
@@ -1343,7 +1385,7 @@ export default function CreateQuotePage() {
             {/* Print-only Footer for Page Numbers */}
             <footer className="print-footer only-print">
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{appSettings.provider_legal_name || appSettings.app_name} - Cotización Oficial</span>
+                    <span>{appSettings.provider_legal_name || appSettings.app_name} - Cotización</span>
                     <span>Página 1</span>
                 </div>
             </footer>

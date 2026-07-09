@@ -26,7 +26,8 @@ export default function QuotesListPage() {
     }, []);
 
     const handleDelete = async (id: string, quoteNumber: string) => {
-        if (!window.confirm(`¿Estás seguro de ELIMINAR permanentemente la cotización #${quoteNumber}?`)) return;
+        const formattedNum = quoteNumber ? formatQuoteNumber(Number(quoteNumber)) : '#' + quoteNumber;
+        if (!window.confirm(`¿Estás seguro de ELIMINAR permanentemente la cotización ${formattedNum}?`)) return;
 
         try {
             const { error } = await supabase.from('quotes').delete().eq('id', id);
@@ -44,6 +45,14 @@ export default function QuotesListPage() {
         return new Date(dateString).toLocaleDateString('es-CO', {
             year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
+    };
+
+    const formatQuoteNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `COT ${day}${month} ${paddedSeq}`;
     };
 
     const getStatusBadge = (status: string) => {
@@ -143,7 +152,7 @@ export default function QuotesListPage() {
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
-                                            {quote.quote_number || '#'}
+                                            {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : '---'}
                                         </td>
                                         <td style={{ padding: '0.65rem 1.25rem', fontWeight: '500', color: THEME.colors.textSecondary }}>
                                             {formatDate(quote.created_at)}

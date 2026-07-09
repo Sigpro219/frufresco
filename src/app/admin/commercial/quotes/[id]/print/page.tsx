@@ -12,6 +12,14 @@ export default function PrintQuotePage() {
         }).format(value);
     };
 
+    const formatQuoteNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `COT ${day}${month} ${paddedSeq}`;
+    };
+
     const params = useParams();
     const [quote, setQuote] = useState<any>(null);
     const [lead, setLead] = useState<any>(null);
@@ -93,6 +101,7 @@ export default function PrintQuotePage() {
 
     useEffect(() => {
         if (!loading && quote) {
+            document.title = formatQuoteNumber(quote.quote_number, quote.created_at);
             const timer = setTimeout(() => {
                 window.print();
             }, 800);
@@ -238,8 +247,8 @@ export default function PrintQuotePage() {
                         )}
                     </div>
                     <div style={{ width: '50%', textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización Oficial</div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>N° #{quote.quote_number}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización</div>
+                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{formatQuoteNumber(quote.quote_number, quote.created_at)}</div>
                         <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                             <div>Fecha: {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
                             <div>Validez: 30 días</div>
@@ -313,7 +322,7 @@ export default function PrintQuotePage() {
                 {/* Print Footer */}
                 <footer className="print-footer">
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'} - Cotización Oficial</span>
+                        <span>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'} - Cotización</span>
                         <span>Página 1</span>
                     </div>
                 </footer>
