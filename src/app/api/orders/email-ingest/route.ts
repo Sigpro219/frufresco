@@ -13,7 +13,7 @@ const getSupabaseAdmin = () => {
 };
 
 async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-1.5-flash-latest'];
   let lastError: any = null;
   for (const model of models) {
     try {

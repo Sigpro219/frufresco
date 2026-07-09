@@ -97,6 +97,15 @@ const formatLogisticsTime = (timeStr: string): string => {
   return `${hours.toString().padStart(2, '0')}:${minStr} ${ampm}`;
 };
 
+const formatDeliverySlot = (slot: string): string => {
+  if (!slot) return '--:-- --';
+  if (slot === 'AM') return 'Mañana (AM)';
+  if (slot === 'PM') return 'Tarde (PM)';
+  if (slot === 'Cualquier hora') return 'Cualquier hora';
+  if (slot.includes(':')) return formatLogisticsTime(slot);
+  return slot;
+};
+
 const getSmartFallbackUnit = (prodName: string, databaseUnit: string): string => {
   const name = prodName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (name.includes('huevo')) {
@@ -3887,7 +3896,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               }} />
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827', fontWeight: 800 }}>Revisión de Correo</h2>
-                <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                  <span style={{ color: '#6B7280', fontSize: '0.85rem' }}><strong>De:</strong> {selectedDraft.source_email}</span>
+                  <span style={{ color: '#1F2937', fontSize: '0.9rem', fontWeight: 600 }}><strong>Asunto:</strong> {selectedDraft.email_subject || '(Sin Asunto)'}</span>
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <button
@@ -4159,13 +4171,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </>
                     )}
 
-                    {/* Asunto */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Asunto del Correo</div>
-                      <div style={{ padding: '12px 16px', color: '#374151', fontWeight: 500, fontStyle: selectedDraft.email_subject ? 'normal' : 'italic' }}>
-                        {selectedDraft.email_subject || '(Sin Asunto)'}
-                      </div>
-                    </div>
+
 
                     {/* Sucursal / Dirección */}
                     {(() => {
@@ -4359,25 +4365,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             (matchedProfile.logistics_data.start_time || matchedProfile.logistics_data.end_time);
                           return isEditing ? (
                             <>
-                              <select 
-                                value={editableDeliverySlot} 
-                                onChange={(e) => setEditableDeliverySlot(e.target.value)} 
-                                disabled={!!hasCustomSchedule}
-                                style={{ 
-                                  padding: '6px 12px', 
-                                  borderRadius: '6px', 
-                                  border: `1px solid ${THEME.colors.border}`, 
-                                  backgroundColor: hasCustomSchedule ? '#F3F4F6' : 'white', 
-                                  color: hasCustomSchedule ? '#9CA3AF' : '#111827',
-                                  minWidth: '150px',
-                                  cursor: hasCustomSchedule ? 'not-allowed' : 'default'
-                                }}
-                              >
-                                <option value="">-- -- : -- --</option>
-                                <option value="AM">AM</option>
-                                <option value="PM">PM</option>
-                                <option value="Cualquier hora">Cualquier hora</option>
-                              </select>
+                                <input 
+                                  type="time" 
+                                  value={editableDeliverySlot && /^([01]\d|2[0-3]):[0-5]\d$/.test(editableDeliverySlot) ? editableDeliverySlot : ''} 
+                                  onChange={(e) => setEditableDeliverySlot(e.target.value)} 
+                                  disabled={!!hasCustomSchedule}
+                                  style={{ 
+                                    padding: '6px 12px', 
+                                    borderRadius: '8px', 
+                                    border: `1px solid ${THEME.colors.border}`, 
+                                    backgroundColor: hasCustomSchedule ? '#F3F4F6' : 'white', 
+                                    color: hasCustomSchedule ? '#9CA3AF' : '#111827',
+                                    outline: 'none',
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                    cursor: hasCustomSchedule ? 'not-allowed' : 'pointer'
+                                  }}
+                                />
                               {hasCustomSchedule && (
                                 <span style={{ fontSize: '0.8rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
                                   <Info size={14} />
@@ -4387,7 +4391,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             </>
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span>{editableDeliverySlot || '-- -- : -- --'}</span>
+                              <span>{formatDeliverySlot(editableDeliverySlot)}</span>
                               {hasCustomSchedule && (
                                 <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 500 }}>
                                   ({formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'})
@@ -4441,19 +4445,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </div>
                     </div>
 
-                    {/* Auditoría */}
-                    <div style={{ borderTop: `1px solid ${THEME.colors.border}` }}>
-                      <details style={{ backgroundColor: '#F9FAFB', padding: '0.75rem 1rem', cursor: 'pointer' }}>
-                        <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>
-                          ▶ Ver información de auditoría
-                        </summary>
-                        <div style={{ padding: '1rem 0 0.5rem 0', display: 'flex', flexDirection: 'column', gap: '4px', color: '#1E3A8A', fontSize: '0.85rem' }}>
-                          <div><strong>Persona que agrega el pedido:</strong> Sistema Inteligencia Artificial (IA)</div>
-                          <div><strong>Fecha y hora de creación:</strong> {new Date(selectedDraft.created_at).toLocaleString('es-CO')}</div>
-                          <div><strong>Última actualización:</strong> {selectedDraft.updated_at ? new Date(selectedDraft.updated_at).toLocaleString('es-CO') : 'Sin actualizaciones manuales'}</div>
-                        </div>
-                      </details>
-                    </div>
+
 
                   </div>
                 </div>
@@ -5176,112 +5168,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 )}
               </div>
 
-              {/* Cuerpo del correo / Adjuntos ocultos en un acordeón al final */}
-              <details style={{ backgroundColor: '#F3F4F6', borderRadius: '8px', padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #E5E7EB' }}>
-                <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>Ver texto original / adjunto del correo enviado por el cliente</summary>
-                <div style={{ padding: '1rem 0 0.5rem 0', fontSize: '0.85rem', color: '#6B7280', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {(() => {
-                    const metadata = getDraftMetadata(selectedDraft);
-                    if (!metadata.attachmentUrl) return null;
-                    const attachmentName = metadata.attachmentName || 'documento_adjunto.pdf';
-                    const lowercaseName = attachmentName.toLowerCase();
-                    const isExcel = lowercaseName.endsWith('.xlsx') || lowercaseName.endsWith('.xls') || lowercaseName.endsWith('.csv');
-                    const isImage = lowercaseName.endsWith('.png') || lowercaseName.endsWith('.jpg') || lowercaseName.endsWith('.jpeg') || lowercaseName.endsWith('.webp') || lowercaseName.endsWith('.gif');
-                    
-                    const badgeText = isExcel ? 'EXCEL' : isImage ? 'IMG' : 'PDF';
-                    const badgeBg = isExcel ? '#DCFCE7' : isImage ? '#F3E8FF' : '#FEE2E2';
-                    const badgeColor = isExcel ? '#15803D' : isImage ? '#6B21A8' : '#EF4444';
-                    
-                    const buttonText = isExcel ? 'Ver Excel Original' : isImage ? 'Ver Imagen Original' : 'Ver PDF Original';
-                    const buttonBg = isExcel ? '#10B981' : isImage ? '#8B5CF6' : '#EF4444';
-                    const buttonHoverBg = isExcel ? '#059669' : isImage ? '#7C3AED' : '#DC2626';
 
-                    return (
-                      <div style={{
-                        backgroundColor: 'white',
-                        border: '1.5px solid #E2E8F0',
-                        borderRadius: '12px',
-                        padding: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                        cursor: 'default'
-                      }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{
-                            backgroundColor: badgeBg,
-                            color: badgeColor,
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 'bold',
-                            fontSize: '0.8rem'
-                          }}>
-                            {badgeText}
-                          </div>
-                          <div style={{ textAlign: 'left' }}>
-                            <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {attachmentName}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>Documento original de solicitud</div>
-                          </div>
-                        </div>
-                        <a 
-                          href={metadata.attachmentUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          style={{
-                            padding: '0.5rem 1rem',
-                            backgroundColor: buttonBg,
-                            color: 'white',
-                            borderRadius: '8px',
-                            fontWeight: 700,
-                            fontSize: '0.8rem',
-                            textDecoration: 'none',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'background-color 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.backgroundColor = buttonHoverBg}
-                          onMouseLeave={e => e.currentTarget.style.backgroundColor = buttonBg}
-                        >
-                          {isExcel ? <Grid size={14} /> : <FileText size={14} />} {buttonText}
-                        </a>
-                      </div>
-                    );
-                  })()}
-                  {(() => {
-                    const metadata = getDraftMetadata(selectedDraft);
-                    if (metadata.emailHtml) {
-                      return (
-                        <div style={{ borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0', height: '350px', backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
-                          <iframe
-                            srcDoc={metadata.emailHtml}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              border: 'none',
-                              backgroundColor: 'white'
-                            }}
-                            sandbox="allow-same-origin allow-popups"
-                          />
-                        </div>
-                      );
-                    }
-                    return (
-                      <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: metadata.attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: metadata.attachmentUrl ? '12px' : '0' }}>
-                        {selectedDraft.email_body || '(Sin cuerpo)'}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </details>
 
             </div>
 

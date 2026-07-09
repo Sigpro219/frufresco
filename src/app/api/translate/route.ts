@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     // Usamos el SDK oficial para máxima estabilidad
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
     
     const prompt = `Translate exactly this product name from Spanish to ${targetLang === 'en' ? 'English' : 'Spanish'}. 
     Return ONLY the translated text. Do not add anything else.

@@ -28,8 +28,8 @@ export async function POST(req: Request) {
         // Usamos el SDK oficial de Google para mayor estabilidad
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
         
-        // Usamos gemini-3-flash-preview (el estándar de vanguardia en 2026)
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        // Usamos gemini-3.5-flash (el estándar de vanguardia en 2026)
+        const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
         const prompt = `
 Eres un experto en marketing gastronómico y nutrición para FruFresco, una tienda premium de frutas y verduras.
@@ -79,9 +79,9 @@ No incluyas markdown, solo el JSON puro.
         // Si el error es específicamente de "model not found", intentamos un último recurso con gemini-2.5-flash
         if (error.message.includes('not found') || error.message.includes('not supported')) {
             try {
-                console.log('🔄 Reintentando con modelo alternativo (gemini-2.5-flash)...');
+                console.log('🔄 Reintentando con modelo alternativo (gemini-3.1-flash-lite)...');
                 const genAI = new GoogleGenerativeAI(GEMINI_KEY as string);
-                const backupModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                const backupModel = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
                 const result = await backupModel.generateContent("Traduce a ingles: " + name);
                 const response = await result.response;
                 return NextResponse.json({
