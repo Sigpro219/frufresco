@@ -28,6 +28,7 @@ export default function CreateQuotePage() {
     const [rules, setRules] = useState<any[]>([]); 
     const [clientSearch, setClientSearch] = useState('');
     const [showClientResults, setShowClientResults] = useState(false);
+    const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [nicknames, setNicknames] = useState<any[]>([]);
@@ -87,6 +88,24 @@ export default function CreateQuotePage() {
         const { data: convData } = await supabase.from('product_conversions').select('*');
         if (convData) setConversions(convData || []);
     };
+
+    useEffect(() => {
+        if (activeDropdownIndex >= 0) {
+            const container = document.getElementById('client-search-dropdown');
+            const activeItem = document.getElementById(`dropdown-item-${activeDropdownIndex}`);
+            if (container && activeItem) {
+                const containerTop = container.scrollTop;
+                const containerBottom = containerTop + container.clientHeight;
+                const elemTop = activeItem.offsetTop;
+                const elemBottom = elemTop + activeItem.offsetHeight;
+                if (elemTop < containerTop) {
+                    container.scrollTop = elemTop;
+                } else if (elemBottom > containerBottom) {
+                    container.scrollTop = elemBottom - container.clientHeight;
+                }
+            }
+        }
+    }, [activeDropdownIndex]);
 
     useEffect(() => {
         if (selectedModelId) {
@@ -510,6 +529,29 @@ export default function CreateQuotePage() {
 
     const selectedClientInfo = clients.find(c => c.id === selectedClientId);
 
+    const filteredClients = clients.filter(c => 
+        (c.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+        (c.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+        (c.nit?.toLowerCase().includes(clientSearch.toLowerCase()))
+    );
+
+    const filteredLeads = leads.filter(l => 
+        (l.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+        (l.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+        (l.phone?.toLowerCase().includes(clientSearch.toLowerCase()))
+    );
+
+    const dropdownItems = [
+        ...filteredClients.map(c => ({ type: 'client' as const, id: c.id, label: c.company_name || c.contact_name, c })),
+        ...filteredLeads.map(l => ({ type: 'lead' as const, id: l.id, label: l.company_name || l.contact_name, l })),
+        { type: 'manual' as const, label: `+ Usar "${clientSearch}" como cliente manual` },
+        { type: 'new_client' as const, label: '✨ Registrar cliente nuevo oficial' }
+    ];
+
+    useEffect(() => {
+        setActiveDropdownIndex(-1);
+    }, [clientSearch]);
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
 
@@ -535,77 +577,183 @@ export default function CreateQuotePage() {
                                             setShowClientResults(true);
                                         }}
                                         onFocus={() => setShowClientResults(true)}
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                    />
-                                    {showClientResults && clientSearch.length > 0 && (
-                                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 50, marginTop: '4px', maxHeight: '250px', overflowY: 'auto' }}>
-                                            {clients.filter(c => 
-                                                (c.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
-                                                (c.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
-                                                (c.nit?.toLowerCase().includes(clientSearch.toLowerCase()))
-                                            ).map(c => (
-                                                <div 
-                                                    key={c.id}
-                                                    onClick={() => {
-                                                        handleClientChange(c.id);
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setActiveDropdownIndex(prev => (prev + 1) % dropdownItems.length);
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setActiveDropdownIndex(prev => (prev - 1 + dropdownItems.length) % dropdownItems.length);
+                                            } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (activeDropdownIndex >= 0 && activeDropdownIndex < dropdownItems.length) {
+                                                    const item = dropdownItems[activeDropdownIndex];
+                                                    if (item.type === 'client') {
+                                                        handleClientChange(item.id);
                                                         setSelectedLeadId(null);
                                                         setShowClientResults(false);
                                                         setClientSearch('');
-                                                    }}
-                                                    style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                >
-                                                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}><span style={{ color: appSettings.primary_color, marginRight: '4px' }}>[Cliente]</span> {c.company_name || c.contact_name}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                                        {c.role === 'b2c_client' ? 'Consumidor Final' : `NIT: ${c.nit || 'Sin registro'}`} • {c.contact_name}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {leads.filter(l => 
-                                                (l.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
-                                                (l.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
-                                                (l.phone?.toLowerCase().includes(clientSearch.toLowerCase()))
-                                            ).map(l => (
-                                                <div 
-                                                    key={`lead-${l.id}`}
-                                                    onClick={() => {
-                                                        handleLeadChange(l.id);
+                                                    } else if (item.type === 'lead') {
+                                                        handleLeadChange(item.id);
                                                         setSelectedClientId('');
                                                         setShowClientResults(false);
                                                         setClientSearch('');
-                                                    }}
-                                                    style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                >
-                                                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}><span style={{ color: '#16A34A', marginRight: '4px' }}>[Prospecto]</span> {l.company_name || l.contact_name}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                                        Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <div 
-                                                onClick={() => {
-                                                    setClientName(clientSearch);
-                                                    setSelectedClientId('');
-                                                    setSelectedLeadId(null);
-                                                    setShowClientResults(false);
-                                                }}
-                                                style={{ padding: '0.8rem', cursor: 'pointer', backgroundColor: '#F0FDFA', color: '#0F766E', fontWeight: 'bold', fontSize: '0.85rem', textAlign: 'center' }}
-                                            >
-                                                + Usar &quot;{clientSearch}&quot; como cliente manual
-                                            </div>
-                                            <div 
-                                                onClick={() => {
-                                                    setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
-                                                    setIsClientModalOpen(true);
-                                                    setShowClientResults(false);
-                                                }}
-                                                style={{ padding: '0.8rem', cursor: 'pointer', backgroundColor: '#EFF6FF', color: '#1E40AF', fontWeight: 'bold', fontSize: '0.85rem', textAlign: 'center', borderTop: '1px solid #DBEAFE' }}
-                                            >
-                                                ✨ Registrar cliente nuevo oficial
-                                            </div>
+                                                    } else if (item.type === 'manual') {
+                                                        setClientName(clientSearch);
+                                                        setSelectedClientId('');
+                                                        setSelectedLeadId(null);
+                                                        setShowClientResults(false);
+                                                    } else if (item.type === 'new_client') {
+                                                        setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
+                                                        setIsClientModalOpen(true);
+                                                        setShowClientResults(false);
+                                                    }
+                                                }
+                                            } else if (e.key === 'Escape') {
+                                                setShowClientResults(false);
+                                            }
+                                        }}
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                    />
+                                    {showClientResults && clientSearch.length > 0 && (
+                                        <div 
+                                            id="client-search-dropdown"
+                                            style={{ 
+                                                position: 'absolute', 
+                                                top: '100%', 
+                                                left: 0, 
+                                                right: 0, 
+                                                backgroundColor: 'white', 
+                                                border: '1px solid #E5E7EB', 
+                                                borderRadius: '8px', 
+                                                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                                                zIndex: 50, 
+                                                marginTop: '4px', 
+                                                maxHeight: '250px', 
+                                                overflowY: 'auto' 
+                                            }}
+                                        >
+                                            {dropdownItems.map((item, idx) => {
+                                                const isActive = idx === activeDropdownIndex;
+                                                if (item.type === 'client') {
+                                                    const c = item.c;
+                                                    return (
+                                                        <div 
+                                                            key={c.id}
+                                                            id={`dropdown-item-${idx}`}
+                                                            onClick={() => {
+                                                                handleClientChange(c.id);
+                                                                setSelectedLeadId(null);
+                                                                setShowClientResults(false);
+                                                                setClientSearch('');
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem', 
+                                                                cursor: 'pointer', 
+                                                                borderBottom: '1px solid #F3F4F6', 
+                                                                transition: 'background 0.2s',
+                                                                backgroundColor: isActive ? '#EFF6FF' : 'transparent'
+                                                            }}
+                                                            onMouseEnter={() => {
+                                                                setActiveDropdownIndex(idx);
+                                                            }}
+                                                        >
+                                                            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                                                <span style={{ color: appSettings.primary_color, marginRight: '4px' }}>[Cliente]</span> {c.company_name || c.contact_name}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                                                                {c.role === 'b2c_client' ? 'Consumidor Final' : `NIT: ${c.nit || 'Sin registro'}`} • {c.contact_name}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else if (item.type === 'lead') {
+                                                    const l = item.l;
+                                                    return (
+                                                        <div 
+                                                            key={`lead-${l.id}`}
+                                                            id={`dropdown-item-${idx}`}
+                                                            onClick={() => {
+                                                                handleLeadChange(l.id);
+                                                                setSelectedClientId('');
+                                                                setShowClientResults(false);
+                                                                setClientSearch('');
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem', 
+                                                                cursor: 'pointer', 
+                                                                borderBottom: '1px solid #F3F4F6', 
+                                                                transition: 'background 0.2s',
+                                                                backgroundColor: isActive ? '#ECFEFF' : 'transparent'
+                                                            }}
+                                                            onMouseEnter={() => {
+                                                                setActiveDropdownIndex(idx);
+                                                            }}
+                                                        >
+                                                            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                                                <span style={{ color: '#16A34A', marginRight: '4px' }}>[Prospecto]</span> {l.company_name || l.contact_name}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                                                                Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else if (item.type === 'manual') {
+                                                    return (
+                                                        <div 
+                                                            key="manual-option"
+                                                            id={`dropdown-item-${idx}`}
+                                                            onClick={() => {
+                                                                setClientName(clientSearch);
+                                                                setSelectedClientId('');
+                                                                setSelectedLeadId(null);
+                                                                setShowClientResults(false);
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem', 
+                                                                cursor: 'pointer', 
+                                                                backgroundColor: isActive ? '#CCFBF1' : '#F0FDFA', 
+                                                                color: '#0F766E', 
+                                                                fontWeight: 'bold', 
+                                                                fontSize: '0.85rem', 
+                                                                textAlign: 'center' 
+                                                            }}
+                                                            onMouseEnter={() => {
+                                                                setActiveDropdownIndex(idx);
+                                                            }}
+                                                        >
+                                                            + Usar &quot;{clientSearch}&quot; como cliente manual
+                                                        </div>
+                                                    );
+                                                } else if (item.type === 'new_client') {
+                                                    return (
+                                                        <div 
+                                                            key="new-client-option"
+                                                            id={`dropdown-item-${idx}`}
+                                                            onClick={() => {
+                                                                setNewClient(prev => ({ ...prev, company_name: clientSearch, contact_name: clientSearch }));
+                                                                setIsClientModalOpen(true);
+                                                                setShowClientResults(false);
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem', 
+                                                                cursor: 'pointer', 
+                                                                backgroundColor: isActive ? '#DBEAFE' : '#EFF6FF', 
+                                                                color: '#1E40AF', 
+                                                                fontWeight: 'bold', 
+                                                                fontSize: '0.85rem', 
+                                                                textAlign: 'center', 
+                                                                borderTop: '1px solid #DBEAFE' 
+                                                            }}
+                                                            onMouseEnter={() => {
+                                                                setActiveDropdownIndex(idx);
+                                                            }}
+                                                        >
+                                                            ✨ Registrar cliente nuevo oficial
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })}
                                         </div>
                                     )}
                                     <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
