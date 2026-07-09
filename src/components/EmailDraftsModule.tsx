@@ -318,6 +318,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [isAttachmentZoomed, setIsAttachmentZoomed] = useState(false);
 
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
 
@@ -329,7 +330,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setAttachmentError(null);
     setIsFloatingExpanded(false);
     setSelectedAttachmentIndex(0);
+    setIsAttachmentZoomed(false);
   }, [selectedDraft?.id]);
+
+  useEffect(() => {
+    setIsAttachmentZoomed(false);
+  }, [selectedAttachmentIndex]);
 
   useEffect(() => {
     if (!selectedDraft || activeTab !== 'attachment') return;
@@ -5631,12 +5637,46 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   // 2.5 Caso: Imagen (.png, .jpg, .jpeg, .gif, .webp)
                   if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
                     return wrapContent(
-                      <div style={{ flex: 1, backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '16px' }}>
+                      <div style={{ 
+                        flex: 1, 
+                        backgroundColor: '#F8FAFC', 
+                        display: isAttachmentZoomed ? 'block' : 'flex', 
+                        alignItems: isAttachmentZoomed ? 'flex-start' : 'center', 
+                        justifyContent: isAttachmentZoomed ? 'flex-start' : 'center', 
+                        overflow: 'auto', 
+                        padding: '16px',
+                        position: 'relative'
+                      }}>
                         <img
                           src={currentUrl}
                           alt={attachmentName}
-                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                          onClick={() => setIsAttachmentZoomed(!isAttachmentZoomed)}
+                          style={{ 
+                            maxWidth: isAttachmentZoomed ? 'none' : '100%', 
+                            maxHeight: isAttachmentZoomed ? 'none' : '100%', 
+                            width: isAttachmentZoomed ? '220%' : 'auto',
+                            cursor: isAttachmentZoomed ? 'zoom-out' : 'zoom-in',
+                            objectFit: 'contain', 
+                            borderRadius: '8px', 
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            transition: 'all 0.15s ease'
+                          }}
                         />
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '12px',
+                          right: '12px',
+                          backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          pointerEvents: 'none',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+                        }}>
+                          {isAttachmentZoomed ? 'Click para alejar' : 'Click para acercar'}
+                        </div>
                       </div>
                     );
                   }
