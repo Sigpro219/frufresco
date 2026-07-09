@@ -485,8 +485,7 @@ export default function CreateQuotePage() {
                     total_amount: totalAmount,
                     status: 'draft',
                     start_date: new Date().toISOString().split('T')[0],
-                    valid_until: null,
-                    notes: JSON.stringify({ introTitle, introDesc })
+                    valid_until: null
                 })
                 .select()
                 .single();
