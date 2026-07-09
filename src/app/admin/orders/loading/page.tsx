@@ -1505,6 +1505,23 @@ export default function OrderLoadingPage() {
                                     {updateLoading ? 'Procesando...' : 'Enviar a Compras'}
                                 </button>
                                 <button 
+                                    onClick={() => {
+                                        window.open('/admin/orders/print-labels?ids=' + Array.from(selectedOrders).join(','), '_blank');
+                                    }}
+                                    style={{
+                                        backgroundColor: '#059669',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '0.5rem 1rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)',
+                                    }}
+                                >
+                                    🖨️ Etiquetas
+                                </button>
+                                <button 
                                     onClick={() => setSelectedOrders(new Set())}
                                     style={{
                                         backgroundColor: 'transparent',
