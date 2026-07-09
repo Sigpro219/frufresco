@@ -593,8 +593,8 @@ export default function CreateQuotePage() {
             <html>
                 <head>
                     <base href="${window.location.origin}">
-                    <title>\${formatQuoteNumber(savedQuote.quote_number)}</title>
-                    \${stylesHTML}
+                    <title>${formatQuoteNumber(savedQuote.quote_number)}</title>
+                    ${stylesHTML}
                     <style>
                         body {
                             background-color: white !important;
@@ -634,7 +634,7 @@ export default function CreateQuotePage() {
                     </style>
                 </head>
                 <body>
-                    <div>\${content}</div>
+                    <div>${content}</div>
                     <script>
                         window.onload = function() {
                             setTimeout(function() {
