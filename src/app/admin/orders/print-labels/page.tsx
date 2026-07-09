@@ -7,11 +7,11 @@ import { getFriendlyOrderId } from '@/lib/orderUtils';
 
 interface LabelInfo {
     name: string;
-    sku: string;
     weight: string;
     lote: string;
     vencimiento: string;
     orderSequenceId: string;
+    accountingId: string;
 }
 
 export default function BulkOrderPrintLabelsPage() {
@@ -62,7 +62,7 @@ export default function BulkOrderPrintLabelsPage() {
                     .select(`
                         id, order_id, quantity, nickname,
                         product:products (
-                            id, name, sku, requires_label
+                            id, name, sku, requires_label, accounting_id
                         )
                     `)
                     .in('order_id', ids);
@@ -77,7 +77,7 @@ export default function BulkOrderPrintLabelsPage() {
                         
                         const qty = item.quantity || 0;
                         const name = item.product?.name || item.nickname || 'Producto Procesado';
-                        const sku = item.product?.sku || '';
+                        const accountingId = item.product?.accounting_id || '';
                         
                         const fullKilos = Math.floor(qty);
                         const remainder = parseFloat((qty - fullKilos).toFixed(3));
@@ -85,22 +85,22 @@ export default function BulkOrderPrintLabelsPage() {
                         for (let i = 0; i < fullKilos; i++) {
                             labelList.push({
                                 name: name.toUpperCase(),
-                                sku,
                                 weight: '1 kg',
                                 lote: getLoteDate(),
                                 vencimiento: getExpirationDate(),
-                                orderSequenceId
+                                orderSequenceId,
+                                accountingId: String(accountingId)
                             });
                         }
 
                         if (remainder > 0) {
                             labelList.push({
                                 name: name.toUpperCase(),
-                                sku,
                                 weight: `${remainder.toString().replace('.', ',')} kg`,
                                 lote: getLoteDate(),
                                 vencimiento: getExpirationDate(),
-                                orderSequenceId
+                                orderSequenceId,
+                                accountingId: String(accountingId)
                             });
                         }
                     });
@@ -251,8 +251,8 @@ export default function BulkOrderPrintLabelsPage() {
                                     />
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
-                                    <div style={{ fontSize: '7pt', fontWeight: 'bold', textAlign: 'center', color: '#64748B', wordBreak: 'break-all' }}>
-                                        {lbl.sku}
+                                    <div style={{ fontSize: '8pt', fontWeight: 'bold', textAlign: 'center', color: '#1E293B', wordBreak: 'break-all' }}>
+                                        ID: {lbl.accountingId}
                                     </div>
                                     <div style={{ fontSize: '6.5pt', fontWeight: '900', color: '#0F172A', backgroundColor: '#F1F5F9', padding: '2px 4px', borderRadius: '4px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
                                         #{lbl.orderSequenceId}
