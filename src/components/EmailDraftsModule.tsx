@@ -5375,6 +5375,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </span>
                 )}
 
+                {(() => {
+                  if (!metadata.attachments || !Array.isArray(metadata.attachments)) return null;
+                  const pendingDocs = metadata.attachments.filter((a: any) => !a.processed).length;
+                  if (pendingDocs > 1) {
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FCD34D' }}>
+                        <span style={{ fontSize: '14px' }}>📑</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>
+                          Aprobando 1 de {pendingDocs} adjuntos
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <button 
                   onClick={() => setSelectedDraft(null)}
                   style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
@@ -5635,6 +5651,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
                                 {att.name}
                               </span>
+                              {att.deliveryDate && (
+                                <span style={{ opacity: 0.8, fontSize: '0.65rem', marginLeft: '2px', fontWeight: 'bold' }}>
+                                  ({att.deliveryDate.substring(5).replace('-', '/')})
+                                </span>
+                              )}
                             </button>
                           );
                         })}
@@ -7357,6 +7378,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </label>
                 <input
                   id="modal-qty-input"
+                  autoComplete="off"
                   tabIndex={(selectedProductForVariant.options_config?.length || 0) + 1}
                   type="text"
                   value={variantQuantity}
