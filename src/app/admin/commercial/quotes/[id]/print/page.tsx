@@ -137,6 +137,8 @@ export default function PrintQuotePage() {
                     font-family: system-ui, -apple-system, sans-serif !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
+                    font-size: 8.5pt !important;
+                    line-height: 1.2 !important;
                 }
                 .print-container {
                     padding: 1.5cm;
@@ -160,10 +162,37 @@ export default function PrintQuotePage() {
                         background-color: white !important;
                         margin: 0 !important;
                         padding: 0 !important;
+                        font-size: 8.5pt !important;
+                        line-height: 1.2 !important;
                     }
                     .print-container {
-                        padding: 0;
-                        max-width: 100%;
+                        padding: 0 !important;
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                    }
+                    h1, h2, h3, h4, p, div, span, td, th {
+                        font-size: 8.5pt !important;
+                        line-height: 1.2 !important;
+                    }
+                    h1 {
+                        font-size: 14pt !important;
+                    }
+                    h2, h3, h4 {
+                        font-size: 11pt !important;
+                    }
+                    table th, table td {
+                        padding: 4px 6px !important;
+                        font-size: 8.5pt !important;
+                        line-height: 1.2 !important;
+                    }
+                    tfoot {
+                        display: table-row-group !important;
+                    }
+                    tr {
+                        page-break-inside: avoid !important;
+                    }
+                    thead {
+                        page-break-after: avoid !important;
                     }
                     footer.print-footer {
                         position: fixed;

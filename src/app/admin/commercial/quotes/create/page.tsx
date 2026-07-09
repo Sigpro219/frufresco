@@ -603,6 +603,8 @@ export default function CreateQuotePage() {
                             color: #0F172A !important;
                             -webkit-print-color-adjust: exact !important;
                             print-color-adjust: exact !important;
+                            font-size: 8.5pt !important;
+                            line-height: 1.2 !important;
                         }
                         .no-print {
                             display: none !important;
@@ -613,6 +615,38 @@ export default function CreateQuotePage() {
                         @media print {
                             body {
                                 padding: 0 !important;
+                                font-size: 8.5pt !important;
+                                line-height: 1.2 !important;
+                            }
+                            #quote-document {
+                                padding: 0 !important;
+                                margin: 0 !important;
+                                border: none !important;
+                                box-shadow: none !important;
+                            }
+                            h1, h2, h3, h4, p, div, span, td, th {
+                                font-size: 8.5pt !important;
+                                line-height: 1.2 !important;
+                            }
+                            h1 {
+                                font-size: 14pt !important;
+                            }
+                            h2, h3, h4 {
+                                font-size: 11pt !important;
+                            }
+                            table th, table td {
+                                padding: 4px 6px !important;
+                                font-size: 8.5pt !important;
+                                line-height: 1.2 !important;
+                            }
+                            tfoot {
+                                display: table-row-group !important;
+                            }
+                            tr {
+                                page-break-inside: avoid !important;
+                            }
+                            thead {
+                                page-break-after: avoid !important;
                             }
                             @page {
                                 size: letter;
