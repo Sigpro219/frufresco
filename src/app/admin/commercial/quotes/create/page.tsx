@@ -534,6 +534,7 @@ export default function CreateQuotePage() {
     };
 
     const selectedClientInfo = clients.find(c => c.id === selectedClientId);
+    const selectedLeadInfo = leads.find(l => l.id === selectedLeadId);
 
     const filteredClients = clients.filter(c => 
         (c.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
@@ -918,6 +919,13 @@ export default function CreateQuotePage() {
                                     {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
                                     {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
                                     {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
+                                </div>
+                            ) : selectedLeadInfo ? (
+                                <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                                    {selectedLeadInfo.company_name && <div>{selectedLeadInfo.company_name}</div>}
+                                    {selectedLeadInfo.contact_name && <div>Atención: {selectedLeadInfo.contact_name}</div>}
+                                    {selectedLeadInfo.phone && <div>Teléfono: {selectedLeadInfo.phone}</div>}
+                                    {selectedLeadInfo.email && <div>Email: {selectedLeadInfo.email}</div>}
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
