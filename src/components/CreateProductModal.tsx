@@ -40,7 +40,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         tags: [] as string[],
         parent_id: null as string | null,
         utility_deviation_pct: 0,
-        inherit_price: false
+        inherit_price: false,
+        requires_label: false
     });
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [parentSearch, setParentSearch] = useState('');
@@ -193,8 +194,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         { id: 'HO', name: 'Hortalizas' },
         { id: 'LA', name: 'Lácteos' },
         { id: 'DE', name: 'Despensa' },
-        { id: 'CO', name: 'Congelados' },
-        { id: 'PR', name: 'Procesados' }
+        { id: 'CO', name: 'Congelados' }
     ];
     const baseUnits = ['Kg', 'G', 'Lb', 'Lt', 'Un', 'Atado', 'Bulto'];
 
@@ -808,6 +808,33 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         )}
                                         <input type="file" accept="image/*" onChange={handleFileChange} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
                                     </div>
+                                </div>
+                            </div>
+                            
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                marginTop: '1rem', 
+                                padding: '0.8rem', 
+                                backgroundColor: formData.requires_label ? '#ECFDF5' : '#F9FAFB', 
+                                borderRadius: '12px',
+                                border: `1px solid ${formData.requires_label ? '#A7F3D0' : '#D1D5DB'}`
+                            }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="create_requires_label"
+                                    checked={formData.requires_label} 
+                                    onChange={(e) => setFormData({ ...formData, requires_label: e.target.checked })} 
+                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }} 
+                                />
+                                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setFormData({ ...formData, requires_label: !formData.requires_label })}>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: formData.requires_label ? '#065F46' : '#4B5563', cursor: 'pointer' }}>
+                                        Requiere Etiqueta Térmica de Procesado
+                                    </label>
+                                    <p style={{ fontSize: '0.65rem', color: '#6B7280', margin: 0 }}>
+                                        Si está marcado, se imprimirán etiquetas de 100x50mm para este producto al procesar pedidos.
+                                    </p>
                                 </div>
                             </div>
                         </div>

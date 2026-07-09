@@ -107,8 +107,7 @@ export const translations = {
       'HO': 'Hortalizas',
       'LA': 'Lácteos',
       'DE': 'Despensa',
-      'CO': 'Congelados',
-      'PR': 'Procesados'
+      'CO': 'Congelados'
     },
     completeOrder: "Completa tu pedido",
     relatedProducts: "También te podría interesar",
@@ -327,8 +326,7 @@ export const translations = {
       'HO': 'Greens',
       'LA': 'Dairy',
       'DE': 'Pantry',
-      'CO': 'Frozen',
-      'PR': 'Processed'
+      'CO': 'Frozen'
     },
     completeOrder: "Complete your order",
     relatedProducts: "You may also like",

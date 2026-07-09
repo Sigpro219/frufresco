@@ -74,7 +74,7 @@ export default function OrderDetailPage() {
             base_price: number;
             options_config?: any;
             weight_kg?: number;
-            category?: string;
+            requires_label?: boolean;
         };
         selected_options?: any;
         variant_label?: any;
@@ -129,7 +129,7 @@ export default function OrderDetailPage() {
                 .select(`
                     *,
                     product:products (
-                        id, name, unit_of_measure, image_url, base_price, variants, weight_kg, category
+                        id, name, unit_of_measure, image_url, base_price, variants, weight_kg, requires_label
                     )
                 `)
                 .eq('order_id', id);
@@ -430,7 +430,7 @@ export default function OrderDetailPage() {
 
                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                             {(() => {
-                                const processedItemsCount = items.filter(item => item.product?.category === 'PR').length;
+                                const processedItemsCount = items.filter(item => item.product?.requires_label).length;
                                 if (processedItemsCount > 0 && !isEditing) {
                                     return (
                                         <Link

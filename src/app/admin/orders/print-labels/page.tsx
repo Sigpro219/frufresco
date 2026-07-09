@@ -62,13 +62,13 @@ export default function BulkOrderPrintLabelsPage() {
                     .select(`
                         id, order_id, quantity, nickname,
                         product:products (
-                            id, name, sku, category
+                            id, name, sku, requires_label
                         )
                     `)
                     .in('order_id', ids);
 
                 if (itemsData && ordersData) {
-                    const processedItems = itemsData.filter((item: any) => item.product?.category === 'PR');
+                    const processedItems = itemsData.filter((item: any) => item.product?.requires_label === true);
                     const labelList: LabelInfo[] = [];
 
                     processedItems.forEach((item: any) => {
@@ -130,7 +130,7 @@ export default function BulkOrderPrintLabelsPage() {
     if (labels.length === 0) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif', gap: '1rem' }}>
-                <h3>No se encontraron productos de la categoría "Procesados" en los pedidos seleccionados.</h3>
+                <h3>No se encontraron productos que requieran etiqueta en los pedidos seleccionados.</h3>
                 <button 
                     onClick={() => router.back()} 
                     style={{ padding: '8px 16px', backgroundColor: '#334155', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
