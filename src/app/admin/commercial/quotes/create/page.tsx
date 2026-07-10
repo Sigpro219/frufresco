@@ -619,6 +619,7 @@ export default function CreateQuotePage() {
                                 line-height: 1.2 !important;
                             }
                             #quote-document {
+                                position: static !important;
                                 padding: 0 !important;
                                 margin: 0 !important;
                                 border: none !important;
@@ -641,6 +642,9 @@ export default function CreateQuotePage() {
                             }
                             tfoot {
                                 display: table-row-group !important;
+                            }
+                            tfoot.print-spacer-tfoot {
+                                display: table-footer-group !important;
                             }
                             tr {
                                 page-break-inside: avoid !important;
@@ -1292,6 +1296,11 @@ export default function CreateQuotePage() {
                                 <td></td>
                             </tr>
                         </tfoot>
+                        <tfoot className="only-print print-spacer-tfoot" style={{ display: 'none' }}>
+                            <tr>
+                                <td colSpan={6} style={{ height: '45px', border: 'none', padding: 0 }}></td>
+                            </tr>
+                        </tfoot>
                     </table>
 
                     <div className="no-print" style={{ marginTop: '2rem', padding: '2rem', backgroundColor: '#F9FAFB', borderRadius: '8px', border: '1px dashed #D1D5DB' }}>
@@ -1420,8 +1429,12 @@ export default function CreateQuotePage() {
                         margin: 0 !important; 
                         padding: 1.5cm !important;
                         min-height: auto !important;
-                        position: relative;
+                        position: static !important;
                         overflow: visible;
+                    }
+
+                    tfoot.print-spacer-tfoot {
+                        display: table-footer-group !important;
                     }
 
                     /* WATERMARK */

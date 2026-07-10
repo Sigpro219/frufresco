@@ -169,6 +169,7 @@ export default function PrintQuotePage() {
                         padding: 0 !important;
                         max-width: 100% !important;
                         margin: 0 !important;
+                        position: static !important;
                     }
                     h1, h2, h3, h4, p, div, span, td, th {
                         font-size: 8.5pt !important;
@@ -187,6 +188,9 @@ export default function PrintQuotePage() {
                     }
                     tfoot {
                         display: table-row-group !important;
+                    }
+                    tfoot.print-spacer-tfoot {
+                        display: table-footer-group !important;
                     }
                     tr {
                         page-break-inside: avoid !important;
@@ -346,6 +350,11 @@ export default function PrintQuotePage() {
                             <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
                                 ${formatPrice(Math.ceil(quote.total_amount))}
                             </td>
+                        </tr>
+                    </tfoot>
+                    <tfoot className="print-spacer-tfoot" style={{ display: 'none' }}>
+                        <tr>
+                            <td colSpan={6} style={{ height: '45px', border: 'none', padding: 0 }}></td>
                         </tr>
                     </tfoot>
                 </table>
