@@ -296,47 +296,6 @@ function CreateOrderContent() {
         }
     }, [manageConversionsProduct]);
 
-    // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // ── ESC: cierra modales en orden de prioridad (más específico → más general) ──
-            if (e.key === 'Escape') {
-                if (variantConfigProduct) { setVariantConfigProduct(null); return; }
-                if (manageConversionsProduct) { setManageConversionsProduct(null); return; }
-                if (selectedProductForModal) { setSelectedProductForModal(null); return; }
-                if (showMapPicker) { setShowMapPicker(false); return; }
-                if (showFloatingDoc) { setShowFloatingDoc(false); return; }
-                if (deleteConfirm) { setDeleteConfirm(null); return; }
-                if (duplicateConfirm) { setDuplicateConfirm(null); return; }
-                return;
-            }
-
-            // Los atajos Alt solo aplican cuando el modal de producto está abierto
-            if (!selectedProductForModal) return;
-
-            // Alt+V → Editar Variantes
-            if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
-                if (!variantConfigProduct && !manageConversionsProduct) {
-                    e.preventDefault();
-                    setVariantConfigProduct(selectedProductForModal);
-                }
-                return;
-            }
-
-            // Alt+E → Editar Equivalencias
-            if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
-                if (!variantConfigProduct && !manageConversionsProduct) {
-                    e.preventDefault();
-                    setManageConversionsProduct(selectedProductForModal);
-                }
-                return;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedProductForModal, variantConfigProduct, manageConversionsProduct, showMapPicker, showFloatingDoc, deleteConfirm, duplicateConfirm]);
-
     useEffect(() => {
         if (selectedProductForModal) {
             // Re-fetch latest conversions for this product to prevent stale cache
@@ -458,6 +417,47 @@ function CreateOrderContent() {
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
     const [showFloatingDoc, setShowFloatingDoc] = useState(false);
     const [isFloatingDocExpanded, setIsFloatingDocExpanded] = useState(false);
+
+    // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // ── ESC: cierra modales en orden de prioridad (más específico → más general) ──
+            if (e.key === 'Escape') {
+                if (variantConfigProduct) { setVariantConfigProduct(null); return; }
+                if (manageConversionsProduct) { setManageConversionsProduct(null); return; }
+                if (selectedProductForModal) { setSelectedProductForModal(null); return; }
+                if (showMapPicker) { setShowMapPicker(false); return; }
+                if (showFloatingDoc) { setShowFloatingDoc(false); return; }
+                if (deleteConfirm) { setDeleteConfirm(null); return; }
+                if (duplicateConfirm) { setDuplicateConfirm(null); return; }
+                return;
+            }
+
+            // Los atajos Alt solo aplican cuando el modal de producto está abierto
+            if (!selectedProductForModal) return;
+
+            // Alt+V → Editar Variantes
+            if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
+                if (!variantConfigProduct && !manageConversionsProduct) {
+                    e.preventDefault();
+                    setVariantConfigProduct(selectedProductForModal);
+                }
+                return;
+            }
+
+            // Alt+E → Editar Equivalencias
+            if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
+                if (!variantConfigProduct && !manageConversionsProduct) {
+                    e.preventDefault();
+                    setManageConversionsProduct(selectedProductForModal);
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedProductForModal, variantConfigProduct, manageConversionsProduct, showMapPicker, showFloatingDoc, deleteConfirm, duplicateConfirm]);
 
     useEffect(() => {
         loadData();
@@ -3731,7 +3731,7 @@ function CreateOrderContent() {
                                         textDecoration: 'underline'
                                     }}
                                 >
-                                    ⚙️ Editar Variantes <span style={{ opacity: 0.5, fontWeight: 400 }}>[Alt+V]</span>
+                                    ⚙️ Editar Variantes
                                 </button>
                                 <span>|</span>
                                 <button
@@ -3749,7 +3749,7 @@ function CreateOrderContent() {
                                         textDecoration: 'underline'
                                     }}
                                 >
-                                    ⚙️ Editar Equivalencias <span style={{ opacity: 0.5, fontWeight: 400 }}>[Alt+E]</span>
+                                    ⚙️ Editar Equivalencias
                                 </button>
                             </div>
 
