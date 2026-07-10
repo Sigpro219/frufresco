@@ -348,7 +348,12 @@ export async function POST(req: Request) {
              - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
              - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
-             - IMPORTANTE: Si la tabla contiene una columna de fecha de entrega individual por producto (ej. "F. Entrega", "Fecha de entrega", "Fecha"), o si se especifica explícitamente una fecha de entrega en la misma línea del producto, extrae obligatoriamente esa fecha específica en el campo "deliveryDate" de ese ítem en formato "YYYY-MM-DD". Si el ítem no tiene una fecha de entrega específica por línea, coloca null.
+             - CRÍTICO - FECHAS POR ÍTEM: Si el documento tiene:
+                  (a) Una columna de fecha de entrega individual (ej. "F. Entrega", "Fecha Entrega", "Fecha", "Fecha de despacho"),
+                  (b) Secciones o grupos de productos separados por encabezados que contienen fechas distintas (ej. una sección "Entrega 23/07/2026" seguida de productos, y otra sección "Entrega 25/07/2026" con más productos),
+                  (c) O cualquier indicación de que cada producto tiene su propia fecha de entrega diferente a la global;
+                ENTONCES debes OBLIGATORIAMENTE asignar la fecha específica de entrega de cada producto en el campo "deliveryDate" de ese ítem en formato "YYYY-MM-DD". PROPAGA la fecha de la sección/encabezado más cercano a cada ítem si no hay columna explícita.
+                Si un ítem NO tiene fecha de entrega específica diferente a la general, coloca null en su "deliveryDate".
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
@@ -660,6 +665,12 @@ export async function POST(req: Request) {
 
       parsedAttachments = await Promise.all(attachmentPromises);
       uploadedAttachments = parsedAttachments.map(att => ({ name: att.name, url: att.url }));
+
+      // DIAGNOSTIC LOG: Show per-attachment AI extraction results for deliveryDate per item
+      parsedAttachments.forEach((att, i) => {
+        const uniqueDates = [...new Set((att.items || []).map((itm: any) => itm.deliveryDate || null))];
+        console.log(`[Email Inbound] [DIAG] Adjunto ${i+1}/${parsedAttachments.length}: "${att.name}" | globalDate=${att.deliveryDate} | itemDates=[${uniqueDates.join(', ')}] | items=${(att.items || []).length}`);
+      });
 
       if (uploadedAttachments.length > 0) {
         attachmentUrl = uploadedAttachments[0].url;
@@ -1139,38 +1150,68 @@ export async function POST(req: Request) {
     }
 
     // 5. Save draft to public.order_drafts
-    const draftsToInsert = [];
+    const draftsToInsert: any[] = [];
 
-    if (parsedAttachments.length > 1) {
-      for (let index = 0; index < parsedAttachments.length; index++) {
-        const att = parsedAttachments[index];
-        const uniqueDraftUuid = crypto.randomUUID();
+    const processSourceIntoDrafts = (sourceData: any, isFromAttachment: boolean, attIndex: number = 0, totalAtts: number = 0) => {
+      const items = Array.isArray(sourceData.items) ? sourceData.items : [];
+      const groups = new Map<string, any[]>();
+      
+      if (items.length === 0) {
+        const fallbackDate = sourceData.deliveryDate || targetDeliveryDate || null;
+        groups.set(String(fallbackDate), []);
+      } else {
+        items.forEach((itm: any) => {
+          const itemDate = itm.deliveryDate || sourceData.deliveryDate || targetDeliveryDate || null;
+          const key = String(itemDate);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(itm);
+        });
+      }
+
+      const numGroups = groups.size;
+      console.log(`[Email Inbound] [DIAG] processSourceIntoDrafts: att=${attIndex+1}/${totalAtts} | groups=${numGroups} | dateKeys=[${[...groups.keys()].join(', ')}]`);
+      let groupIndex = 0;
+
+      for (const [dateKey, groupedItems] of groups.entries()) {
+        groupIndex++;
+        const effectiveDate = dateKey === 'null' ? null : dateKey;
+        const isFirstGlobalDraft = draftsToInsert.length === 0;
+        const uniqueDraftUuid = isFirstGlobalDraft ? draftUuid : crypto.randomUUID();
         const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
-        const attItems = Array.isArray(att.items) ? att.items : [];
+        
+        let subjectSuffix = '';
+        if (totalAtts > 1) {
+           subjectSuffix += `[Adjunto ${attIndex + 1}/${totalAtts}]`;
+        }
+        if (numGroups > 1) {
+           subjectSuffix += ` [Pedido ${groupIndex}/${numGroups}]`;
+        }
+        
+        const finalSubject = `[${shortCode}] ${subjectSuffix ? subjectSuffix + ' ' : ''}${subject}`.trim().replace(/\s+/g, ' ');
 
         draftsToInsert.push({
           id: uniqueDraftUuid,
           profile_id: profile ? profile.id : null,
-          client_detected_name: (att.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
+          client_detected_name: (sourceData.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
           source_email: senderEmail,
-          email_subject: `[${shortCode}] [Adjunto ${index + 1}/${parsedAttachments.length}] ${subject}`,
+          email_subject: finalSubject,
           email_body: currentPlainText,
           extracted_items: [
             { 
               isMetadata: true, 
-              address: att.address || extractedData.address || null,
+              address: sourceData.address || extractedData.address || null,
               addressDetected: addressDetected,
-              deliverySlot: att.deliverySlot || finalDeliverySlot,
-              deliveryDate: att.deliveryDate || targetDeliveryDate || null,
-              phone: att.phone || extractedData.phone || null,
-              nit: att.nit || extractedData.nit || null,
-              clientType: att.clientType || clientType,
-              attachmentUrl: att.url || null,
-              attachmentName: att.name || null,
-              attachments: [att],
+              deliverySlot: sourceData.deliverySlot || finalDeliverySlot,
+              deliveryDate: effectiveDate,
+              phone: sourceData.phone || extractedData.phone || null,
+              nit: sourceData.nit || extractedData.nit || null,
+              clientType: sourceData.clientType || clientType,
+              attachmentUrl: sourceData.url || attachmentUrl || null,
+              attachmentName: sourceData.name || attachmentName || null,
+              attachments: isFromAttachment ? [sourceData] : parsedAttachments,
               emailHtml: htmlText || null
             },
-            ...attItems.map((itm: any) => {
+            ...groupedItems.map((itm: any) => {
               let originalName = String(itm.originalName || itm.name || '').trim();
               originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
               const nameLower = originalName.toLowerCase();
@@ -1194,53 +1235,14 @@ export async function POST(req: Request) {
           status: 'pending'
         });
       }
+    };
+
+    if (parsedAttachments.length > 0) {
+      for (let index = 0; index < parsedAttachments.length; index++) {
+        processSourceIntoDrafts(parsedAttachments[index], true, index, parsedAttachments.length);
+      }
     } else {
-      const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
-      draftsToInsert.push({
-        id: draftUuid,
-        profile_id: profile ? profile.id : null,
-        client_detected_name: (extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
-        source_email: senderEmail,
-        email_subject: `[${shortCode}] ${subject}`,
-        email_body: currentPlainText,
-        extracted_items: [
-          { 
-            isMetadata: true, 
-            address: extractedData.address || null,
-            addressDetected: addressDetected,
-            deliverySlot: finalDeliverySlot,
-            deliveryDate: targetDeliveryDate || null,
-            phone: extractedData.phone || null,
-            nit: extractedData.nit || null,
-            clientType: clientType,
-            attachmentUrl: attachmentUrl || null,
-            attachmentName: attachmentName || null,
-            attachments: parsedAttachments,
-            emailHtml: htmlText || null
-          },
-          ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
-            let originalName = String(itm.originalName || itm.name || '').trim();
-            originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
-            const nameLower = originalName.toLowerCase();
-            let observations = itm.observations || '';
-            
-            if (nameLower.includes('libra') || nameLower.includes('lb')) {
-              if (!observations.toLowerCase().includes('libra')) {
-                observations = `Solicitado en Libras. ${observations}`.trim();
-              }
-              return { ...itm, originalName, unit: 'Lb', observations };
-            }
-            if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
-              if (!observations.toLowerCase().includes('litro')) {
-                observations = `Solicitado en Litros. ${observations}`.trim();
-              }
-              return { ...itm, originalName, unit: 'Litro', observations };
-            }
-            return { ...itm, originalName };
-          }) : [])
-        ],
-        status: 'pending'
-      });
+      processSourceIntoDrafts(extractedData, false);
     }
 
     const { data: insertedDrafts, error: draftError } = await supabaseAdmin
