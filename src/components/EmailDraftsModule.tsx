@@ -533,6 +533,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   };
   const minDeliveryDate = getMinDeliveryDate();
   const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
+  const updateGlobalDeliveryDate = (newDate: string) => {
+    setDeliveryDate(prevDate => {
+      setEditableItems(prevItems => prevItems.map(item => {
+        if (!item.deliveryDate || item.deliveryDate === prevDate) {
+          return { ...item, deliveryDate: newDate };
+        }
+        return item;
+      }));
+      return newDate;
+    });
+  };
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
@@ -1795,6 +1806,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             matched_product_id: matchedId,
             skuQuery: prod?.sku || '',
             unit: finalUnit,
+            deliveryDate: item.deliveryDate || currentAtt?.deliveryDate || metadata.deliveryDate || minDeliveryDate,
             observations: (() => {
               let extraDescription = '';
               if (prod && prod.name) {
@@ -4496,16 +4508,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <input 
-                            type="date" 
-                            value={deliveryDate} 
-                            min={minDeliveryDate}
-                            disabled={!isEditing} 
-                            onChange={(e) => {
+                               onChange={(e) => {
                               const newDate = e.target.value;
                               const minDate = getMinDeliveryDate();
                               if (newDate < minDate) {
                                 showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
-                                setDeliveryDate(minDate);
+                                updateGlobalDeliveryDate(minDate);
                                 return;
                               }
                               const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
@@ -4515,8 +4523,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   const adjustedDate = getNextAllowedDeliveryDate(newDate, allowedDays);
                                   if (adjustedDate !== newDate) {
                                     showToast(`Día no permitido. Ajustado al siguiente día válido: ${adjustedDate}`, 'info');
-                                    setDeliveryDate(adjustedDate);
+                                    updateGlobalDeliveryDate(adjustedDate);
                                     return;
+                                  }
+                                }
+                              }
+                              updateGlobalDeliveryDate(newDate);                             return;
                                   }
                                 }
                               }
@@ -7804,10 +7816,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   .eq('id', id);
               if (!error) {
                   setConversions(prev => prev.filter(c => c.id !== id));
-                  supabase.channel('master_conversions_changes').send({
-                      type: 'broadcast',
-                      event: 'conversion_update',
-                      payload: { action: 'refresh' }
+                  
+                  // Trigger local storage for cross-tab sync (same browser)
+                  localStorage.setItem('conversions_changed', Date.now().toString());
+                  
+                  // Trigger Supabase broadcast for cross-device sync
+                  const chan = supabase.channel('master_conversions_changes');
+                  chan.subscribe((status) => {
+                      if (status === 'SUBSCRIBED') {
+                          chan.send({ type: 'broadcast', event: 'conversion_update', payload: { action: 'refresh' } }).then(() => supabase.removeChannel(chan));
+                      }
                   });
               }
           };
@@ -7849,10 +7867,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   qty1Input.value = '1';
                   unit1Input.value = '';
                   qty2Input.value = '';
-                  supabase.channel('master_conversions_changes').send({
-                      type: 'broadcast',
-                      event: 'conversion_update',
-                      payload: { action: 'refresh' }
+                  
+                  // Trigger local storage for cross-tab sync (same browser)
+                  localStorage.setItem('conversions_changed', Date.now().toString());
+                  
+                  // Trigger Supabase broadcast for cross-device sync
+                  const chan = supabase.channel('master_conversions_changes');
+                  chan.subscribe((status) => {
+                      if (status === 'SUBSCRIBED') {
+                          chan.send({ type: 'broadcast', event: 'conversion_update', payload: { action: 'refresh' } }).then(() => supabase.removeChannel(chan));
+                      }
                   });
               } else {
                   alert('Ocurrió un error al guardar la equivalencia.');

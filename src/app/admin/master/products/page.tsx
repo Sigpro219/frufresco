@@ -159,7 +159,7 @@ export default function MasterProductsPage() {
         fetchProducts();
     }, [fetchProducts]);
 
-    // Realtime subscription for conversions
+    // Realtime subscription & Local Storage sync for conversions
     useEffect(() => {
         const fetchConversions = () => {
             supabase.from('product_conversions').select('*').then(({ data }) => {
@@ -167,13 +167,22 @@ export default function MasterProductsPage() {
             });
         };
 
+        // 1. Listen for Supabase Broadcast (Cross-device)
         const channel = supabase.channel('master_conversions_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'product_conversions' }, fetchConversions)
             .on('broadcast', { event: 'conversion_update' }, fetchConversions)
             .subscribe();
 
+        // 2. Listen for LocalStorage changes (Cross-tab same browser - 100% reliable)
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'conversions_changed') {
+                fetchConversions();
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+
         return () => {
             supabase.removeChannel(channel);
+            window.removeEventListener('storage', handleStorage);
         };
     }, [supabase]);
 
