@@ -619,6 +619,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return result.toISOString().split('T')[0];
   };
   const minDeliveryDate = getMinDeliveryDate();
+  const lastDraftIdRef = useRef<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
@@ -1835,6 +1836,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   useEffect(() => {
     if (selectedDraft) {
+      const isNewDraft = lastDraftIdRef.current !== selectedDraft.id;
+      lastDraftIdRef.current = selectedDraft.id;
       setIsEditing(true);
       const meta = getDraftMetadata(selectedDraft);
       const currentAtt = meta.attachments && Array.isArray(meta.attachments) ? meta.attachments[selectedAttachmentIndex] : null;
@@ -2097,27 +2100,42 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setEditableItems(initialEdits);
 
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
-      setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || meta.deliverySlot || '');
-      if (meta.priceList) {
-        setPriceList(meta.priceList);
-      } else if (matchedProfile) {
-        const effectiveClientId = matchedProfile.parent_id || matchedProfile.id;
-        const activeAgreement = effectiveClientId 
-          ? agreements.find(q => q.client_id === effectiveClientId)
-          : null;
-        if (activeAgreement) {
-          setPriceList(formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
+      if (isNewDraft) {
+        setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || meta.deliverySlot || '');
+        if (meta.priceList) {
+          setPriceList(meta.priceList);
+        } else if (matchedProfile) {
+          const effectiveClientId = matchedProfile.parent_id || matchedProfile.id;
+          const activeAgreement = effectiveClientId 
+            ? agreements.find(q => q.client_id === effectiveClientId)
+            : null;
+          if (activeAgreement) {
+            setPriceList(formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
+          } else {
+            const parentProfile = matchedProfile.parent_id ? profiles.find(p => p.id === matchedProfile.parent_id) : null;
+            const resolvedModelId = matchedProfile.pricing_model_id || parentProfile?.pricing_model_id || null;
+            const pm = resolvedModelId ? pricingModels.find(m => m.id === resolvedModelId) : null;
+            setPriceList(pm ? pm.name : 'Clientes B2C');
+          }
         } else {
-          const parentProfile = matchedProfile.parent_id ? profiles.find(p => p.id === matchedProfile.parent_id) : null;
-          const resolvedModelId = matchedProfile.pricing_model_id || parentProfile?.pricing_model_id || null;
-          const pm = resolvedModelId ? pricingModels.find(m => m.id === resolvedModelId) : null;
-          setPriceList(pm ? pm.name : 'Clientes B2C');
+          setPriceList('');
         }
+        setOrderDocument(meta.orderDocument || 'Remisión');
+        setPurchaseOrder(meta.purchaseOrder || '');
       } else {
-        setPriceList('');
+        if (currentAtt && currentAtt.deliverySlot) {
+          setEditableDeliverySlot(currentAtt.deliverySlot);
+        } else if (!editableDeliverySlot || editableDeliverySlot.trim() === '' || editableDeliverySlot.trim() === '--:--') {
+          setEditableDeliverySlot(computedSlot || meta.deliverySlot || '');
+        }
+        
+        if (!priceList && meta.priceList) {
+          setPriceList(meta.priceList);
+        }
+        if (!purchaseOrder && meta.purchaseOrder) {
+          setPurchaseOrder(meta.purchaseOrder);
+        }
       }
-      setOrderDocument(meta.orderDocument || 'Remisión');
-      setPurchaseOrder(meta.purchaseOrder || '');
       let initialDateStr = currentAtt?.deliveryDate || meta.deliveryDate || minDeliveryDate;
       if (initialDateStr < minDeliveryDate) {
         initialDateStr = minDeliveryDate;
