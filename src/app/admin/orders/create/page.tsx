@@ -285,6 +285,18 @@ function CreateOrderContent() {
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
+        if (manageConversionsProduct) {
+            setTimeout(() => {
+                const qty1 = document.getElementById('new-conv-qty-1') as HTMLInputElement | null;
+                if (qty1) {
+                    qty1.focus();
+                    qty1.select();
+                }
+            }, 100);
+        }
+    }, [manageConversionsProduct]);
+
+    useEffect(() => {
         if (selectedProductForModal) {
             // Re-fetch latest conversions for this product to prevent stale cache
             supabase
@@ -3762,6 +3774,7 @@ function CreateOrderContent() {
                                     </label>
                                     <input
                                         id="modal-qty-input"
+                                        autoComplete="off"
                                         type="text"
                                         value={modalQuantity}
                                         onChange={(e) => {
@@ -4009,7 +4022,7 @@ function CreateOrderContent() {
                     <div style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 13000, backdropFilter: 'blur(3px)'
+                        zIndex: 25000, backdropFilter: 'blur(3px)'
                     }} onClick={() => setManageConversionsProduct(null)}>
 
                         <div
@@ -4105,10 +4118,37 @@ function CreateOrderContent() {
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ flex: 1 }}>
-                                            <input id="new-conv-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                            <input 
+                                                id="new-conv-qty-1" 
+                                                type="number" 
+                                                defaultValue="1" 
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        document.getElementById('new-conv-unit-1')?.focus();
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} 
+                                            />
                                         </div>
                                         <div style={{ flex: 2 }}>
-                                            <select id="new-conv-unit-1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}>
+                                            <select 
+                                                id="new-conv-unit-1" 
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === 'ArrowRight') {
+                                                        e.preventDefault();
+                                                        const qty2 = document.getElementById('new-conv-qty-2');
+                                                        if (qty2) {
+                                                            qty2.focus();
+                                                            (qty2 as HTMLInputElement).select();
+                                                        }
+                                                    } else if (e.key === 'ArrowLeft') {
+                                                        e.preventDefault();
+                                                        document.getElementById('new-conv-qty-1')?.focus();
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}
+                                            >
                                                 <option value="">Selecciona unidad</option>
                                                 {DYNAMIC_UNITS.map(u => (
                                                     <option key={u} value={u}>{u}</option>
@@ -4123,7 +4163,21 @@ function CreateOrderContent() {
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ flex: 1 }}>
-                                            <input id="new-conv-qty-2" type="number" placeholder="Ej: 0.3" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                            <input 
+                                                id="new-conv-qty-2" 
+                                                type="number" 
+                                                placeholder="Ej: 0.3" 
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleAdd();
+                                                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        document.getElementById('new-conv-unit-1')?.focus();
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} 
+                                            />
                                         </div>
                                         <div style={{ flex: 2 }}>
                                             <div style={{ width: '100%', padding: '0.5rem', backgroundColor: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', fontWeight: '800', textAlign: 'center', color: '#15803D', fontSize: '0.9rem' }}>
