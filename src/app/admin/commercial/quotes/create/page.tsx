@@ -650,17 +650,16 @@ export default function CreateQuotePage() {
                             }
                             @page {
                                 size: letter;
-                                margin: 1.5cm;
+                                margin: 1.5cm 1.5cm 2.2cm 1.5cm;
                             }
                             footer.print-footer {
                                 position: fixed;
-                                bottom: 0;
+                                bottom: -1.2cm;
                                 left: 0;
                                 right: 0;
                                 font-size: 0.75rem;
                                 color: #94A3B8;
-                                text-align: right;
-                                padding-top: 10px;
+                                padding-top: 6px;
                                 border-top: 1px solid #E2E8F0;
                                 display: block !important;
                             }
@@ -1446,7 +1445,7 @@ export default function CreateQuotePage() {
                     /* PAGE NUMBERING */
                     footer.print-footer {
                         position: fixed;
-                        bottom: 0;
+                        bottom: -1.2cm;
                         left: 0;
                         right: 0;
                         font-size: 0.75rem;
@@ -1462,7 +1461,7 @@ export default function CreateQuotePage() {
 
                 @page { 
                     size: letter; 
-                    margin: 2cm; 
+                    margin: 1.5cm 1.5cm 2.2cm 1.5cm; 
                 }
 
                 .only-print { display: none !important; }

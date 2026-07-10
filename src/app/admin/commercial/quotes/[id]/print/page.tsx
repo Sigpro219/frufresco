@@ -196,7 +196,7 @@ export default function PrintQuotePage() {
                     }
                     footer.print-footer {
                         position: fixed;
-                        bottom: 0;
+                        bottom: -1.2cm;
                         left: 0;
                         right: 0;
                         font-size: 0.75rem;
@@ -211,7 +211,7 @@ export default function PrintQuotePage() {
                 }
                 @page {
                     size: letter;
-                    margin: 1.5cm;
+                    margin: 1.5cm 1.5cm 2.2cm 1.5cm;
                 }
                 footer.print-footer {
                     display: none;
