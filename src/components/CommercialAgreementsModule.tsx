@@ -170,7 +170,7 @@ export default function CommercialAgreementsModule() {
 
     // Calculate status of agreement dynamically
     const getAgreementStatus = (validUntil: string) => {
-        if (!validUntil) return { label: 'Sin Vencer', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const };
+        if (!validUntil) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const };
         
         const expiry = new Date(validUntil);
         const today = new Date();
