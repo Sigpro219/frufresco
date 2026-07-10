@@ -6758,6 +6758,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   Causa de Reclamación / Cancelación:
                 </label>
                 <select
+                  autoFocus
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   style={{
