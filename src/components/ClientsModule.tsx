@@ -642,7 +642,7 @@ export default function ClientsModule() {
         { id: 'dashboard', label: 'Resumen', icon: <BarChart3 size={16} /> },
         { id: 'leads', label: 'Prospectos', icon: <Mail size={16} /> },
         { id: 'b2b', label: 'Institucionales', icon: <Building2 size={16} /> },
-        { id: 'agreements', label: 'Acuerdos B2B', icon: <FileText size={16} /> },
+        { id: 'agreements', label: 'Acuerdos Institucionales', icon: <FileText size={16} /> },
         { id: 'b2c', label: 'Hogar', icon: <Users size={16} /> },
     ];
 
