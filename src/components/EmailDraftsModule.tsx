@@ -2857,8 +2857,42 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             });
           }
 
-          // F. Actualizar borrador a aprobado
+          // F. Actualizar borrador
           const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+          const updatedAttachments = metaItem.attachments && Array.isArray(metaItem.attachments) ? [...metaItem.attachments] : [];
+          let isLastAttachment = true;
+          let nextUnprocessedIdx = -1;
+
+          if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
+            updatedAttachments[selectedAttachmentIndex] = {
+              ...updatedAttachments[selectedAttachmentIndex],
+              processed: true,
+              orderId: order.id,
+              deliveryDate: deliveryDate,
+              deliverySlot: editableDeliverySlot || null,
+              items: editableItems.map(itm => ({
+                name: itm.name || itm.originalName,
+                originalName: itm.originalName,
+                quantity: itm.quantity,
+                unit: itm.unit,
+                matched_product_id: itm.matched_product_id,
+                observations: itm.observations,
+                selected_options: itm.selected_options,
+                isDeleted: itm.isDeleted,
+                deliveryDate: itm.deliveryDate || null
+              }))
+            };
+
+            for (let i = 0; i < updatedAttachments.length; i++) {
+              if (!updatedAttachments[i].processed) {
+                isLastAttachment = false;
+                if (nextUnprocessedIdx === -1) {
+                  nextUnprocessedIdx = i;
+                }
+              }
+            }
+          }
+
           const updatedMetaItem = {
             ...metaItem,
             address: editableAddress,
@@ -2869,20 +2903,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             purchaseOrder: purchaseOrder,
             latitude: draftCoordinates?.lat || metaItem.latitude || null,
             longitude: draftCoordinates?.lng || metaItem.longitude || null,
-            receiptEmailSent: true
+            receiptEmailSent: true,
+            attachments: updatedAttachments
           };
           const updatedExtractedItems = [
             updatedMetaItem,
             ...editableItems
           ];
 
-          await supabase
-            .from('order_drafts')
-            .update({ 
-              status: 'approved',
-              extracted_items: updatedExtractedItems
-            })
-            .eq('id', selectedDraft.id);
+          if (isLastAttachment) {
+            await supabase
+              .from('order_drafts')
+              .update({ 
+                status: 'approved',
+                extracted_items: updatedExtractedItems
+              })
+              .eq('id', selectedDraft.id);
+          } else {
+            await supabase
+              .from('order_drafts')
+              .update({ 
+                extracted_items: updatedExtractedItems
+              })
+              .eq('id', selectedDraft.id);
+          }
 
           // G. Enviar correo HTML de acuse de recibo con resumen de pedido
           const itemsHtml = editableItems.filter((item: any) => !item.isDeleted).map((item: any) => {
@@ -2964,8 +3008,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }).catch(e => console.error('Failed to trigger mail processor', e));
           }
 
-          showToast('Pedido registrado y acuse de recibo enviado con éxito 📧✅', 'success');
-          setSelectedDraft(null);
+          if (isLastAttachment) {
+            showToast('Pedido registrado y acuse de recibo enviado con éxito 📧✅', 'success');
+            setSelectedDraft(null);
+          } else {
+            showToast(`Pedido registrado para "${updatedAttachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+            const localDraftUpdated = {
+              ...selectedDraft,
+              extracted_items: updatedExtractedItems
+            };
+            setSelectedDraft(localDraftUpdated);
+            setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
+            if (nextUnprocessedIdx !== -1) {
+              setSelectedAttachmentIndex(nextUnprocessedIdx);
+            }
+          }
           fetchDrafts();
         } catch (err: any) {
           console.error('Error unifying order processing and receipt:', err);
