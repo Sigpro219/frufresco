@@ -129,96 +129,60 @@ export default function PrintQuotePage() {
         <div className="print-container">
             {/* Styles to inject print specifics */}
             <style dangerouslySetInnerHTML={{ __html: `
+                * { box-sizing: border-box; }
                 body {
-                    background-color: white !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    color: #0F172A !important;
-                    font-family: system-ui, -apple-system, sans-serif !important;
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                    font-size: 8.5pt !important;
-                    line-height: 1.2 !important;
+                    background-color: white;
+                    margin: 0;
+                    padding: 0;
+                    color: #0F172A;
+                    font-family: system-ui, -apple-system, sans-serif;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                    font-size: 8.5pt;
+                    line-height: 1.3;
                 }
                 .print-container {
-                    padding: 1.5cm;
-                    max-width: 800px;
-                    margin: 0 auto;
-                    position: relative;
+                    padding: 0;
+                    max-width: 100%;
+                    margin: 0;
+                    position: static;
                 }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
+                table { width: 100%; border-collapse: collapse; }
+                thead { display: table-header-group; }
+                tfoot { display: table-row-group; }
+                tfoot.print-spacer-tfoot { display: none !important; }
+                .print-footer { display: none !important; }
+                tr { page-break-inside: avoid; }
+                tr.item-row { border-bottom: 1px solid #E2E8F0; }
                 th, td {
-                    padding: 10px 8px;
+                    padding: 4px 6px;
+                    font-size: 8.5pt;
+                    line-height: 1.3;
                     text-align: left;
                 }
-                tr.item-row {
-                    border-bottom: 1px solid #E2E8F0;
-                }
-                @media print {
-                    body {
-                        background-color: white !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        font-size: 8.5pt !important;
-                        line-height: 1.2 !important;
-                    }
-                    .print-container {
-                        padding: 0 !important;
-                        max-width: 100% !important;
-                        margin: 0 !important;
-                        position: static !important;
-                    }
-                    h1, h2, h3, h4, p, div, span, td, th {
-                        font-size: 8.5pt !important;
-                        line-height: 1.2 !important;
-                    }
-                    h1 {
-                        font-size: 14pt !important;
-                    }
-                    h2, h3, h4 {
-                        font-size: 11pt !important;
-                    }
-                    table th, table td {
-                        padding: 4px 6px !important;
-                        font-size: 8.5pt !important;
-                        line-height: 1.2 !important;
-                    }
-                    tfoot {
-                        display: table-row-group !important;
-                    }
-                    tfoot.print-spacer-tfoot {
-                        display: table-footer-group !important;
-                    }
-                    tr {
-                        page-break-inside: avoid !important;
-                    }
-                    thead {
-                        page-break-after: avoid !important;
-                    }
-                    footer.print-footer {
-                        position: fixed;
-                        bottom: -1.2cm;
-                        left: 0;
-                        right: 0;
-                        font-size: 0.75rem;
-                        color: #94A3B8;
-                        border-top: 1px solid #E2E8F0;
-                        padding-top: 6px;
-                        display: block !important;
-                    }
-                    .print-page-number::after {
-                        content: "Página " counter(page);
-                    }
-                }
+                h1 { font-size: 14pt; margin: 0 0 4px 0; }
+                h2, h3, h4 { font-size: 10pt; margin: 0 0 2px 0; }
+                p, span, div { font-size: 8.5pt; }
+
                 @page {
-                    size: letter;
-                    margin: 1.5cm 1.5cm 2.2cm 1.5cm;
-                }
-                footer.print-footer {
-                    display: none;
+                    size: letter portrait;
+                    margin: 1.5cm 1.5cm 2cm 1.5cm;
+                    @bottom-left {
+                        content: "${appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}";
+                        font-size: 7.5pt;
+                        color: #94A3B8;
+                        font-family: system-ui, -apple-system, sans-serif;
+                        border-top: 1px solid #E2E8F0;
+                        padding-top: 4px;
+                    }
+                    @bottom-right {
+                        content: "Página " counter(page) " de " counter(pages);
+                        font-size: 7.5pt;
+                        color: #94A3B8;
+                        font-family: system-ui, -apple-system, sans-serif;
+                        border-top: 1px solid #E2E8F0;
+                        padding-top: 4px;
+                    }
                 }
             ` }} />
 
@@ -352,20 +316,7 @@ export default function PrintQuotePage() {
                             </td>
                         </tr>
                     </tfoot>
-                    <tfoot className="print-spacer-tfoot" style={{ display: 'none' }}>
-                        <tr>
-                            <td colSpan={6} style={{ height: '45px', border: 'none', padding: 0 }}></td>
-                        </tr>
-                    </tfoot>
                 </table>
-
-                {/* Print Footer */}
-                <footer className="print-footer">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.5pt', color: '#94A3B8', borderTop: '1px solid #E2E8F0', paddingTop: '4px' }}>
-                        <span>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'} | contacto@investmentscortes.com</span>
-                        <span className="print-page-number"></span>
-                    </div>
-                </footer>
             </div>
         </div>
     );
