@@ -463,9 +463,9 @@ export async function POST(req: Request) {
               for (let c = 0; c < row.length; c++) {
                 const val = String(row[c] || '').toLowerCase().trim();
                 if (!val) continue;
-                const isNameCol = val.match(/producto|descrip|nombre|item|art[íi]culo|material|detalle|sku|product|name|desc/i);
-                const isQtyCol = val.match(/cant|qty|quantity|pedid|solicit|volumen|peso/i) && !val.match(/medida|presentaci[óo]n/i);
-                const isUnitCol = val.match(/unidad|uom|medida|unid\.?|unit|presentaci[óo]n/i);
+                const isNameCol = val.match(/prod|descrip|nombre|item|art[íi]culo|material|detalle|sku|product|name/i);
+                const isQtyCol = val.match(/^can$|^cant|qty|quantity|pedid|solicit|volumen|peso/i) && !val.match(/medida|presentaci[óo]n/i);
+                const isUnitCol = val.match(/unidad|uom|ubm|medida|unid\.?|unit|presentaci[óo]n/i);
                 const isObsCol = val.match(/obs|observaci[óo]n|observaciones|notas|nota|obs\.?/i);
 
                 if (isNameCol) {
