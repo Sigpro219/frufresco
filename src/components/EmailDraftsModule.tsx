@@ -4937,9 +4937,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '40%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '13%' }}>PRECIO U.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '12%' }}>SUBTOTAL</th>
                         <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
@@ -5114,6 +5116,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }}
                                             />
                                           </div>
+                                          {(() => {
+                                            if (!matchedProd) return null;
+                                            const priceExists = contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null;
+                                            if (!priceExists) {
+                                              return (
+                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
+                                                  ⚠️ Sin Precio
+                                                </span>
+                                              );
+                                            }
+                                            
+                                            const isAgreement = activePricingModel?.is_agreement;
+                                            const hasAgreementPrice = isAgreement && agreementPrices[activePricingModel.id]?.[matchedProd.id] !== undefined;
+                                            
+                                            if (hasAgreementPrice) {
+                                              return (
+                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
+                                                  Tarifa Contrato
+                                                </span>
+                                              );
+                                            } else if (isB2CDefault || (!isAgreement && activePricingModel?.name === 'Clientes B2C')) {
+                                              return (
+                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
+                                                  Tarifa B2C (Defecto)
+                                                </span>
+                                              );
+                                            } else {
+                                              return (
+                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
+                                                  Tarifa Modelo
+                                                </span>
+                                              );
+                                            }
+                                          })()}
                                         </div>
                                       </div>
                                     </td>
@@ -5227,6 +5263,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                         </span>
                                       </div>
+                                    </td>
+
+                                    {/* Precio Unitario */}
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      textAlign: 'right',
+                                      width: '13%', 
+                                      backgroundColor: getCellBgColor(i, false),
+                                      fontWeight: '600',
+                                      color: '#374151',
+                                      opacity: item.isDeleted ? 0.5 : 1
+                                    }}>
+                                      {formatMoney(resolvedPrice)}
+                                    </td>
+
+                                    {/* Subtotal */}
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      textAlign: 'right',
+                                      width: '12%', 
+                                      backgroundColor: getCellBgColor(i, false),
+                                      fontWeight: '800',
+                                      color: '#059669',
+                                      opacity: item.isDeleted ? 0.5 : 1
+                                    }}>
+                                      {formatMoney(itemTotal)}
                                     </td>
 
                                     <td style={{ 
