@@ -474,15 +474,20 @@ export async function POST(req: Request) {
               for (let c = 0; c < row.length; c++) {
                 const val = String(row[c] || '').toLowerCase().trim();
                 if (!val) continue;
-                if (val.match(/^(descripci[óo]n|producto|nombre|item|art[íi]culo|detalle|sku|desc|product|name)$/i) || val.match(/(descripci[óo]n\s+de\s+producto|nombre\s+del\s+producto|desc\s+producto)/i)) {
+                const isNameCol = val.match(/producto|descrip|nombre|item|art[íi]culo|material|detalle|sku|product|name|desc/i);
+                const isQtyCol = val.match(/cant|qty|quantity|pedid|solicit|volumen|peso/i) && !val.match(/medida|presentaci[óo]n/i);
+                const isUnitCol = val.match(/unidad|uom|medida|unid\.?|unit|presentaci[óo]n/i);
+                const isObsCol = val.match(/obs|observaci[óo]n|observaciones|notas|nota|obs\.?/i);
+
+                if (isNameCol) {
                   if (nameIdx === -1) nameIdx = c;
-                } else if (val.match(/^(cant|cantidad|unidades|qty|quantity|cant\.?|cant\s+pedida)$/i)) {
-                  if (qtyIdx === -1 || (val === 'unidades' && qtyIdx !== -1)) {
+                } else if (isQtyCol) {
+                  if (qtyIdx === -1 || (val.includes('unidad') && qtyIdx !== -1)) {
                     if (qtyIdx === -1) qtyIdx = c;
                   }
-                } else if (val.match(/^(unidad|uom|medida|unid\.?|unit|presentaci[óo]n)$/i)) {
+                } else if (isUnitCol) {
                   if (unitIdx === -1) unitIdx = c;
-                } else if (val.match(/^(obs|observaci[óo]n|observaciones|notas|nota|obs\.?)$/i)) {
+                } else if (isObsCol) {
                   if (obsIdx === -1) obsIdx = c;
                 }
               }
@@ -496,17 +501,26 @@ export async function POST(req: Request) {
               }
             }
 
+            const isNumeric = (val: any): boolean => {
+              if (val === null || val === undefined) return false;
+              if (typeof val === 'number') return !isNaN(val);
+              const str = String(val).trim().replace(',', '.');
+              if (str === '') return false;
+              const num = Number(str);
+              return !isNaN(num);
+            };
+
             if (nameColIdx === -1 || qtyColIdx === -1) {
               for (let r = 0; r < Math.min(allRows.length, 15); r++) {
                 const row = allRows[r];
                 if (!row || row.length < 2) continue;
-                if (typeof row[0] === 'string' && row[0].length > 3 && typeof row[1] === 'number') {
+                if (typeof row[0] === 'string' && row[0].length > 3 && isNumeric(row[1])) {
                   headerRowIdx = r - 1;
                   nameColIdx = 0;
                   qtyColIdx = 1;
                   break;
                 }
-                if (typeof row[1] === 'string' && row[1].length > 3 && typeof row[2] === 'number') {
+                if (typeof row[1] === 'string' && row[1].length > 3 && isNumeric(row[2])) {
                   headerRowIdx = r - 1;
                   nameColIdx = 1;
                   qtyColIdx = 2;
@@ -566,7 +580,7 @@ export async function POST(req: Request) {
           ${attExcelTextContext}
           TAREA:
           1. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el correo y el Excel.
-          2. IMPORTANTE EN EXCEL: Ya contamos con un lector programático rápido que extraerá la lista de productos del archivo. Por lo tanto, tu prioridad número 1 es extraer los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType'). Puedes dejar la lista de 'items' vacía [] o incluir solo los primeros 2 productos de muestra en el JSON.
+          2. IMPORTANTE EN EXCEL: Extrae la lista completa de productos del Excel/CSV en la propiedad 'items' (con 'originalName', 'quantity', 'unit' y 'observations' si aplica) para que sirva como respaldo por si nuestro lector automático rápido llega a fallar. Además, extrae los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType').
           3. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
           4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
           5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" o null.
@@ -580,7 +594,9 @@ export async function POST(req: Request) {
             "deliverySlot": "AM / PM / Cualquier hora / null",
             "deliveryDate": "YYYY-MM-DD o null",
             "clientType": "b2b_client o b2c_client",
-            "items": []
+            "items": [
+              { "originalName": "Nombre del producto", "quantity": 10, "unit": "Kg", "observations": null }
+            ]
           }
           `;
           try {
@@ -606,12 +622,17 @@ export async function POST(req: Request) {
 
             if (attProgrammaticExcelItems.length > 0) {
               attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
+            } else if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
+              // Fallback: Usar los productos extraídos por Gemini si el lector programático no obtuvo nada
+              attExtractedData.items = filterExcelItems(attExtractedData.items, attExtractedData.clientInDocument || '');
             } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
                 attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
               } else {
                 attExtractedData.items = [];
               }
+            } else {
+              attExtractedData.items = [];
             }
           } catch (e) {
             console.error('Failed to parse Gemini output for Excel content:', e);
