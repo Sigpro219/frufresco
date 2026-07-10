@@ -132,12 +132,30 @@ export default function MasterProductsPage() {
 
             setProducts(allProducts);
 
+            // Fetch conversions paginated
+            let allConvs: any[] = [];
+            let hasMoreConvs = true;
+            let fromConv = 0;
+            const limitConv = 1000;
+            while (hasMoreConvs) {
+                const { data: convData } = await supabase
+                    .from('product_conversions')
+                    .select('*')
+                    .range(fromConv, fromConv + limitConv - 1);
+                if (convData && convData.length > 0) {
+                    allConvs = [...allConvs, ...convData];
+                    fromConv += limitConv;
+                    if (convData.length < limitConv) hasMoreConvs = false;
+                } else {
+                    hasMoreConvs = false;
+                }
+            }
+            setConversions(allConvs as ProductConversion[]);
+
             // Cargas secundarias (simultáneas para no bloquear UI)
             Promise.all([
-                supabase.from('product_conversions').select('*'),
                 supabase.from('app_settings').select('value').eq('key', 'standard_units').maybeSingle()
-            ]).then(([conv, settings]) => {
-                if (conv.data) setConversions(conv.data as ProductConversion[]);
+            ]).then(([settings]) => {
                 if (settings.data?.value) setDynamicUnits((settings.data.value as string).split(','));
             }).catch(e => console.warn('Carga secundaria falló:', e));
 
@@ -162,9 +180,16 @@ export default function MasterProductsPage() {
     // Realtime subscription & Local Storage sync for conversions
     useEffect(() => {
         const fetchConversions = () => {
-            supabase.from('product_conversions').select('*').then(({ data }) => {
-                if (data) setConversions(data as ProductConversion[]);
-            });
+            if (conversionProduct) {
+                supabase.from('product_conversions').select('*').eq('product_id', conversionProduct.id).then(({ data }) => {
+                    if (data) {
+                        setConversions(prev => {
+                            const filtered = prev.filter(c => c.product_id !== conversionProduct.id);
+                            return [...filtered, ...(data as ProductConversion[])];
+                        });
+                    }
+                });
+            }
         };
 
         // 1. Listen for Supabase Broadcast (Cross-device)
@@ -207,6 +232,24 @@ export default function MasterProductsPage() {
             }
         }
     }, [products]);
+
+    // Fetch conversions on demand when modal opens
+    useEffect(() => {
+        if (conversionProduct) {
+            supabase
+                .from('product_conversions')
+                .select('*')
+                .eq('product_id', conversionProduct.id)
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        setConversions(prev => {
+                            const filtered = prev.filter(c => c.product_id !== conversionProduct.id);
+                            return [...filtered, ...(data as ProductConversion[])];
+                        });
+                    }
+                });
+        }
+    }, [conversionProduct]);
 
     // Helper para generar SKU técnico secuencial
     const generateSequentialSKU = (lastSKU: string) => {
@@ -1678,7 +1721,7 @@ export default function MasterProductsPage() {
                                                     gap: '3px'
                                                 }}
                                             >
-                                                <Scale size={10} strokeWidth={1.5} /> {formatNumber(conversions.filter(c => c.product_id === p.id).length)} Eq.
+                                                <Scale size={10} strokeWidth={1.5} /> Equivalencias
                                             </button>
                                             <div style={{ 
                                                 fontSize: '0.65rem', 

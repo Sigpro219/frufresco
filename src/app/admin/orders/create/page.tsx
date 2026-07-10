@@ -296,6 +296,47 @@ function CreateOrderContent() {
         }
     }, [manageConversionsProduct]);
 
+    // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // ── ESC: cierra modales en orden de prioridad (más específico → más general) ──
+            if (e.key === 'Escape') {
+                if (variantConfigProduct) { setVariantConfigProduct(null); return; }
+                if (manageConversionsProduct) { setManageConversionsProduct(null); return; }
+                if (selectedProductForModal) { setSelectedProductForModal(null); return; }
+                if (showMapPicker) { setShowMapPicker(false); return; }
+                if (showFloatingDoc) { setShowFloatingDoc(false); return; }
+                if (deleteConfirm) { setDeleteConfirm(null); return; }
+                if (duplicateConfirm) { setDuplicateConfirm(null); return; }
+                return;
+            }
+
+            // Los atajos Alt solo aplican cuando el modal de producto está abierto
+            if (!selectedProductForModal) return;
+
+            // Alt+V → Editar Variantes
+            if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
+                if (!variantConfigProduct && !manageConversionsProduct) {
+                    e.preventDefault();
+                    setVariantConfigProduct(selectedProductForModal);
+                }
+                return;
+            }
+
+            // Alt+E → Editar Equivalencias
+            if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
+                if (!variantConfigProduct && !manageConversionsProduct) {
+                    e.preventDefault();
+                    setManageConversionsProduct(selectedProductForModal);
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedProductForModal, variantConfigProduct, manageConversionsProduct, showMapPicker, showFloatingDoc, deleteConfirm, duplicateConfirm]);
+
     useEffect(() => {
         if (selectedProductForModal) {
             // Re-fetch latest conversions for this product to prevent stale cache
@@ -586,9 +627,27 @@ function CreateOrderContent() {
                 .eq('is_active', true)
                 .order('contact_name', { ascending: true });
 
-            const fetchConversions = supabase
-                .from('product_conversions')
-                .select('*');
+            const fetchConversions = (async () => {
+                let allConvs: any[] = [];
+                let hasMore = true;
+                let from = 0;
+                const limit = 1000;
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('product_conversions')
+                        .select('*')
+                        .range(from, from + limit - 1);
+                    if (error) return { data: null, error };
+                    if (data && data.length > 0) {
+                        allConvs = [...allConvs, ...data];
+                        from += limit;
+                        if (data.length < limit) hasMore = false;
+                    } else {
+                        hasMore = false;
+                    }
+                }
+                return { data: allConvs, error: null };
+            })();
 
             const [resB2B, resB2C, resConvs] = await Promise.all([fetchB2B, fetchB2C, fetchConversions]);
 
@@ -3672,17 +3731,13 @@ function CreateOrderContent() {
                                         textDecoration: 'underline'
                                     }}
                                 >
-                                    ⚙️ Editar Variantes
+                                    ⚙️ Editar Variantes <span style={{ opacity: 0.5, fontWeight: 400 }}>[Alt+V]</span>
                                 </button>
                                 <span>|</span>
                                 <button
                                     type="button"
                                     tabIndex={-1}
-                                    onClick={() => {
-                                        if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
-                                            setManageConversionsProduct(selectedProductForModal);
-                                        }
-                                    }}
+                                    onClick={() => setManageConversionsProduct(selectedProductForModal)}
                                     style={{
                                         background: 'none',
                                         border: 'none',
@@ -3694,7 +3749,7 @@ function CreateOrderContent() {
                                         textDecoration: 'underline'
                                     }}
                                 >
-                                    ⚙️ Editar Equivalencias
+                                    ⚙️ Editar Equivalencias <span style={{ opacity: 0.5, fontWeight: 400 }}>[Alt+E]</span>
                                 </button>
                             </div>
 

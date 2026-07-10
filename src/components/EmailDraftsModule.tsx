@@ -1313,8 +1313,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const fetchConversions = async () => {
     try {
-      const { data } = await supabase.from('product_conversions').select('*');
-      if (data) setConversions(data);
+      let allConvs: any[] = [];
+      let hasMoreConvs = true;
+      let fromConv = 0;
+      const limitConv = 1000;
+      while (hasMoreConvs) {
+        const { data: convData } = await supabase
+          .from('product_conversions')
+          .select('*')
+          .range(fromConv, fromConv + limitConv - 1);
+        if (convData && convData.length > 0) {
+          allConvs = [...allConvs, ...convData];
+          fromConv += limitConv;
+          if (convData.length < limitConv) hasMoreConvs = false;
+        } else {
+          hasMoreConvs = false;
+        }
+      }
+      setConversions(allConvs);
     } catch (e) {
       console.error('Error loading product conversions:', e);
     }
