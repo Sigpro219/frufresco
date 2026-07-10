@@ -1121,6 +1121,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [agreements, setAgreements] = useState<any[]>([]);
   const [agreementPrices, setAgreementPrices] = useState<Record<string, Record<string, number>>>({});
 
+  const formatAgreementNumber = (seq: number, dateStr?: string) => {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const paddedSeq = String(seq).padStart(4, '0');
+    return `ACI ${day}${month} ${paddedSeq}`;
+  };
+
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
   const [activePricingModel, setActivePricingModel] = useState<any>(null);
   const [isB2CDefault, setIsB2CDefault] = useState(false);
@@ -2090,7 +2098,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
       setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || meta.deliverySlot || '');
-      setPriceList(meta.priceList || '');
+      if (meta.priceList) {
+        setPriceList(meta.priceList);
+      } else if (matchedProfile) {
+        const effectiveClientId = matchedProfile.parent_id || matchedProfile.id;
+        const activeAgreement = effectiveClientId 
+          ? agreements.find(q => q.client_id === effectiveClientId)
+          : null;
+        if (activeAgreement) {
+          setPriceList(formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
+        } else {
+          const parentProfile = matchedProfile.parent_id ? profiles.find(p => p.id === matchedProfile.parent_id) : null;
+          const resolvedModelId = matchedProfile.pricing_model_id || parentProfile?.pricing_model_id || null;
+          const pm = resolvedModelId ? pricingModels.find(m => m.id === resolvedModelId) : null;
+          setPriceList(pm ? pm.name : 'Clientes B2C');
+        }
+      } else {
+        setPriceList('');
+      }
       setOrderDocument(meta.orderDocument || 'Remisión');
       setPurchaseOrder(meta.purchaseOrder || '');
       let initialDateStr = currentAtt?.deliveryDate || meta.deliveryDate || minDeliveryDate;
@@ -4483,6 +4508,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     profile_id: foundProf.id,
                                     client_detected_name: foundProf.company_name || foundProf.contact_name || ''
                                   }));
+                                  
+                                  const effectiveClientId = foundProf.parent_id || foundProf.id;
+                                  const activeAgreement = effectiveClientId 
+                                    ? agreements.find(q => q.client_id === effectiveClientId)
+                                    : null;
+                                  if (activeAgreement) {
+                                    setPriceList(formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
+                                  } else {
+                                    const parentProfile = foundProf.parent_id ? profiles.find(p => p.id === foundProf.parent_id) : null;
+                                    const resolvedModelId = foundProf.pricing_model_id || parentProfile?.pricing_model_id || null;
+                                    const pm = resolvedModelId ? pricingModels.find(m => m.id === resolvedModelId) : null;
+                                    setPriceList(pm ? pm.name : 'Clientes B2C');
+                                  }
+
                                   setEditableClientName(foundProf.company_name || foundProf.contact_name || '');
                                   setEditableClientPhone(foundProf.phone && foundProf.phone !== '0' ? foundProf.phone : '');
                                   setEditableClientNit(foundProf.nit || '');
