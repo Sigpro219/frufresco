@@ -2688,8 +2688,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
     const metadataForValidations = getDraftMetadata(selectedDraft);
     const currentDeliverySlot = editableDeliverySlot || metadataForValidations?.deliverySlot;
-    if (!deliveryDate || !currentDeliverySlot) {
-      showToast('Error: Debes seleccionar una fecha y franja de entrega válida.', 'error');
+    
+    if (!deliveryDate) {
+      showToast('Error: Debes seleccionar una fecha de entrega válida.', 'error');
+      return;
+    }
+
+    if (!currentDeliverySlot || currentDeliverySlot.trim() === '' || currentDeliverySlot.trim() === '--:--') {
+      showToast('Error: Debes indicar una hora de entrega válida.', 'error');
+      return;
+    }
+
+    if (!priceList || priceList.trim() === '') {
+      showToast('Error: La lista de precios no puede estar vacía.', 'error');
+      return;
+    }
+
+    if (!purchaseOrder || purchaseOrder.trim() === '') {
+      showToast('Error: La orden de compra no puede estar vacía.', 'error');
       return;
     }
 
