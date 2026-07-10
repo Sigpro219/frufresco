@@ -6758,6 +6758,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <select
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
                   style={{
                     width: '100%',
                     padding: '0.65rem 1rem',
