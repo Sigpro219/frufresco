@@ -2687,14 +2687,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
 
     const metadataForValidations = getDraftMetadata(selectedDraft);
-    const currentDeliverySlot = editableDeliverySlot || metadataForValidations?.deliverySlot;
     
     if (!deliveryDate) {
       showToast('Error: Debes seleccionar una fecha de entrega válida.', 'error');
       return;
     }
 
-    if (!currentDeliverySlot || currentDeliverySlot.trim() === '' || currentDeliverySlot.trim() === '--:--') {
+    if (!editableDeliverySlot || editableDeliverySlot.trim() === '' || editableDeliverySlot.trim() === '--:--') {
       showToast('Error: Debes indicar una hora de entrega válida.', 'error');
       return;
     }
