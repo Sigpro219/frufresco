@@ -201,10 +201,12 @@ export default function PrintQuotePage() {
                         right: 0;
                         font-size: 0.75rem;
                         color: #94A3B8;
-                        text-align: right;
-                        padding-top: 10px;
                         border-top: 1px solid #E2E8F0;
+                        padding-top: 6px;
                         display: block !important;
+                    }
+                    .print-page-number::after {
+                        content: "Página " counter(page);
                     }
                 }
                 @page {
@@ -350,9 +352,9 @@ export default function PrintQuotePage() {
 
                 {/* Print Footer */}
                 <footer className="print-footer">
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'} - Cotización</span>
-                        <span>Página 1</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.5pt', color: '#94A3B8', borderTop: '1px solid #E2E8F0', paddingTop: '4px' }}>
+                        <span>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'} | contacto@investmentscortes.com</span>
+                        <span className="print-page-number"></span>
                     </div>
                 </footer>
             </div>
