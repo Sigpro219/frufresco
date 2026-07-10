@@ -1313,8 +1313,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const fetchConversions = async () => {
     try {
-      const { data } = await supabase.from('product_conversions').select('*');
-      if (data) setConversions(data);
+      let allConvs: any[] = [];
+      let hasMoreConvs = true;
+      let fromConv = 0;
+      const limitConv = 1000;
+      while (hasMoreConvs) {
+        const { data: convData } = await supabase
+          .from('product_conversions')
+          .select('*')
+          .range(fromConv, fromConv + limitConv - 1);
+        if (convData && convData.length > 0) {
+          allConvs = [...allConvs, ...convData];
+          fromConv += limitConv;
+          if (convData.length < limitConv) hasMoreConvs = false;
+        } else {
+          hasMoreConvs = false;
+        }
+      }
+      setConversions(allConvs);
     } catch (e) {
       console.error('Error loading product conversions:', e);
     }
@@ -2212,11 +2228,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         (target as HTMLInputElement).type === 'password'
       )) || target.tagName === 'TEXTAREA';
 
+      if (target.tagName === 'SELECT') return;
+
       const isBypassKey = isAltShortcut || e.ctrlKey || e.metaKey || e.key === 'Escape' ||
         (e.key === 'Enter' && (!!actionConfirm || !!deleteConfirm || !!rejectModal || !!showConfirmModal || !!obsModal)) ||
         (e.key === 'Delete' && !isTextInput);
 
-      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !isBypassKey) return;
 
       // Handle Enter key for confirmation modals
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -4137,7 +4155,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }}
                 >
                   <Mail size={14} />
-                  {showFloatingEmail ? 'Ocultar Texto Original (Alt+O)' : 'Ver Texto Original (Alt+O)'}
+                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
                 </button>
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
