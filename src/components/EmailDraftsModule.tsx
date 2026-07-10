@@ -2228,11 +2228,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         (target as HTMLInputElement).type === 'password'
       )) || target.tagName === 'TEXTAREA';
 
+      if (target.tagName === 'SELECT') return;
+
       const isBypassKey = isAltShortcut || e.ctrlKey || e.metaKey || e.key === 'Escape' ||
         (e.key === 'Enter' && (!!actionConfirm || !!deleteConfirm || !!rejectModal || !!showConfirmModal || !!obsModal)) ||
         (e.key === 'Delete' && !isTextInput);
 
-      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !isBypassKey) return;
 
       // Handle Enter key for confirmation modals
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -6758,7 +6760,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <select
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  onKeyDown={(e) => e.stopPropagation()}
                   style={{
                     width: '100%',
                     padding: '0.65rem 1rem',
