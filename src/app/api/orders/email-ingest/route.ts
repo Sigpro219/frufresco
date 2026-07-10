@@ -1125,12 +1125,64 @@ export async function POST(req: Request) {
     }
 
     // 5. Save draft to public.order_drafts
-    // Use the predefined draftUuid so we can reference its short ID immediately
-    const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
+    const draftsToInsert = [];
 
-    const { data: newDraft, error: draftError } = await supabaseAdmin
-      .from('order_drafts')
-      .insert({
+    if (parsedAttachments.length > 1) {
+      for (let index = 0; index < parsedAttachments.length; index++) {
+        const att = parsedAttachments[index];
+        const uniqueDraftUuid = crypto.randomUUID();
+        const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
+        const attItems = Array.isArray(att.items) ? att.items : [];
+
+        draftsToInsert.push({
+          id: uniqueDraftUuid,
+          profile_id: profile ? profile.id : null,
+          client_detected_name: (att.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
+          source_email: senderEmail,
+          email_subject: `[${shortCode}] [Adjunto ${index + 1}/${parsedAttachments.length}] ${subject}`,
+          email_body: currentPlainText,
+          extracted_items: [
+            { 
+              isMetadata: true, 
+              address: att.address || extractedData.address || null,
+              addressDetected: addressDetected,
+              deliverySlot: att.deliverySlot || finalDeliverySlot,
+              deliveryDate: att.deliveryDate || targetDeliveryDate || null,
+              phone: att.phone || extractedData.phone || null,
+              nit: att.nit || extractedData.nit || null,
+              clientType: att.clientType || clientType,
+              attachmentUrl: att.url || null,
+              attachmentName: att.name || null,
+              attachments: [att],
+              emailHtml: htmlText || null
+            },
+            ...attItems.map((itm: any) => {
+              let originalName = String(itm.originalName || itm.name || '').trim();
+              originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
+              const nameLower = originalName.toLowerCase();
+              let observations = itm.observations || '';
+              
+              if (nameLower.includes('libra') || nameLower.includes('lb')) {
+                if (!observations.toLowerCase().includes('libra')) {
+                  observations = `Solicitado en Libras. ${observations}`.trim();
+                }
+                return { ...itm, originalName, unit: 'Lb', observations };
+              }
+              if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+                if (!observations.toLowerCase().includes('litro')) {
+                  observations = `Solicitado en Litros. ${observations}`.trim();
+                }
+                return { ...itm, originalName, unit: 'Litro', observations };
+              }
+              return { ...itm, originalName };
+            })
+          ],
+          status: 'pending'
+        });
+      }
+    } else {
+      const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
+      draftsToInsert.push({
         id: draftUuid,
         profile_id: profile ? profile.id : null,
         client_detected_name: (extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
@@ -1154,58 +1206,41 @@ export async function POST(req: Request) {
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
             let originalName = String(itm.originalName || itm.name || '').trim();
-            // Clean trailing package/quantity details like "x 1000 g", "x 500g", "1000 gr", etc.
             originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
-            
             const nameLower = originalName.toLowerCase();
-            let quantity = itm.quantity;
             let observations = itm.observations || '';
             
-            // Si el nombre original contiene la palabra 'libra' o 'libras' o 'lb'
             if (nameLower.includes('libra') || nameLower.includes('lb')) {
-              // Si la unidad detectada en base de datos es Kg, 1 libra = 0.5 Kg.
-              // Indicamos en las observaciones que se solicitó en libras
               if (!observations.toLowerCase().includes('libra')) {
                 observations = `Solicitado en Libras. ${observations}`.trim();
               }
-              // Opcional: Podríamos convertir la cantidad a Kg (ej: 1 libra = 0.5 Kg) si se asume Kg por defecto
-              // Pero el frontend/sistema de equivalencias requiere saber la cantidad original y la unidad.
-              // Agregamos un flag de unidad 'Lb' o similar al objeto del item
-              return {
-                ...itm,
-                originalName: originalName,
-                unit: 'Lb',
-                observations: observations
-              };
+              return { ...itm, originalName, unit: 'Lb', observations };
             }
             if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
               if (!observations.toLowerCase().includes('litro')) {
                 observations = `Solicitado en Litros. ${observations}`.trim();
               }
-              return {
-                ...itm,
-                originalName: originalName,
-                unit: 'Litro',
-                observations: observations
-              };
+              return { ...itm, originalName, unit: 'Litro', observations };
             }
-            return {
-              ...itm,
-              originalName: originalName
-            };
+            return { ...itm, originalName };
           }) : [])
         ],
         status: 'pending'
-      })
-      .select()
-      .single();
+      });
+    }
+
+    const { data: insertedDrafts, error: draftError } = await supabaseAdmin
+      .from('order_drafts')
+      .insert(draftsToInsert)
+      .select();
 
     if (draftError) {
       console.error('[Email Inbound] Error saving draft:', draftError);
       return NextResponse.json({ error: draftError.message }, { status: 500 });
     }
 
-    console.log('[Email Inbound] Draft created successfully:', newDraft.id);
+    const newDraft = insertedDrafts?.[0] || { id: draftsToInsert[0]?.id };
+    console.log('[Email Inbound] Draft(s) created successfully:', insertedDrafts?.map(d => d.id));
     supabaseAdmin.from('raw_emails').update({ status: 'success' }).eq('payload->>envelope->>from', fromField).then(()=>{}, ()=>{});
 
     // 4. Send confirmation email to the client using Nodemailer
@@ -1386,7 +1421,7 @@ export async function POST(req: Request) {
         }
         
         const clientName = extractedClientName || profile?.company_name || profile?.contact_name || '';
-        const draftIdStr = shortCode;
+        const draftIdStr = `EML-${newDraft.id.substring(0, 6).toUpperCase()}`;
 
         const emailHtml = `
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
