@@ -387,13 +387,14 @@ export async function POST(req: Request) {
            - Si no hay información de horario, pon null.
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
+        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
              - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
              - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
              - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
              - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
+             - IMPORTANTE: Si la tabla contiene una columna de fecha de entrega individual por producto (ej. "F. Entrega", "Fecha de entrega", "Fecha"), o si se especifica explícitamente una fecha de entrega en la misma línea del producto, extrae obligatoriamente esa fecha específica en el campo "deliveryDate" de ese ítem en formato "YYYY-MM-DD". Si el ítem no tiene una fecha de entrega específica por línea, coloca null.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
@@ -421,7 +422,13 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
+            { 
+              "originalName": "Nombre del Producto", 
+              "quantity": 10, 
+              "unit": "Kg / Lb / Unidad / Litro / null", 
+              "observations": "Cualquier nota u observación específica del producto o null",
+              "deliveryDate": "YYYY-MM-DD o null"
+            }
           ]
         }
       `;
@@ -697,11 +704,15 @@ export async function POST(req: Request) {
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
            - Si el horario cubre tanto mañana como tarde (ej. "7:00 am a 4:00 pm", "todo el día", "cualquier hora"), asume "Cualquier hora".
            - Si se listan horarios por sede (ej. "Bosques de Athan: 7am a 4pm", "Clínica Roma: 7:30am a 11:50am"), intenta deducir cuál aplica basándote en el nombre o dirección del cliente. Si no se puede deducir o es el horario general (ej. "horario de recibo es de 7:00 a 11:00"), asume la jornada del horario general o la que corresponda (ej. "7:00 a 11:00 de la mañana" -> "AM").
-           - Si no hay información de horario, pon null.
-           - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
+         5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega is 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
         6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
-        7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
+        7. Extrae todos los productos solicitados y su cantidad numérica.
+           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
+           - NO confundas el código PLU (primera columna) con la cantidad. 
+           - IMPORTANTE: Si se especifica explícitamente una fecha de entrega en la misma línea o párrafo del producto (ej. "Hierbabuena para el 23/07"), extrae obligatoriamente esa fecha específica en el campo "deliveryDate" de ese ítem en formato "YYYY-MM-DD". Si el ítem no tiene una fecha de entrega específica por línea, coloca null.
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+           - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
+        8. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
            - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
            - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
         
@@ -709,7 +720,7 @@ export async function POST(req: Request) {
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
         - Las cantidades deben ser numéricas.
         - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos.
-
+ 
         REGLAS DE EXCLUSIÓN CRÍTICA DE PRODUCTOS:
         * NUNCA extraigas el nombre del cliente, dirección, teléfono, NIT, número de factura o cualquier información de la cabecera/pie de página como si fuera un producto.
         * Si detectas un texto que coincide con el nombre de la empresa (ej. "CLUB BELLAVISTA", "ADR WORK", etc.) y un valor numérico extremadamente grande al lado (ej. "7900405437", "800234123", etc. que claramente es un teléfono, NIT o código de barra), es información del cliente/documento, NO es un producto del pedido. Queda TERMINANTEMENTE PROHIBIDO incluirlo en la lista de 'items'.
@@ -726,7 +737,13 @@ export async function POST(req: Request) {
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Tomate Chonto", "quantity": 15, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
+            { 
+              "originalName": "Tomate Chonto", 
+              "quantity": 15, 
+              "unit": "Kg / Lb / Unidad / Litro / null", 
+              "observations": "Cualquier nota u observación específica del producto o null",
+              "deliveryDate": "YYYY-MM-DD o null"
+            }
           ]
         }
       `;

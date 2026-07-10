@@ -1812,6 +1812,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             matched_product_id: matchedId,
             skuQuery: prod?.sku || '',
             unit: finalUnit,
+            deliveryDate: item.deliveryDate || null,
             observations: (() => {
               let extraDescription = '';
               if (prod && prod.name) {
@@ -2945,13 +2946,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
 
-      // Calculate totals
-      let totalAmount = 0;
-      let totalWeight = 0;
-      const itemsData: any[] = [];
+      // Verify zero price items first for all items
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
-
       for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
@@ -2962,20 +2959,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               zeroPriceItemName = prod.name;
               break;
             }
-            const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-            totalAmount += resolvedPrice * qtyNum;
-            const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
-            totalWeight += qtyNum * w;
-
-            itemsData.push({
-              product_id: prod.id,
-              quantity: qtyNum,
-              unit_price: resolvedPrice,
-              nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
-              variant_label: item.observations || null,
-              unit: item.unit || prod.unit_of_measure || 'Kg',
-              selected_options: item.selected_options || {}
-            });
           }
         }
       }
@@ -2986,47 +2969,97 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return;
       }
 
-      // 2. Create the order
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          profile_id: finalProfileId,
+      // Group active items by deliveryDate
+      const activeItems = editableItems.filter(itm => !itm.isDeleted);
+      const groups: Record<string, any[]> = {};
+      for (const item of activeItems) {
+        const itemDate = item.deliveryDate || deliveryDate;
+        if (!groups[itemDate]) {
+          groups[itemDate] = [];
+        }
+        groups[itemDate].push(item);
+      }
+
+      const createdOrderIds: string[] = [];
+      const createdOrdersInfo: { id: string; total: number; deliveryDate: string; items: any[] }[] = [];
+
+      // Create an order for each date group
+      for (const [groupDate, groupItems] of Object.entries(groups)) {
+        let totalAmount = 0;
+        let totalWeight = 0;
+        const itemsData: any[] = [];
+
+        for (const item of groupItems) {
+          if (item.matched_product_id) {
+            const prod = products.find(p => p.id === item.matched_product_id);
+            if (prod) {
+              const resolvedPrice = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : prod.base_price;
+              const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+              totalAmount += resolvedPrice * qtyNum;
+              const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+              totalWeight += qtyNum * w;
+
+              itemsData.push({
+                product_id: prod.id,
+                quantity: qtyNum,
+                unit_price: resolvedPrice,
+                nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
+                variant_label: item.observations || null,
+                unit: item.unit || prod.unit_of_measure || 'Kg',
+                selected_options: item.selected_options || {}
+              });
+            }
+          }
+        }
+
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            profile_id: finalProfileId,
+            total: totalAmount,
+            total_weight_kg: totalWeight,
+            status: 'pending_approval',
+            payment_status: 'Pendiente',
+            payment_method: paymentMethod,
+            origin: 'Email Ingest',
+            origin_source: 'email',
+            delivery_date: groupDate,
+            delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+            admin_notes: finalAdminNotes,
+            shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
+            latitude: draftCoordinates?.lat || metadata?.latitude || null,
+            longitude: draftCoordinates?.lng || metadata?.longitude || null
+          })
+          .select()
+          .single();
+
+        if (orderError) {
+          throw new Error(`Error al registrar pedido para la fecha ${groupDate}: ${orderError.message}`);
+        }
+
+        createdOrderIds.push(order.id);
+        createdOrdersInfo.push({
+          id: order.id,
           total: totalAmount,
-          total_weight_kg: totalWeight,
-          status: 'pending_approval',
-          payment_status: 'Pendiente',
-          payment_method: paymentMethod,
-          origin: 'Email Ingest',
-          origin_source: 'email',
-          delivery_date: deliveryDate,
-          delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
-          admin_notes: finalAdminNotes,
-          shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
-          latitude: draftCoordinates?.lat || metadata?.latitude || null,
-          longitude: draftCoordinates?.lng || metadata?.longitude || null
-        })
-        .select()
-        .single();
+          deliveryDate: groupDate,
+          items: itemsData
+        });
 
-      if (orderError) {
-        throw new Error('Error al registrar pedido: ' + orderError.message);
+        const finalItemsData = itemsData.map(itm => ({
+          order_id: order.id,
+          ...itm
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(finalItemsData);
+
+        if (itemsError) {
+          throw new Error(`Error al registrar ítems para la fecha ${groupDate}: ${itemsError.message}`);
+        }
       }
 
-      // 3. Create order items
-      const finalItemsData = itemsData.map(itm => ({
-        order_id: order.id,
-        ...itm
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(finalItemsData);
-
-      if (itemsError) {
-        throw new Error('Error al registrar ítems: ' + itemsError.message);
-      }
-
-      // 4. Update the draft status to approved and save updated attachments list
+      // Update the draft status to approved and save updated attachments list
       const updatedAttachments = metadata.attachments && Array.isArray(metadata.attachments) ? [...metadata.attachments] : [];
       let isLastAttachment = true;
       let nextUnprocessedIdx = -1;
@@ -3035,7 +3068,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         updatedAttachments[selectedAttachmentIndex] = {
           ...updatedAttachments[selectedAttachmentIndex],
           processed: true,
-          orderId: order.id,
+          orderId: createdOrderIds[0] || null,
+          orderIds: createdOrderIds,
           deliveryDate: deliveryDate,
           deliverySlot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
           items: editableItems.map(itm => ({
@@ -3046,7 +3080,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             matched_product_id: itm.matched_product_id,
             observations: itm.observations,
             selected_options: itm.selected_options,
-            isDeleted: itm.isDeleted
+            isDeleted: itm.isDeleted,
+            deliveryDate: itm.deliveryDate
           }))
         };
 
@@ -3087,41 +3122,47 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           .eq('id', selectedDraft.id);
       }
 
-      // 5. Send confirmation email (queue in mail table)
+      // Send confirmation emails (queue in mail table) for each created order
       if (selectedDraft.source_email && sendConfirmationEmail) {
-        const formattedItems = editableItems.map(item => {
-          const prod = products.find(p => p.id === item.matched_product_id);
-          const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-          const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
-          return {
-            name: prod?.name || item.originalName || 'Producto',
-            quantity: qtyNum,
-            price: formatNumber(unitPrice),
-            total: formatNumber(unitPrice * qtyNum)
-          };
-        });
+        for (const orderInfo of createdOrdersInfo) {
+          const formattedItems = orderInfo.items.map(item => {
+            const prod = products.find(p => p.id === item.product_id);
+            return {
+              name: prod?.name || 'Producto',
+              quantity: item.quantity,
+              price: formatNumber(item.unit_price),
+              total: formatNumber(item.unit_price * item.quantity)
+            };
+          });
 
-        await supabase.from('mail').insert({
-          to_email: selectedDraft.source_email,
-          subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
-          template: {
-            name: 'order_confirmation',
-            data: {
-              client: selectedDraft.client_detected_name || 'Cliente',
-              order_number: order.id.slice(0, 6).toUpperCase(),
-              total_amount: formatNumber(totalAmount),
-              items: formattedItems
+          await supabase.from('mail').insert({
+            to_email: selectedDraft.source_email,
+            subject: `¡Confirmación de Pedido FruFresco N° ${orderInfo.id.slice(0, 6).toUpperCase()}!`,
+            template: {
+              name: 'order_confirmation',
+              data: {
+                client: selectedDraft.client_detected_name || 'Cliente',
+                order_number: orderInfo.id.slice(0, 6).toUpperCase(),
+                total_amount: formatNumber(orderInfo.total),
+                items: formattedItems
+              }
             }
-          }
-        });
+          });
+        }
       }
 
       if (isLastAttachment) {
-        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅', 'success');
+        const successMsg = createdOrderIds.length > 1
+          ? `¡Se registraron exitosamente ${createdOrderIds.length} pedidos independientes! Borrador aprobado ✅`
+          : '¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅';
+        showToast(successMsg, 'success');
         setShowConfirmModal(false);
         setSelectedDraft(null);
       } else {
-        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+        const successMsg = createdOrderIds.length > 1
+          ? `Se registraron exitosamente ${createdOrderIds.length} pedidos para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`
+          : `Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`;
+        showToast(successMsg, 'success');
         setShowConfirmModal(false);
         
         // Update local selectedDraft state with updated attachments
@@ -4687,6 +4728,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
 
 
+              {/* Aviso de pedidos múltiples por fecha */}
+              {(() => {
+                const uniqueDates = Array.from(new Set(
+                  editableItems
+                    .filter(itm => !itm.isDeleted)
+                    .map(itm => itm.deliveryDate || deliveryDate)
+                )).filter(Boolean);
+
+                if (uniqueDates.length > 1) {
+                  return (
+                    <div style={{
+                      backgroundColor: '#FEF3C7',
+                      border: '1px solid #F59E0B',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      marginBottom: '1.5rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      color: '#92400E',
+                      fontWeight: 600,
+                      fontSize: '0.9rem'
+                    }}>
+                      <span style={{ fontSize: '1.25rem' }}>⚠️</span>
+                      <div>
+                        Este borrador contiene productos programados para <strong>{uniqueDates.length} fechas de entrega distintas</strong>. 
+                        Al aprobar se crearán <strong>{uniqueDates.length} pedidos independientes</strong> en el sistema (uno para cada fecha).
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Tabla de Productos Estilo Pedido */}
               <div style={{ marginBottom: '2rem' }}>
 
@@ -4711,8 +4786,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           </th>
                         )}
                         <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '40%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '35%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>FECHA ENTREGA</th>
                         <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
@@ -5000,6 +5076,37 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                         </span>
                                       </div>
+                                    </td>
+
+                                    <td style={{ 
+                                      padding: '1rem 1rem', 
+                                      width: '15%', 
+                                      backgroundColor: getCellBgColor(i, true),
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <input
+                                        type="date"
+                                        disabled={!isEditing || item.isDeleted}
+                                        value={item.deliveryDate || ''}
+                                        onChange={(e) => {
+                                          const newEdits = [...editableItems];
+                                          newEdits[i] = { ...newEdits[i], deliveryDate: e.target.value || null };
+                                          setEditableItems(newEdits);
+                                        }}
+                                        style={{
+                                          width: '100%',
+                                          padding: '8px',
+                                          borderRadius: '8px',
+                                          border: '2px solid #E2E8F0',
+                                          fontWeight: 'bold',
+                                          fontSize: '0.9rem',
+                                          backgroundColor: item.isDeleted ? '#F1F5F9' : '#FFFFFF',
+                                          color: item.deliveryDate ? '#1F2937' : '#9CA3AF',
+                                          textDecoration: item.isDeleted ? 'line-through' : 'none',
+                                          cursor: item.isDeleted ? 'not-allowed' : 'pointer',
+                                          outline: 'none'
+                                        }}
+                                      />
                                     </td>
 
                                     <td style={{ 
