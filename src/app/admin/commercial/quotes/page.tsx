@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
 export default function QuotesListPage() {
@@ -15,6 +15,7 @@ export default function QuotesListPage() {
         const { data, error } = await supabase
             .from('quotes')
             .select('*')
+            .neq('status', 'agreement')
             .order('created_at', { ascending: false });
 
         if (data) setQuotes(data);
@@ -47,22 +48,23 @@ export default function QuotesListPage() {
         });
     };
 
-    const formatQuoteNumber = (seq: number, dateStr?: string) => {
+    const formatQuoteNumber = (seq: number, status?: string, dateStr?: string) => {
         const date = dateStr ? new Date(dateStr) : new Date();
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const paddedSeq = String(seq).padStart(4, '0');
-        return `COT ${day}${month} ${paddedSeq}`;
+        const prefix = status === 'agreement' ? 'ACI' : 'COT';
+        return `${prefix} ${day}${month} ${paddedSeq}`;
     };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'draft': return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Borrador</span>;
-            case 'sent': return <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Enviada</span>;
-            case 'accepted': return <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Aceptada</span>;
-            case 'converted': return <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #10B981' }}>PEDIDO CREADO</span>;
-            case 'agreement': return <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #3B82F6' }}>ACUERDO COMERCIAL</span>;
-            case 'rejected': return <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Rechazada</span>;
+            case 'draft': return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Borrador</span>;
+            case 'sent': return <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Enviada</span>;
+            case 'accepted': return <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Aceptada</span>;
+            case 'converted': return <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #10B981', display: 'inline-block', whiteSpace: 'nowrap' }}>Pedido Creado</span>;
+            case 'agreement': return <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #3B82F6', display: 'inline-block', whiteSpace: 'nowrap' }}>Acuerdo Comercial</span>;
+            case 'rejected': return <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', whiteSpace: 'nowrap' }}>Rechazada</span>;
             default: return status;
         }
     };
@@ -151,25 +153,63 @@ export default function QuotesListPage() {
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
-                                            {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : '---'}
+                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                            <span style={{ 
+                                                fontFamily: 'monospace', 
+                                                fontSize: '0.75rem', 
+                                                backgroundColor: '#F1F5F9', 
+                                                padding: '4px 8px', 
+                                                borderRadius: '6px', 
+                                                fontWeight: 'bold', 
+                                                color: '#475569',
+                                                border: '1px solid #E2E8F0'
+                                            }}>
+                                                {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.status, quote.created_at) : '---'}
+                                            </span>
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '500', color: THEME.colors.textSecondary }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
                                             {formatDate(quote.created_at)}
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
                                             {quote.client_name}
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textSecondary }}>
-                                            {quote.model_snapshot_name || 'N/A'}
+                                        <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
+                                            {quote.model_snapshot_name || '---'}
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.9rem' }}>
                                             {formatMoney(quote.total_amount || 0)}
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem' }}>
                                             {getStatusBadge(quote.status)}
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                            <Link href={`/admin/commercial/quotes/${quote.id}/print`} target="_blank" style={{ textDecoration: 'none' }}>
+                                                <button 
+                                                    title="Descargar PDF / Imprimir"
+                                                    style={{ 
+                                                        border: 'none',
+                                                        backgroundColor: '#EFF6FF',
+                                                        color: '#1D4ED8',
+                                                        padding: '0.35rem 0.75rem',
+                                                        borderRadius: THEME.radius.sm,
+                                                        cursor: 'pointer', 
+                                                        fontWeight: '700',
+                                                        fontSize: '0.75rem',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                    }}
+                                                >
+                                                    <FileText size={12} strokeWidth={2} /> PDF
+                                                </button>
+                                            </Link>
                                             <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none' }}>
                                                 <button style={{ 
                                                     border: `1px solid ${THEME.colors.borderActive}`,

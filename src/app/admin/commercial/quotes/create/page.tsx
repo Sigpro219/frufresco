@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { THEME } from '@/lib/adminTheme';
 
-export default function CreateQuotePage() {
+function CreateQuotePageContent() {
     const formatPrice = (value: number) => {
         return new Intl.NumberFormat('es-CO', {
             minimumFractionDigits: 0,
@@ -78,44 +78,127 @@ export default function CreateQuotePage() {
         secondary_color: '#64748B'
     });
 
+    const searchParams = useSearchParams();
+    const duplicateFrom = searchParams ? searchParams.get('duplicate_from') : null;
+
     useEffect(() => {
         fetchInitialData();
     }, []);
 
+    useEffect(() => {
+        if (duplicateFrom) {
+            loadDuplicateQuote(duplicateFrom);
+        }
+    }, [duplicateFrom]);
+
+    const loadDuplicateQuote = async (quoteId: string) => {
+        try {
+            // 1. Fetch quote details
+            const { data: qData, error: qErr } = await supabase
+                .from('quotes')
+                .select('*')
+                .eq('id', quoteId)
+                .single();
+
+            if (qErr) throw qErr;
+
+            if (qData) {
+                // Pre-populate client info
+                if (qData.client_id) {
+                    setSelectedClientId(qData.client_id);
+                    setClientName(qData.client_name || '');
+                    setClientSearch(qData.client_name || '');
+                } else if (qData.lead_id) {
+                    setSelectedLeadId(qData.lead_id);
+                    setClientName(qData.client_name || '');
+                    setClientSearch(qData.client_name || '');
+                } else {
+                    setClientName(qData.client_name || '');
+                    setClientSearch(qData.client_name || '');
+                }
+
+                // Pre-populate model and settings
+                if (qData.model_id) setSelectedModelId(qData.model_id);
+                if (qData.payment_terms_days) setPaymentTermsDays(qData.payment_terms_days);
+                if (qData.intro_title) setIntroTitle(qData.intro_title);
+                if (qData.intro_desc) setIntroDesc(qData.intro_desc);
+
+                // 2. Fetch quote items
+                const { data: iData, error: iErr } = await supabase
+                    .from('quote_items')
+                    .select('*, products(name, unit_of_measure, sku, iva_rate)')
+                    .eq('quote_id', quoteId);
+
+                if (iErr) throw iErr;
+
+                if (iData) {
+                    const loadedItems = iData.map((item: any) => ({
+                        product_id: item.product_id,
+                        variant_id: item.variant_id || null,
+                        name: item.product_name || item.products?.name || 'Producto',
+                        sku: item.sku || item.products?.sku || '',
+                        unit: item.unit_of_measure || item.products?.unit_of_measure || 'Kg',
+                        cost: item.cost_basis || 0,
+                        margin: item.margin_percent || 0,
+                        variant_adjustment: 0,
+                        price: item.unit_price || 0,
+                        iva_rate: item.iva_rate || 0,
+                        quantity: item.quantity || 1
+                    }));
+                    setItems(loadedItems);
+                }
+            }
+        } catch (err: any) {
+            console.error('Error pre-populating quote version:', err);
+            alert('Error al pre-cargar cotización anterior: ' + err.message);
+        }
+    };
+
     const fetchInitialData = async () => {
-        const { data: sData } = await supabase.from('app_settings').select('*');
-        if (sData) {
-            const settingsMap: Record<string, string> = {};
-            sData.forEach((s: any) => { settingsMap[s.key] = s.value; });
-            setAppSettings(prev => ({ ...prev, ...settingsMap }));
+        try {
+            const { data: sData, error: sErr } = await supabase.from('app_settings').select('*');
+            if (sErr) console.warn('Error fetching app_settings:', sErr);
+            if (sData) {
+                const settingsMap: Record<string, string> = {};
+                sData.forEach((s: any) => { settingsMap[s.key] = s.value; });
+                setAppSettings(prev => ({ ...prev, ...settingsMap }));
+            }
+
+            const { data: mData, error: mErr } = await supabase.from('pricing_models').select('*').order('name');
+            if (mErr) console.warn('Error fetching pricing_models:', mErr);
+            if (mData && mData.length > 0) {
+                setModels(mData);
+                setSelectedModelId(mData[0].id);
+            }
+
+            const { data: cData, error: cErr } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
+            if (cErr) console.warn('Error fetching profiles:', cErr);
+            if (cData) setClients(cData || []);
+
+            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email').order('company_name');
+            if (lErr) console.warn('Error fetching leads:', lErr);
+            if (lData) setLeads(lData || []);
+
+            const { data: tData, error: tErr } = await supabase.from('quote_templates').select('*').order('name');
+            if (tErr) console.warn('Error fetching quote_templates:', tErr);
+            if (tData) setTemplates(tData || []);
+
+            const { data: convData, error: convErr } = await supabase.from('product_conversions').select('*');
+            if (convErr) console.warn('Error fetching product_conversions:', convErr);
+            if (convData) setConversions(convData || []);
+
+            // Fetch next sequential quote number
+            const { data: latestQuotes, error: qErr } = await supabase
+                .from('quotes')
+                .select('quote_number')
+                .order('quote_number', { ascending: false })
+                .limit(1);
+            if (qErr) console.warn('Error fetching latest quote number:', qErr);
+            const nextNum = latestQuotes && latestQuotes.length > 0 ? (latestQuotes[0].quote_number + 1) : 1;
+            setQuoteNumber(String(nextNum));
+        } catch (err) {
+            console.error('Error in fetchInitialData:', err);
         }
-
-        const { data: mData } = await supabase.from('pricing_models').select('*').order('name');
-        if (mData && mData.length > 0) {
-            setModels(mData);
-            setSelectedModelId(mData[0].id);
-        }
-
-        const { data: cData } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
-        if (cData) setClients(cData || []);
-
-        const { data: lData } = await supabase.from('leads').select('id, company_name, contact_name, phone, email').order('company_name');
-        if (lData) setLeads(lData || []);
-
-        const { data: tData } = await supabase.from('quote_templates').select('*').order('name');
-        if (tData) setTemplates(tData || []);
-
-        const { data: convData } = await supabase.from('product_conversions').select('*');
-        if (convData) setConversions(convData || []);
-
-        // Fetch next sequential quote number
-        const { data: latestQuotes } = await supabase
-            .from('quotes')
-            .select('quote_number')
-            .order('quote_number', { ascending: false })
-            .limit(1);
-        const nextNum = latestQuotes && latestQuotes.length > 0 ? (latestQuotes[0].quote_number + 1) : 1;
-        setQuoteNumber(String(nextNum));
     };
 
     useEffect(() => {
@@ -543,11 +626,31 @@ export default function CreateQuotePage() {
                 total_price: Math.ceil(item.price) * item.quantity
             }));
 
-            const { error: iError } = await supabase.from('quote_items').insert(quoteItemsArr);
-            if (iError) throw iError;
+            try {
+                const { error: iError } = await supabase.from('quote_items').insert(quoteItemsArr);
+                if (iError) throw iError;
+            } catch (itemErr) {
+                console.error('Error inserting quote items, rolling back quote header:', itemErr);
+                await supabase.from('quotes').delete().eq('id', quote.id);
+                throw itemErr;
+            }
+
+            if (duplicateFrom) {
+                const { error: rejectError } = await supabase
+                    .from('quotes')
+                    .update({ status: 'rejected' })
+                    .eq('id', duplicateFrom);
+                if (rejectError) {
+                    console.error('Error rejecting original quote:', rejectError);
+                }
+            }
 
             if (shouldRedirect) {
-                alert(`Cotización ${quote.quote_number || ''} guardada exitosamente`);
+                if (duplicateFrom) {
+                    alert(`Se ha creado la nueva versión ${quote.quote_number || ''} y se ha descartado la cotización anterior.`);
+                } else {
+                    alert(`Cotización ${quote.quote_number || ''} guardada exitosamente`);
+                }
                 router.push('/admin/commercial/quotes');
             } else {
                 setQuoteNumber(quote.quote_number || 'SAVED');
@@ -569,104 +672,7 @@ export default function CreateQuotePage() {
             return;
         }
 
-        // Obtener el HTML puro del contenedor
-        const content = printDocRef.current ? printDocRef.current.innerHTML : '';
-
-        // Obtener todas las hojas de estilo del documento actual
-        let stylesHTML = '';
-        if (typeof document !== 'undefined') {
-            const styleNodes = document.querySelectorAll('link[rel="stylesheet"], style');
-            styleNodes.forEach(node => {
-                stylesHTML += node.outerHTML;
-            });
-        }
-
-        // Abrir una nueva ventana en blanco
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-            alert('Por favor permite las ventanas emergentes para poder imprimir el documento.');
-            return;
-        }
-
-        // Escribir el documento con su estructura y estilos
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <base href="${window.location.origin}">
-                    <title>${formatQuoteNumber(savedQuote.quote_number)}</title>
-                    ${stylesHTML}
-                    <style>
-                        * { box-sizing: border-box; }
-                        body {
-                            background-color: white !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            color: #0F172A !important;
-                            -webkit-print-color-adjust: exact !important;
-                            print-color-adjust: exact !important;
-                            font-size: 8.5pt !important;
-                            font-family: system-ui, -apple-system, sans-serif !important;
-                            line-height: 1.3 !important;
-                        }
-                        .no-print { display: none !important; }
-                        .only-print { display: block !important; }
-                        .print-footer { display: none !important; }
-                        .print-spacer-tfoot { display: none !important; }
-                        #quote-document {
-                            padding: 0 !important;
-                            margin: 0 !important;
-                            border: none !important;
-                            box-shadow: none !important;
-                        }
-                        table { width: 100%; border-collapse: collapse; }
-                        thead { display: table-header-group; }
-                        tfoot { display: table-row-group; }
-                        tr { page-break-inside: avoid; }
-                        th, td {
-                            padding: 4px 6px !important;
-                            font-size: 8.5pt !important;
-                            line-height: 1.3 !important;
-                        }
-                        h1 { font-size: 14pt !important; margin: 0 0 4px 0; }
-                        h2, h3, h4 { font-size: 10pt !important; margin: 0 0 2px 0; }
-                        p, span, div { font-size: 8.5pt !important; }
-
-                        @page {
-                            size: letter portrait;
-                            margin: 1.5cm 1.5cm 2cm 1.5cm;
-                            @bottom-left {
-                                content: "${appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}";
-                                font-size: 7.5pt;
-                                color: #94A3B8;
-                                font-family: system-ui, -apple-system, sans-serif;
-                                border-top: 1px solid #E2E8F0;
-                                padding-top: 4px;
-                            }
-                            @bottom-right {
-                                content: "Página " counter(page) " de " counter(pages);
-                                font-size: 7.5pt;
-                                color: #94A3B8;
-                                font-family: system-ui, -apple-system, sans-serif;
-                                border-top: 1px solid #E2E8F0;
-                                padding-top: 4px;
-                            }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div>${content}</div>
-                    <script>
-                        window.onload = function() {
-                            setTimeout(function() {
-                                window.print();
-                                window.close();
-                            }, 800);
-                        };
-                    </script>
-                </body>
-            </html>
-        `);
-        printWindow.document.close();
+        window.open(`/admin/commercial/quotes/${savedQuote.id}/print`, '_blank');
         router.push('/admin/commercial/quotes');
     };
 
@@ -1449,5 +1455,13 @@ export default function CreateQuotePage() {
             ` }} />
 
         </main>
+    );
+}
+
+export default function CreateQuotePage() {
+    return (
+        <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'system-ui, sans-serif', color: '#64748B' }}>Cargando creador de cotizaciones...</div>}>
+            <CreateQuotePageContent />
+        </Suspense>
     );
 }

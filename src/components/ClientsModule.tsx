@@ -31,7 +31,11 @@ import {
     Building2,
     Users,
     ChevronRight,
-    Home
+    Home,
+    HelpCircle,
+    Info,
+    UploadCloud,
+    Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -154,6 +158,21 @@ export default function ClientsModule() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isFormReadOnly, setIsFormReadOnly] = useState(false);
 
+    // Lead Conversion Modal State
+    const [conversionLead, setConversionLead] = useState<Lead | null>(null);
+    const [conversionCompanyName, setConversionCompanyName] = useState('');
+    const [conversionNit, setConversionNit] = useState('');
+    const [conversionPhone, setConversionPhone] = useState('');
+    const [conversionAddress, setConversionAddress] = useState('');
+    const [conversionCreateAgreement, setConversionCreateAgreement] = useState(false);
+    const [conversionStartDate, setConversionStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [conversionDurationValue, setConversionDurationValue] = useState<number>(2);
+    const [conversionDurationUnit, setConversionDurationUnit] = useState<string>('weeks');
+    const [conversionFile, setConversionFile] = useState<File | null>(null);
+    const [conversionItems, setConversionItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
+    const [converting, setConverting] = useState(false);
+    const [parsingFile, setParsingFile] = useState(false);
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -240,6 +259,24 @@ export default function ClientsModule() {
     };
 
     const handleUpdateLeadStatus = async (id: string, newStatus: string) => {
+        if (newStatus === 'converted') {
+            const lead = leads.find(l => l.id === id);
+            if (lead) {
+                setConversionLead(lead);
+                setConversionCompanyName(lead.company_name || lead.contact_name || '');
+                setConversionNit('');
+                setConversionPhone(lead.phone || '');
+                setConversionAddress('');
+                setConversionCreateAgreement(false);
+                setConversionStartDate(new Date().toISOString().split('T')[0]);
+                setConversionDurationValue(2);
+                setConversionDurationUnit('weeks');
+                setConversionFile(null);
+                setConversionItems([]);
+                return;
+            }
+        }
+
         const { error } = await supabase
             .from('leads')
             .update({ status: newStatus })
@@ -250,6 +287,225 @@ export default function ClientsModule() {
         } else {
             setLeads(leads.map(l => l.id === id ? { ...l, status: newStatus } : l));
             window.showToast?.('Estado de lead actualizado', 'success');
+        }
+    };
+
+    const downloadConversionTemplate = async () => {
+        try {
+            const { data: products, error } = await supabase
+                .from('products')
+                .select('accounting_id, name, base_price, unit_of_measure')
+                .eq('is_active', true)
+                .order('name');
+            
+            if (error) throw error;
+            if (!products || products.length === 0) {
+                window.showToast?.('No se encontraron productos activos', 'error');
+                return;
+            }
+            
+            const rows = products.map(p => ({
+                'ID Producto (Cod. Contable)': p.accounting_id,
+                'Nombre del Producto': p.name,
+                'U.M.': p.unit_of_measure || 'Unidad',
+                'Costo Base (Referencia)': p.base_price || 0,
+                'Precio Acordado': ''
+            }));
+            
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Precios B2B');
+            XLSX.writeFile(workbook, 'Plantilla_Acuerdo_Comercial.xlsx');
+            window.showToast?.('Plantilla descargada con éxito', 'success');
+        } catch (err: any) {
+            console.error(err);
+            window.showToast?.('Error al descargar plantilla: ' + err.message, 'error');
+        }
+    };
+
+    const handleConversionFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        setConversionFile(file);
+        setParsingFile(true);
+        
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                
+                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                if (rawRows.length === 0) {
+                    throw new Error('El archivo está vacío');
+                }
+                
+                const headers = Object.keys(rawRows[0]);
+                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
+                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
+                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
+                
+                if (!idCol || !priceCol) {
+                    throw new Error('No se encontraron las columnas Código y Precio');
+                }
+                
+                const parsedItems: any[] = [];
+                let rowCount = 0;
+                
+                rawRows.forEach((row) => {
+                    const idVal = String(row[idCol] || '').trim();
+                    const priceVal = parseFloat(String(row[priceCol] || '').replace(/[^0-9.-]/g, ''));
+                    const nameVal = nameCol ? String(row[nameCol] || '') : '';
+                    
+                    if (idVal && !isNaN(priceVal)) {
+                        parsedItems.push({
+                            accounting_id: idVal,
+                            unit_price: priceVal,
+                            product_name: nameVal
+                        });
+                        rowCount++;
+                    }
+                });
+                
+                if (parsedItems.length === 0) {
+                    throw new Error('No se encontraron filas válidas con Código y Precio');
+                }
+                
+                setConversionItems(parsedItems);
+                window.showToast?.(`Se cargaron ${rowCount} productos válidos desde el Excel`, 'success');
+            } catch (err: any) {
+                console.error(err);
+                window.showToast?.('Error al leer Excel: ' + err.message, 'error');
+                setConversionFile(null);
+                setConversionItems([]);
+            } finally {
+                setParsingFile(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleConversionSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!conversionLead) return;
+        
+        setConverting(true);
+        try {
+            const { data: newProfile, error: profileErr } = await supabase
+                .from('profiles')
+                .insert({
+                    company_name: conversionCompanyName,
+                    contact_name: conversionLead.contact_name,
+                    email: conversionLead.email,
+                    phone: conversionPhone,
+                    address: conversionAddress,
+                    nit: conversionNit ? parseInt(conversionNit.replace(/[^0-9]/g, '')) : null,
+                    role: 'b2b_client',
+                    is_active: true
+                })
+                .select()
+                .single();
+                
+            if (profileErr) throw profileErr;
+            
+            const { error: leadErr } = await supabase
+                .from('leads')
+                .update({ status: 'converted' })
+                .eq('id', conversionLead.id);
+                
+            if (leadErr) throw leadErr;
+            
+            if (conversionCreateAgreement && conversionItems.length > 0) {
+                const expiry = new Date(conversionStartDate + 'T12:00:00');
+                if (conversionDurationUnit === 'days') {
+                    expiry.setDate(expiry.getDate() + conversionDurationValue);
+                } else if (conversionDurationUnit === 'weeks') {
+                    expiry.setDate(expiry.getDate() + conversionDurationValue * 7);
+                } else if (conversionDurationUnit === 'months') {
+                    expiry.setMonth(expiry.getMonth() + conversionDurationValue);
+                } else if (conversionDurationUnit === 'years') {
+                    expiry.setFullYear(expiry.getFullYear() + conversionDurationValue);
+                }
+                const calculatedValidUntil = expiry.toISOString();
+                
+                const { data: dbProducts, error: dbProdErr } = await supabase
+                    .from('products')
+                    .select('id, name, base_price, accounting_id');
+                    
+                if (dbProdErr) throw dbProdErr;
+                
+                const productMap: Record<string, any> = {};
+                dbProducts.forEach(p => {
+                    if (p.accounting_id !== null && p.accounting_id !== undefined) {
+                        productMap[String(p.accounting_id)] = p;
+                    }
+                });
+                
+                const { data: newQuote, error: insertQErr } = await supabase
+                    .from('quotes')
+                    .insert({
+                        client_id: newProfile.id,
+                        client_name: newProfile.company_name || newProfile.contact_name,
+                        status: 'agreement',
+                        start_date: conversionStartDate ? new Date(conversionStartDate).toISOString() : new Date().toISOString(),
+                        valid_until: calculatedValidUntil,
+                        version: 1,
+                        subtotal_amount: 0,
+                        total_tax_amount: 0,
+                        total_amount: 0
+                    })
+                    .select()
+                    .single();
+                    
+                if (insertQErr) throw insertQErr;
+                
+                const itemsToInsert: any[] = [];
+                conversionItems.forEach(item => {
+                    const dbProduct = productMap[String(item.accounting_id)];
+                    if (dbProduct) {
+                        const basePrice = dbProduct.base_price || 0;
+                        const negotiatedPrice = item.unit_price;
+                        const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
+                        
+                        itemsToInsert.push({
+                            quote_id: newQuote.id,
+                            product_id: dbProduct.id,
+                            product_name: dbProduct.name,
+                            quantity: 1,
+                            cost_basis: basePrice,
+                            margin_percent: marginPercent,
+                            unit_price: negotiatedPrice,
+                            iva_rate: 0,
+                            iva_amount: 0,
+                            total_price: negotiatedPrice
+                        });
+                    }
+                });
+                
+                if (itemsToInsert.length > 0) {
+                    const batchSize = 100;
+                    for (let i = 0; i < itemsToInsert.length; i += batchSize) {
+                        const batch = itemsToInsert.slice(i, i + batchSize);
+                        const { error: insertItemsErr } = await supabase
+                            .from('quote_items')
+                            .insert(batch);
+                        if (insertItemsErr) throw insertItemsErr;
+                    }
+                }
+            }
+            
+            window.showToast?.('Prospecto convertido a cliente con éxito', 'success');
+            setConversionLead(null);
+            
+            fetchData();
+        } catch (err: any) {
+            console.error(err);
+            window.showToast?.('Error en conversión: ' + err.message, 'error');
+        } finally {
+            setConverting(false);
         }
     };
 
@@ -802,7 +1058,7 @@ export default function ClientsModule() {
                 </header>
 
                 {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (COMPACTA) */}
-                {activeTab !== 'dashboard' && (
+                {activeTab !== 'dashboard' && activeTab !== 'agreements' && (
                     <div style={{ 
                         display: 'flex', 
                         gap: '0.8rem', 
@@ -1454,6 +1710,344 @@ export default function ClientsModule() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* MODAL CONVERSIÓN DE LEAD */}
+            {conversionLead && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                    <form 
+                        onSubmit={handleConversionSubmit}
+                        style={{ 
+                            backgroundColor: 'white', 
+                            borderRadius: THEME.radius.lg || '12px', 
+                            width: '95%', 
+                            maxWidth: '540px', 
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', 
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            maxHeight: '90vh'
+                        }}
+                    >
+                        {/* Modal Header */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid #E2E8F0`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Building2 size={18} style={{ color: '#0D7A57' }} />
+                                <h3 style={{ margin: 0, fontWeight: '900', color: '#1E293B' }}>Convertir Prospecto a Cliente B2B</h3>
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => setConversionLead(null)} 
+                                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+                            
+                            {/* Client Information */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Razón Social / Nombre Comercial:</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={conversionCompanyName} 
+                                    onChange={(e) => setConversionCompanyName(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '10px', 
+                                        borderRadius: '8px', 
+                                        border: `1px solid #CBD5E1`,
+                                        fontSize: '0.85rem'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>NIT / Identificación:</label>
+                                    <input 
+                                        type="text" 
+                                        value={conversionNit} 
+                                        onChange={(e) => setConversionNit(e.target.value)}
+                                        placeholder="Ej: 900123456"
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '10px', 
+                                            borderRadius: '8px', 
+                                            border: `1px solid #CBD5E1`,
+                                            fontSize: '0.85rem'
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Teléfono:</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        value={conversionPhone} 
+                                        onChange={(e) => setConversionPhone(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '10px', 
+                                            borderRadius: '8px', 
+                                            border: `1px solid #CBD5E1`,
+                                            fontSize: '0.85rem'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Dirección:</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={conversionAddress} 
+                                    onChange={(e) => setConversionAddress(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '10px', 
+                                        borderRadius: '8px', 
+                                        border: `1px solid #CBD5E1`,
+                                        fontSize: '0.85rem'
+                                    }}
+                                />
+                            </div>
+
+                            {/* Checkbox to create agreement */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.5rem 0' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="create_agreement"
+                                    checked={conversionCreateAgreement} 
+                                    onChange={(e) => setConversionCreateAgreement(e.target.checked)}
+                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="create_agreement" style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B', cursor: 'pointer' }}>
+                                    ¿Inicializar Acuerdo Comercial de Precios Congelados B2B?
+                                </label>
+                            </div>
+
+                            {/* Conditional Agreement Fields */}
+                            {conversionCreateAgreement && (
+                                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    
+                                    {/* EXPLANATORY COMPONENT WITH HELP ICON */}
+                                    <div style={{ 
+                                        backgroundColor: '#EFF6FF', 
+                                        border: '1px solid #BFDBFE', 
+                                        padding: '1rem', 
+                                        borderRadius: '12px', 
+                                        display: 'flex', 
+                                        gap: '10px', 
+                                        alignItems: 'flex-start' 
+                                    }}>
+                                        <HelpCircle size={20} style={{ color: '#2563EB', flexShrink: 0, marginTop: '2px' }} />
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 'bold', color: '#1E40AF' }}>
+                                                ¿Cómo funciona la Carga Masiva de Precios?
+                                            </h4>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#1E3A8A', lineHeight: '1.4' }}>
+                                                Puedes descargar la plantilla pre-rellenada con todos tus productos activos y colocar el precio en la columna vacía, o subir tu propio Excel personalizado. El sistema identificará de forma inteligente las columnas buscando:
+                                            </p>
+                                            <ul style={{ margin: '6px 0 0 0', paddingLeft: '1.2rem', fontSize: '0.75rem', color: '#1E3A8A', lineHeight: '1.4' }}>
+                                                <li><strong>Identificador de Producto:</strong> Cabeceras como <em>idProducto, accounting_id, código, cod. contable, id</em>.</li>
+                                                <li><strong>Precio Acordado:</strong> Cabeceras como <em>precio, precio acordado, price, precio neto</em>.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Fecha de Inicio:</label>
+                                                <input 
+                                                    type="date" 
+                                                    required={conversionCreateAgreement}
+                                                    value={conversionStartDate} 
+                                                    onChange={(e) => setConversionStartDate(e.target.value)}
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '10px', 
+                                                        borderRadius: '8px', 
+                                                        border: `1px solid #CBD5E1`,
+                                                        fontSize: '0.85rem'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Duración:</label>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input 
+                                                        type="number"
+                                                        min="1"
+                                                        required={conversionCreateAgreement}
+                                                        value={conversionDurationValue}
+                                                        onChange={(e) => setConversionDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
+                                                        style={{ 
+                                                            width: '80px', 
+                                                            padding: '10px', 
+                                                            borderRadius: '8px', 
+                                                            border: `1px solid #CBD5E1`,
+                                                            fontSize: '0.85rem',
+                                                            textAlign: 'center'
+                                                        }}
+                                                    />
+                                                    <select
+                                                        value={conversionDurationUnit}
+                                                        onChange={(e) => setConversionDurationUnit(e.target.value)}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '10px',
+                                                            borderRadius: '8px',
+                                                            border: `1px solid #CBD5E1`,
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                    >
+                                                        <option value="days">Días</option>
+                                                        <option value="weeks">Semanas</option>
+                                                        <option value="months">Meses</option>
+                                                        <option value="years">Años</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {(() => {
+                                            const expiry = new Date(conversionStartDate + 'T12:00:00');
+                                            if (conversionDurationUnit === 'days') {
+                                                expiry.setDate(expiry.getDate() + conversionDurationValue);
+                                            } else if (conversionDurationUnit === 'weeks') {
+                                                expiry.setDate(expiry.getDate() + conversionDurationValue * 7);
+                                            } else if (conversionDurationUnit === 'months') {
+                                                expiry.setMonth(expiry.getMonth() + conversionDurationValue);
+                                            } else if (conversionDurationUnit === 'years') {
+                                                expiry.setFullYear(expiry.getFullYear() + conversionDurationValue);
+                                            }
+                                            const formattedExpiry = expiry.toLocaleDateString('es-ES', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric'
+                                            });
+                                            return (
+                                                <div style={{ 
+                                                    marginTop: '10px', 
+                                                    fontSize: '0.8rem', 
+                                                    color: '#64748B',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}>
+                                                    <span>📅 El acuerdo vencerá el:</span>
+                                                    <strong style={{ color: '#0D7A57' }}>{formattedExpiry}</strong>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' }}>Lista de Precios (Excel):</span>
+                                            <button
+                                                type="button"
+                                                onClick={downloadConversionTemplate}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#0D7A57',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <Download size={14} /> Descargar Plantilla
+                                            </button>
+                                        </div>
+
+                                        <div style={{
+                                            border: `2px dashed ${conversionFile ? '#0D7A57' : '#CBD5E1'}`,
+                                            backgroundColor: conversionFile ? '#F0FDF4' : '#F8FAFC',
+                                            borderRadius: '12px',
+                                            padding: '1.5rem',
+                                            textAlign: 'center',
+                                            cursor: 'pointer',
+                                            position: 'relative',
+                                            transition: 'all 0.2s'
+                                        }}>
+                                            <input 
+                                                type="file" 
+                                                accept=".xlsx, .xls"
+                                                onChange={handleConversionFileUpload}
+                                                style={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    opacity: 0,
+                                                    cursor: 'pointer'
+                                                }}
+                                            />
+                                            <UploadCloud size={32} style={{ color: conversionFile ? '#0D7A57' : '#94A3B8', margin: '0 auto 8px auto' }} />
+                                            {conversionFile ? (
+                                                <div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>{conversionFile.name}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
+                                                        {conversionItems.length} productos detectados listos para cargar
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>Selecciona o arrastra tu archivo Excel</div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
+                                                        Formatos soportados: .xlsx, .xls
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid #E2E8F0`, display: 'flex', gap: '10px', backgroundColor: '#F9FAFB' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => setConversionLead(null)} 
+                                style={{ 
+                                    flex: 1, 
+                                    padding: '10px', 
+                                    borderRadius: '8px', 
+                                    border: `1px solid #CBD5E1`, 
+                                    backgroundColor: 'white', 
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer' 
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                type="submit" 
+                                disabled={converting || parsingFile || (conversionCreateAgreement && conversionItems.length === 0)}
+                                style={{ 
+                                    flex: 2, 
+                                    padding: '10px', 
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: (conversionCreateAgreement && conversionItems.length === 0) || converting ? '#CBD5E1' : '#0D7A57', 
+                                    color: 'white', 
+                                    fontWeight: 'bold',
+                                    cursor: (conversionCreateAgreement && conversionItems.length === 0) || converting ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {converting ? 'Procesando...' : 'Convertir y Guardar'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
         </div>

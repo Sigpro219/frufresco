@@ -26,6 +26,7 @@ export default function PrintQuotePage() {
     const [clientInfo, setClientInfo] = useState<any>(null);
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [logoLoaded, setLogoLoaded] = useState(false);
     const [appSettings, setAppSettings] = useState({
         provider_legal_name: 'Investments Cortés S.A.S.',
         provider_nit: '901.393.217',
@@ -49,8 +50,8 @@ export default function PrintQuotePage() {
         try {
             // Load App Settings
             const { data: sData } = await supabase.from('app_settings').select('*');
+            const settingsMap: Record<string, string> = {};
             if (sData) {
-                const settingsMap: Record<string, string> = {};
                 sData.forEach((s: any) => { settingsMap[s.key] = s.value; });
                 setAppSettings(prev => ({ ...prev, ...settingsMap }));
             }
@@ -92,22 +93,34 @@ export default function PrintQuotePage() {
                 .eq('quote_id', params.id);
 
             if (iData) setItems(iData);
+
+            // Preload logo
+            const logoUrl = settingsMap.provider_logo_url || settingsMap.app_logo_url || '/logo-investments.png';
+            if (logoUrl) {
+                const img = new Image();
+                img.onload = () => setLogoLoaded(true);
+                img.onerror = () => setLogoLoaded(true);
+                img.src = logoUrl;
+            } else {
+                setLogoLoaded(true);
+            }
         } catch (error) {
             console.error('Error loading print data:', error);
+            setLogoLoaded(true);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (!loading && quote) {
+        if (!loading && quote && logoLoaded) {
             document.title = formatQuoteNumber(quote.quote_number, quote.created_at);
             const timer = setTimeout(() => {
                 window.print();
-            }, 800);
+            }, 500);
             return () => clearTimeout(timer);
         }
-    }, [loading, quote]);
+    }, [loading, quote, logoLoaded]);
 
     if (loading) {
         return (
@@ -188,7 +201,7 @@ export default function PrintQuotePage() {
 
             {/* Watermark in background */}
             <div style={{
-                position: 'absolute',
+                position: 'fixed',
                 top: '40%',
                 left: '50%',
                 transform: 'translate(-50%, -50%) rotate(-30deg)',

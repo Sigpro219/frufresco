@@ -197,32 +197,46 @@ export default function QuoteDetailPage() {
 
                 if (oErr) throw oErr;
 
-                // 2. Create Order Items
-                const { error: iErr } = await supabase.from('order_items').insert(
-                    items.map(qi => ({
-                        order_id: order.id,
-                        product_id: qi.product_id,
-                        quantity: qi.quantity || 1,
-                        unit_price: (qi.unit_price || 0) * (1 + ((qi.iva_rate || 0) / 100)),
-                        variant_label: '',
-                        nickname: qi.product_name || (qi.products?.name || '')
-                    }))
-                );
+                try {
+                    // 2. Create Order Items (populating tax-inclusive price, rate, and amount)
+                    const itemsData = items.map(qi => {
+                        const priceWithTax = Math.round((qi.unit_price || 0) * (1 + ((qi.iva_rate || 0) / 100)));
+                        const itemTotal = priceWithTax * (qi.quantity || 1);
+                        const rate = qi.iva_rate || 0;
+                        const ivaAmount = rate > 0 ? itemTotal * (rate / (100 + rate)) : 0;
+                        return {
+                            order_id: order.id,
+                            product_id: qi.product_id,
+                            quantity: qi.quantity || 1,
+                            unit_price: priceWithTax,
+                            variant_label: '',
+                            nickname: qi.product_name || (qi.products?.name || ''),
+                            iva_rate: rate,
+                            iva_amount: Math.round(ivaAmount)
+                        };
+                    });
 
-                if (iErr) throw iErr;
+                    const { error: iErr } = await supabase.from('order_items').insert(itemsData);
+                    if (iErr) throw iErr;
 
-                // 3. Update Quote Status
-                await supabase
-                    .from('quotes')
-                    .update({ status: 'converted', client_id: selectedClient.id, order_id: order.id }) 
-                    .eq('id', quote.id);
+                    // 3. Update Quote Status
+                    const { error: qErr } = await supabase
+                        .from('quotes')
+                        .update({ status: 'converted', client_id: selectedClient.id, order_id: order.id }) 
+                        .eq('id', quote.id);
+                    if (qErr) throw qErr;
 
-                alert('✅ ¡Pedido Creado Exitosamente!');
-                router.push(`/admin/orders/${order.id}`); 
+                    alert('✅ ¡Pedido Creado Exitosamente!');
+                    router.push(`/admin/orders/${order.id}`); 
+                } catch (innerErr) {
+                    console.error('Error during order items creation, rolling back order:', innerErr);
+                    await supabase.from('orders').delete().eq('id', order.id);
+                    throw innerErr;
+                }
 
             } else {
                 // Commercial Agreement Flow
-                await supabase
+                const { error: agreementErr } = await supabase
                     .from('quotes')
                     .update({ 
                         status: 'agreement', 
@@ -231,6 +245,8 @@ export default function QuoteDetailPage() {
                         notes: (quote.notes || '') + '\n[CONVERTIDO A ACUERDO COMERCIAL]'
                     })
                     .eq('id', quote.id);
+                
+                if (agreementErr) throw agreementErr;
                 
                 alert('✅ ¡Acuerdo Comercial Registrado!');
                 setShowConversionModal(false);
@@ -334,6 +350,31 @@ export default function QuoteDetailPage() {
                             </div>
                         ) : (
                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none' }}>
+                                    <button
+                                        style={{ 
+                                            backgroundColor: '#FFFBEB', 
+                                            color: '#D97706', 
+                                            border: '1px solid #F59E0B', 
+                                            padding: '0.8rem 1.5rem', 
+                                            borderRadius: '8px', 
+                                            fontWeight: 'bold', 
+                                            cursor: 'pointer', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '0.5rem',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FEF3C7';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FFFBEB';
+                                        }}
+                                    >
+                                        📝 Ajustar Precios
+                                    </button>
+                                </Link>
                                 <button
                                     onClick={handleConvertClick}
                                     disabled={converting}
