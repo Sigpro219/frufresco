@@ -516,6 +516,12 @@ export default function CommercialAgreementsModule() {
                                     {getAgreementStatus(selectedAgreement.valid_until).label}
                                 </span>
                             </div>
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block' }}>PRODUCTOS CARGADOS:</span>
+                                <strong style={{ fontSize: '0.85rem', color: THEME.colors.primary }}>
+                                    {loadingItems ? 'Cargando...' : `${agreementItems.length} ítems`}
+                                </strong>
+                            </div>
                         </div>
 
                         {/* Drawer List Content */}
