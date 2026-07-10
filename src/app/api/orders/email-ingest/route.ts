@@ -310,57 +310,11 @@ export async function POST(req: Request) {
       items: []
     };
 
-    // 2. Parse email body or attachment with Gemi    // 2. Parse email body or attachments with Gemini
+    // 2. Parse email body or attachments with Gemini
     let uploadedAttachments: { name: string, url: string }[] = [];
     let parsedAttachments: any[] = [];
 
     if (attachments.length > 0) {
-      // 1. Upload ALL attachments to Supabase Storage
-      for (let i = 0; i < attachments.length; i++) {
-        const att = attachments[i];
-        const attFileName = att.file_name || att.filename || `adjunto_${i}.bin`;
-        const attBase64 = att.content;
-        const attMime = att.content_type || 'application/octet-stream';
-        
-        try {
-          // Ensure order-attachments bucket exists
-          try {
-            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
-          } catch (_) {}
-
-          const buffer = Buffer.from(attBase64, 'base64');
-          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
-          const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-            .from('order-attachments')
-            .upload(storagePath, buffer, {
-              contentType: attMime,
-              upsert: true
-            });
-
-          if (!uploadError) {
-            const { data: { publicUrl } } = supabaseAdmin.storage
-              .from('order-attachments')
-              .getPublicUrl(storagePath);
-            uploadedAttachments.push({
-              name: attFileName,
-              url: publicUrl
-            });
-            console.log(`[Email Inbound] Attachment ${i} (${attFileName}) uploaded to Supabase Storage: ${publicUrl}`);
-          } else {
-            console.error(`[Email Inbound] Failed to upload attachment ${i} (${attFileName}):`, uploadError);
-          }
-        } catch (uploadErr) {
-          console.error(`[Email Inbound] Storage upload handler crashed for attachment ${i}:`, uploadErr);
-        }
-      }
-
-      // Keep compatibility with existing code that references attachmentUrl/attachmentName
-      if (uploadedAttachments.length > 0) {
-        attachmentUrl = uploadedAttachments[0].url;
-        attachmentName = uploadedAttachments[0].name;
-      }
-
       // Define standard generic extraction prompt template
       const genericPrompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
@@ -422,18 +376,24 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null", "deliveryDate": "YYYY-MM-DD o null" }
+            { 
+              "originalName": "Nombre del Producto", 
+              "quantity": 10, 
+              "unit": "Kg / Lb / Unidad / Litro / null", 
+              "observations": "Cualquier nota u observación específica del producto o null",
+              "deliveryDate": "YYYY-MM-DD o null"
+            }
           ]
         }
       `;
 
-      // 2. Process EACH attachment sequentially or in parallel
-      for (let i = 0; i < attachments.length; i++) {
-        const attachment = attachments[i];
+      // Process ALL attachments in parallel (Storage upload + AI Parse)
+      const attachmentPromises = attachments.map(async (attachment, i) => {
         const attFileName = attachment.file_name || attachment.filename || `adjunto_${i}.bin`;
         const base64Data = attachment.content;
-        let mimeType = attachment.content_type || 'application/pdf';
+        let mimeType = attachment.content_type || 'application/octet-stream';
         const lowerName = attFileName.toLowerCase();
+        
         if (!attachment.content_type || attachment.content_type === 'application/octet-stream') {
           if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
           else if (lowerName.endsWith('.png')) mimeType = 'image/png';
@@ -443,11 +403,41 @@ export async function POST(req: Request) {
           else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
           else if (lowerName.endsWith('.csv')) mimeType = 'text/csv';
         }
-        const publicUrl = uploadedAttachments[i]?.url || '';
 
         const lowerMime = mimeType.toLowerCase();
         const attIsExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
+        // A. Upload to Supabase Storage in parallel
+        let publicUrl = '';
+        try {
+          try {
+            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+          } catch (_) {}
+
+          const buffer = Buffer.from(base64Data, 'base64');
+          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from('order-attachments')
+            .upload(storagePath, buffer, {
+              contentType: mimeType,
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data: { publicUrl: pUrl } } = supabaseAdmin.storage
+              .from('order-attachments')
+              .getPublicUrl(storagePath);
+            publicUrl = pUrl;
+            console.log(`[Email Inbound] Parallel attachment ${i} (${attFileName}) uploaded to Supabase: ${publicUrl}`);
+          } else {
+            console.error(`[Email Inbound] Failed parallel upload for attachment ${i}:`, uploadError);
+          }
+        } catch (uploadErr) {
+          console.error(`[Email Inbound] Parallel storage upload handler crashed for attachment ${i}:`, uploadErr);
+        }
+
+        // B. Parse attachment text content if Excel, or call Gemini
         let attProgrammaticExcelItems: any[] = [];
         let attExcelTextContext = '';
 
@@ -464,7 +454,6 @@ export async function POST(req: Request) {
             }
             const aiRows = allRows.slice(0, 30);
             attExcelTextContext = JSON.stringify(aiRows);
-            console.log(`[Email Inbound] Extracted text (limited to 30 rows) from Excel attachment: ${attFileName}`);
 
             let headerRowIdx = -1, nameColIdx = -1, qtyColIdx = -1, unitColIdx = -1, obsColIdx = -1;
             for (let r = 0; r < Math.min(allRows.length, 30); r++) {
@@ -546,7 +535,7 @@ export async function POST(req: Request) {
               });
             }
           } catch (err) {
-            console.error('[Email Inbound] Error parsing Excel:', err);
+            console.error('[Email Inbound] Error parsing Excel programmatically:', err);
           }
         }
 
@@ -595,7 +584,7 @@ export async function POST(req: Request) {
             "deliveryDate": "YYYY-MM-DD o null",
             "clientType": "b2b_client o b2c_client",
             "items": [
-              { "originalName": "Nombre del producto", "quantity": 10, "unit": "Kg", "observations": null }
+              { "originalName": "Nombre del producto", "quantity": 10, "unit": "Kg", "observations": null, "deliveryDate": "YYYY-MM-DD o null" }
             ]
           }
           `;
@@ -606,9 +595,7 @@ export async function POST(req: Request) {
             const filterExcelItems = (items: any[], clientName: string) => {
               if (!items || items.length === 0) return [];
               return items.filter((itm: any) => {
-                // 1. Exclude transaction numbers, phone numbers, or NITs (> 5000)
                 if (itm.quantity > 5000) return false;
-                // 2. Exclude customer name/header row
                 if (clientName) {
                   const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                   const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -623,7 +610,6 @@ export async function POST(req: Request) {
             if (attProgrammaticExcelItems.length > 0) {
               attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
             } else if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
-              // Fallback: Usar los productos extraídos por Gemini si el lector programático no obtuvo nada
               attExtractedData.items = filterExcelItems(attExtractedData.items, attExtractedData.clientInDocument || '');
             } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
@@ -655,7 +641,7 @@ export async function POST(req: Request) {
           }
         }
 
-        parsedAttachments.push({
+        return {
           name: attFileName,
           url: publicUrl,
           processed: false,
@@ -669,10 +655,17 @@ export async function POST(req: Request) {
           nit: attExtractedData.nit || null,
           clientType: attExtractedData.clientType || null,
           items: attExtractedData.items || []
-        });
+        };
+      });
+
+      parsedAttachments = await Promise.all(attachmentPromises);
+      uploadedAttachments = parsedAttachments.map(att => ({ name: att.name, url: att.url }));
+
+      if (uploadedAttachments.length > 0) {
+        attachmentUrl = uploadedAttachments[0].url;
+        attachmentName = uploadedAttachments[0].name;
       }
 
-      // Initialize global extractedData with the first attachment's extraction for backwards compatibility
       if (parsedAttachments.length > 0) {
         extractedData = {
           clientInDocument: parsedAttachments[0].clientInDocument,
