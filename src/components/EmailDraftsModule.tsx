@@ -1652,6 +1652,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (selectedDraft) {
       setIsEditing(true);
       const meta = getDraftMetadata(selectedDraft);
+      const currentAtt = meta.attachments && Array.isArray(meta.attachments) ? meta.attachments[selectedAttachmentIndex] : null;
       const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
       
       if (matchedProfile && matchedProfile.address) {
@@ -1806,7 +1807,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             matched_product_id: matchedId,
             skuQuery: prod?.sku || '',
             unit: finalUnit,
-            deliveryDate: item.deliveryDate || currentAtt?.deliveryDate || metadata.deliveryDate || minDeliveryDate,
+            deliveryDate: item.deliveryDate || currentAtt?.deliveryDate || meta.deliveryDate || minDeliveryDate,
             observations: (() => {
               let extraDescription = '';
               if (prod && prod.name) {
@@ -1911,15 +1912,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       });
       setEditableItems(initialEdits);
 
-      // Initialize delivery date from metadata if present
-      const metadata = getDraftMetadata(selectedDraft);
-      const currentAtt = metadata.attachments && Array.isArray(metadata.attachments) ? metadata.attachments[selectedAttachmentIndex] : null;
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
-      setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || metadata.deliverySlot || '');
-      setPriceList(metadata.priceList || '');
-      setOrderDocument(metadata.orderDocument || 'Remisión');
-      setPurchaseOrder(metadata.purchaseOrder || '');
-      let initialDateStr = currentAtt?.deliveryDate || metadata.deliveryDate || minDeliveryDate;
+      setEditableDeliverySlot(computedSlot || currentAtt?.deliverySlot || meta.deliverySlot || '');
+      setPriceList(meta.priceList || '');
+      setOrderDocument(meta.orderDocument || 'Remisión');
+      setPurchaseOrder(meta.purchaseOrder || '');
+      let initialDateStr = currentAtt?.deliveryDate || meta.deliveryDate || minDeliveryDate;
       if (initialDateStr < minDeliveryDate) {
         initialDateStr = minDeliveryDate;
       }
@@ -2931,13 +2929,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
 
-      // Calculate totals
-      let totalAmount = 0;
-      let totalWeight = 0;
-      const itemsData: any[] = [];
+      // Verify zero price items first for all items
       let hasZeroPriceItem = false;
       let zeroPriceItemName = '';
-
       for (const item of editableItems.filter(itm => !itm.isDeleted)) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
@@ -2948,20 +2942,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               zeroPriceItemName = prod.name;
               break;
             }
-            const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-            totalAmount += resolvedPrice * qtyNum;
-            const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
-            totalWeight += qtyNum * w;
-
-            itemsData.push({
-              product_id: prod.id,
-              quantity: qtyNum,
-              unit_price: resolvedPrice,
-              nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
-              variant_label: item.observations || null,
-              unit: item.unit || prod.unit_of_measure || 'Kg',
-              selected_options: item.selected_options || {}
-            });
           }
         }
       }
@@ -2972,47 +2952,97 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return;
       }
 
-      // 2. Create the order
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          profile_id: finalProfileId,
+      // Group active items by deliveryDate
+      const activeItems = editableItems.filter(itm => !itm.isDeleted);
+      const groups: Record<string, any[]> = {};
+      for (const item of activeItems) {
+        const itemDate = item.deliveryDate || deliveryDate;
+        if (!groups[itemDate]) {
+          groups[itemDate] = [];
+        }
+        groups[itemDate].push(item);
+      }
+
+      const createdOrderIds: string[] = [];
+      const createdOrdersInfo: { id: string; total: number; deliveryDate: string; items: any[] }[] = [];
+
+      // Create an order for each date group
+      for (const [groupDate, groupItems] of Object.entries(groups)) {
+        let totalAmount = 0;
+        let totalWeight = 0;
+        const itemsData: any[] = [];
+
+        for (const item of groupItems) {
+          if (item.matched_product_id) {
+            const prod = products.find(p => p.id === item.matched_product_id);
+            if (prod) {
+              const resolvedPrice = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : prod.base_price;
+              const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+              totalAmount += resolvedPrice * qtyNum;
+              const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+              totalWeight += qtyNum * w;
+
+              itemsData.push({
+                product_id: prod.id,
+                quantity: qtyNum,
+                unit_price: resolvedPrice,
+                nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
+                variant_label: item.observations || null,
+                unit: item.unit || prod.unit_of_measure || 'Kg',
+                selected_options: item.selected_options || {}
+              });
+            }
+          }
+        }
+
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            profile_id: finalProfileId,
+            total: totalAmount,
+            total_weight_kg: totalWeight,
+            status: 'pending_approval',
+            payment_status: 'Pendiente',
+            payment_method: paymentMethod,
+            origin: 'Email Ingest',
+            origin_source: 'email',
+            delivery_date: groupDate,
+            delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
+            admin_notes: finalAdminNotes,
+            shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
+            latitude: draftCoordinates?.lat || metadata?.latitude || null,
+            longitude: draftCoordinates?.lng || metadata?.longitude || null
+          })
+          .select()
+          .single();
+
+        if (orderError) {
+          throw new Error(`Error al registrar pedido para la fecha ${groupDate}: ${orderError.message}`);
+        }
+
+        createdOrderIds.push(order.id);
+        createdOrdersInfo.push({
+          id: order.id,
           total: totalAmount,
-          total_weight_kg: totalWeight,
-          status: 'pending_approval',
-          payment_status: 'Pendiente',
-          payment_method: paymentMethod,
-          origin: 'Email Ingest',
-          origin_source: 'email',
-          delivery_date: deliveryDate,
-          delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
-          admin_notes: finalAdminNotes,
-          shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
-          latitude: draftCoordinates?.lat || metadata?.latitude || null,
-          longitude: draftCoordinates?.lng || metadata?.longitude || null
-        })
-        .select()
-        .single();
+          deliveryDate: groupDate,
+          items: itemsData
+        });
 
-      if (orderError) {
-        throw new Error('Error al registrar pedido: ' + orderError.message);
+        const finalItemsData = itemsData.map(itm => ({
+          order_id: order.id,
+          ...itm
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(finalItemsData);
+
+        if (itemsError) {
+          throw new Error(`Error al registrar ítems para la fecha ${groupDate}: ${itemsError.message}`);
+        }
       }
 
-      // 3. Create order items
-      const finalItemsData = itemsData.map(itm => ({
-        order_id: order.id,
-        ...itm
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(finalItemsData);
-
-      if (itemsError) {
-        throw new Error('Error al registrar ítems: ' + itemsError.message);
-      }
-
-      // 4. Update the draft status to approved and save updated attachments list
+      // Update the draft status to approved and save updated attachments list
       const updatedAttachments = metadata.attachments && Array.isArray(metadata.attachments) ? [...metadata.attachments] : [];
       let isLastAttachment = true;
       let nextUnprocessedIdx = -1;
@@ -3021,7 +3051,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         updatedAttachments[selectedAttachmentIndex] = {
           ...updatedAttachments[selectedAttachmentIndex],
           processed: true,
-          orderId: order.id,
+          orderId: createdOrderIds[0] || null,
+          orderIds: createdOrderIds,
           deliveryDate: deliveryDate,
           deliverySlot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
           items: editableItems.map(itm => ({
@@ -3032,7 +3063,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             matched_product_id: itm.matched_product_id,
             observations: itm.observations,
             selected_options: itm.selected_options,
-            isDeleted: itm.isDeleted
+            isDeleted: itm.isDeleted,
+            deliveryDate: itm.deliveryDate
           }))
         };
 
@@ -3073,41 +3105,47 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           .eq('id', selectedDraft.id);
       }
 
-      // 5. Send confirmation email (queue in mail table)
+      // Send confirmation emails (queue in mail table) for each created order
       if (selectedDraft.source_email && sendConfirmationEmail) {
-        const formattedItems = editableItems.map(item => {
-          const prod = products.find(p => p.id === item.matched_product_id);
-          const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-          const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
-          return {
-            name: prod?.name || item.originalName || 'Producto',
-            quantity: qtyNum,
-            price: formatNumber(unitPrice),
-            total: formatNumber(unitPrice * qtyNum)
-          };
-        });
+        for (const orderInfo of createdOrdersInfo) {
+          const formattedItems = orderInfo.items.map(item => {
+            const prod = products.find(p => p.id === item.product_id);
+            return {
+              name: prod?.name || 'Producto',
+              quantity: item.quantity,
+              price: formatNumber(item.unit_price),
+              total: formatNumber(item.unit_price * item.quantity)
+            };
+          });
 
-        await supabase.from('mail').insert({
-          to_email: selectedDraft.source_email,
-          subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
-          template: {
-            name: 'order_confirmation',
-            data: {
-              client: selectedDraft.client_detected_name || 'Cliente',
-              order_number: order.id.slice(0, 6).toUpperCase(),
-              total_amount: formatNumber(totalAmount),
-              items: formattedItems
+          await supabase.from('mail').insert({
+            to_email: selectedDraft.source_email,
+            subject: `¡Confirmación de Pedido FruFresco N° ${orderInfo.id.slice(0, 6).toUpperCase()}!`,
+            template: {
+              name: 'order_confirmation',
+              data: {
+                client: selectedDraft.client_detected_name || 'Cliente',
+                order_number: orderInfo.id.slice(0, 6).toUpperCase(),
+                total_amount: formatNumber(orderInfo.total),
+                items: formattedItems
+              }
             }
-          }
-        });
+          });
+        }
       }
 
       if (isLastAttachment) {
-        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅', 'success');
+        const successMsg = createdOrderIds.length > 1
+          ? `¡Se registraron exitosamente ${createdOrderIds.length} pedidos independientes! Borrador aprobado ✅`
+          : '¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅';
+        showToast(successMsg, 'success');
         setShowConfirmModal(false);
         setSelectedDraft(null);
       } else {
-        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+        const successMsg = createdOrderIds.length > 1
+          ? `Se registraron exitosamente ${createdOrderIds.length} pedidos para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`
+          : `Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`;
+        showToast(successMsg, 'success');
         setShowConfirmModal(false);
         
         // Update local selectedDraft state with updated attachments
@@ -4508,7 +4546,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <input 
-                               onChange={(e) => {
+                            type="date" 
+                            value={deliveryDate} 
+                            min={getMinDeliveryDate()}
+                            disabled={!isEditing}
+                            onChange={(e) => {
                               const newDate = e.target.value;
                               const minDate = getMinDeliveryDate();
                               if (newDate < minDate) {
@@ -4528,11 +4570,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   }
                                 }
                               }
-                              updateGlobalDeliveryDate(newDate);                             return;
-                                  }
-                                }
-                              }
-                              setDeliveryDate(newDate);
+                              updateGlobalDeliveryDate(newDate);
                             }} 
                             style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, cursor: isEditing ? 'pointer' : 'default', backgroundColor: isEditing ? 'white' : '#F9FAFB' }} 
                           />
@@ -4696,9 +4734,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '40%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>NOMBRE EN DOCUMENTO</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '35%' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '20%' }}>CANT.</th>
+                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>FECHA ENTREGA</th>
                         <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
                       </tr>
                     </thead>
@@ -4748,7 +4787,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     )}
                                     <td style={{ 
                                       padding: '1rem 1rem', 
-                                      width: '30%', 
+                                      width: '25%', 
                                       backgroundColor: getCellBgColor(i, true),
                                       transition: 'background-color 0.2s'
                                     }}>
@@ -4780,7 +4819,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </td>
                                     <td style={{ 
                                       padding: '1rem 1rem', 
-                                      width: '40%', 
+                                      width: '35%', 
                                       backgroundColor: getCellBgColor(i, false),
                                       transition: 'background-color 0.2s'
                                     }}>
@@ -4878,7 +4917,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     </td>
                                     <td style={{ 
                                       padding: '1rem 1rem', 
-                                      width: '25%', 
+                                      width: '20%', 
                                       backgroundColor: getCellBgColor(i, true),
                                       transition: 'background-color 0.2s'
                                     }}>
@@ -4933,7 +4972,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                    nextInput.select();
                                                  }
                                                } else {
-                                                 const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                                                 const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '', deliveryDate: deliveryDate }];
                                                  setEditableItems(newEdits);
                                                  setTimeout(() => {
                                                    const nextInput = productInputRefs.current[i + 1];
@@ -4987,6 +5026,38 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         </span>
                                       </div>
                                     </td>
+                                    <td style={{ 
+                                       padding: '1rem 1rem', 
+                                       width: '15%', 
+                                       backgroundColor: getCellBgColor(i, true),
+                                       transition: 'background-color 0.2s',
+                                       textAlign: 'center'
+                                     }}>
+                                       <input
+                                         type="date"
+                                         disabled={!isEditing || item.isDeleted}
+                                         value={item.deliveryDate || deliveryDate}
+                                         min={minDeliveryDate}
+                                         onChange={(e) => {
+                                           const newDate = e.target.value;
+                                           const newEdits = [...editableItems];
+                                           newEdits[i].deliveryDate = newDate;
+                                           setEditableItems(newEdits);
+                                         }}
+                                         style={{
+                                           padding: '6px 8px',
+                                           borderRadius: '8px',
+                                           border: '2px solid #E2E8F0',
+                                           fontWeight: 'bold',
+                                           fontSize: '0.9rem',
+                                           color: '#1E293B',
+                                           backgroundColor: item.isDeleted ? '#F1F5F9' : '#FFFFFF',
+                                           cursor: item.isDeleted ? 'not-allowed' : 'pointer',
+                                           outline: 'none',
+                                           width: '100%'
+                                         }}
+                                       />
+                                     </td>
                                     <td style={{ 
                                       padding: '1rem 0.5rem', 
                                       textAlign: 'center', 
@@ -5277,7 +5348,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start', gap: '0.75rem', alignItems: 'center' }}>
                     <button
                       onClick={() => {
-                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '', deliveryDate: deliveryDate }];
                         setEditableItems(newEdits);
                         setTimeout(() => {
                           const nextInput = productInputRefs.current[newEdits.length - 1];
