@@ -497,49 +497,89 @@ function CreateOrderContent() {
             }
 
             if (currentProfile) {
-                modelId = currentProfile.pricing_model_id || null;
+                let resolvedModelId = currentProfile.pricing_model_id;
+                if (!resolvedModelId && currentProfile.parent_id) {
+                    const parent = clients.find(c => c.id === currentProfile.parent_id);
+                    if (parent) {
+                        resolvedModelId = parent.pricing_model_id;
+                    }
+                }
+                modelId = resolvedModelId || null;
             }
 
             let resolvedModel: any = null;
             let expired = false;
             let b2cFallback = false;
+            let activeAgreement: any = null;
 
-            // 1. Fetch current pricing model if defined
-            if (modelId) {
-                const { data: pm } = await supabase
-                    .from('pricing_models')
-                    .select('*')
-                    .eq('id', modelId)
-                    .single();
+            // Check if there is an active agreement for the client (or matrix parent)
+            if (clientType === 'B2B' && currentProfile) {
+                const effectiveClientId = currentProfile.parent_id || currentProfile.id;
+                const { data } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, start_date, valid_until')
+                    .eq('client_id', effectiveClientId)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
                 
-                if (pm) {
-                    resolvedModel = pm;
-                    // Validate expiration against deliveryDate
-                    if (deliveryDate) {
-                        const delivery = deliveryDate.split('T')[0];
-                        const start = pm.start_date?.split('T')[0];
-                        const end = pm.end_date?.split('T')[0];
-                        if (start && start > delivery) {
-                            expired = true;
-                        }
-                        if (end && end < delivery) {
-                            expired = true;
-                        }
+                if (data) {
+                    const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
+                    const start = data.start_date?.split('T')[0];
+                    const end = data.valid_until?.split('T')[0];
+                    let isValid = true;
+                    if (start && start > checkDate) isValid = false;
+                    if (end && end < checkDate) isValid = false;
+
+                    if (isValid) {
+                        activeAgreement = data;
                     }
                 }
             }
 
-            // 2. Fallback to Clientes B2C if no model or if expired
-            if (!resolvedModel || expired) {
-                b2cFallback = true;
-                const { data: b2cModel } = await supabase
-                    .from('pricing_models')
-                    .select('*')
-                    .eq('name', 'Clientes B2C')
-                    .single();
-                
-                if (b2cModel) {
-                    resolvedModel = b2cModel;
+            if (activeAgreement) {
+                resolvedModel = {
+                    id: activeAgreement.id,
+                    name: `Acuerdo ${activeAgreement.quote_number}`,
+                    is_agreement: true
+                };
+            } else {
+                // 1. Fetch current pricing model if defined
+                if (modelId) {
+                    const { data: pm } = await supabase
+                        .from('pricing_models')
+                        .select('*')
+                        .eq('id', modelId)
+                        .single();
+                    
+                    if (pm) {
+                        resolvedModel = pm;
+                        // Validate expiration against deliveryDate
+                        if (deliveryDate) {
+                            const delivery = deliveryDate.split('T')[0];
+                            const start = pm.start_date?.split('T')[0];
+                            const end = pm.end_date?.split('T')[0];
+                            if (start && start > delivery) {
+                                expired = true;
+                            }
+                            if (end && end < delivery) {
+                                expired = true;
+                            }
+                        }
+                    }
+                }
+
+                // 2. Fallback to Clientes B2C if no model or if expired
+                if (!resolvedModel || expired) {
+                    b2cFallback = true;
+                    const { data: b2cModel } = await supabase
+                        .from('pricing_models')
+                        .select('*')
+                        .eq('name', 'Clientes B2C')
+                        .single();
+                    
+                    if (b2cModel) {
+                        resolvedModel = b2cModel;
+                    }
                 }
             }
 
@@ -547,7 +587,7 @@ function CreateOrderContent() {
             setIsB2CDefault(b2cFallback);
             setIsContractExpired(expired);
 
-            // 3. Load prices for the resolved model with fallback B2C prices
+            // 3. Load prices for the resolved contract/model with fallback B2C prices
             if (resolvedModel) {
                 const map: Record<string, number> = {};
                 const customIds = new Set<string>();
@@ -572,18 +612,31 @@ function CreateOrderContent() {
                     }
                 }
 
-                // Fetch active model prices
-                const { data: activePrices } = await supabase
-                    .from('pricing_model_prices')
-                    .select('product_id, price')
-                    .eq('model_id', resolvedModel.id);
-                
-                activePrices?.forEach((p: any) => {
-                    map[p.product_id] = p.price;
-                    if (resolvedModel.name !== 'Clientes B2C') {
+                if (activeAgreement) {
+                    // Fetch agreement prices from quote_items
+                    const { data: qItems } = await supabase
+                        .from('quote_items')
+                        .select('product_id, unit_price')
+                        .eq('quote_id', activeAgreement.id);
+                    
+                    qItems?.forEach((p: any) => {
+                        map[p.product_id] = p.unit_price;
                         customIds.add(p.product_id);
-                    }
-                });
+                    });
+                } else {
+                    // Fetch active model prices
+                    const { data: activePrices } = await supabase
+                        .from('pricing_model_prices')
+                        .select('product_id, price')
+                        .eq('model_id', resolvedModel.id);
+                    
+                    activePrices?.forEach((p: any) => {
+                        map[p.product_id] = p.price;
+                        if (resolvedModel.name !== 'Clientes B2C') {
+                            customIds.add(p.product_id);
+                        }
+                    });
+                }
 
                 setContractPrices(map);
                 setCustomPriceIds(customIds);

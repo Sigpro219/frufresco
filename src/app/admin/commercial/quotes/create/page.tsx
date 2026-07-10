@@ -171,7 +171,7 @@ function CreateQuotePageContent() {
                 setSelectedModelId(mData[0].id);
             }
 
-            const { data: cData, error: cErr } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
+            const { data: cData, error: cErr } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, parent_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
             if (cErr) console.warn('Error fetching profiles:', cErr);
             if (cData) setClients(cData || []);
 
@@ -235,8 +235,15 @@ function CreateQuotePageContent() {
         const client = clients.find(c => c.id === clientId);
         if (client) {
             setClientName(client.company_name || client.contact_name || '');
-            if (client.pricing_model_id) {
-                setSelectedModelId(client.pricing_model_id);
+            let resolvedModelId = client.pricing_model_id;
+            if (!resolvedModelId && client.parent_id) {
+                const parent = clients.find(c => c.id === client.parent_id);
+                if (parent) {
+                    resolvedModelId = parent.pricing_model_id;
+                }
+            }
+            if (resolvedModelId) {
+                setSelectedModelId(resolvedModelId);
             }
             // Cargar máscaras de productos (Nicknames) para este cliente
             try {

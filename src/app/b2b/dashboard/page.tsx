@@ -550,11 +550,16 @@ export default function B2BDashboard() {
         const fetchAgreements = async () => {
             setIsLoadingAgreements(true);
             try {
+                const clientIds = [profile.id];
+                if (profile.parent_id) {
+                    clientIds.push(profile.parent_id);
+                }
+
                 // Try with join first; fall back to simple query if FK not configured
                 const { data, error } = await supabase
                     .from('quotes')
                     .select('*, pricing_models!model_id(name)')
-                    .eq('client_id', profile.id)
+                    .in('client_id', clientIds)
                     .eq('status', 'agreement')
                     .order('created_at', { ascending: false });
 
@@ -563,7 +568,7 @@ export default function B2BDashboard() {
                     const { data: fallback, error: fallbackError } = await supabase
                         .from('quotes')
                         .select('*')
-                        .eq('client_id', profile.id)
+                        .in('client_id', clientIds)
                         .eq('status', 'agreement')
                         .order('created_at', { ascending: false });
 

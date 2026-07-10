@@ -24,25 +24,78 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     const userId = session?.user?.id;
 
     let pricingModelId = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2C
+    let agreementItems: any[] = [];
+    let hasActiveAgreement = false;
+
     if (userId) {
         const { data: profile } = await serverSupabase
             .from('profiles')
-            .select('pricing_model_id')
+            .select('pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
             .eq('id', userId)
             .single();
-        if (profile?.pricing_model_id) {
-            pricingModelId = profile.pricing_model_id;
+        const resolvedModelId = profile?.pricing_model_id || (profile?.parent as any)?.pricing_model_id;
+        if (resolvedModelId) {
+            pricingModelId = resolvedModelId;
+        }
+
+        // Check if this client (or their matrix parent) has an active agreement quote
+        const effectiveClientId = profile?.parent_id || userId;
+        const { data: activeAgreement } = await serverSupabase
+            .from('quotes')
+            .select('id, start_date, valid_until')
+            .eq('client_id', effectiveClientId)
+            .eq('status', 'agreement')
+            .maybeSingle();
+
+        if (activeAgreement) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const start = activeAgreement.start_date?.split('T')[0];
+            const end = activeAgreement.valid_until?.split('T')[0];
+            let isVigente = true;
+            if (start && start > todayStr) isVigente = false;
+            if (end && end < todayStr) isVigente = false;
+
+            if (isVigente) {
+                hasActiveAgreement = true;
+                const { data: qItems } = await serverSupabase
+                    .from('quote_items')
+                    .select('product_id, unit_price')
+                    .eq('quote_id', activeAgreement.id);
+                if (qItems) {
+                    agreementItems = qItems;
+                }
+            }
         }
     }
 
     // 1. Data Fetching for the Grid (Optimized with Cache)
     const [
-        allVisible,
+        allVisibleRaw,
         translationCache
     ] = await Promise.all([
         getVisibleProducts(pricingModelId),
         locale === 'en' ? getTranslationCache() : Promise.resolve({})
     ]);
+
+    // Override prices if there is an active agreement
+    let allVisible = allVisibleRaw;
+    if (hasActiveAgreement && agreementItems.length > 0) {
+        const agreementPriceMap = new Map(agreementItems.map(item => [item.product_id, item.unit_price]));
+        allVisible = allVisibleRaw.map(p => {
+            const agreementPrice = agreementPriceMap.get(p.id);
+            if (agreementPrice !== undefined) {
+                return {
+                    ...p,
+                    pricing_model_prices: [
+                        {
+                            price: agreementPrice
+                        }
+                    ]
+                };
+            }
+            return p;
+        });
+    }
 
     // Fetch nicknames if user is logged in
     const { data: nicknamesData } = userId 

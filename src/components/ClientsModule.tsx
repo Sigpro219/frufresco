@@ -2860,11 +2860,125 @@ function EmptyState({ text }: { text: string }) {
 
 
 
+function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose: () => void }) {
+    const [items, setItems] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchItems = async () => {
+            setLoading(true);
+            try {
+                const { data } = await supabase
+                    .from('quote_items')
+                    .select('*, products:product_id (name, accounting_id, unit_of_measure)')
+                    .eq('quote_id', agreement.id)
+                    .order('created_at');
+                if (data) setItems(data);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchItems();
+    }, [agreement.id]);
+
+    const formatAgreementNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `ACI ${day}${month} ${paddedSeq}`;
+    };
+
+    const agreementId = formatAgreementNumber(agreement.quote_number, agreement.created_at);
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid #E2E8F0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.2rem 2rem', borderBottom: '1px solid #F1F5F9', background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.2rem' }}>📜</span>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: '#1E293B' }}>Precios Congelados: {agreementId}</h3>
+                            <span style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios / Acuerdo Institucional activo</span>
+                        </div>
+                    </div>
+                    <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #E2E8F0', cursor: 'pointer', color: '#64748B', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: '2rem', flex: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', backgroundColor: '#F8FAFC', padding: '1rem 1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.8rem', color: '#475569' }}>
+                        <div><strong>Vigencia:</strong> {agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'} al {agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}</div>
+                        {agreement.model_snapshot_name && <div><strong>Modelo Base:</strong> {agreement.model_snapshot_name}</div>}
+                    </div>
+
+                    {loading ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '3rem 0' }}>
+                            <Loader2 size={24} className="animate-spin" style={{ color: '#0D7A57' }} />
+                            <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>Cargando catálogo congelado...</span>
+                        </div>
+                    ) : items.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: '#64748B', fontSize: '0.85rem', fontStyle: 'italic', padding: '2rem 0' }}>Este acuerdo no tiene productos vinculados.</p>
+                    ) : (
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: '800' }}>
+                                        <th style={{ padding: '0.75rem 1rem' }}>Producto</th>
+                                        <th style={{ padding: '0.75rem 1rem' }}>UoM</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Base</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>IVA</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio con IVA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map(item => {
+                                        const ivaPercent = item.iva_rate || 0;
+                                        const basePrice = item.unit_price || 0;
+                                        const ivaAmount = basePrice * (ivaPercent / 100);
+                                        const totalPrice = basePrice + ivaAmount;
+
+                                        return (
+                                            <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
+                                                <td style={{ padding: '0.75rem 1rem', fontWeight: '700' }}>
+                                                    {item.products?.name || 'Producto Desconocido'}
+                                                    {item.products?.accounting_id && <span style={{ display: 'block', fontSize: '0.6rem', color: '#94A3B8', fontWeight: 'normal', marginTop: '2px' }}>Cód. Contable: {item.products.accounting_id}</span>}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>{item.products?.unit_of_measure || 'un'}</td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '600' }}>${basePrice.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#64748B' }}>{ivaPercent}%</td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>${totalPrice.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '1.2rem 2rem', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#F8FAFC' }}>
+                    <button onClick={onClose} style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean }) {
     const isEdit = !!editData && !!editData.id;
     const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
+    const isB2B = role === 'b2b_client';
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
         razon_social: editData?.razon_social || '',
@@ -2950,11 +3064,75 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     }, [editData?.id]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
+    const [branches, setBranches] = useState<Profile[]>([]);
+
+    const fetchBranches = async () => {
+        if (!editData?.id || !formData.is_corporate_parent) return;
+        const { data } = await supabase
+            .from('profiles')
+            .select('id, company_name, contact_name, branch_id, phone, address, pricing_model_id')
+            .eq('parent_id', editData.id);
+        if (data) setBranches(data);
+    };
+
+    useEffect(() => {
+        fetchBranches();
+    }, [editData?.id, formData.is_corporate_parent]);
+
+    const [agreement, setAgreement] = useState<any>(null);
+    const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+    const [loadingAgreement, setLoadingAgreement] = useState(false);
+    const [inheritedFromParent, setInheritedFromParent] = useState(false);
+
+    const fetchAgreement = async () => {
+        if (!editData?.id) return;
+        setLoadingAgreement(true);
+        try {
+            if (formData.parent_id) {
+                const { data: parentData } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
+                    .eq('client_id', formData.parent_id)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
+
+                if (parentData) {
+                    setAgreement(parentData);
+                    setInheritedFromParent(true);
+                } else {
+                    setAgreement(null);
+                }
+            } else {
+                const { data: ownData } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
+                    .eq('client_id', editData.id)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
+
+                if (ownData) {
+                    setAgreement(ownData);
+                    setInheritedFromParent(false);
+                } else {
+                    setAgreement(null);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching customer agreement:', err);
+        } finally {
+            setLoadingAgreement(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAgreement();
+    }, [editData?.id, formData.parent_id]);
+
     useEffect(() => {
         const fetchParents = async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone')
+                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone, rut_url, mercantile_registry_url, legal_rep_id_url')
                 .eq('role', 'b2b_client')
                 .eq('is_corporate_parent', true);
             if (data) setPotentialParents(data);
@@ -3198,6 +3376,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             setIsExceptionsModalOpen(false);
                             fetchExceptionCount();
                         }} 
+                    />
+                )}
+                {isAgreementModalOpen && agreement && (
+                    <AgreementDetailsModal
+                        agreement={agreement}
+                        onClose={() => setIsAgreementModalOpen(false)}
                     />
                 )}
                 {/* HEADER PREMIUM */}
@@ -3550,22 +3734,121 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                                 <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
-                                                <select 
-                                                    value={formData.pricing_model_id} 
-                                                    onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
-                                                    disabled={isReadOnly}
-                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
-                                                >
-                                                    <option value="">Seleccionar...</option>
-                                                    {pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-                                                </select>
+                                                {agreement ? (() => {
+                                                    const expiry = agreement.valid_until;
+                                                    const status = (() => {
+                                                        if (!expiry) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
+                                                        const exp = new Date(expiry);
+                                                        const today = new Date();
+                                                        today.setHours(0,0,0,0);
+                                                        const diff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                        if (diff < 0) return { label: 'Vencido', color: '#EF4444', bgColor: '#FEF2F2', type: 'expired' };
+                                                        if (diff <= 15) return { label: `Vence en ${diff}d`, color: '#D97706', bgColor: '#FFFBEB', type: 'warning' };
+                                                        return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
+                                                    })();
+                                                    
+                                                    const agreementId = (() => {
+                                                        const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
+                                                        const day = String(date.getDate()).padStart(2, '0');
+                                                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                        const paddedSeq = String(agreement.quote_number).padStart(4, '0');
+                                                        return `ACI ${day}${month} ${paddedSeq}`;
+                                                    })();
+
+                                                    return (
+                                                        <div 
+                                                            onClick={() => setIsAgreementModalOpen(true)}
+                                                            title="Haga clic para ver los precios congelados del acuerdo"
+                                                            style={{ 
+                                                                padding: '0.8rem 1rem', 
+                                                                borderRadius: THEME.radius.md, 
+                                                                backgroundColor: status.bgColor, 
+                                                                border: `1.5px solid ${status.type === 'expired' ? '#FCA5A5' : status.type === 'warning' ? '#FDE68A' : '#A7F3D0'}`, 
+                                                                color: status.color, 
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.25rem',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                position: 'relative'
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span style={{ fontSize: '0.9rem' }}>📜</span>
+                                                                    <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#1E293B' }}>
+                                                                        {agreementId}
+                                                                    </span>
+                                                                    {inheritedFromParent && (
+                                                                        <span style={{ fontSize: '0.6rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                            Matriz
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span style={{ fontSize: '0.55rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', backgroundColor: status.type === 'expired' ? '#FEE2E2' : status.type === 'warning' ? '#FEF3C7' : '#D1FAE5', color: status.color, textTransform: 'uppercase' }}>
+                                                                    {status.label}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                                                                <span>Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                                                                <span style={{ fontSize: '0.6rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline' }}>Ver Precios →</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })() : (
+                                                    <select 
+                                                        value={formData.pricing_model_id} 
+                                                        onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
+                                                        disabled={isReadOnly || !!formData.parent_id}
+                                                        style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: (isReadOnly || !!formData.parent_id) ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: (isReadOnly || !!formData.parent_id) ? 'default' : 'pointer' }}
+                                                    >
+                                                        {formData.parent_id ? (() => {
+                                                             const parent = potentialParents.find(p => p.id === formData.parent_id);
+                                                             const parentModel = parent && pricingModels ? pricingModels.find(m => m.id === parent.pricing_model_id) : null;
+                                                             return (
+                                                                 <option value="">
+                                                                     {parentModel ? `Heredado de Matriz: ${parentModel.name}` : 'Heredado de Matriz: Modelo B2C'}
+                                                                 </option>
+                                                             );
+                                                        })() : (
+                                                             <option value="">Seleccionar...</option>
+                                                        )}
+                                                        {!formData.parent_id && pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
+                                                    </select>
+                                                )}
                                             </div>
                                             <FormField label="Días de Pago" value={formData.payment_days} onChange={(v) => setFormData({...formData, payment_days: parseInt(v) || 0})} type="number" readOnly={isReadOnly} />
                                         </div>
+
+                                        {/* WARNING DE ACUERDO VENCIDO O INEXISTENTE */}
+                                        {loadingAgreement ? (
+                                            <div style={{ padding: '0.8rem', borderRadius: '12px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Loader2 size={14} className="animate-spin" />
+                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Buscando Acuerdo Institucional...</span>
+                                            </div>
+                                        ) : !agreement ? (
+                                            <div style={{ 
+                                                padding: '1rem', 
+                                                borderRadius: THEME.radius.lg, 
+                                                backgroundColor: '#FEF2F2', 
+                                                border: '1.5px solid #FCA5A5', 
+                                                color: '#B91C1C', 
+                                                marginTop: '1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                fontFamily: THEME.typography.fontFamilySecondary
+                                            }}>
+                                                <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
+                                                    {formData.parent_id ? 'La Casa Matriz no cuenta con un Acuerdo Institucional vigente.' : 'El cliente no cuenta con un Acuerdo Institucional vigente.'}
+                                                </span>
+                                            </div>
+                                        ) : null}
                                         {!formData.is_corporate_parent && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                                                <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
-                                                <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                                 <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
                                             </div>
                                         )}
@@ -3954,6 +4237,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             {/* BLOQUE CONDICIONAL: EXPEDIENTE (MATRIZ) VS OPERACIÓN (SUCURSAL) */}
                             {formData.is_corporate_parent ? (
+                                <>
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                         <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Folder size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
@@ -3965,6 +4249,52 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <DocumentUploadField label="Cédula Representante Legal" url={formData.legal_rep_id_url} onUpload={(url) => setFormData({...formData, legal_rep_id_url: url})} readOnly={isReadOnly} />
                                     </div>
                                 </section>
+
+                                    {/* BLOQUE: SUCURSALES (ONLY FOR CORPORATE PARENT) */}
+                                    {isB2B && editData?.id && (
+                                        <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, marginTop: '1.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                                <div style={{ width: '32px', height: '32px', backgroundColor: '#F0FDF4', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🏢</div>
+                                                <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
+                                            </div>
+                                            {branches.length === 0 ? (
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', fontFamily: THEME.typography.fontFamilySecondary }}>No hay sucursales asociadas a esta Casa Matriz.</p>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', marginTop: '1rem' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        <thead>
+                                                            <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#64748B', fontWeight: '800' }}>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Sucursal</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Contacto</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>ID Sucursal</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Dirección</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Modelo Precios</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {branches.map(branch => {
+                                                                const modelName = pricingModels?.find(m => m.id === branch.pricing_model_id)?.name || 'Heredado';
+                                                                return (
+                                                                    <tr key={branch.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
+                                                                        <td style={{ padding: '0.6rem 0.4rem', fontWeight: '700' }}>{branch.company_name}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>{branch.contact_name} {branch.phone && `(${branch.phone})`}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem', fontWeight: '600' }}>{branch.branch_id || '---'}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>{branch.address}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>
+                                                                            <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: branch.pricing_model_id ? '#EFF6FF' : '#F1F5F9', color: branch.pricing_model_id ? '#1D4ED8' : '#475569', fontSize: '0.65rem', fontWeight: '700' }}>
+                                                                                {modelName}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </section>
+                                    )}
+                                </>
                             ) : (
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>

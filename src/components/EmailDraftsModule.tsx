@@ -1029,6 +1029,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return list;
   })();
 
+  const [pricingModels, setPricingModels] = useState<any[]>([]);
+  const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
+  const [agreements, setAgreements] = useState<any[]>([]);
+  const [agreementPrices, setAgreementPrices] = useState<Record<string, Record<string, number>>>({});
+
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
   const [activePricingModel, setActivePricingModel] = useState<any>(null);
   const [isB2CDefault, setIsB2CDefault] = useState(false);
@@ -1050,69 +1055,89 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let resolvedModel: any = null;
       let expired = false;
       let b2cFallback = false;
+      let loadedPrices: Record<string, number> = {};
 
-      // 1. Fetch current pricing model if defined
-      if (contractModelId) {
-        const { data: pm } = await supabase
-          .from('pricing_models')
-          .select('*')
-          .eq('id', contractModelId)
-          .single();
-        
-        if (pm) {
-          resolvedModel = pm;
-          // Validate expiration against deliveryDate
-          if (deliveryDate) {
-            const delivery = deliveryDate.split('T')[0];
-            const start = pm.start_date?.split('T')[0];
-            const end = pm.end_date?.split('T')[0];
-            if (start && start > delivery) {
-              expired = true;
-            }
-            if (end && end < delivery) {
-              expired = true;
+      const effectiveClientId = currentProfileForContract?.parent_id || currentProfileForContract?.id;
+
+      // 1. Check for Active Agreement Quotes first
+      const activeAgreement = effectiveClientId 
+        ? agreements.find(q => q.client_id === effectiveClientId)
+        : null;
+
+      if (activeAgreement) {
+        resolvedModel = {
+          id: activeAgreement.id,
+          name: `Acuerdo ${activeAgreement.quote_number}`,
+          is_agreement: true
+        };
+
+        const agreementMap = agreementPrices[activeAgreement.id];
+        if (agreementMap) {
+          loadedPrices = { ...agreementMap };
+        }
+
+        // Check expiration
+        if (deliveryDate) {
+          const delivery = deliveryDate.split('T')[0];
+          const start = activeAgreement.start_date?.split('T')[0];
+          const end = activeAgreement.valid_until?.split('T')[0];
+          if (start && start > delivery) {
+            expired = true;
+          }
+          if (end && end < delivery) {
+            expired = true;
+          }
+        }
+      } else {
+        // 2. Fetch pricing model if no agreement
+        const parentProfile = currentProfileForContract?.parent_id ? profiles.find(p => p.id === currentProfileForContract.parent_id) : null;
+        const resolvedModelId = currentProfileForContract?.pricing_model_id || parentProfile?.pricing_model_id || null;
+
+        if (resolvedModelId) {
+          const pm = pricingModels.find(m => m.id === resolvedModelId);
+          if (pm) {
+            resolvedModel = pm;
+            if (deliveryDate) {
+              const delivery = deliveryDate.split('T')[0];
+              const start = pm.start_date?.split('T')[0];
+              const end = pm.end_date?.split('T')[0];
+              if (start && start > delivery) {
+                expired = true;
+              }
+              if (end && end < delivery) {
+                expired = true;
+              }
             }
           }
         }
-      }
 
-      // 2. Fallback to Clientes B2C if no model or if expired
-      if (!resolvedModel || expired) {
-        b2cFallback = true;
-        const { data: b2cModel } = await supabase
-          .from('pricing_models')
-          .select('*')
-          .eq('name', 'Clientes B2C')
-          .single();
-        
-        if (b2cModel) {
-          resolvedModel = b2cModel;
+        // Fallback to Clientes B2C if no model or if expired
+        if (!resolvedModel || expired) {
+          b2cFallback = true;
+          const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
+          if (b2cModel) {
+            resolvedModel = b2cModel;
+            expired = false;
+          }
+        }
+
+        // Load prices for resolved pricing model
+        if (resolvedModel) {
+          const pmPrices = allModelPrices[resolvedModel.id];
+          if (pmPrices) {
+            loadedPrices = { ...pmPrices };
+          }
         }
       }
 
       setActivePricingModel(resolvedModel);
       setIsB2CDefault(b2cFallback);
       setIsContractExpired(expired);
-
-      // 3. Load prices for the resolved model
-      if (resolvedModel) {
-        const { data: prices } = await supabase
-          .from('pricing_model_prices')
-          .select('product_id, price')
-          .eq('model_id', resolvedModel.id);
-        
-        const map: Record<string, number> = {};
-        prices?.forEach((p: any) => {
-          map[p.product_id] = p.price;
-        });
-        setContractPrices(map);
-      } else {
-        setContractPrices({});
-      }
+      setContractPrices(loadedPrices);
     }
 
     resolveContract();
-  }, [selectedDraft?.id, contractModelId, deliveryDate]);
+  }, [selectedDraft?.id, currentProfileForContract?.id, currentProfileForContract?.parent_id, deliveryDate, agreements, agreementPrices, pricingModels, allModelPrices]);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);
@@ -1340,7 +1365,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id')
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id, parent_id')
         .eq('is_active', true)
         .order('company_name', { ascending: true });
       if (data) setProfiles(data);
@@ -1348,9 +1373,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       console.error(e);
     }
   };
-
-  const [pricingModels, setPricingModels] = useState<any[]>([]);
-  const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
 
   const fetchPricingData = async () => {
     try {
@@ -1366,16 +1388,79 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         map[row.model_id][row.product_id] = row.price;
       });
       setAllModelPrices(map);
+
+      // Fetch all active agreement quotes
+      const { data: quotesData } = await supabase
+        .from('quotes')
+        .select('id, client_id, quote_number, start_date, valid_until')
+        .eq('status', 'agreement');
+
+      if (quotesData && quotesData.length > 0) {
+        setAgreements(quotesData);
+        const quoteIds = quotesData.map(q => q.id);
+        const { data: itemsData } = await supabase
+          .from('quote_items')
+          .select('quote_id, product_id, unit_price')
+          .in('quote_id', quoteIds);
+
+        const aMap: Record<string, Record<string, number>> = {};
+        itemsData?.forEach((row: any) => {
+          if (!aMap[row.quote_id]) {
+            aMap[row.quote_id] = {};
+          }
+          aMap[row.quote_id][row.product_id] = row.unit_price;
+        });
+        setAgreementPrices(aMap);
+      } else {
+        setAgreements([]);
+        setAgreementPrices({});
+      }
     } catch (e) {
       console.error('Error fetching pricing data:', e);
     }
   };
+
   const getResolvedPriceForDraft = (draft: any, productId: string) => {
     const profile = profiles.find(p => p.id === draft.profile_id);
-    const modelId = profile?.pricing_model_id || null;
+    const effectiveClientId = profile?.parent_id || profile?.id || null;
+
+    // Check if there is an active agreement for this client (or their parent)
+    const activeAgreement = effectiveClientId 
+      ? agreements.find(q => q.client_id === effectiveClientId)
+      : null;
+
+    if (activeAgreement) {
+      let expired = false;
+      const metadata = getDraftMetadata(draft);
+      const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
+      if (deliveryDateStr) {
+        const delivery = deliveryDateStr.split('T')[0];
+        const start = activeAgreement.start_date?.split('T')[0];
+        const end = activeAgreement.valid_until?.split('T')[0];
+        if (start && start > delivery) expired = true;
+        if (end && end < delivery) expired = true;
+      }
+
+      if (!expired) {
+        const agreementMap = agreementPrices[activeAgreement.id];
+        if (agreementMap) {
+          const pr = agreementMap[productId];
+          if (pr !== undefined && pr !== null) return pr;
+        }
+      }
+    }
+
+    // Fallback to pricing model or parent pricing model
+    let modelId = profile?.pricing_model_id || null;
+    if (!modelId && profile?.parent_id) {
+      const parent = profiles.find(p => p.id === profile.parent_id);
+      if (parent) {
+        modelId = parent.pricing_model_id || null;
+      }
+    }
 
     let resolvedModelId = modelId;
-    let expired = false;
+    let expiredModel = false;
 
     // Verify expiration of pricing model
     if (modelId && pricingModels.length > 0) {
@@ -1387,13 +1472,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           const delivery = deliveryDateStr.split('T')[0];
           const start = pm.start_date?.split('T')[0];
           const end = pm.end_date?.split('T')[0];
-          if (start && start > delivery) expired = true;
-          if (end && end < delivery) expired = true;
+          if (start && start > delivery) expiredModel = true;
+          if (end && end < delivery) expiredModel = true;
         }
       }
     }
 
-    if (!resolvedModelId || expired) {
+    if (!resolvedModelId || expiredModel) {
       const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
       resolvedModelId = b2cModel?.id || null;
     }
