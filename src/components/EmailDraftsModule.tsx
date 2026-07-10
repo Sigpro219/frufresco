@@ -521,6 +521,93 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setSelectedAttachmentIndex(idx);
   };
 
+  const handleSplitAttachmentByDate = () => {
+    if (!selectedDraft) return;
+    const metadata = getDraftMetadata(selectedDraft);
+    const meta = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || {};
+    
+    // Get currently loaded items in editableItems (which includes user edits)
+    const activeItems = editableItems.filter(itm => !itm.isDeleted);
+    
+    // Group activeItems by item.deliveryDate (fall back to the global deliveryDate)
+    const groups: Record<string, any[]> = {};
+    for (const item of activeItems) {
+      const itemDate = item.deliveryDate || deliveryDate;
+      if (!groups[itemDate]) {
+        groups[itemDate] = [];
+      }
+      groups[itemDate].push(item);
+    }
+    
+    const uniqueDates = Object.keys(groups);
+    if (uniqueDates.length <= 1) {
+      showToast('No se encontraron múltiples fechas de entrega distintas entre los productos para dividir.', 'info');
+      return;
+    }
+    
+    // We will build a list of virtual attachments
+    let currentUrl = metadata.attachmentUrl;
+    let currentName = metadata.attachmentName || 'documento.pdf';
+    if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+      const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+      if (selectedAtt) {
+        currentUrl = selectedAtt.url;
+        currentName = selectedAtt.name;
+      }
+    }
+    
+    const nameWithoutExt = currentName.replace(/\.[^/.]+$/, "");
+    const ext = currentName.split('.').pop()?.toLowerCase() || 'pdf';
+    
+    const newVirtualAttachments = uniqueDates.map((groupDate) => {
+      const groupItems = groups[groupDate];
+      return {
+        name: `${nameWithoutExt} [${groupDate}].${ext}`,
+        url: currentUrl,
+        processed: false,
+        orderId: null,
+        deliveryDate: groupDate,
+        deliverySlot: editableDeliverySlot || metadata.deliverySlot || 'AM',
+        clientInDocument: selectedDraft.client_detected_name || meta.clientInDocument || null,
+        documentType: meta.documentType || 'PDF',
+        address: editableAddress || metadata.address,
+        phone: editableClientPhone || metadata.phone,
+        nit: editableClientNit || metadata.nit,
+        clientType: editableClientType || metadata.clientType,
+        items: groupItems.map(itm => ({
+          originalName: itm.originalName || itm.name,
+          quantity: itm.quantity,
+          unit: itm.unit,
+          observations: itm.observations,
+          deliveryDate: groupDate
+        }))
+      };
+    });
+    
+    // We will replace the attachments list in metadata with this new list of virtual attachments
+    const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
+      if (itm.isMetadata) {
+        return {
+          ...itm,
+          attachments: newVirtualAttachments
+        };
+      }
+      return itm;
+    });
+    
+    // Save to local state
+    const localDraftUpdated = {
+      ...selectedDraft,
+      extracted_items: updatedExtractedItems
+    };
+    setSelectedDraft(localDraftUpdated);
+    setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
+    
+    // Reset selectedAttachmentIndex to the first new virtual attachment
+    setSelectedAttachmentIndex(0);
+    showToast(`¡Se dividió el documento en ${newVirtualAttachments.length} adjuntos virtuales según sus fechas de entrega! ⚡`, 'success');
+  };
+
   const getMinDeliveryDate = () => {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -5745,53 +5832,94 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 return (
                   <div style={{
                     display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
                     borderBottom: '1px solid #E2E8F0',
                     backgroundColor: '#F8FAFC',
-                    padding: '0 8px',
-                    gap: '4px'
+                    padding: '0 8px'
                   }}>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('email')}
-                      style={{
-                        padding: '10px 16px',
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        fontWeight: activeTab === 'email' ? 800 : 500,
-                        color: activeTab === 'email' ? '#2563EB' : '#64748B',
-                        borderBottom: activeTab === 'email' ? '2.5px solid #2563EB' : '2.5px solid transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <Mail size={14} />
-                      Correo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('attachment')}
-                      style={{
-                        padding: '10px 16px',
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        fontWeight: activeTab === 'attachment' ? 800 : 500,
-                        color: activeTab === 'attachment' ? '#2563EB' : '#64748B',
-                        borderBottom: activeTab === 'attachment' ? '2.5px solid #2563EB' : '2.5px solid transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <Paperclip size={14} />
-                      Adjunto
-                    </button>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('email')}
+                        style={{
+                          padding: '10px 16px',
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          fontWeight: activeTab === 'email' ? 800 : 500,
+                          color: activeTab === 'email' ? '#2563EB' : '#64748B',
+                          borderBottom: activeTab === 'email' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <Mail size={14} />
+                        Correo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('attachment')}
+                        style={{
+                          padding: '10px 16px',
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          fontWeight: activeTab === 'attachment' ? 800 : 500,
+                          color: activeTab === 'attachment' ? '#2563EB' : '#64748B',
+                          borderBottom: activeTab === 'attachment' ? '2.5px solid #2563EB' : '2.5px solid transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <Paperclip size={14} />
+                        Adjunto
+                      </button>
+                    </div>
+
+                    {/* Botón interactivo de división de adjunto (recuadro 1) */}
+                    {activeTab === 'attachment' && (() => {
+                      const activeItems = editableItems.filter(itm => !itm.isDeleted);
+                      const uniqueDates = Array.from(new Set(activeItems.map(itm => itm.deliveryDate || deliveryDate))).filter(Boolean);
+                      if (uniqueDates.length > 1) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={handleSplitAttachmentByDate}
+                            style={{
+                              marginRight: '8px',
+                              padding: '5px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #D97706',
+                              backgroundColor: '#FFFBEB',
+                              color: '#B45309',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.backgroundColor = '#FEF3C7';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.backgroundColor = '#FFFBEB';
+                            }}
+                          >
+                            ⚡ Separar por Fechas
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 );
               })()}
@@ -6130,6 +6258,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={currentName}>
                       📎 {currentName || 'Documento adjunto'}
                     </span>
+
+                    {metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0 && (
+                      <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        backgroundColor: '#E2E8F0',
+                        color: '#334155',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        📂 Adjunto {selectedAttachmentIndex + 1} de {metadata.attachments.length} 
+                        {metadata.attachments[selectedAttachmentIndex]?.processed && ' (Aprobado)'}
+                      </span>
+                    )}
+
                     <a
                       href={currentUrl}
                       target="_blank"
