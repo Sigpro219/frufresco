@@ -4137,7 +4137,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }}
                 >
                   <Mail size={14} />
-                  {showFloatingEmail ? 'Ocultar Texto Original (Alt+O)' : 'Ver Texto Original (Alt+O)'}
+                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
                 </button>
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
