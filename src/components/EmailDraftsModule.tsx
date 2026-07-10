@@ -2212,7 +2212,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       const isAltShortcut = e.altKey && (
         e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
-        e.code === 'KeyV' || e.key === 'v' || e.key === 'V'
+        e.code === 'KeyV' || e.key === 'v' || e.key === 'V' ||
+        e.code === 'KeyO' || e.key === 'o' || e.key === 'O'
       );
 
       const isTextInput = (target.tagName === 'INPUT' && (
@@ -2274,6 +2275,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           newEdits[obsModal.rowIndex].observations = obsModal.text;
           setEditableItems(newEdits);
           setObsModal(null);
+          return;
+        }
+      }
+
+      // Handle Alt+O shortcut globally
+      if (e.altKey && (e.code === 'KeyO' || e.key === 'o' || e.key === 'O')) {
+        if (selectedDraft && isEditing && !showConfirmModal) {
+          e.preventDefault();
+          setShowFloatingEmail(prev => !prev);
           return;
         }
       }
@@ -4179,7 +4189,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }}
                 >
                   <Mail size={14} />
-                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
+                  {showFloatingEmail ? 'Ocultar Texto Original (Alt+O)' : 'Ver Texto Original (Alt+O)'}
                 </button>
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
