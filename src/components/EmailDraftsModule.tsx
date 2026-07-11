@@ -2212,12 +2212,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
     const raw = draft.extracted_items || [];
+    if (!Array.isArray(raw)) return [];
     return raw.filter((i: any) => !i.isMetadata);
   };
   
   const getDraftMetadata = (draft: any) => {
     const raw = draft.extracted_items || [];
-    const meta = raw.find((i: any) => i.isMetadata);
+    const meta = Array.isArray(raw) ? raw.find((i: any) => i.isMetadata) : undefined;
     
     // Normalize and/or assume delivery slot based on metadata or email content
     let deliverySlot = meta?.deliverySlot || draft.delivery_slot || null;
