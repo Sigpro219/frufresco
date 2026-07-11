@@ -114,7 +114,6 @@ export async function POST(req: Request) {
           email_subject: '[RAW_WEBHOOK] ' + (payload.headers?.subject || payload.headers?.Subject || 'Sin Asunto'),
           source_email: payload.headers?.from || payload.headers?.From || payload.envelope?.from || 'desconocido',
           status: 'pending',
-          items: [],
           extracted_items: { debug_payload: payload }
         }])
         .select()
