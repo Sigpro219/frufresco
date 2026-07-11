@@ -1767,6 +1767,18 @@ export async function POST(req: Request) {
           if (mailId) {
             await supabaseAdmin.from('mail').update({ status: 'error', error_message: err?.message || 'Error parsing' }).eq('id', mailId);
           }
+          await supabaseAdmin.from('order_drafts').insert([{
+            email_subject: subject || 'Error en Ingesta',
+            source_email: fromField || 'desconocido',
+            status: 'rejected',
+            client_type: 'b2b_client',
+            items: [],
+            extracted_items: { 
+              error: err?.message || 'Fatal error in processMailAsync',
+              stack: err?.stack,
+              name: err?.name
+            }
+          }]);
         }
       };
 
