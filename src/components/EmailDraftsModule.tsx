@@ -4925,6 +4925,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             }
                             return null;
                           })()}
+                          {selectedDraft.email_subject?.includes('[Pedido ') && (
+                            <div style={{
+                              marginTop: '6px',
+                              padding: '8px 12px',
+                              backgroundColor: '#EFF6FF',
+                              borderLeft: '3px solid #3B82F6',
+                              color: '#1E3A8A',
+                              fontSize: '0.8rem',
+                              fontWeight: 500,
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '8px'
+                            }}>
+                              <span style={{ fontSize: '1rem' }}>ℹ️</span>
+                              <div>
+                                <strong>Pedido dividido por fechas:</strong> Este borrador contiene exclusivamente los productos que el cliente solicitó para entrega en la fecha indicada arriba.
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
