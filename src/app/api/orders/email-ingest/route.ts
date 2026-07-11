@@ -460,85 +460,347 @@ export async function POST(req: Request) {
             const aiRows = allRows.slice(0, 30);
             attExcelTextContext = JSON.stringify(aiRows);
 
-            let headerRowIdx = -1, nameColIdx = -1, qtyColIdx = -1, unitColIdx = -1, obsColIdx = -1;
-            for (let r = 0; r < Math.min(allRows.length, 30); r++) {
-              const row = allRows[r];
-              if (!row || !Array.isArray(row)) continue;
-              let nameIdx = -1, qtyIdx = -1, unitIdx = -1, obsIdx = -1;
-              for (let c = 0; c < row.length; c++) {
-                const val = String(row[c] || '').toLowerCase().trim();
-                if (!val) continue;
-                const isNameCol = val.match(/prod|descrip|nombre|item|art[íi]culo|material|detalle|sku|product|name/i);
-                const isQtyCol = val.match(/^can$|^cant|qty|quantity|pedid|solicit|volumen|peso/i) && !val.match(/medida|presentaci[óo]n/i);
-                const isUnitCol = val.match(/unidad|uom|ubm|medida|unid\.?|unit|presentaci[óo]n/i);
-                const isObsCol = val.match(/obs|observaci[óo]n|observaciones|notas|nota|obs\.?/i);
-
-                if (isNameCol) {
-                  if (nameIdx === -1) nameIdx = c;
-                } else if (isQtyCol) {
-                  if (qtyIdx === -1 || (val.includes('unidad') && qtyIdx !== -1)) {
-                    if (qtyIdx === -1) qtyIdx = c;
-                  }
-                } else if (isUnitCol) {
-                  if (unitIdx === -1) unitIdx = c;
-                } else if (isObsCol) {
-                  if (obsIdx === -1) obsIdx = c;
-                }
-              }
-              if (nameIdx !== -1 && qtyIdx !== -1) {
-                headerRowIdx = r;
-                nameColIdx = nameIdx;
-                qtyColIdx = qtyIdx;
-                if (unitIdx !== -1) unitColIdx = unitIdx;
-                if (obsIdx !== -1) obsColIdx = obsIdx;
-                break;
-              }
-            }
+            // ═══════════════════════════════════════════════════════════════
+            // MOTOR INTELIGENTE DE PARSING DE EXCEL (Multi-Estrategia)
+            // ═══════════════════════════════════════════════════════════════
 
             const isNumeric = (val: any): boolean => {
               if (val === null || val === undefined) return false;
               if (typeof val === 'number') return !isNaN(val);
               const str = String(val).trim().replace(',', '.');
               if (str === '') return false;
-              const num = Number(str);
-              return !isNaN(num);
+              return !isNaN(Number(str));
             };
 
+            const parseNum = (val: any): number => {
+              if (typeof val === 'number') return val;
+              return parseFloat(String(val || '').trim().replace(',', '.'));
+            };
+
+            // Diccionario de sinónimos para cada tipo de columna (con puntaje)
+            const NAME_SYNONYMS: [RegExp, number][] = [
+              [/^prod(ucto|uct|uctos)?$/i, 10],  // producto, product, productos
+              [/prod/i, 7],                        // prodcuto (typo), products, etc.
+              [/^desc(ripci[oó]n)?$/i, 10],
+              [/descrip/i, 7],
+              [/^nombre$/i, 10],
+              [/^item$/i, 9],
+              [/^art[ií]culo$/i, 10],
+              [/art[ií]cul/i, 7],
+              [/^material$/i, 9],
+              [/^detalle$/i, 9],
+              [/^sku$/i, 8],
+              [/^referencia$/i, 6],
+              [/^concepto$/i, 7],
+              [/^insumo/i, 8],
+              [/^mercancia/i, 7],
+              [/^fruta/i, 6],
+              [/^verdura/i, 6],
+              [/^bien$/i, 5],
+            ];
+            const QTY_SYNONYMS: [RegExp, number][] = [
+              [/^can(t(idad)?)?$/i, 10],           // can, cant, cantidad
+              [/^qty$/i, 10],
+              [/^quantity$/i, 10],
+              [/^unidades$/i, 8],
+              [/^pedid[oa]?$/i, 8],
+              [/^solicit/i, 7],
+              [/^total$/i, 5],
+              [/cant[\.\s]*(pedid|solicit|total)/i, 9],
+              [/^vol(umen)?$/i, 6],
+              [/^peso$/i, 6],
+              [/^pedir$/i, 7],
+              [/^orden$/i, 4],
+              [/^demanda$/i, 5],
+              [/^requerid/i, 7],
+              [/^necesidad$/i, 5],
+            ];
+            // Negative patterns: columns that LOOK like qty but aren't
+            const QTY_NEGATIVE: RegExp[] = [
+              /medida/i, /presentaci[oó]n/i, /precio/i, /valor/i, /costo/i,
+              /plu/i, /c[oó]digo/i, /barr?a/i, /ref(erencia)?$/i, /ean/i,
+            ];
+            const UNIT_SYNONYMS: [RegExp, number][] = [
+              [/^unidad$/i, 10],
+              [/^uom$/i, 10],
+              [/^ubm$/i, 10],
+              [/^medida$/i, 8],
+              [/^unid\.?$/i, 9],
+              [/^unit$/i, 10],
+              [/^presentaci[oó]n$/i, 8],
+              [/^um$/i, 7],
+              [/^emp(aque)?$/i, 6],
+            ];
+            const OBS_SYNONYMS: [RegExp, number][] = [
+              [/^obs(ervaci[oó]n(es)?)?$/i, 10],
+              [/^notas?$/i, 9],
+              [/^comentario/i, 8],
+              [/^especificaci[oó]n/i, 7],
+              [/^detalle$/i, 5],
+              [/^instrucciones$/i, 6],
+            ];
+            // Columns to SKIP (never treat as name or quantity)
+            const SKIP_COLUMNS: RegExp[] = [
+              /^plu$/i, /^c[oó]digo/i, /^cod\.?$/i, /^ref\.?$/i, /^ean$/i,
+              /^barr?a$/i, /^#$/i, /^no\.?$/i, /^n[uú]mero$/i, /^id$/i,
+              /^precio/i, /^valor/i, /^costo/i, /^total/i, /^subtotal/i,
+              /^iva/i, /^impuesto/i, /^descuento/i, /^\.t$/i, /^sede/i,
+              /^sucursal/i, /^bodega/i, /^almac[eé]n$/i, /^lote$/i,
+              /^fecha/i, /^f\.\s*entrega/i, /^entrega$/i, /^oc$/i,
+            ];
+
+            const scoreColumn = (val: string, synonyms: [RegExp, number][]): number => {
+              let best = 0;
+              for (const [regex, score] of synonyms) {
+                if (regex.test(val)) best = Math.max(best, score);
+              }
+              return best;
+            };
+
+            const isSkipColumn = (val: string): boolean => {
+              return SKIP_COLUMNS.some(rx => rx.test(val));
+            };
+
+            let headerRowIdx = -1, nameColIdx = -1, qtyColIdx = -1, unitColIdx = -1, obsColIdx = -1;
+
+            // ─── ESTRATEGIA 1: Scoring por sinónimos de cabecera ───
+            let bestHeaderScore = 0;
+            for (let r = 0; r < Math.min(allRows.length, 30); r++) {
+              const row = allRows[r];
+              if (!row || !Array.isArray(row)) continue;
+
+              let rNameIdx = -1, rQtyIdx = -1, rUnitIdx = -1, rObsIdx = -1;
+              let rNameScore = 0, rQtyScore = 0;
+
+              for (let c = 0; c < row.length; c++) {
+                const raw = row[c];
+                if (raw === null || raw === undefined) continue;
+                const val = String(raw).toLowerCase().replace(/[*_\-\.#]/g, '').trim();
+                if (!val || val.length > 40) continue;
+                if (isSkipColumn(val)) continue;
+
+                const ns = scoreColumn(val, NAME_SYNONYMS);
+                const qs = scoreColumn(val, QTY_SYNONYMS);
+                const us = scoreColumn(val, UNIT_SYNONYMS);
+                const os = scoreColumn(val, OBS_SYNONYMS);
+
+                // Check qty negative patterns
+                const isQtyNeg = QTY_NEGATIVE.some(rx => rx.test(val));
+
+                if (ns > rNameScore) { rNameIdx = c; rNameScore = ns; }
+                if (qs > rQtyScore && !isQtyNeg) { rQtyIdx = c; rQtyScore = qs; }
+                if (us > 0 && rUnitIdx === -1) rUnitIdx = c;
+                if (os > 0 && rObsIdx === -1) rObsIdx = c;
+              }
+
+              const totalScore = rNameScore + rQtyScore;
+              if (rNameIdx !== -1 && rQtyIdx !== -1 && totalScore > bestHeaderScore) {
+                bestHeaderScore = totalScore;
+                headerRowIdx = r;
+                nameColIdx = rNameIdx;
+                qtyColIdx = rQtyIdx;
+                unitColIdx = rUnitIdx;
+                obsColIdx = rObsIdx;
+              }
+            }
+            console.log(`[Excel Parser] Strategy 1 (Synonyms): headerRow=${headerRowIdx}, nameCol=${nameColIdx}, qtyCol=${qtyColIdx}, unitCol=${unitColIdx}, obsCol=${obsColIdx}, score=${bestHeaderScore}`);
+
+            // ─── ESTRATEGIA 2: Buscar fila con ≥2 celdas de texto corto (típicas cabeceras) ───
             if (nameColIdx === -1 || qtyColIdx === -1) {
-              for (let r = 0; r < Math.min(allRows.length, 15); r++) {
+              for (let r = 0; r < Math.min(allRows.length, 20); r++) {
                 const row = allRows[r];
-                if (!row || row.length < 2) continue;
-                if (typeof row[0] === 'string' && row[0].length > 3 && isNumeric(row[1])) {
-                  headerRowIdx = r - 1;
-                  nameColIdx = 0;
-                  qtyColIdx = 1;
-                  break;
-                }
-                if (typeof row[1] === 'string' && row[1].length > 3 && isNumeric(row[2])) {
-                  headerRowIdx = r - 1;
-                  nameColIdx = 1;
-                  qtyColIdx = 2;
-                  break;
+                if (!row || !Array.isArray(row)) continue;
+                const textCells: number[] = [];
+                row.forEach((cell: any, c: number) => {
+                  const val = String(cell || '').trim();
+                  if (val.length >= 2 && val.length <= 25 && isNaN(Number(val))) {
+                    textCells.push(c);
+                  }
+                });
+                if (textCells.length >= 2 && textCells.length <= 12) {
+                  // This row could be a header. Check if next rows have the pattern: text + number
+                  let dataRowsFound = 0;
+                  for (let dr = r + 1; dr < Math.min(r + 6, allRows.length); dr++) {
+                    const dRow = allRows[dr];
+                    if (!dRow || !Array.isArray(dRow)) continue;
+                    const hasText = textCells.some(c => dRow[c] && String(dRow[c]).trim().length > 3 && isNaN(Number(String(dRow[c]).trim())));
+                    const hasNum = textCells.some(c => {
+                      // Look at adjacent columns for numbers
+                      for (let nc = 0; nc < dRow.length; nc++) {
+                        if (nc !== c && isNumeric(dRow[nc]) && parseNum(dRow[nc]) > 0 && parseNum(dRow[nc]) <= 5000) return true;
+                      }
+                      return false;
+                    });
+                    if (hasText && hasNum) dataRowsFound++;
+                  }
+                  if (dataRowsFound >= 2) {
+                    // Use first text column as name, scan for qty column
+                    const candidateNameCol = textCells[0];
+                    let candidateQtyCol = -1;
+                    // Find first numeric column after candidate name
+                    for (let dr = r + 1; dr < Math.min(r + 10, allRows.length); dr++) {
+                      const dRow = allRows[dr];
+                      if (!dRow) continue;
+                      for (let c = 0; c < dRow.length; c++) {
+                        if (c === candidateNameCol) continue;
+                        const hdr = String(row[c] || '').toLowerCase().trim();
+                        if (isSkipColumn(hdr)) continue;
+                        if (isNumeric(dRow[c]) && parseNum(dRow[c]) > 0 && parseNum(dRow[c]) <= 5000) {
+                          candidateQtyCol = c;
+                          break;
+                        }
+                      }
+                      if (candidateQtyCol !== -1) break;
+                    }
+                    if (candidateQtyCol !== -1) {
+                      headerRowIdx = r;
+                      nameColIdx = candidateNameCol;
+                      qtyColIdx = candidateQtyCol;
+                      console.log(`[Excel Parser] Strategy 2 (Pattern): headerRow=${r}, nameCol=${candidateNameCol}, qtyCol=${candidateQtyCol}`);
+                      break;
+                    }
+                  }
                 }
               }
             }
 
+            // ─── ESTRATEGIA 3: Análisis estadístico de columnas ───
+            if (nameColIdx === -1 || qtyColIdx === -1) {
+              const maxCols = Math.max(...allRows.filter(r => Array.isArray(r)).map(r => r.length), 0);
+              const colStats: { textCount: number, numCount: number, avgLen: number, totalLen: number }[] = [];
+              for (let c = 0; c < maxCols; c++) {
+                let textCount = 0, numCount = 0, totalLen = 0;
+                for (let r = 0; r < Math.min(allRows.length, 50); r++) {
+                  const row = allRows[r];
+                  if (!row || !Array.isArray(row) || c >= row.length) continue;
+                  const val = row[c];
+                  if (val === null || val === undefined) continue;
+                  if (typeof val === 'number' || (typeof val === 'string' && !isNaN(Number(val.trim())) && val.trim() !== '')) {
+                    numCount++;
+                  } else if (typeof val === 'string' && val.trim().length > 2) {
+                    textCount++;
+                    totalLen += val.trim().length;
+                  }
+                }
+                colStats.push({ textCount, numCount, avgLen: textCount > 0 ? totalLen / textCount : 0, totalLen });
+              }
+
+              // Name column: most text cells with longest average length
+              let bestNameCol = -1, bestNameScore2 = 0;
+              for (let c = 0; c < colStats.length; c++) {
+                const s = colStats[c];
+                const score = s.textCount * s.avgLen;
+                if (s.textCount >= 3 && s.avgLen > 5 && score > bestNameScore2) {
+                  bestNameScore2 = score;
+                  bestNameCol = c;
+                }
+              }
+
+              // Qty column: numeric column with values in reasonable range (1-5000)
+              let bestQtyCol = -1, bestQtyCount = 0;
+              for (let c = 0; c < colStats.length; c++) {
+                if (c === bestNameCol) continue;
+                const s = colStats[c];
+                // Count how many values are in reasonable quantity range
+                let reasonableCount = 0;
+                for (let r = 0; r < Math.min(allRows.length, 50); r++) {
+                  const row = allRows[r];
+                  if (!row || !Array.isArray(row) || c >= row.length) continue;
+                  const n = parseNum(row[c]);
+                  if (!isNaN(n) && n > 0 && n <= 5000) reasonableCount++;
+                }
+                if (reasonableCount > bestQtyCount && s.numCount >= 2) {
+                  bestQtyCount = reasonableCount;
+                  bestQtyCol = c;
+                }
+              }
+
+              if (bestNameCol !== -1 && bestQtyCol !== -1) {
+                nameColIdx = bestNameCol;
+                qtyColIdx = bestQtyCol;
+                // Find header row: search upward from first data row
+                for (let r = 0; r < Math.min(allRows.length, 20); r++) {
+                  const row = allRows[r];
+                  if (!row || !Array.isArray(row)) continue;
+                  const nameCell = String(row[nameColIdx] || '').trim();
+                  if (nameCell.length >= 2 && nameCell.length <= 30 && isNaN(Number(nameCell))) {
+                    // Check if next row has actual data
+                    const nextRow = allRows[r + 1];
+                    if (nextRow && nextRow[nameColIdx] && String(nextRow[nameColIdx]).trim().length > 3) {
+                      headerRowIdx = r;
+                      break;
+                    }
+                  }
+                }
+                if (headerRowIdx === -1) headerRowIdx = 0;
+                console.log(`[Excel Parser] Strategy 3 (Stats): nameCol=${nameColIdx}, qtyCol=${qtyColIdx}, headerRow=${headerRowIdx}`);
+              }
+            }
+
+            // ─── ESTRATEGIA 4: Heurística simple (columna texto + columna número adyacente) ───
+            if (nameColIdx === -1 || qtyColIdx === -1) {
+              for (let r = 0; r < Math.min(allRows.length, 15); r++) {
+                const row = allRows[r];
+                if (!row || row.length < 2) continue;
+                for (let c = 0; c < row.length - 1; c++) {
+                  const cellText = String(row[c] || '').trim();
+                  if (cellText.length > 3 && isNaN(Number(cellText)) && isNumeric(row[c + 1]) && parseNum(row[c + 1]) > 0 && parseNum(row[c + 1]) <= 5000) {
+                    headerRowIdx = r - 1;
+                    nameColIdx = c;
+                    qtyColIdx = c + 1;
+                    console.log(`[Excel Parser] Strategy 4 (Adjacent): headerRow=${headerRowIdx}, nameCol=${c}, qtyCol=${c + 1}`);
+                    break;
+                  }
+                }
+                if (nameColIdx !== -1) break;
+              }
+            }
+
+            console.log(`[Excel Parser] Final detection: headerRow=${headerRowIdx}, nameCol=${nameColIdx}, qtyCol=${qtyColIdx}, unitCol=${unitColIdx}, obsCol=${obsColIdx}`);
+
+            // ─── EXTRACCIÓN DE FILAS ───
             const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+            const TOTAL_KEYWORDS = /^(total|subtotal|sub-total|gran total|suma|iva|impuesto|descuento|neto)/i;
+
             for (let r = startRow; r < allRows.length; r++) {
               const row = allRows[r];
               if (!row || !Array.isArray(row)) continue;
               const rawName = row[nameColIdx !== -1 ? nameColIdx : 0];
               const rawQty = row[qtyColIdx !== -1 ? qtyColIdx : 1];
               if (!rawName || String(rawName).trim() === '' || String(rawName).includes('--- HOJA:')) continue;
-              const qtyVal = parseFloat(String(rawQty || '').replace(',', '.'));
-              if (isNaN(qtyVal) || qtyVal <= 0) continue;
+
+              const nameStr = String(rawName).trim();
+              // Skip total/subtotal rows
+              if (TOTAL_KEYWORDS.test(nameStr)) continue;
+              // Skip rows that look like metadata (very short or very long)
+              if (nameStr.length <= 1 || nameStr.length > 200) continue;
+
+              const qtyVal = parseNum(rawQty);
+              if (isNaN(qtyVal) || qtyVal <= 0 || qtyVal > 50000) continue;
+
+              // Build unit value
+              let unitVal = 'Unidad';
+              if (unitColIdx !== -1 && row[unitColIdx] !== undefined && row[unitColIdx] !== null) {
+                const u = String(row[unitColIdx]).trim();
+                if (u.length > 0 && u.length < 20) unitVal = u;
+              }
+
+              // Build observations
+              let obsVal: string | null = null;
+              if (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null) {
+                const o = String(row[obsColIdx]).trim();
+                if (o.length > 0 && o.length < 500) obsVal = o;
+              }
+
               attProgrammaticExcelItems.push({
-                originalName: String(rawName).trim(),
+                originalName: nameStr,
                 quantity: qtyVal,
-                unit: unitColIdx !== -1 ? String(row[unitColIdx] || '').trim() : 'Unidad',
-                observations: (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null && String(row[obsColIdx]).trim() !== '') ? String(row[obsColIdx]).trim() : null
+                unit: unitVal,
+                observations: obsVal
               });
             }
+            console.log(`[Excel Parser] Extracted ${attProgrammaticExcelItems.length} items programmatically from ${attFileName}`);
+
           } catch (err) {
             console.error('[Email Inbound] Error parsing Excel programmatically:', err);
           }
