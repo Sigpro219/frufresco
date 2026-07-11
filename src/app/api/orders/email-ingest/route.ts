@@ -1470,7 +1470,7 @@ export async function POST(req: Request) {
               clientType: sourceData.clientType || clientType,
               attachmentUrl: sourceData.url || attachmentUrl || null,
               attachmentName: sourceData.name || attachmentName || null,
-              attachments: isFromAttachment ? [sourceData] : parsedAttachments,
+              attachments: isFromAttachment ? [{ ...sourceData, items: groupedItems }] : parsedAttachments.map((pa: any) => ({ ...pa, items: [] })),
               emailHtml: htmlText || null
             },
             ...groupedItems.map((itm: any) => {
