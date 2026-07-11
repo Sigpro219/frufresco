@@ -5870,20 +5870,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </button>
                 )}
                 
-                {selectedDraft.status === 'pending' && (
-                  <button
-                    id="btn-edit-draft"
-                    type="button"
-                    disabled={saving}
-                    onClick={handleToggleEdit}
-                    style={{
-                      background: 'none', border: 'none', color: isEditing ? '#059669' : '#4B5563', fontWeight: 600, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                    }}
-                  >
-                    {isEditing ? <><Check size={16} /> {saving ? 'Guardando...' : 'Finalizar Edición'}</> : <><Edit2 size={16} /> Modificar Pedido</>}
-                  </button>
-                 )}
- 
+                
                  {selectedDraft.status === 'pending' && (
                   <button
                     id="btn-reject-draft"
