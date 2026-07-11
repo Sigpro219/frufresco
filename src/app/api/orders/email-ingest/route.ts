@@ -106,20 +106,23 @@ export async function POST(req: Request) {
       rawPayloadStr = await req.text();
       const payload = JSON.parse(rawPayloadStr);
 
-      // Save email immediately to the 'mail' table to ensure we have a record
+      // Save email immediately to the 'order_drafts' table to ensure we have a record
+      // Using extracted_items JSONB column to store the raw payload for debugging
       const { data: mailRecord, error: mailErr } = await supabaseAdmin
-        .from('mail')
+        .from('order_drafts')
         .insert([{
-          payload: payload,
-          sender_email: payload.headers?.from || payload.envelope?.from || 'desconocido',
-          subject: payload.headers?.subject || 'Sin Asunto',
-          status: 'pending'
+          email_subject: '[RAW_WEBHOOK] ' + (payload.headers?.subject || payload.headers?.Subject || 'Sin Asunto'),
+          source_email: payload.headers?.from || payload.headers?.From || payload.envelope?.from || 'desconocido',
+          status: 'pending',
+          client_type: 'b2b_client',
+          items: [],
+          extracted_items: { debug_payload: payload }
         }])
         .select()
         .single();
 
       if (mailErr) {
-        console.error('[Email Inbound] Error saving raw mail payload:', mailErr);
+        console.error('[Email Inbound] Error saving raw mail payload to drafts:', mailErr);
       }
 
       // 2. KICK OFF ASYNCHRONOUS PROCESSING
