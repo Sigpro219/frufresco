@@ -410,10 +410,56 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         })
         .then(buffer => {
           const workbook = XLSX.read(buffer, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const html = XLSX.utils.sheet_to_html(worksheet, { id: 'excel-table' });
-          setAttachmentHtml(html);
+          let finalHtml = '';
+          
+          workbook.SheetNames.forEach((sheetName, index) => {
+            const worksheet = workbook.Sheets[sheetName];
+            const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+            const validRows = rawData.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''));
+            
+            if (validRows.length === 0) return;
+
+            const maxCols = Math.max(...validRows.map(r => r.length));
+            const activeCols = new Set<number>();
+            for (let c = 0; c < maxCols; c++) {
+              for (let r = 0; r < validRows.length; r++) {
+                const val = validRows[r][c];
+                if (val !== null && val !== undefined && String(val).trim() !== '') {
+                  activeCols.add(c);
+                  break;
+                }
+              }
+            }
+            const sortedActiveCols = Array.from(activeCols).sort((a, b) => a - b);
+
+            let html = `<div style="margin-bottom: ${index < workbook.SheetNames.length - 1 ? '32px' : '0'};">`;
+            html += `<div style="background-color: #E2E8F0; padding: 8px 12px; font-weight: 800; border-radius: 6px 6px 0 0; color: #1E293B; border: 1px solid #CBD5E1; border-bottom: none; display: inline-block;">Hoja: ${sheetName}</div>`;
+            html += `<table class="excel-table" style="margin-bottom: 0;"><tbody>`;
+            
+            validRows.forEach((row, rIdx) => {
+              // Consider the first row of data as the header
+              const isHeader = rIdx === 0;
+              html += `<tr style="${isHeader ? 'background-color: #F1F5F9; font-weight: 800;' : ''}">`;
+              sortedActiveCols.forEach(c => {
+                const cellVal = row[c];
+                let displayVal = (cellVal !== null && cellVal !== undefined) ? String(cellVal).trim() : '';
+                displayVal = displayVal.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                if (isHeader) {
+                  html += `<th>${displayVal}</th>`;
+                } else {
+                  html += `<td>${displayVal}</td>`;
+                }
+              });
+              html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            finalHtml += html;
+          });
+
+          if (!finalHtml) {
+             finalHtml = '<div style="padding: 20px; text-align: center; color: #64748B;">El archivo Excel está vacío</div>';
+          }
+          setAttachmentHtml(finalHtml);
         })
         .catch(err => {
           console.error("Error loading attachment:", err);
@@ -6244,7 +6290,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       return wrapContent(
                         <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '12px' }}>
                           <style>{`
-                            #excel-table {
+                            .excel-table {
                               border-collapse: collapse;
                               width: max-content;
                               min-width: 100%;
@@ -6257,14 +6303,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               overflow: hidden;
                               border: 1px solid #E2E8F0;
                             }
-                            #excel-table td, #excel-table th {
+                            .excel-table td, .excel-table th {
                               border: 1px solid #E2E8F0;
                               padding: 8px 10px;
                               min-width: 60px;
                               white-space: nowrap;
                               text-align: left;
                             }
-                            #excel-table tr:first-child {
+                            .excel-table tr:first-child {
                               background-color: #F1F5F9;
                               font-weight: 800;
                               color: #1E293B;
@@ -6272,10 +6318,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               top: 0;
                               border-bottom: 2px solid #CBD5E1;
                             }
-                            #excel-table tr:nth-child(even) {
+                            .excel-table tr:nth-child(even) {
                               background-color: #F8FAFC;
                             }
-                            #excel-table tr:hover {
+                            .excel-table tr:hover {
                               background-color: #EFF6FF;
                             }
                           `}</style>
