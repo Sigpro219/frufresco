@@ -6149,43 +6149,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </button>
                     </div>
 
-                    {/* Botón interactivo de división de adjunto (recuadro 1) */}
-                    {activeTab === 'attachment' && (() => {
-                      const activeItems = editableItems.filter(itm => !itm.isDeleted);
-                      const uniqueDates = Array.from(new Set(activeItems.map(itm => itm.deliveryDate || deliveryDate))).filter(Boolean);
-                      if (uniqueDates.length > 1) {
-                        return (
-                          <button
-                            type="button"
-                            onClick={handleSplitAttachmentByDate}
-                            style={{
-                              marginRight: '8px',
-                              padding: '5px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid #D97706',
-                              backgroundColor: '#FFFBEB',
-                              color: '#B45309',
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.backgroundColor = '#FEF3C7';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.backgroundColor = '#FFFBEB';
-                            }}
-                          >
-                            ⚡ Separar por Fechas
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
+                    {/* Botón interactivo de división de adjunto eliminado */}
                   </div>
                 );
               })()}
