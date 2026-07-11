@@ -2430,6 +2430,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       const isAltShortcut = e.altKey && (
+        e.code === 'KeyA' || e.key === 'a' || e.key === 'A' ||
         e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
         e.code === 'KeyV' || e.key === 'v' || e.key === 'V' ||
         e.code === 'KeyO' || e.key === 'o' || e.key === 'O'
@@ -2498,6 +2499,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           setObsModal(null);
           return;
         }
+      }
+
+      // Handle Alt+A shortcut globally (Actualizar Bandeja)
+      if (e.altKey && (e.code === 'KeyA' || e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        fetchDrafts();
+        return;
       }
 
       // Handle Alt+O shortcut globally
@@ -3529,6 +3537,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
         <button 
           onClick={() => fetchDrafts()}
+          title="Alt+A"
           style={{
             padding: '0.5rem 1rem',
             backgroundColor: 'white',
@@ -3539,7 +3548,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             fontSize: '0.85rem'
           }}
         >
-          Actualizar Bandeja
+          Actualizar Bandeja <span style={{ opacity: 0.4, fontSize: '0.75rem', marginLeft: '0.3rem' }}>(Alt+A)</span>
         </button>
       </div>
 
