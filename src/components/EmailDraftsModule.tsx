@@ -1033,6 +1033,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
   const [agreements, setAgreements] = useState<any[]>([]);
   const [agreementPrices, setAgreementPrices] = useState<Record<string, Record<string, number>>>({});
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaignTargets, setCampaignTargets] = useState<any[]>([]);
+  const [campaignItems, setCampaignItems] = useState<any[]>([]);
 
   const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
   const [activePricingModel, setActivePricingModel] = useState<any>(null);
@@ -1415,6 +1418,33 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         setAgreements([]);
         setAgreementPrices({});
       }
+
+      // Fetch commercial campaigns
+      const { data: campaignData } = await supabase
+        .from('commercial_campaigns')
+        .select('*')
+        .eq('status', 'active');
+      if (campaignData) setCampaigns(campaignData);
+
+      if (campaignData && campaignData.length > 0) {
+        const campaignIds = campaignData.map(c => c.id);
+        
+        const { data: targetData } = await supabase
+          .from('campaign_targets')
+          .select('*')
+          .in('campaign_id', campaignIds);
+        if (targetData) setCampaignTargets(targetData);
+
+        const { data: itemData } = await supabase
+          .from('campaign_items')
+          .select('*')
+          .in('campaign_id', campaignIds);
+        if (itemData) setCampaignItems(itemData);
+      } else {
+        setCampaigns([]);
+        setCampaignTargets([]);
+        setCampaignItems([]);
+      }
     } catch (e) {
       console.error('Error fetching pricing data:', e);
     }
@@ -1423,6 +1453,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const getResolvedPriceForDraft = (draft: any, productId: string) => {
     const profile = profiles.find(p => p.id === draft.profile_id);
     const effectiveClientId = profile?.parent_id || profile?.id || null;
+
+    let basePrice = 0;
+    let foundBase = false;
 
     // Check if there is an active agreement for this client (or their parent)
     const activeAgreement = effectiveClientId 
@@ -1445,51 +1478,103 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const agreementMap = agreementPrices[activeAgreement.id];
         if (agreementMap) {
           const pr = agreementMap[productId];
-          if (pr !== undefined && pr !== null) return pr;
+          if (pr !== undefined && pr !== null) {
+            basePrice = pr;
+            foundBase = true;
+          }
         }
       }
     }
 
-    // Fallback to pricing model or parent pricing model
-    let modelId = profile?.pricing_model_id || null;
-    if (!modelId && profile?.parent_id) {
-      const parent = profiles.find(p => p.id === profile.parent_id);
-      if (parent) {
-        modelId = parent.pricing_model_id || null;
+    if (!foundBase) {
+      // Fallback to pricing model or parent pricing model
+      let modelId = profile?.pricing_model_id || null;
+      if (!modelId && profile?.parent_id) {
+        const parent = profiles.find(p => p.id === profile.parent_id);
+        if (parent) {
+          modelId = parent.pricing_model_id || null;
+        }
       }
-    }
 
-    let resolvedModelId = modelId;
-    let expiredModel = false;
+      let resolvedModelId = modelId;
+      let expiredModel = false;
 
-    // Verify expiration of pricing model
-    if (modelId && pricingModels.length > 0) {
-      const pm = pricingModels.find(m => m.id === modelId);
-      if (pm) {
-        const metadata = getDraftMetadata(draft);
-        const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
-        if (deliveryDateStr) {
-          const delivery = deliveryDateStr.split('T')[0];
-          const start = pm.start_date?.split('T')[0];
-          const end = pm.end_date?.split('T')[0];
-          if (start && start > delivery) expiredModel = true;
-          if (end && end < delivery) expiredModel = true;
+      // Verify expiration of pricing model
+      if (modelId && pricingModels.length > 0) {
+        const pm = pricingModels.find(m => m.id === modelId);
+        if (pm) {
+          const metadata = getDraftMetadata(draft);
+          const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
+          if (deliveryDateStr) {
+            const delivery = deliveryDateStr.split('T')[0];
+            const start = pm.start_date?.split('T')[0];
+            const end = pm.end_date?.split('T')[0];
+            if (start && start > delivery) expiredModel = true;
+            if (end && end < delivery) expiredModel = true;
+          }
+        }
+      }
+
+      if (!resolvedModelId || expiredModel) {
+        const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
+        resolvedModelId = b2cModel?.id || null;
+      }
+
+      if (resolvedModelId && allModelPrices[resolvedModelId]) {
+        const pr = allModelPrices[resolvedModelId][productId];
+        if (pr !== undefined && pr !== null) {
+          basePrice = pr;
+          foundBase = true;
         }
       }
     }
 
-    if (!resolvedModelId || expiredModel) {
-      const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
-      resolvedModelId = b2cModel?.id || null;
+    if (!foundBase) {
+      const prod = products.find(p => p.id === productId);
+      basePrice = prod?.base_price || 0;
     }
 
-    if (resolvedModelId && allModelPrices[resolvedModelId]) {
-      const pr = allModelPrices[resolvedModelId][productId];
-      if (pr !== undefined && pr !== null) return pr;
+    // Apply Active Campaign if applicable
+    if (effectiveClientId && campaigns.length > 0) {
+      const metadata = getDraftMetadata(draft);
+      const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
+      const delivery = deliveryDateStr ? deliveryDateStr.split('T')[0] : new Date().toISOString().split('T')[0];
+
+      // Find targets mapping this client/parent to active campaigns
+      const clientTargets = campaignTargets.filter(t => t.profile_id === effectiveClientId);
+      const clientCampaignIds = clientTargets.map(t => t.campaign_id);
+
+      // Find active campaigns that are currently valid on the delivery date
+      const activeCamps = campaigns.filter(c => {
+        if (!clientCampaignIds.includes(c.id)) return false;
+        if (c.status !== 'active') return false;
+        const start = c.start_date?.split('T')[0];
+        const end = c.end_date?.split('T')[0];
+        if (start && start > delivery) return false;
+        if (end && end < delivery) return false;
+        return true;
+      });
+
+      if (activeCamps.length > 0) {
+        const activeCampIds = activeCamps.map(c => c.id);
+        // Find campaign items for this product
+        const items = campaignItems.filter(item => item.product_id === productId && activeCampIds.includes(item.campaign_id));
+        
+        if (items.length > 0) {
+          const item = items[0];
+          const camp = activeCamps.find(c => c.id === item.campaign_id);
+          if (camp) {
+            if (camp.type === 'fixed_price') {
+              return item.adjustment_value;
+            } else if (camp.type === 'margin_adjustment') {
+              return basePrice * (1 + item.adjustment_value / 100);
+            }
+          }
+        }
+      }
     }
 
-    const prod = products.find(p => p.id === productId);
-    return prod?.base_price || 0;
+    return basePrice;
   };
   const handleToggleEdit = async () => {
     if (isEditing) {
@@ -2762,7 +2847,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           const itemsHtml = editableItems.filter((item: any) => !item.isDeleted).map((item: any) => {
             const prod = products.find(p => p.id === item.matched_product_id);
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-            const unitPrice = prod?.base_price || 0;
+            const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
             const lineTotal = unitPrice * qtyNum;
             const lineTotalDisplay = lineTotal > 0 ? formatMoney(lineTotal) : 'Por confirmar';
             const productNameDisplay = `${prod?.name || item.originalName || 'Producto'}${item.unit ? ` (${item.unit})` : ''}`;

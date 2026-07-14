@@ -100,6 +100,7 @@ interface Profile {
 interface Lead {
     id: string;
     company_name?: string;
+    nit?: string;
     contact_name: string;
     phone: string;
     email?: string;
@@ -109,6 +110,8 @@ interface Lead {
     business_size?: string;
     latitude?: number;
     longitude?: number;
+    address?: string;
+    municipality?: string;
     last_contact_date?: string;
     next_contact_date?: string;
     contact_count?: number;
@@ -262,11 +265,20 @@ export default function ClientsModule() {
         if (newStatus === 'converted') {
             const lead = leads.find(l => l.id === id);
             if (lead) {
+                let parsedAddress = lead.address || '';
+                let parsedNit = lead.nit ? String(lead.nit) : '';
+                if (!parsedAddress) {
+                    const notesText = lead.notes || '';
+                    if (notesText.includes('ORIG:')) {
+                        const origMatch = notesText.match(/ORIG:\s*([^|]+)/);
+                        if (origMatch) parsedAddress = origMatch[1].trim();
+                    }
+                }
                 setConversionLead(lead);
                 setConversionCompanyName(lead.company_name || lead.contact_name || '');
-                setConversionNit('');
+                setConversionNit(parsedNit);
                 setConversionPhone(lead.phone || '');
-                setConversionAddress('');
+                setConversionAddress(parsedAddress);
                 setConversionCreateAgreement(false);
                 setConversionStartDate(new Date().toISOString().split('T')[0]);
                 setConversionDurationValue(2);
@@ -2420,8 +2432,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {(isB2B || isLead || isB2C) && (
                     <InfoRow icon="📧" label="Email" value={data.email} />
                 )}
-                {isB2B && profileData?.nit && (
-                    <InfoRow icon="🆔" label="NIT" value={profileData.nit} />
+                {((isB2B && profileData?.nit) || (isLead && leadData?.nit)) && (
+                    <InfoRow icon="🆔" label="NIT" value={isB2B ? profileData?.nit : leadData?.nit} />
                 )}
                 {(isB2B || isB2C) && profileData && (
                     <InfoRow 
@@ -2430,12 +2442,19 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         value={`${profileData.address || ''}${profileData.municipality || profileData.city ? `, ${profileData.municipality || profileData.city}` : ''}${profileData.department ? `, ${profileData.department}` : ''}`} 
                     />
                 )}
-                {(isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude && (
+                {isLead && leadData && (
+                    <InfoRow 
+                        icon="📍" 
+                        label="Ubicación" 
+                        value={`${leadData.address || ''}${leadData.municipality ? `, ${leadData.municipality}` : ''}`} 
+                    />
+                )}
+                {((isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude) || (isLead && leadData && leadData.latitude && leadData.longitude) ? (
                     <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '700', paddingLeft: '1.5rem' }}>
-                        🌐 {profileData.latitude.toFixed(4)}, {profileData.longitude.toFixed(4)} 
+                        🌐 {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
                         <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
                     </div>
-                )}
+                ) : null}
                 {isB2B && profileData && (
                     <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
                         <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.6rem' }}>⚙️ MODELO DE COTIZACIÓN</label>
@@ -2726,10 +2745,13 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
                 {isLead ? (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                        {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
-                        {(client as any).business_size && <span style={{ fontSize: '0.65rem', backgroundColor: '#F0FDF4', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_size}</span>}
-                    </div>
+                    <>
+                        {client.nit && <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit}</div>}
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                            {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
+                            {(client as any).business_size && <span style={{ fontSize: '0.65rem', backgroundColor: '#F0FDF4', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_size}</span>}
+                        </div>
+                    </>
                 ) : (
                     <>
                         <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>

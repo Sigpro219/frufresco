@@ -27,6 +27,8 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     let agreementItems: any[] = [];
     let hasActiveAgreement = false;
 
+    const campaignMap = new Map<string, { value: number; type: string; name: string }>();
+
     if (userId) {
         const { data: profile } = await serverSupabase
             .from('profiles')
@@ -66,6 +68,43 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                 }
             }
         }
+
+        // Check for active campaigns targeting this client
+        const { data: targetCampaigns } = await serverSupabase
+            .from('campaign_targets')
+            .select('campaign_id')
+            .eq('profile_id', effectiveClientId);
+
+        if (targetCampaigns && targetCampaigns.length > 0) {
+            const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
+            const nowIso = new Date().toISOString();
+            const { data: activeCamps } = await serverSupabase
+                .from('commercial_campaigns')
+                .select('*')
+                .in('id', campIds)
+                .eq('status', 'active')
+                .lte('start_date', nowIso)
+                .gte('end_date', nowIso);
+
+            if (activeCamps && activeCamps.length > 0) {
+                const activeCampIds = activeCamps.map((c: any) => c.id);
+                const { data: items } = await serverSupabase
+                    .from('campaign_items')
+                    .select('campaign_id, product_id, adjustment_value')
+                    .in('campaign_id', activeCampIds);
+
+                items?.forEach((item: any) => {
+                    const camp = activeCamps.find((c: any) => c.id === item.campaign_id);
+                    if (camp) {
+                        campaignMap.set(item.product_id, {
+                            value: item.adjustment_value,
+                            type: camp.type,
+                            name: camp.name
+                        });
+                    }
+                });
+            }
+        }
     }
 
     // 1. Data Fetching for the Grid (Optimized with Cache)
@@ -77,25 +116,45 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
         locale === 'en' ? getTranslationCache() : Promise.resolve({})
     ]);
 
-    // Override prices if there is an active agreement
-    let allVisible = allVisibleRaw;
-    if (hasActiveAgreement && agreementItems.length > 0) {
+    const applyCommercialPrices = (plist: any[]) => {
         const agreementPriceMap = new Map(agreementItems.map(item => [item.product_id, item.unit_price]));
-        allVisible = allVisibleRaw.map(p => {
+        return plist.map(p => {
             const agreementPrice = agreementPriceMap.get(p.id);
-            if (agreementPrice !== undefined) {
-                return {
-                    ...p,
-                    pricing_model_prices: [
-                        {
-                            price: agreementPrice
-                        }
-                    ]
+            const basePrice = agreementPrice !== undefined 
+                ? agreementPrice 
+                : (p.pricing_model_prices?.[0]?.price ?? p.base_price ?? 0);
+
+            const campaignAdj = campaignMap.get(p.id);
+            let finalPrice = basePrice;
+            let campaignInfo: any = null;
+
+            if (campaignAdj) {
+                if (campaignAdj.type === 'fixed_price') {
+                    finalPrice = campaignAdj.value;
+                } else if (campaignAdj.type === 'margin_adjustment') {
+                    finalPrice = basePrice * (1 + campaignAdj.value / 100);
+                }
+                campaignInfo = {
+                    originalPrice: basePrice,
+                    campaignName: campaignAdj.name,
+                    adjustmentValue: campaignAdj.value,
+                    type: campaignAdj.type
                 };
             }
-            return p;
+
+            return {
+                ...p,
+                pricing_model_prices: [
+                    {
+                        price: finalPrice
+                    }
+                ],
+                campaign_info: campaignInfo
+            };
         });
-    }
+    };
+
+    const allVisible = applyCommercialPrices(allVisibleRaw);
 
     // Fetch nicknames if user is logged in
     const { data: nicknamesData } = userId 
@@ -202,7 +261,8 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
 
         console.log("DEBUG SEARCH:", { q, searchQueries, searchTerms, orConditionsLen: orConditions.length, dbErr: dbErr?.message, dbCount: dbProducts?.length });
 
-        const foundProducts = applyNicknames(dbProducts || []);
+        const dbProductsWithPrices = applyCommercialPrices(dbProducts || []);
+        const foundProducts = applyNicknames(dbProductsWithPrices);
 
         if (foundProducts.length === 0 && suggestedCatCode) {
             let catProducts: any[] = [];
@@ -228,11 +288,9 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             } else {
                 catProducts = resCat.data || [];
             }
-            
-            if (catProducts && catProducts.length > 0) {
-                rawProducts = applyNicknames(catProducts);
-                fallbackCategoryName = CATEGORY_MAP[suggestedCatCode] || suggestedCatCode;
-            }
+            const catProductsWithPrices = applyCommercialPrices(catProducts || []);
+            rawProducts = applyNicknames(catProductsWithPrices);
+            fallbackCategoryName = CATEGORY_MAP[suggestedCatCode] || suggestedCatCode;
         } else {
             const merged = [...memoryFiltered];
             const existingIds = new Set(merged.map(p => p.id));

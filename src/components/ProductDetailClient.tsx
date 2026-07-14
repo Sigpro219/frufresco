@@ -28,6 +28,7 @@ interface Product {
     iva_rate?: number;
     pricing_model_prices?: { price: number }[];
     weight_kg?: number | null;
+    campaign_info?: any;
 }
 
 export default function ProductDetailClient({ product }: { product: Product }) {
@@ -162,6 +163,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const priceWithAdjustment = basePrice * (1 + adjustmentPercent / 100);
 
     const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
+
+    // Calcular el precio original si hay campaña activa
+    const originalBasePrice = product.campaign_info ? product.campaign_info.originalPrice : basePrice;
+    const originalPriceWithAdjustment = originalBasePrice * (1 + adjustmentPercent / 100);
+    const originalPrice = Math.ceil((originalPriceWithAdjustment * activeConversionFactor) / 50) * 50;
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
@@ -306,13 +312,51 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
                     <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary-dark)', marginBottom: '1.5rem' }}>
                         {currentPrice !== undefined ? (
-                            `$${currentPrice.toLocaleString('es-CO')}`
+                            product.campaign_info ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                                        <span style={{ fontSize: '2rem', fontWeight: '950', color: '#DC2626', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            ${currentPrice.toLocaleString('es-CO')}
+                                        </span>
+                                        <span style={{ fontSize: '1.25rem', textDecoration: 'line-through', color: '#94A3B8', fontWeight: '500' }}>
+                                            ${originalPrice.toLocaleString('es-CO')}
+                                        </span>
+                                        <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400' }}>
+                                            {t.perUnit} {activeUnit}
+                                        </span>
+                                    </div>
+                                    <span style={{ 
+                                        fontSize: '0.8rem', 
+                                        backgroundColor: '#FEE2E2', 
+                                        color: '#EF4444', 
+                                        padding: '4px 10px', 
+                                        borderRadius: '8px', 
+                                        fontWeight: 'bold', 
+                                        display: 'inline-block',
+                                        alignSelf: 'flex-start',
+                                        marginTop: '4px'
+                                    }}>
+                                        ⚡ {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
+                                    </span>
+                                </div>
+                            ) : (
+                                <>
+                                    <span>
+                                        ${currentPrice.toLocaleString('es-CO')}
+                                    </span>
+                                    <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
+                                        {t.perUnit} {activeUnit}
+                                    </span>
+                                </>
+                            )
                         ) : (
-                            <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>{t.unavailable}</span>
+                            <>
+                                <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>{t.unavailable}</span>
+                                <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
+                                    {t.perUnit} {activeUnit}
+                                </span>
+                            </>
                         )}
-                        <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
-                            {t.perUnit} {activeUnit}
-                        </span>
                     </div>
 
                     <div style={{ marginBottom: '2rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>

@@ -180,6 +180,7 @@ function CreateOrderContent() {
     const [conversions, setConversions] = useState<any[]>([]);
     const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
     const [customPriceIds, setCustomPriceIds] = useState<Set<string>>(new Set());
+    const [campaignPrices, setCampaignPrices] = useState<Record<string, { value: number; type: string; name: string }>>({});
     const [activePricingModel, setActivePricingModel] = useState<any>(null);
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
@@ -587,13 +588,14 @@ function CreateOrderContent() {
             setIsB2CDefault(b2cFallback);
             setIsContractExpired(expired);
 
-            // 3. Load prices for the resolved contract/model with fallback B2C prices
+            // 3. Load prices for the resolved contract/model with baseline fallback prices
             if (resolvedModel) {
                 const map: Record<string, number> = {};
                 const customIds = new Set<string>();
 
-                // Fetch B2C prices first if active model is not Clientes B2C
-                if (resolvedModel.name !== 'Clientes B2C') {
+                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback to Clientes B2C
+                let baselineModelId = modelId;
+                if (!baselineModelId) {
                     const { data: b2cModel } = await supabase
                         .from('pricing_models')
                         .select('id')
@@ -601,15 +603,19 @@ function CreateOrderContent() {
                         .single();
                     
                     if (b2cModel) {
-                        const { data: b2cPrices } = await supabase
-                            .from('pricing_model_prices')
-                            .select('product_id, price')
-                            .eq('model_id', b2cModel.id);
-                        
-                        b2cPrices?.forEach((p: any) => {
-                            map[p.product_id] = p.price;
-                        });
+                        baselineModelId = b2cModel.id;
                     }
+                }
+
+                if (baselineModelId) {
+                    const { data: baselinePrices } = await supabase
+                        .from('pricing_model_prices')
+                        .select('product_id, price')
+                        .eq('model_id', baselineModelId);
+                    
+                    baselinePrices?.forEach((p: any) => {
+                        map[p.product_id] = p.price;
+                    });
                 }
 
                 if (activeAgreement) {
@@ -638,11 +644,67 @@ function CreateOrderContent() {
                     });
                 }
 
+                // Fetch active campaigns targeting this B2B client
+                const campMap: Record<string, { value: number; type: string; name: string }> = {};
+                const effectiveClientId = selectedClient;
+                if (clientType === 'B2B' && effectiveClientId) {
+                    const { data: targetCampaigns } = await supabase
+                        .from('campaign_targets')
+                        .select('campaign_id')
+                        .eq('profile_id', effectiveClientId);
+
+                    if (targetCampaigns && targetCampaigns.length > 0) {
+                        const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
+                        const nowIso = new Date().toISOString();
+                        const { data: activeCamps } = await supabase
+                            .from('commercial_campaigns')
+                            .select('*')
+                            .in('id', campIds)
+                            .eq('status', 'active')
+                            .lte('start_date', nowIso)
+                            .gte('end_date', nowIso);
+
+                        if (activeCamps && activeCamps.length > 0) {
+                            const activeCampIds = activeCamps.map((c: any) => c.id);
+                            const { data: items } = await supabase
+                                .from('campaign_items')
+                                .select('campaign_id, product_id, adjustment_value')
+                                .in('campaign_id', activeCampIds);
+
+                            items?.forEach((item: any) => {
+                                const camp = activeCamps.find((c: any) => c.id === item.campaign_id);
+                                if (camp) {
+                                    campMap[item.product_id] = {
+                                        value: item.adjustment_value,
+                                        type: camp.type,
+                                        name: camp.name
+                                    };
+                                }
+                            });
+                        }
+                    }
+                }
+
+                // Apply campaign price overrides to the resolved prices map
+                Object.keys(campMap).forEach((productId) => {
+                    const basePrice = map[productId] || 0;
+                    if (basePrice > 0) {
+                        const campaign = campMap[productId];
+                        if (campaign.type === 'fixed_price') {
+                            map[productId] = campaign.value;
+                        } else if (campaign.type === 'margin_adjustment') {
+                            map[productId] = basePrice * (1 + campaign.value / 100);
+                        }
+                    }
+                });
+
+                setCampaignPrices(campMap);
                 setContractPrices(map);
                 setCustomPriceIds(customIds);
             } else {
                 setContractPrices({});
                 setCustomPriceIds(new Set());
+                setCampaignPrices({});
             }
         }
 
@@ -2116,7 +2178,7 @@ function CreateOrderContent() {
                                                                 gap: '4px',
                                                                 width: 'fit-content'
                                                             }}>
-                                                                <span>🏷️ {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
+                                                                <span>🏷️ {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
                                                                 {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                             </div>
                                                         )}
@@ -3190,17 +3252,45 @@ function CreateOrderContent() {
                                                                 </span>
                                                             )}
                                                             {/* Pricing Source Badge */}
-                                                            {contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (
-                                                                customPriceIds.has(item.product.id) ? (
-                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        Tarifa Contrato
-                                                                    </span>
-                                                                ) : (
-                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        Tarifa B2C (Defecto)
-                                                                    </span>
-                                                                )
-                                                            ) : (
+                                                            {campaignPrices[item.product.id] ? (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    ⚡ {campaignPrices[item.product.id].name} ({campaignPrices[item.product.id].type === 'fixed_price' ? 'Precio Fijo' : `${campaignPrices[item.product.id].value > 0 ? '+' : ''}${campaignPrices[item.product.id].value}%`})
+                                                                </span>
+                                                            ) : contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (() => {
+                                                                const isAgreement = activePricingModel?.is_agreement;
+                                                                const hasCustomPrice = customPriceIds.has(item.product.id);
+                                                                if (isAgreement) {
+                                                                    if (hasCustomPrice) {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                Tarifa Acuerdo
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        const currentProfile = clients.find(c => c.id === selectedClient);
+                                                                        const hasB2BModel = !!(currentProfile?.pricing_model_id || (currentProfile?.parent_id && clients.find(c => c.id === currentProfile.parent_id)?.pricing_model_id));
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                {hasB2BModel ? 'Fuera de Acuerdo (B2B)' : 'Fuera de Acuerdo (B2C)'}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                } else {
+                                                                    if (hasCustomPrice) {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                Tarifa Contrato
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                Tarifa B2C (Defecto)
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                }
+                                                            })() : (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                     ⚠️ Sin Precio
                                                                 </span>
