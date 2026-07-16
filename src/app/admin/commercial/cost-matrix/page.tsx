@@ -689,8 +689,8 @@ export default function CostMatrixPage() {
             <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
                 
                 {/* --- HEADER LINE --- */}
-                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 350px' }}>
+                <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
+                    <div>
                         <Link href="/admin/commercial" style={{ 
                             textDecoration: 'none', 
                             color: '#94A3B8', 
@@ -705,7 +705,7 @@ export default function CostMatrixPage() {
                             ← Volver
                         </Link>
                         <h1 style={{ 
-                            fontSize: '1.8rem', 
+                            fontSize: '2rem', 
                             fontWeight: '900', 
                             color: '#0F172A', 
                             margin: 0, 
@@ -713,7 +713,6 @@ export default function CostMatrixPage() {
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: '0.6rem',
-                            whiteSpace: 'nowrap'
                         }}>
                             Matriz Comercial <span style={{ color: '#0EA5E9', filter: 'drop-shadow(0 0 8px rgba(14, 165, 233, 0.2))' }}>Delta</span>
                         </h1>
@@ -722,173 +721,99 @@ export default function CostMatrixPage() {
                         </p>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', padding: '0.6rem', borderRadius: '16px', backdropFilter: 'blur(10px)', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <label style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estrategia:</label>
-                            <button 
-                                onClick={() => setIsSmartModalOpen(true)}
-                                style={{ 
-                                    padding: '0.4rem 0.8rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #BAE6FD', 
-                                    backgroundColor: '#F0F9FF', 
-                                    color: '#0369A1', 
-                                    fontWeight: '800', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    fontSize: '0.85rem'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
-                            >
-                                <Brain size={18} /> CI-Delta v2
-                            </button>
-                         </div>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <label style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filtrar:</label>
-                            <select 
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ 
-                                    padding: '0.4rem 0.8rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #E2E8F0', 
-                                    backgroundColor: 'white', 
-                                    fontWeight: '800', 
-                                    minWidth: '150px',
-                                    fontSize: '0.85rem',
-                                    color: '#1E293B',
-                                    outline: 'none',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <option value="Todas">Todo el Catálogo</option>
-                                {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
-                            </select>
-                         </div>
-                         
-                         <div style={{ display: 'flex', gap: '0.4rem' }}>
-                            <button 
-                                onClick={fetchData} 
-                                title="Sincronizar Datos"
-                                style={{ 
-                                    width: '38px',
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: 'none', 
-                                    backgroundColor: '#0F172A', 
-                                    color: 'white', 
-                                    cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
-                            >
-                                <RefreshCw size={20} />
-                            </button>
-                            <button
-                                onClick={() => handleAuthorizeAll()}
-                                disabled={isAuthorizing}
-                                style={{ 
-                                    padding: '0 1rem', 
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: '1px solid #0EA5E9', 
-                                    backgroundColor: isAuthorizing ? '#F1F5F9' : '#0F172A', 
-                                    color: 'white', 
-                                    fontWeight: '900', 
-                                    cursor: isAuthorizing ? 'not-allowed' : 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    fontSize: '0.8rem',
-                                    gap: '0.5rem',
-                                    justifyContent: 'center',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
-                                }}
-                                onMouseEnter={(e) => !isAuthorizing && (e.currentTarget.style.backgroundColor = '#1E293B')}
-                                onMouseLeave={(e) => !isAuthorizing && (e.currentTarget.style.backgroundColor = '#0F172A')}
-                            >
-                                <Brain size={20} className={isAuthorizing ? 'animate-pulse' : ''} />
-                                {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
-                            </button>
-                            <button onClick={handleExportTemplate}
-                                style={{ 
-                                    padding: '0 1rem', 
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: '1px solid #3B82F6', 
-                                    backgroundColor: '#EFF6FF', 
-                                    color: '#1D4ED8', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.8rem',
-                                    cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                            >
-                                <TrendingDown size={18} /> Descargar Plantilla
-                            </button>
-                            <button onClick={() => setIsImportModalOpen(true)}
-                                style={{ 
-                                    padding: '0 1rem', 
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: '1px solid #8B5CF6', 
-                                    backgroundColor: '#F5F3FF', 
-                                    color: '#6D28D9', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.8rem',
-                                    cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
-                            >
-                                <TrendingUp size={18} /> Cargar Costos
-                            </button>
-                            <button onClick={handleExport}
-                                style={{ 
-                                    padding: '0 1rem', 
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: '1px solid #10B981', 
-                                    backgroundColor: '#ECFDF5', 
-                                    color: '#065F46', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.8rem',
-                                    cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
-                            >
-                                <BarChart3 size={18} /> Exportar
-                            </button>
-                         </div>
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={() => handleAuthorizeAll()}
+                            disabled={isAuthorizing}
+                            style={{ 
+                                padding: '0 1.2rem', 
+                                height: '42px',
+                                borderRadius: '12px', 
+                                border: 'none', 
+                                background: isAuthorizing ? '#64748B' : 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', 
+                                color: 'white', 
+                                fontWeight: '900', 
+                                cursor: isAuthorizing ? 'not-allowed' : 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                fontSize: '0.85rem',
+                                gap: '0.5rem',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)'
+                            }}
+                            onMouseEnter={(e) => !isAuthorizing && (e.currentTarget.style.transform = 'translateY(-1px)')}
+                            onMouseLeave={(e) => !isAuthorizing && (e.currentTarget.style.transform = 'translateY(0)')}
+                        >
+                            <Brain size={18} className={isAuthorizing ? 'animate-pulse' : ''} />
+                            {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
+                        </button>
+                        
+                        <button onClick={handleExportTemplate}
+                            style={{ 
+                                padding: '0 1.2rem', 
+                                height: '42px',
+                                borderRadius: '12px', 
+                                border: '1px solid #BFDBFE', 
+                                backgroundColor: '#EFF6FF', 
+                                color: '#1E40AF', 
+                                fontWeight: '800', 
+                                fontSize: '0.85rem',
+                                cursor: 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.4rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                        >
+                            <TrendingDown size={18} /> Descargar Plantilla
+                        </button>
+
+                        <button onClick={() => setIsImportModalOpen(true)}
+                            style={{ 
+                                padding: '0 1.2rem', 
+                                height: '42px',
+                                borderRadius: '12px', 
+                                border: '1px solid #DDD6FE', 
+                                backgroundColor: '#F5F3FF', 
+                                color: '#6D28D9', 
+                                fontWeight: '800', 
+                                fontSize: '0.85rem',
+                                cursor: 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.4rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
+                        >
+                            <TrendingUp size={18} /> Cargar Costos
+                        </button>
+
+                        <button onClick={handleExport}
+                            style={{ 
+                                padding: '0 1.2rem', 
+                                height: '42px',
+                                borderRadius: '12px', 
+                                border: '1px solid #A7F3D0', 
+                                backgroundColor: '#ECFDF5', 
+                                color: '#065F46', 
+                                fontWeight: '800', 
+                                fontSize: '0.85rem',
+                                cursor: 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.4rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                        >
+                            <BarChart3 size={18} /> Exportar
+                        </button>
                     </div>
                 </div>
 
@@ -933,9 +858,11 @@ export default function CostMatrixPage() {
                     </div>
                 )}
 
-                <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                {/* --- FILTERS & SEARCH ROW --- */}
+                <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Search Bar Container */}
                     <div style={{ 
-                        flex: 1,
+                        flex: '1 1 400px',
                         display: 'flex', 
                         alignItems: 'center', 
                         backgroundColor: 'white', 
@@ -949,7 +876,7 @@ export default function CostMatrixPage() {
                         <Search size={18} color="#94A3B8" />
                         <input 
                             type="text"
-                            placeholder="Buscar productos..."
+                            placeholder="Buscar productos por nombre, SKU, keywords o tags (@tag)..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{ 
@@ -972,56 +899,136 @@ export default function CostMatrixPage() {
                             </button>
                         )}
                     </div>
-                    
-                    {/* Tooltip Icon for search help */}
-                    <div 
-                        style={{ position: 'relative' }} 
-                        onMouseEnter={() => setShowHelp(true)}
-                        onMouseLeave={() => setShowHelp(false)}
-                    >
-                        <div style={{ 
-                            cursor: 'help', 
-                            color: showHelp ? 'var(--primary)' : '#9CA3AF',
-                            backgroundColor: 'white',
-                            padding: '0.8rem',
-                            borderRadius: '10px',
-                            border: '1px solid #E5E7EB',
-                            display: 'flex',
-                            alignItems: 'center',
-                            transition: 'all 0.2s'
-                        }}>
-                            <Info size={20} />
-                        </div>
-                        
-                        {showHelp && (
-                            <div style={{
-                                position: 'absolute',
-                                top: '110%',
-                                right: 0,
-                                backgroundColor: '#1F2937',
-                                color: 'white',
-                                padding: '1rem',
-                                borderRadius: '12px',
-                                width: '280px',
-                                fontSize: '0.8rem',
-                                zIndex: 100,
-                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                                transition: 'all 0.2s ease',
-                                pointerEvents: 'none',
-                                opacity: 1
-                            }}>
-                                <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
-                                <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
-                                    <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
-                                    <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
-                                    <li><b>SKU:</b> Busca por código exacto.</li>
-                                </ul>
-                            </div>
-                        )}
+
+                    {/* Filter controls row */}
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                         {/* Strategy Selector Button */}
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0', height: '42px' }}>
+                            <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Estrategia:</span>
+                            <button 
+                                onClick={() => setIsSmartModalOpen(true)}
+                                style={{ 
+                                    padding: '0.3rem 0.6rem', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #BAE6FD', 
+                                    backgroundColor: '#F0F9FF', 
+                                    color: '#0369A1', 
+                                    fontWeight: '800', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    fontSize: '0.8rem'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                            >
+                                <Brain size={16} /> CI-Delta v2
+                            </button>
+                         </div>
+
+                         {/* Category Filter Select */}
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0', height: '42px' }}>
+                            <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Categoría:</span>
+                            <select 
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                style={{ 
+                                    padding: '0.2rem 0.4rem', 
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: 'transparent', 
+                                    fontWeight: '800', 
+                                    minWidth: '150px',
+                                    fontSize: '0.8rem',
+                                    color: '#1E293B',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="Todas">Todo el Catálogo</option>
+                                {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
+                            </select>
+                         </div>
+
+                         {/* Refresh button */}
+                         <button 
+                             onClick={fetchData} 
+                             title="Sincronizar Datos"
+                             style={{ 
+                                 width: '42px',
+                                 height: '42px',
+                                 borderRadius: '12px', 
+                                 border: 'none', 
+                                 backgroundColor: '#0F172A', 
+                                 color: 'white', 
+                                 cursor: 'pointer', 
+                                 display: 'flex', 
+                                 alignItems: 'center', 
+                                 justifyContent: 'center',
+                                 transition: 'all 0.2s',
+                                 boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
+                             }}
+                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
+                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
+                         >
+                             <RefreshCw size={18} />
+                         </button>
+
+                         {/* Help Tooltip Icon */}
+                         <div 
+                             style={{ position: 'relative' }} 
+                             onMouseEnter={() => setShowHelp(true)}
+                             onMouseLeave={() => setShowHelp(false)}
+                         >
+                             <div style={{ 
+                                 cursor: 'help', 
+                                 color: showHelp ? 'var(--primary)' : '#9CA3AF',
+                                 backgroundColor: 'white',
+                                 padding: '0.7rem',
+                                 borderRadius: '12px',
+                                 border: '1px solid #E5E7EB',
+                                 display: 'flex',
+                                 alignItems: 'center',
+                                 height: '42px',
+                                 transition: 'all 0.2s'
+                             }}>
+                                 <Info size={18} />
+                             </div>
+                             
+                             {showHelp && (
+                                 <div style={{
+                                     position: 'absolute',
+                                     top: '110%',
+                                     right: 0,
+                                     backgroundColor: '#1F2937',
+                                     color: 'white',
+                                     padding: '1rem',
+                                     borderRadius: '12px',
+                                     width: '280px',
+                                     fontSize: '0.8rem',
+                                     zIndex: 100,
+                                     boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                     transition: 'all 0.2s ease',
+                                     pointerEvents: 'none',
+                                     opacity: 1
+                                 }}>
+                                     <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
+                                     <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
+                                         <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
+                                         <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
+                                         <li><b>SKU:</b> Busca por código exacto.</li>
+                                     </ul>
+                                 </div>
+                             )}
+                         </div>
                     </div>
                 </div>
-
-
 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '5rem', color: '#6B7280' }}>Cargando historial de precios...</div>
