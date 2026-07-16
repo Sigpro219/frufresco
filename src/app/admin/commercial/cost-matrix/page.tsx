@@ -28,6 +28,7 @@ interface Product {
     keywords?: string;
     tags?: string[];
     capabilities?: string[];
+    accounting_id?: number | null;
 }
 
 function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: any) {
@@ -144,6 +145,11 @@ export default function CostMatrixPage() {
     const [isAuthorizing, setIsAuthorizing] = useState(false);
     const [sortField, setSortField] = useState<string | null>(null);
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState('');
+    const [importSuccess, setImportSuccess] = useState('');
+    const [importFile, setImportFile] = useState<File | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -334,6 +340,124 @@ export default function CostMatrixPage() {
         XLSX.writeFile(wb, `Frufresco_CostMatrix_${format(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
+    const handleExportTemplate = () => {
+        const data = products.map(p => {
+            const currentManual = manualOverrides[p.id]?.manual_cost || 0;
+            return {
+                'accounting_id': p.accounting_id || '',
+                'SKU': p.sku || '',
+                'Producto': p.name || '',
+                'Unidad': p.unit_of_measure || '',
+                'Costo Actual': currentManual ? Math.round(currentManual) : 0,
+                'Nuevo Costo': ''
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Plantilla de Costos");
+        XLSX.writeFile(wb, `Plantilla_Costos_Frufresco_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    };
+
+    const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportFile(file);
+        setImportError('');
+        setImportSuccess('');
+    };
+
+    const processImport = async () => {
+        if (!importFile) {
+            setImportError('Por favor selecciona un archivo Excel.');
+            return;
+        }
+        setImporting(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const bstr = evt.target?.result;
+                    const wb = XLSX.read(bstr, { type: 'binary' });
+                    const wsname = wb.SheetNames[0];
+                    const ws = wb.Sheets[wsname];
+                    const rawData = XLSX.utils.sheet_to_json(ws);
+                    
+                    if (rawData.length === 0) {
+                        throw new Error('El archivo está vacío.');
+                    }
+                    
+                    const productMap: Record<number, Product> = {};
+                    products.forEach(p => {
+                        if (p.accounting_id !== undefined && p.accounting_id !== null) {
+                            productMap[p.accounting_id] = p;
+                        }
+                    });
+                    
+                    const upsertData: any[] = [];
+                    let processedCount = 0;
+                    
+                    for (const row of rawData as any[]) {
+                        const accIdRaw = row['accounting_id'];
+                        const newCostRaw = row['Nuevo Costo'];
+                        
+                        if (accIdRaw === undefined || accIdRaw === null) continue;
+                        
+                        const accId = parseInt(accIdRaw);
+                        if (isNaN(accId)) continue;
+                        
+                        if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
+                        
+                        const newCost = parseFloat(newCostRaw);
+                        if (isNaN(newCost) || newCost <= 0) continue;
+                        
+                        const prod = productMap[accId];
+                        if (prod) {
+                            upsertData.push({
+                                product_id: prod.id,
+                                manual_cost: newCost,
+                                updated_at: new Date().toISOString(),
+                                updated_by: 'EXCEL-BULK-UPDATE',
+                                is_active: true
+                            });
+                            processedCount++;
+                        }
+                    }
+                    
+                    if (upsertData.length === 0) {
+                        throw new Error('No se encontraron registros válidos para actualizar. Verifica el accounting_id y que la columna "Nuevo Costo" tenga números válidos.');
+                    }
+                    
+                    const batchSize = 50;
+                    for (let i = 0; i < upsertData.length; i += batchSize) {
+                        const batch = upsertData.slice(i, i + batchSize);
+                        const { error } = await supabase
+                            .from('commercial_cost_matrix')
+                            .upsert(batch);
+                        
+                        if (error) throw error;
+                    }
+                    
+                    setImportSuccess(`¡Actualización masiva completada! Se procesaron ${processedCount} productos con éxito.`);
+                    await fetchData();
+                    setImportFile(null);
+                } catch (err: any) {
+                    console.error('Error parsing excel:', err);
+                    setImportError(err.message || 'Error al procesar el archivo Excel.');
+                } finally {
+                    setImporting(false);
+                }
+            };
+            reader.readAsBinaryString(importFile);
+        } catch (err: any) {
+            console.error('Error reading file:', err);
+            setImportError(err.message || 'Error al leer el archivo.');
+            setImporting(false);
+        }
+    };
+
     const handleSort = (field: string) => {
         if (sortField === field) {
             setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -390,8 +514,8 @@ export default function CostMatrixPage() {
         pendingCost: products.filter(p => !manualOverrides[p.id] && calculateSmartCost(p.id) === 0).length,
         expiringSoon: products.filter(p => {
             const m = manualOverrides[p.id];
-            if (!m) return false;
-            return differenceInDays(new Date(), new Date(m.updated_at)) > 45;
+            if (!m) return true;
+            return differenceInDays(new Date(), new Date(m.updated_at)) >= 15;
         }).length
     };
 
@@ -623,6 +747,48 @@ export default function CostMatrixPage() {
                                 <Brain size={20} className={isAuthorizing ? 'animate-pulse' : ''} />
                                 {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
                             </button>
+                            <button onClick={handleExportTemplate}
+                                style={{ 
+                                    padding: '0 1rem', 
+                                    height: '38px',
+                                    borderRadius: '10px', 
+                                    border: '1px solid #3B82F6', 
+                                    backgroundColor: '#EFF6FF', 
+                                    color: '#1D4ED8', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                            >
+                                <TrendingDown size={18} /> Descargar Plantilla
+                            </button>
+                            <button onClick={() => setIsImportModalOpen(true)}
+                                style={{ 
+                                    padding: '0 1rem', 
+                                    height: '38px',
+                                    borderRadius: '10px', 
+                                    border: '1px solid #8B5CF6', 
+                                    backgroundColor: '#F5F3FF', 
+                                    color: '#6D28D9', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
+                            >
+                                <TrendingUp size={18} /> Cargar Costos
+                            </button>
                             <button onClick={handleExport}
                                 style={{ 
                                     padding: '0 1rem', 
@@ -679,9 +845,9 @@ export default function CostMatrixPage() {
                             icon={<TrendingDown size={20} />}
                         />
                         <StatCard 
-                            label="Alertas Comerciales" 
-                            value={stats.pendingCost} 
-                            subValue={stats.expiringSoon > 0 ? `⌛ ${stats.expiringSoon}` : 'Al día'}
+                            label="Precios Desactualizados (15d+)" 
+                            value={stats.expiringSoon} 
+                            subValue={stats.pendingCost > 0 ? `⚠️ ${stats.pendingCost} Sin Costo` : 'Al día'}
                             color="#C2410C" 
                             bg="#FFF7ED"
                             icon={<ShieldAlert size={20} />} 
@@ -982,6 +1148,31 @@ export default function CostMatrixPage() {
                                                                 {p.unit_of_measure}
                                                             </span>
                                                         </div>
+                                                        {(() => {
+                                                            const m = manualOverrides[p.id];
+                                                            const isOutdated = !m || differenceInDays(new Date(), new Date(m.updated_at)) >= 15;
+                                                            if (isOutdated) {
+                                                                return (
+                                                                    <div style={{ marginTop: '0.3rem' }}>
+                                                                        <span style={{ 
+                                                                            fontSize: '0.65rem', 
+                                                                            color: '#B45309', 
+                                                                            backgroundColor: '#FEF3C7', 
+                                                                            padding: '2px 6px', 
+                                                                            borderRadius: '6px', 
+                                                                            fontWeight: '800',
+                                                                            border: '1px solid #FCD34D',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}>
+                                                                            <Clock size={12} /> Desactualizado (+15d)
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
                                                     </td>
                                                     
                                                     {/* Row Cells for 8 purchases */}
@@ -1234,6 +1425,116 @@ export default function CostMatrixPage() {
                                     <div style={{ fontSize: '0.8rem', color: '#9A3412', marginTop: '0.8rem', lineHeight: '1.4' }}>
                                         Basado en el modelo de Holt-Winters simplificado. Las señales manuales se integran con un peso prioritario sobre la inercia del algoritmo.
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- IMPORT MODAL --- */}
+                {isImportModalOpen && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem',
+                        backdropFilter: 'blur(4px)',
+                        fontFamily: 'system-ui, sans-serif'
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '24px',
+                            maxWidth: '600px',
+                            width: '100%',
+                            padding: '2.5rem',
+                            position: 'relative',
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+                        }}>
+                            <button 
+                                onClick={() => {
+                                    setIsImportModalOpen(false);
+                                    setImportFile(null);
+                                    setImportError('');
+                                    setImportSuccess('');
+                                }}
+                                style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+                            >
+                                <X size={30} />
+                            </button>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <div style={{ backgroundColor: '#F5F3FF', padding: '1rem', borderRadius: '16px', color: '#6D28D9' }}>
+                                    <TrendingUp size={40} />
+                                </div>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#111827' }}>Importación Masiva de Costos</h2>
+                                    <p style={{ margin: 0, color: '#6B7280', fontWeight: '600', fontSize: '0.85rem' }}>Carga masiva utilizando el identificador único <b>accounting_id</b></p>
+                                </div>
+                            </div>
+
+                            {importError && (
+                                <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.8rem 1.2rem', borderRadius: '12px', marginBottom: '1.2rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                                    ❌ {importError}
+                                </div>
+                            )}
+
+                            {importSuccess && (
+                                <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', color: '#166534', padding: '0.8rem 1.2rem', borderRadius: '12px', marginBottom: '1.2rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                                    ✅ {importSuccess}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <div style={{ border: '2px dashed #DDD6FE', padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', backgroundColor: '#F9F5FF' }}>
+                                    <input 
+                                        type="file" 
+                                        accept=".xlsx, .xls"
+                                        onChange={handleImportExcel}
+                                        id="excel-file-upload"
+                                        style={{ display: 'none' }}
+                                    />
+                                    <label htmlFor="excel-file-upload" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ color: '#8B5CF6' }}><TrendingUp size={36} /></div>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#4C1D95' }}>
+                                            {importFile ? importFile.name : 'Selecciona o arrastra tu archivo Excel'}
+                                        </span>
+                                        <span style={{ fontSize: '0.75rem', color: '#7C3AED' }}>Formatos aceptados: .xlsx, .xls</span>
+                                    </label>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.8rem' }}>
+                                    <button 
+                                        onClick={() => {
+                                            setIsImportModalOpen(false);
+                                            setImportFile(null);
+                                            setImportError('');
+                                            setImportSuccess('');
+                                        }}
+                                        style={{ padding: '0.6rem 1.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', backgroundColor: 'white', color: '#475569', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        onClick={processImport}
+                                        disabled={importing || !importFile}
+                                        style={{ 
+                                            padding: '0.6rem 1.2rem', 
+                                            borderRadius: '10px', 
+                                            border: 'none', 
+                                            backgroundColor: !importFile ? '#E2E8F0' : '#8B5CF6', 
+                                            color: 'white', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.85rem', 
+                                            cursor: !importFile ? 'not-allowed' : 'pointer',
+                                            boxShadow: importFile ? '0 4px 12px rgba(139, 92, 246, 0.2)' : 'none'
+                                        }}
+                                    >
+                                        {importing ? 'Procesando...' : 'Cargar Costos'}
+                                    </button>
                                 </div>
                             </div>
                         </div>
