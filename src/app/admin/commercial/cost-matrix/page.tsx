@@ -31,6 +31,11 @@ interface Product {
     accounting_id?: number | null;
 }
 
+const formatNumberWithDots = (val: number) => {
+    if (val === undefined || val === null || isNaN(val)) return '0';
+    return Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+
 function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: any) {
     return (
         <div style={{ 
@@ -1272,7 +1277,7 @@ export default function CostMatrixPage() {
                                                                                 border: mOverride ? '1px solid #BFDBFE' : (isBestPrice ? '1px solid #4ADE80' : '1px solid #D1FAE5'),
                                                                                 position: 'relative'
                                                                             }}>
-                                                                                ${Math.round(purchase ? purchase.normalized_price : mOverride.manual_cost).toLocaleString()}
+                                                                                ${formatNumberWithDots(purchase ? purchase.normalized_price : mOverride.manual_cost)}
                                                                                 {isBestPrice && (
                                                                                     <div style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '1rem', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))' }} title="Mejor precio histórico">🎖️</div>
                                                                                 )}
@@ -1322,7 +1327,7 @@ export default function CostMatrixPage() {
                                                                             alignItems: 'center',
                                                                             gap: '0.4rem'
                                                                         }}>
-                                                                            ${Math.round(smart).toLocaleString()}
+                                                                            ${formatNumberWithDots(smart)}
                                                                             {isAligned && <span title="Precio Autorizado por IA"><CheckCircle2 size={16} color="#10B981" /></span>}
                                                                             {harvestStatus === 'harvest' && <span title="RECOMENDACIÓN: ABUNDANCIA ESTACIONAL"><Brain size={16} color="#0EA5E9" className="animate-pulse" /></span>}
                                                                         </div>
@@ -1339,7 +1344,7 @@ export default function CostMatrixPage() {
                                                                         </span>
                                                                         {currentManual && !isAligned && (
                                                                             <div style={{ fontSize: '0.55rem', color: '#1E40AF', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px', marginTop: '0.2rem' }}>
-                                                                                ✍️ Manual: ${Math.round(currentManual).toLocaleString()}
+                                                                                ✍️ Manual: ${formatNumberWithDots(currentManual)}
                                                                             </div>
                                                                         )}
                                                                     </div>
