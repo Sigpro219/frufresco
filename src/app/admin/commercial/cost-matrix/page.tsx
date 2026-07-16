@@ -401,7 +401,7 @@ export default function CostMatrixPage() {
             const manual = manualOverrides[p.id]?.manual_cost;
             
             return {
-                'SKU': p.sku,
+                'accounting_id': p.accounting_id || '',
                 'Producto': p.name,
                 'Categoría': CATEGORY_MAP[p.category] || p.category,
                 'Unidad': p.unit_of_measure,
@@ -749,49 +749,66 @@ export default function CostMatrixPage() {
                             {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
                         </button>
                         
-                        <button onClick={handleExportTemplate}
-                            style={{ 
-                                padding: '0 1.2rem', 
-                                height: '42px',
-                                borderRadius: '12px', 
-                                border: '1px solid #BFDBFE', 
-                                backgroundColor: '#EFF6FF', 
-                                color: '#1E40AF', 
-                                fontWeight: '800', 
-                                fontSize: '0.85rem',
-                                cursor: 'pointer', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '0.4rem',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                        >
-                            <TrendingDown size={18} /> Descargar Plantilla
-                        </button>
+                        {/* Carga Masiva Segmented Container */}
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.4rem', 
+                            backgroundColor: 'white', 
+                            padding: '0.3rem 0.6rem', 
+                            borderRadius: '12px', 
+                            border: '1px solid #DDD6FE', 
+                            height: '42px',
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
+                        }}>
+                            <span style={{ fontWeight: '950', fontSize: '0.65rem', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Carga Masiva:</span>
+                            
+                            {/* Download template icon-button */}
+                            <button 
+                                onClick={handleExportTemplate}
+                                title="Descargar Plantilla Excel"
+                                style={{ 
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: '#EFF6FF', 
+                                    color: '#1E40AF', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                            >
+                                <TrendingDown size={16} />
+                            </button>
 
-                        <button onClick={() => setIsImportModalOpen(true)}
-                            style={{ 
-                                padding: '0 1.2rem', 
-                                height: '42px',
-                                borderRadius: '12px', 
-                                border: '1px solid #DDD6FE', 
-                                backgroundColor: '#F5F3FF', 
-                                color: '#6D28D9', 
-                                fontWeight: '800', 
-                                fontSize: '0.85rem',
-                                cursor: 'pointer', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '0.4rem',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
-                        >
-                            <TrendingUp size={18} /> Cargar Costos
-                        </button>
+                            {/* Upload file icon-button */}
+                            <button 
+                                onClick={() => setIsImportModalOpen(true)}
+                                title="Subir Archivo Excel (Cargar Costos)"
+                                style={{ 
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: '#F5F3FF', 
+                                    color: '#6D28D9', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
+                            >
+                                <TrendingUp size={16} />
+                            </button>
+                        </div>
 
                         <button onClick={handleExport}
                             style={{ 
@@ -812,7 +829,7 @@ export default function CostMatrixPage() {
                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
                         >
-                            <BarChart3 size={18} /> Exportar
+                            <BarChart3 size={18} /> Exportar Reporte
                         </button>
                     </div>
                 </div>
