@@ -66,8 +66,13 @@ function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: 
     );
 }
 
-function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
+function ManualCostInput({ productId, onSave, savingId, currentManual, cellState }: any) {
     const [val, setVal] = useState(currentManual ? String(currentManual) : '');
+    const labelColor = cellState?.labelColor || '#9CA3AF';
+    const borderVal = cellState?.border || '1px solid #D1D5DB';
+    const textVal = cellState?.text || '#1E40AF';
+    const bgVal = cellState?.bg || '#F8FAFC';
+    const badgeVal = cellState?.badge || 'Sin Referencia';
     
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
@@ -85,14 +90,14 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                         }
                     }}
                     style={{
-                        width: '75px',
+                        width: '80px',
                         padding: '0.4rem',
-                        borderRadius: '6px',
-                        border: savingId === productId ? '2px solid #10B981' : '2px solid #D1D5DB',
+                        borderRadius: '8px',
+                        border: savingId === productId ? '2px solid #10B981' : `2px solid ${labelColor}`,
                         textAlign: 'center',
-                        fontSize: '0.9rem',
-                        fontWeight: '700',
-                        color: '#1E40AF',
+                        fontSize: '0.95rem',
+                        fontWeight: '800',
+                        color: textVal,
                         outline: 'none',
                         backgroundColor: savingId === productId ? '#F0FDF4' : 'white',
                         transition: 'all 0.3s ease'
@@ -109,22 +114,33 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                         padding: '0.4rem',
                         width: '32px',
                         height: '32px',
-                        backgroundColor: val ? '#2563EB' : '#E2E8F0',
-                        color: val ? 'white' : '#94A3B8',
+                        backgroundColor: val ? labelColor : '#E2E8F0',
+                        color: 'white',
                         border: 'none',
-                        borderRadius: '6px',
+                        borderRadius: '8px',
                         cursor: val ? 'pointer' : 'not-allowed',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        boxShadow: val ? `0 4px 6px ${labelColor}20` : 'none'
                     }}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 </button>
             </div>
-            <span style={{ fontSize: '0.55rem', color: savingId === productId ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', textAlign: 'center' }}>
-                {savingId === productId ? '✓ Guardado' : 'Sin Referencia'}
+            <span style={{ 
+                fontSize: '0.6rem', 
+                color: savingId === productId ? '#10B981' : labelColor, 
+                fontWeight: '900', 
+                textTransform: 'uppercase', 
+                textAlign: 'center',
+                backgroundColor: savingId === productId ? '#DCFCE7' : `${labelColor}15`,
+                padding: '2px 8px',
+                borderRadius: '6px',
+                display: 'inline-block'
+            }}>
+                {savingId === productId ? '✓ Guardado' : badgeVal}
             </span>
         </div>
     );
@@ -314,6 +330,63 @@ export default function CostMatrixPage() {
         }
 
         return (latest.normalized_price * alpha) + (previous.normalized_price * (1 - alpha));
+    };
+
+    const getCostCellState = (productId: string) => {
+        const smart = calculateSmartCost(productId);
+        const manual = manualOverrides[productId];
+        
+        if (!manual) {
+            if (smart === 0) {
+                return {
+                    bg: '#FEF2F2',
+                    text: '#991B1B',
+                    border: '1px solid #FCA5A5',
+                    badge: '❌ Sin Referencia',
+                    labelColor: '#EF4444'
+                };
+            } else {
+                return {
+                    bg: '#FFFBEB',
+                    text: '#B45309',
+                    border: '1px solid #FCD34D',
+                    badge: '⏳ Por Autorizar',
+                    labelColor: '#F59E0B'
+                };
+            }
+        }
+        
+        const daysSinceUpdate = differenceInDays(new Date(), new Date(manual.updated_at));
+        const isOutdated = daysSinceUpdate >= 15;
+        
+        if (isOutdated) {
+            return {
+                bg: '#FEF3C7',
+                text: '#92400E',
+                border: '1px solid #F59E0B',
+                badge: `⚠️ Desactualizado`,
+                labelColor: '#D97706'
+            };
+        }
+        
+        const isAligned = smart > 0 && Math.abs(manual.manual_cost - smart) < 1;
+        if (isAligned) {
+            return {
+                bg: '#E8F5E9',
+                text: '#2E7D32',
+                border: '1px solid #81C784',
+                badge: '✅ Autorizado (IA)',
+                labelColor: '#4CAF50'
+            };
+        }
+        
+        return {
+            bg: '#E3F2FD',
+            text: '#1565C0',
+            border: '1px solid #64B5F6',
+            badge: '✍️ Manual Vigente',
+            labelColor: '#2196F3'
+        };
     };
 
     const handleExport = () => {
@@ -1103,6 +1176,7 @@ export default function CostMatrixPage() {
                                         const history = purchaseHistory[p.id] || [];
                                         const smartCost = effectiveCosts[p.id] || 0;
                                         const harvestStatus = getHarvestStatus(p.id);
+                                        const cellState = getCostCellState(p.id);
 
                                         return (
                                             <Fragment key={p.id}>
@@ -1176,7 +1250,6 @@ export default function CostMatrixPage() {
                                                     
                                                     {/* Row Cells for 8 purchases */}
                                                     {(() => {
-                                                        // Find min normalized price for the medal
                                                         const prices = history.map(h => h.normalized_price);
                                                         const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
 
@@ -1226,11 +1299,12 @@ export default function CostMatrixPage() {
                                                         width: '160px',
                                                         borderLeft: '2px solid #E5E7EB', 
                                                         textAlign: 'center',
-                                                        backgroundColor: manualOverrides[p.id] ? '#EFF6FF' : '#F0FDF4',
+                                                        backgroundColor: cellState.bg,
                                                         position: 'sticky',
                                                         right: '160px',
                                                         zIndex: 5,
-                                                        boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
+                                                        boxShadow: '-2px 0 5px rgba(0,0,0,0.02)',
+                                                        transition: 'all 0.3s ease'
                                                     }}>
                                                         {(() => {
                                                             const smart = calculateSmartCost(p.id);
@@ -1242,7 +1316,7 @@ export default function CostMatrixPage() {
                                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                                                                         <div style={{ 
                                                                             fontWeight: '900', 
-                                                                            color: isAligned ? '#10B981' : '#1E293B',
+                                                                            color: cellState.text,
                                                                             fontSize: '1.2rem',
                                                                             display: 'flex',
                                                                             alignItems: 'center',
@@ -1252,11 +1326,19 @@ export default function CostMatrixPage() {
                                                                             {isAligned && <span title="Precio Autorizado por IA"><CheckCircle2 size={16} color="#10B981" /></span>}
                                                                             {harvestStatus === 'harvest' && <span title="RECOMENDACIÓN: ABUNDANCIA ESTACIONAL"><Brain size={16} color="#0EA5E9" className="animate-pulse" /></span>}
                                                                         </div>
-                                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                            Sugerido IA
-                                                                        </div>
+                                                                        <span style={{ 
+                                                                            fontSize: '0.6rem', 
+                                                                            color: cellState.labelColor, 
+                                                                            fontWeight: '900', 
+                                                                            textTransform: 'uppercase',
+                                                                            backgroundColor: `${cellState.labelColor}15`,
+                                                                            padding: '2px 8px',
+                                                                            borderRadius: '6px'
+                                                                        }}>
+                                                                            {cellState.badge}
+                                                                        </span>
                                                                         {currentManual && !isAligned && (
-                                                                            <div style={{ fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                                                                            <div style={{ fontSize: '0.55rem', color: '#1E40AF', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px', marginTop: '0.2rem' }}>
                                                                                 ✍️ Manual: ${Math.round(currentManual).toLocaleString()}
                                                                             </div>
                                                                         )}
@@ -1270,6 +1352,7 @@ export default function CostMatrixPage() {
                                                                     currentManual={currentManual}
                                                                     savingId={savingId}
                                                                     onSave={handleSaveManualCost}
+                                                                    cellState={cellState}
                                                                 />
                                                             );
                                                         })()}
