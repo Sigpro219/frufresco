@@ -95,12 +95,12 @@ function ManualCostInput({ productId, onSave, savingId, currentManual, cellState
                         }
                     }}
                     style={{
-                        width: '80px',
-                        padding: '0.4rem',
+                        width: '95px',
+                        padding: '0.4rem 0.2rem',
                         borderRadius: '8px',
                         border: savingId === productId ? '2px solid #10B981' : `2px solid ${labelColor}`,
                         textAlign: 'center',
-                        fontSize: '0.95rem',
+                        fontSize: '0.9rem',
                         fontWeight: '800',
                         color: textVal,
                         outline: 'none',
