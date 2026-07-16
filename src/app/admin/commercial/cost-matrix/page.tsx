@@ -1183,28 +1183,32 @@ export default function CostMatrixPage() {
                                                         return [...Array(8)].map((_, i) => {
                                                             const purchase = history[i];
                                                             const isBestPrice = purchase && purchase.normalized_price === minPrice && prices.length > 1;
+                                                            const mOverride = i === 0 && !purchase ? manualOverrides[p.id] : null;
 
                                                             return (
                                                                 <td key={i} className={i > 0 ? "col-compra-old" : "col-compra"} style={{ padding: '0.6rem', borderLeft: '1px solid #F9FAFB', textAlign: 'center', position: 'relative' }}>
-                                                                    {purchase ? (
+                                                                    {purchase || mOverride ? (
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                                                             <div style={{ 
                                                                                 fontWeight: '800', 
-                                                                                color: isBestPrice ? '#15803D' : '#059669', 
+                                                                                color: mOverride ? '#1E40AF' : (isBestPrice ? '#15803D' : '#059669'), 
                                                                                 fontSize: '0.9rem',
-                                                                                backgroundColor: isBestPrice ? '#DCFCE7' : '#ECFDF5',
+                                                                                backgroundColor: mOverride ? '#EFF6FF' : (isBestPrice ? '#DCFCE7' : '#ECFDF5'),
                                                                                 padding: '0.3rem',
                                                                                 borderRadius: '6px',
-                                                                                border: isBestPrice ? '1px solid #4ADE80' : '1px solid #D1FAE5',
+                                                                                border: mOverride ? '1px solid #BFDBFE' : (isBestPrice ? '1px solid #4ADE80' : '1px solid #D1FAE5'),
                                                                                 position: 'relative'
                                                                             }}>
-                                                                                ${Math.round(purchase.normalized_price).toLocaleString()}
+                                                                                ${Math.round(purchase ? purchase.normalized_price : mOverride.manual_cost).toLocaleString()}
                                                                                 {isBestPrice && (
                                                                                     <div style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '1rem', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))' }} title="Mejor precio histórico">🎖️</div>
                                                                                 )}
+                                                                                {mOverride && (
+                                                                                    <div style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '0.9rem' }} title="Costo manual de referencia">✍️</div>
+                                                                                )}
                                                                             </div>
                                                                             <div style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: 'bold' }}>
-                                                                                {format(new Date(purchase.created_at), 'dd MMM', { locale: es })}
+                                                                                {format(new Date(purchase ? purchase.created_at : mOverride.updated_at), 'dd MMM', { locale: es })}
                                                                             </div>
                                                                         </div>
                                                                     ) : (
