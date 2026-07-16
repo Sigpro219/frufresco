@@ -345,7 +345,6 @@ export default function CostMatrixPage() {
             const currentManual = manualOverrides[p.id]?.manual_cost || 0;
             return {
                 'accounting_id': p.accounting_id || '',
-                'SKU': p.sku || '',
                 'Producto': p.name || '',
                 'Unidad': p.unit_of_measure || '',
                 'Costo Actual': currentManual ? Math.round(currentManual) : 0,
