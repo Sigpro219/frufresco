@@ -426,7 +426,8 @@ export default function CostMatrixPage() {
                 'Producto': p.name || '',
                 'Unidad': p.unit_of_measure || '',
                 'Costo Actual': currentManual ? Math.round(currentManual) : 0,
-                'Nuevo Costo': ''
+                'Nuevo Costo': '',
+                'Fecha Última Actualización': manualOverrides[p.id]?.updated_at ? format(new Date(manualOverrides[p.id].updated_at), 'yyyy-MM-dd') : 'Sin Registro'
             };
         });
 
