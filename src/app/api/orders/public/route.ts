@@ -51,7 +51,7 @@ export async function POST(request: Request) {
             const { data: { session } } = await serverSupabase.auth.getSession();
             const userId = session?.user?.id;
 
-            let pricingModelId = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2C
+            let pricingModelId = userId ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2B (General Institucional) vs B2C
             if (userId) {
                 const { data: profile } = await serverSupabase
                     .from('profiles')
