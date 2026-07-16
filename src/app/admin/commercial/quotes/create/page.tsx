@@ -52,6 +52,8 @@ function CreateQuotePageContent() {
     const [conversions, setConversions] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
+    const [originalQuoteVersion, setOriginalQuoteVersion] = useState<number>(1);
+    const [parentQuoteId, setParentQuoteId] = useState<string | null>(null);
 
     // MODAL STATE FOR NEW CLIENT
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -103,6 +105,8 @@ function CreateQuotePageContent() {
             if (qErr) throw qErr;
 
             if (qData) {
+                setParentQuoteId(qData.id);
+                setOriginalQuoteVersion(qData.version || 1);
                 // Pre-populate client info
                 if (qData.client_id) {
                     setSelectedClientId(qData.client_id);
@@ -613,7 +617,9 @@ function CreateQuotePageContent() {
                     total_amount: totalAmount,
                     status: 'draft',
                     start_date: new Date().toISOString().split('T')[0],
-                    valid_until: null
+                    valid_until: null,
+                    parent_quote_id: parentQuoteId,
+                    version: parentQuoteId ? originalQuoteVersion + 1 : 1
                 })
                 .select()
                 .single();

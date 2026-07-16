@@ -310,10 +310,9 @@ export default function CommercialAgreementsModule() {
                 expiry.setFullYear(expiry.getFullYear() + durationValue);
             }
             const calculatedValidUntil = expiry.toISOString();
-            
-            const { data: dbProducts, error: dbProdErr } = await supabase
+                  const { data: dbProducts, error: dbProdErr } = await supabase
                 .from('products')
-                .select('id, name, base_price, accounting_id');
+                .select('id, name, base_price, accounting_id, iva_rate');
                 
             if (dbProdErr) throw dbProdErr;
             
@@ -334,9 +333,52 @@ export default function CommercialAgreementsModule() {
             
             if (existing && existing.length > 0) {
                 const quoteIds = existing.map(q => q.id);
-                await supabase.from('quote_items').delete().in('quote_id', quoteIds);
-                await supabase.from('quotes').delete().in('id', quoteIds);
+                // Mark previous agreements as expired instead of deleting them to preserve history
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                await supabase.from('quotes')
+                    .update({ 
+                        status: 'expired', 
+                        valid_until: yesterday.toISOString().split('T')[0] 
+                    })
+                    .in('id', quoteIds);
             }
+            
+            // Calculate negotiated totals dynamically with actual product IVA rates
+            const itemsToInsert: any[] = [];
+            let matchCount = 0;
+            let subtotal = 0;
+            let totalTax = 0;
+            
+            uploadedItems.forEach(item => {
+                const dbProduct = productMap[String(item.accounting_id)];
+                if (dbProduct) {
+                    matchCount++;
+                    const basePrice = dbProduct.base_price || 0;
+                    const negotiatedPrice = item.unit_price;
+                    const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
+                    
+                    const ivaRate = dbProduct.iva_rate || 0;
+                    const ivaAmount = negotiatedPrice * (ivaRate / 100);
+                    
+                    subtotal += negotiatedPrice;
+                    totalTax += ivaAmount;
+                    
+                    itemsToInsert.push({
+                        product_id: dbProduct.id,
+                        product_name: dbProduct.name,
+                        quantity: 1,
+                        cost_basis: basePrice,
+                        margin_percent: marginPercent,
+                        unit_price: negotiatedPrice,
+                        iva_rate: ivaRate,
+                        iva_amount: ivaAmount,
+                        total_price: negotiatedPrice + ivaAmount
+                    });
+                }
+            });
+            
+            const total = subtotal + totalTax;
             
             const { data: newQuote, error: insertQErr } = await supabase
                 .from('quotes')
@@ -347,45 +389,24 @@ export default function CommercialAgreementsModule() {
                     start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
                     valid_until: calculatedValidUntil,
                     version: 1,
-                    subtotal_amount: 0,
-                    total_tax_amount: 0,
-                    total_amount: 0
+                    subtotal_amount: subtotal,
+                    total_tax_amount: totalTax,
+                    total_amount: total
                 })
                 .select()
                 .single();
-                
+                 
             if (insertQErr) throw insertQErr;
             
-            const itemsToInsert: any[] = [];
-            let matchCount = 0;
-            
-            uploadedItems.forEach(item => {
-                const dbProduct = productMap[String(item.accounting_id)];
-                if (dbProduct) {
-                    matchCount++;
-                    const basePrice = dbProduct.base_price || 0;
-                    const negotiatedPrice = item.unit_price;
-                    const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
-                    
-                    itemsToInsert.push({
-                        quote_id: newQuote.id,
-                        product_id: dbProduct.id,
-                        product_name: dbProduct.name,
-                        quantity: 1,
-                        cost_basis: basePrice,
-                        margin_percent: marginPercent,
-                        unit_price: negotiatedPrice,
-                        iva_rate: 0,
-                        iva_amount: 0,
-                        total_price: negotiatedPrice
-                    });
-                }
-            });
-            
             if (itemsToInsert.length > 0) {
+                // Assign quote_id to items
+                const finalItemsToInsert = itemsToInsert.map(item => ({
+                    ...item,
+                    quote_id: newQuote.id
+                }));
                 const batchSize = 100;
-                for (let i = 0; i < itemsToInsert.length; i += batchSize) {
-                    const batch = itemsToInsert.slice(i, i + batchSize);
+                for (let i = 0; i < finalItemsToInsert.length; i += batchSize) {
+                    const batch = finalItemsToInsert.slice(i, i + batchSize);
                     const { error: insertItemsErr } = await supabase
                         .from('quote_items')
                         .insert(batch);
@@ -549,7 +570,7 @@ export default function CommercialAgreementsModule() {
             if (editUploadedItems.length > 0) {
                 const { data: dbProducts, error: dbProdErr } = await supabase
                     .from('products')
-                    .select('id, name, base_price, accounting_id');
+                    .select('id, name, base_price, accounting_id, iva_rate');
                     
                 if (dbProdErr) throw dbProdErr;
                 
@@ -560,7 +581,7 @@ export default function CommercialAgreementsModule() {
                     }
                 });
                 
-                // Delete old items
+                // Delete old items for this specific active agreement being updated
                 const { error: deleteErr } = await supabase
                     .from('quote_items')
                     .delete()
@@ -571,6 +592,8 @@ export default function CommercialAgreementsModule() {
                 // Insert new items
                 const itemsToInsert: any[] = [];
                 let matchCount = 0;
+                let subtotal = 0;
+                let totalTax = 0;
                 
                 editUploadedItems.forEach(item => {
                     const dbProduct = productMap[String(item.accounting_id)];
@@ -580,6 +603,12 @@ export default function CommercialAgreementsModule() {
                         const negotiatedPrice = item.unit_price;
                         const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
                         
+                        const ivaRate = dbProduct.iva_rate || 0;
+                        const ivaAmount = negotiatedPrice * (ivaRate / 100);
+                        
+                        subtotal += negotiatedPrice;
+                        totalTax += ivaAmount;
+                        
                         itemsToInsert.push({
                             quote_id: editingAgreement.id,
                             product_id: dbProduct.id,
@@ -588,18 +617,32 @@ export default function CommercialAgreementsModule() {
                             cost_basis: basePrice,
                             margin_percent: marginPercent,
                             unit_price: negotiatedPrice,
-                            iva_rate: 0,
-                            iva_amount: 0,
-                            total_price: negotiatedPrice
+                            iva_rate: ivaRate,
+                            iva_amount: ivaAmount,
+                            total_price: negotiatedPrice + ivaAmount
                         });
                     }
                 });
+                
+                const total = subtotal + totalTax;
                 
                 if (itemsToInsert.length > 0) {
                     const { error: itemsErr } = await supabase
                         .from('quote_items')
                         .insert(itemsToInsert);
                     if (itemsErr) throw itemsErr;
+                    
+                    // Update header totals in quotes table to match the new item totals
+                    const { error: updateQuoteTotalsErr } = await supabase
+                        .from('quotes')
+                        .update({
+                            subtotal_amount: subtotal,
+                            total_tax_amount: totalTax,
+                            total_amount: total
+                        })
+                        .eq('id', editingAgreement.id);
+                        
+                    if (updateQuoteTotalsErr) throw updateQuoteTotalsErr;
                 }
                 
                 showToast(`Acuerdo modificado con éxito. Se actualizaron ${matchCount} precios de productos.`, 'success');

@@ -151,6 +151,7 @@ export default function ClientsModule() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Partial<Profile> | null>(null);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
@@ -1000,6 +1001,14 @@ export default function ClientsModule() {
                 />
             )}
 
+            {/* MODAL FORMULARIO PROSPECTO MANUAL (NUEVO) */}
+            {isLeadModalOpen && (
+                <LeadFormModal 
+                    onClose={() => setIsLeadModalOpen(false)} 
+                    onRefresh={fetchData}
+                />
+            )}
+
             {/* MODAL EXCEPCIONES (NICKNAMES) */}
             {isNicknameModalOpen && nicknameClientId && (
                 <ClientExceptionsModal 
@@ -1127,6 +1136,29 @@ export default function ClientsModule() {
                                 }}
                             >
                                 <span>👤</span> Nuevo Cliente Hogar
+                            </button>
+                        )}
+                        {activeTab === 'leads' && hasEditPermission() && (
+                            <button 
+                                onClick={() => setIsLeadModalOpen(true)}
+                                style={{ 
+                                    backgroundColor: '#8B5CF6', 
+                                    color: 'white', 
+                                    padding: '0 1.2rem', 
+                                    borderRadius: '10px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    whiteSpace: 'nowrap',
+                                    height: '40px',
+                                    fontSize: '0.85rem'
+                                }}
+                            >
+                                <span>📢</span> Nuevo Prospecto
                             </button>
                         )}
 
@@ -5173,6 +5205,170 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         )}
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+interface LeadFormModalProps {
+    onClose: () => void;
+    onRefresh: () => void;
+}
+
+function LeadFormModal({ onClose, onRefresh }: LeadFormModalProps) {
+    const [companyName, setCompanyName] = useState('');
+    const [contactName, setContactName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
+    const [nit, setNit] = useState('');
+    const [address, setAddress] = useState('');
+    const [municipality, setMunicipality] = useState('Bogotá');
+    const [businessType, setBusinessType] = useState('Restaurante');
+    const [businessSize, setBusinessSize] = useState('Standard');
+    const [notes, setNotes] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!contactName || !phone) {
+            setError('Nombre de contacto y teléfono son requeridos.');
+            return;
+        }
+        setError('');
+        setLoading(true);
+        try {
+            const { error: insertErr } = await supabase
+                .from('leads')
+                .insert([{
+                    company_name: companyName || null,
+                    contact_name: contactName,
+                    phone: phone,
+                    email: email || null,
+                    nit: nit ? parseInt(nit.replace(/[^0-9]/g, '')) : null,
+                    address: address || null,
+                    municipality: municipality || null,
+                    business_type: businessType,
+                    business_size: businessSize,
+                    notes: notes || null,
+                    status: 'new'
+                }]);
+
+            if (insertErr) throw insertErr;
+            onRefresh();
+            onClose();
+        } catch (err: any) {
+            console.error('Error creating lead:', err);
+            setError(err.message || 'Error al guardar el prospecto.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 9999, backdropFilter: 'blur(4px)',
+            fontFamily: 'system-ui, sans-serif'
+        }}>
+            <div style={{
+                backgroundColor: 'white',
+                borderRadius: '16px',
+                padding: '2rem',
+                width: '100%',
+                maxWidth: '600px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800', color: '#0F172A' }}>📢 Crear Nuevo Prospecto (Lead)</h3>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748B' }}>✕</button>
+                </div>
+
+                {error && (
+                    <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Razón Social / Empresa</label>
+                            <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ej: FruFresco S.A.S" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Nombre de Contacto *</label>
+                            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} required placeholder="Ej: Juan Pérez" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Teléfono *</label>
+                            <input type="text" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="Ej: 3001234567" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Correo Electrónico</label>
+                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Ej: contacto@empresa.com" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>NIT / Documento</label>
+                            <input type="text" value={nit} onChange={e => setNit(e.target.value)} placeholder="Ej: 901393217" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Municipio / Ciudad</label>
+                            <input type="text" value={municipality} onChange={e => setMunicipality(e.target.value)} placeholder="Ej: Bogotá" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Dirección de Despacho</label>
+                        <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Ej: Calle 100 # 15-20" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Tipo de Negocio</label>
+                            <select value={businessType} onChange={e => setBusinessType(e.target.value)} style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none', backgroundColor: 'white' }}>
+                                <option value="Restaurante">Restaurante</option>
+                                <option value="Hotel">Hotel</option>
+                                <option value="Colegio">Colegio</option>
+                                <option value="Casino/Catering">Casino/Catering</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Tamaño</label>
+                            <select value={businessSize} onChange={e => setBusinessSize(e.target.value)} style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none', backgroundColor: 'white' }}>
+                                <option value="Small">Pequeño / Boutique</option>
+                                <option value="Standard">Mediano / Standard</option>
+                                <option value="Chain">Grande / Cadena</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Notas / Observaciones</label>
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ej: Requiere factura formal de inmediato..." rows={3} style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none', resize: 'none' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                        <button type="button" onClick={onClose} style={{ padding: '0.625rem 1.25rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', cursor: 'pointer', backgroundColor: 'white', color: '#475569', fontWeight: 'bold' }}>
+                            Cancelar
+                        </button>
+                        <button type="submit" disabled={loading} style={{ padding: '0.625rem 1.25rem', borderRadius: '8px', border: 'none', fontSize: '0.9rem', cursor: 'pointer', backgroundColor: '#8B5CF6', color: 'white', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)' }}>
+                            {loading ? 'Guardando...' : 'Crear Prospecto'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
