@@ -108,6 +108,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     const [quoteShown, setQuoteShown] = useState(false);
     const [isTerminated, setIsTerminated] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
+    const [quoteId, setQuoteId] = useState<string | null>(null);
     const [b2bGeofence, setB2bGeofence] = useState<Point[]>([]);
     const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 4.67, lng: -74.06 });
     const [mapZoom, setMapZoom] = useState<number>(11);
@@ -144,27 +145,29 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
         // Use the Ref value for the latest data, merging any new updates
         const updatedLeadData = { ...leadDataRef.current, ...dataUpdate };
+        
+        // Input validations per active step
         if (currentStep === 1) { // Contact Name
             if (userText.length < 2) {
                 setError(locale === 'en' ? 'Please enter a valid name.' : 'Por favor ingresa un nombre válido');
                 return;
             }
         }
-        if (currentStep === 2) { // Address
-            if (userText.length < 5) {
-                setError(locale === 'en' ? 'Please enter a more complete address.' : 'Por favor ingresa una dirección más completa.');
-                return;
-            }
-        }
-        if ((!updatedLeadData.is_out_of_coverage && currentStep === 7) || (updatedLeadData.is_out_of_coverage && currentStep === 4)) { // Phone
+        if (currentStep === 2) { // WhatsApp Phone
             if (userText.length < 7) {
-                setError(locale === 'en' ? 'Please enter a valid number.' : 'Por favor ingresa un número válido');
+                setError(locale === 'en' ? 'Please enter a valid phone number.' : 'Por favor ingresa un número de teléfono válido');
                 return;
             }
         }
-        if ((!updatedLeadData.is_out_of_coverage && currentStep === 8) || (updatedLeadData.is_out_of_coverage && currentStep === 5)) { // Email
+        if (currentStep === 3) { // Email
             if (!userText.toLowerCase().includes('no') && !userText.includes('@')) {
                 setError(locale === 'en' ? 'Invalid email format' : 'Formato de correo inválido');
+                return;
+            }
+        }
+        if (currentStep === 4) { // Address
+            if (userText.length < 5) {
+                setError(locale === 'en' ? 'Please enter a more complete address.' : 'Por favor ingresa una dirección más completa.');
                 return;
             }
         }
@@ -177,7 +180,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
         let nextBotMessages: Message[] = [];
 
-        if (currentStep === 0) { // Captured Company
+        if (currentStep === 0) { // Captured Company Name
             updatedLeadData.company_name = userText;
             nextBotMessages = [{ 
                 id: Date.now() + 1, 
@@ -188,10 +191,24 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             updatedLeadData.contact_name = userText;
             nextBotMessages = [{ 
                 id: Date.now() + 1, 
+                text: t.b2b.bot.qPhone, 
+                sender: 'bot'
+            }];
+        } else if (currentStep === 2) { // Captured WhatsApp Phone
+            updatedLeadData.phone = userText;
+            nextBotMessages = [{ 
+                id: Date.now() + 1, 
+                text: t.b2b.bot.qEmail, 
+                sender: 'bot'
+            }];
+        } else if (currentStep === 3) { // Captured Email
+            updatedLeadData.email = userText.toLowerCase().includes('no') ? '' : userText;
+            nextBotMessages = [{ 
+                id: Date.now() + 1, 
                 text: t.b2b.bot.qAddress, 
                 sender: 'bot'
             }];
-        } else if (currentStep === 2) { // Captured Address
+        } else if (currentStep === 4) { // Captured Address
             updatedLeadData.address = userText;
             
             // Geocode the address using Google Maps Geocoder API
@@ -224,13 +241,29 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             nextBotMessages = [
                 { id: Date.now() + 1, text: t.b2b.bot.qLocation, sender: 'bot' }
             ];
-        } else if (currentStep === 3) { // Location confirmed (via map, click triggers step 4 next messages)
+        } else if (currentStep === 5) { // Location confirmed (triggers from confirm click)
+            // Skipped / Handled in map click / confirm button click directly.
+        } else if (currentStep === 6) { // Captured Monthly purchases/consumption in COP (Semaforo)
+            updatedLeadData.business_size = userText;
             nextBotMessages = [{ 
                 id: Date.now() + 1, 
                 text: t.b2b.bot.qType.replace('{name}', updatedLeadData.company_name), 
                 sender: 'bot',
                 options: locale === 'en' ? ['Restaurant', 'Hotel', 'School', 'Casino/Catering', 'Other'] : ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
             }];
+        } else if (currentStep === 7) { // Captured Business Type
+            updatedLeadData.business_type = userText;
+            nextBotMessages = [{ 
+                id: Date.now() + 1, 
+                text: t.b2b.bot.qNit, 
+                sender: 'bot'
+            }];
+        } else if (currentStep === 8) { // Captured NIT (final step!)
+            updatedLeadData.nit = userText.toLowerCase().includes('no') ? '' : userText.replace(/[^0-9-]/g, '');
+            leadDataRef.current = updatedLeadData;
+            setLeadData(updatedLeadData);
+            await submitLead(updatedLeadData);
+            return;
         } else if (currentStep === 10) { // Borderline call prompt response
             const lowerText = userText.toLowerCase();
             const agreed = lowerText.includes('sí') || lowerText.includes('si') || lowerText.includes('yes') || lowerText.includes('agendar');
@@ -238,19 +271,29 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             const nextUpdate = { wants_coverage_call: agreed };
             const mergedData = { ...updatedLeadData, ...nextUpdate };
             
-            const nextText = agreed 
-                ? (locale === 'en' ? "Great! We will schedule a call to review your location. What is your cell phone number?" : "¡Excelente elección! Agendaremos una llamada para revisar tu caso. ¿A qué número de celular te contactamos?")
-                : (locale === 'en' ? "Understood. We can still save your contact for future route openings. What is your cell phone number?" : "Entendido. De todas formas nos gustaría guardar tu contacto para cuando abramos rutas. ¿A qué número de celular te contactamos?");
-            
-            nextBotMessages = [{
-                id: Date.now() + 1,
-                text: nextText,
-                sender: 'bot'
-            }];
-            
-            leadDataRef.current = mergedData;
-            setLeadData(mergedData);
-            setCurrentStep(4); // Transition to waitlist phone step (Step 4)
+            if (agreed) {
+                // Yes, schedule call -> Ask for their average purchases tier (Step 6)
+                const purchasesQuestion = locale === 'en'
+                    ? "Great! We will schedule a call to review your location. To design your customized proposal, what is your average monthly food purchases volume in COP?"
+                    : "¡Excelente elección! Agendaremos una llamada para revisar tu caso de cobertura. Para diseñar tu propuesta personalizada, por favor dinos: ¿Cuál es tu volumen promedio de compras mensuales de alimentos en COP?";
+                nextBotMessages = [{
+                    id: Date.now() + 1,
+                    text: purchasesQuestion,
+                    sender: 'bot',
+                    options: locale === 'en' 
+                        ? ['> $30M COP (Large)', 'Between $10M and $30M COP (Medium)', 'Less than $10M COP (Small)'] 
+                        : ['> $30M COP (Grande)', 'Entre $10M y $30M COP (Mediano)', 'Menos de $10M COP (Pequeño)']
+                }];
+                leadDataRef.current = mergedData;
+                setLeadData(mergedData);
+                setCurrentStep(6); // Jump to COP Purchases Tier step
+            } else {
+                // No thanks -> Save lead immediately as rejected, end flow
+                leadDataRef.current = mergedData;
+                setLeadData(mergedData);
+                await submitLead(mergedData);
+                return;
+            }
             
             let delay = 0;
             nextBotMessages.forEach((msg, index) => {
@@ -261,73 +304,6 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 }, delay);
             });
             return;
-        } else if (!updatedLeadData.is_out_of_coverage) {
-            // IN COVERAGE Normal B2B Flow
-            if (currentStep === 4) { // Captured Type
-                updatedLeadData.business_type = userText;
-                let sizeOptions = locale === 'en' ? ['Small', 'Medium', 'Large'] : ['Pequeño', 'Mediano', 'Grande'];
-                let sizeQuestion = t.b2b.bot.qSize;
-
-                if (userText === 'Restaurante' || userText === 'Restaurant') {
-                    sizeQuestion = locale === 'en' ? 'How many tables or locations do you currently manage?' : '¿Cuántas mesas o sedes manejas actualmente?';
-                    sizeOptions = locale === 'en' ? ['Boutique (< 10 tables)', 'Standard (10-30 tables)', 'Chain / Large Format'] : ['Boutique (< 10 mesas)', 'Estándar (10-30 mesas)', 'Gran Formato / Cadena'];
-                } else if (userText === 'Colegio' || userText === 'School') {
-                    sizeQuestion = locale === 'en' ? 'What type of institution do you serve?' : '¿Qué tipo de institución atiendes?';
-                    sizeOptions = locale === 'en' ? ['Preschool', 'K-12 School', 'University / Institute'] : ['Jardín / Preescolar', 'Colegio (Primaria/Bach)', 'Universidad / Instituto'];
-                } else if (userText === 'Hotel') {
-                    sizeQuestion = locale === 'en' ? 'How many rooms or guests do you manage?' : '¿Cuántas habitaciones o huéspedes manejas?';
-                    sizeOptions = locale === 'en' ? ['Boutique (< 20 rooms)', 'Medium (20-80 rooms)', 'Resort / Large Hotel'] : ['Hotel Boutique (< 20 hab)', 'Mediano (20-80 hab)', 'Gran Hotel / Resort'];
-                }
-
-                nextBotMessages = [{ 
-                    id: Date.now() + 1, 
-                    text: sizeQuestion, 
-                    sender: 'bot',
-                    options: sizeOptions
-                }];
-            } else if (currentStep === 5) { // Captured Size
-                updatedLeadData.business_size = userText;
-                nextBotMessages = [
-                    { id: Date.now() + 1, text: locale === 'en' ? 'Understood. This information is key to prioritizing your care.' : 'Entendido. Esta información es clave para priorizar tu atención.', sender: 'bot' },
-                    { id: Date.now() + 2, text: t.b2b.bot.qNit, sender: 'bot' }
-                ];
-            } else if (currentStep === 6) { // Captured NIT
-                updatedLeadData.nit = userText.toLowerCase().includes('no') ? '' : userText.replace(/[^0-9-]/g, '');
-                nextBotMessages = [{ 
-                    id: Date.now() + 1, 
-                    text: t.b2b.bot.qPhone, 
-                    sender: 'bot'
-                }];
-            } else if (currentStep === 7) { // Captured Phone
-                updatedLeadData.phone = userText;
-                nextBotMessages = [{ 
-                    id: Date.now() + 1, 
-                    text: t.b2b.bot.qEmail, 
-                    sender: 'bot'
-                }];
-            } else if (currentStep === 8) { // Captured Email
-                updatedLeadData.email = userText.toLowerCase().includes('no') ? '' : userText;
-                leadDataRef.current = updatedLeadData;
-                setLeadData(updatedLeadData);
-                await submitLead(updatedLeadData);
-                return;
-            }
-        } else {
-            // OUT OF COVERAGE Waitlist Flow
-            if (currentStep === 4) { // Captured Phone for Waitlist
-                updatedLeadData.phone = userText;
-                nextBotMessages = [{ 
-                    id: Date.now() + 1, 
-                    text: (t.b2b.bot as any).outOfZoneEmail, 
-                    sender: 'bot'
-                }];
-            } else if (currentStep === 5) { // Captured Email for Waitlist
-                updatedLeadData.email = userText.toLowerCase().includes('no') ? '' : userText;
-                leadDataRef.current = updatedLeadData;
-                setLeadData(updatedLeadData);
-                await submitLead(updatedLeadData);
-                return;
-            }
         }
 
         // Final state and Ref sync
@@ -379,8 +355,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             const statusValue = finalData.is_out_of_coverage 
                 ? (isNearCall ? 'new' : 'rejected')
                 : 'new';
-            // Construct notes from partial data if needed
-            const { error } = await supabase
+
+            // 1. Insert B2B Lead and select ID
+            const { data: leadRows, error: leadError } = await supabase
                 .from('leads')
                 .insert([{
                     company_name: finalData.company_name,
@@ -396,21 +373,136 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     municipality: finalData.municipality || 'Desconocido',
                     status: statusValue,
                     notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Desconocido'} | ORIG: ${finalData.address}${notesTag} | BOT_V2.2 🤖`
-                }]);
+                }])
+                .select('id')
+                .single();
 
-            if (error) throw error;
+            if (leadError) throw leadError;
+            const newLeadId = leadRows?.id;
+            let createdQuoteId: string | null = null;
+
+            // 2. Auto-generate pre-quotation (only for active 'new' leads)
+            if (newLeadId && (statusValue === 'new')) {
+                // Determine model
+                let modelId = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15'; // Default fallback General Institucional
+                let modelName = 'General Institucional';
+                
+                const size = finalData.business_size || '';
+                if (size.includes('Grande') || size.includes('30M')) {
+                    modelId = '7a5c8375-ec2b-4b5d-a979-d48907459c20'; // Grande 30 días
+                    modelName = 'Grande 30 días';
+                } else if (size.includes('Mediano') || size.includes('10M')) {
+                    modelId = 'dfddd8ad-2c77-4026-a0c2-14f97f2e3510'; // Mediano 30 días
+                    modelName = 'Mediano 30 días';
+                } else if (size.includes('Pequeño') || size.includes('< 10M')) {
+                    modelId = 'c0ae55d8-cc70-4f56-b3e0-8a15b34b77ca'; // Pequeño 30 días
+                    modelName = 'Pequeño 30 días';
+                }
+
+                // Fetch 5 active popular products
+                const { data: popularProds } = await supabase
+                    .from('products')
+                    .select('id, name, base_price, iva_rate, sku')
+                    .eq('is_active', true)
+                    .gt('base_price', 0)
+                    .limit(5);
+
+                if (popularProds && popularProds.length > 0) {
+                    const prodIds = popularProds.map(p => p.id);
+                    
+                    // Fetch pricing model prices cache
+                    const { data: modelPrices } = await supabase
+                        .from('pricing_model_prices')
+                        .select('product_id, price')
+                        .eq('model_id', modelId)
+                        .in('product_id', prodIds);
+
+                    let subtotal = 0;
+                    let tax = 0;
+                    let total = 0;
+                    const itemsToInsert = [];
+
+                    for (const p of popularProds) {
+                        const cached = modelPrices?.find(mp => mp.product_id === p.id);
+                        const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * 1.15;
+
+                        const qty = 10; // Default quantity for pre-quotation
+                        const itemSubtotal = unitPrice * qty;
+                        const itemTaxRate = Number(p.iva_rate || 0);
+                        const itemTax = itemSubtotal * (itemTaxRate / 100);
+                        const itemTotal = itemSubtotal + itemTax;
+
+                        subtotal += itemSubtotal;
+                        tax += itemTax;
+                        total += itemTotal;
+
+                        itemsToInsert.push({
+                            product_id: p.id,
+                            product_name: p.name,
+                            quantity: qty,
+                            cost_basis: p.base_price,
+                            margin_percent: modelName.includes('Grande') ? 5 : modelName.includes('Mediano') ? 10 : 15,
+                            unit_price: unitPrice,
+                            iva_rate: itemTaxRate,
+                            iva_amount: itemTax,
+                            total_price: itemTotal
+                        });
+                    }
+
+                    // Create Quote
+                    const { data: newQuote, error: newQuoteErr } = await supabase
+                        .from('quotes')
+                        .insert([{
+                            lead_id: newLeadId,
+                            client_name: finalData.company_name,
+                            model_id: modelId,
+                            model_snapshot_name: modelName,
+                            subtotal_amount: subtotal,
+                            total_tax_amount: tax,
+                            total_amount: total,
+                            status: 'sent'
+                        }])
+                        .select('id')
+                        .single();
+
+                    if (newQuoteErr) {
+                        console.error('Error creating auto-quote:', newQuoteErr);
+                    } else if (newQuote) {
+                        createdQuoteId = newQuote.id;
+                        setQuoteId(newQuote.id);
+
+                        // Insert Quote Items
+                        const itemsWithQuoteId = itemsToInsert.map(it => ({ ...it, quote_id: newQuote.id }));
+                        const { error: itemsErr } = await supabase
+                            .from('quote_items')
+                            .insert(itemsWithQuoteId);
+
+                        if (itemsErr) console.error('Error inserting quote items:', itemsErr);
+                    }
+                }
+            }
 
             setTimeout(() => {
                 setIsTyping(false);
+                const isSuccess = statusValue === 'new';
+                let successMsg = isSuccess ? t.b2b.bot.success : (t.b2b.bot as any).outOfZoneSuccess;
+                
+                if (isSuccess && createdQuoteId) {
+                    successMsg = locale === 'en'
+                        ? "Registration completed! We have generated a custom B2B pre-quotation with our wholesale prices. You can download it below."
+                        : "¡Registro completado! Hemos generado una pre-cotización B2B personalizada con nuestros precios mayoristas sugeridos. Puedes descargarla aquí abajo.";
+                }
+
                 setMessages(prev => [...prev, {
                     id: Date.now(),
-                    text: finalData.is_out_of_coverage ? (t.b2b.bot as any).outOfZoneSuccess : t.b2b.bot.success,
+                    text: successMsg,
                     sender: 'bot'
                 }]);
-                setIsSubmitting(false); 
-                if (!finalData.is_out_of_coverage) {
+                setIsSubmitting(false);
+
+                if (isSuccess) {
                     setIsCompleted(true);
-                    setQuoteShown(true); // Activamos la visualización de cotizaciones sugeridas
+                    setQuoteShown(true);
                 } else {
                     setIsTerminated(true);
                 }
@@ -497,7 +589,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             {msg.text}
                         </div>
                         
-                        {msg.sender === 'bot' && msg.options && (currentStep === 4 || currentStep === 5 || currentStep === 10) && (
+                        {msg.sender === 'bot' && msg.options && (currentStep === 6 || currentStep === 7 || currentStep === 10) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
                                 {msg.options.map(opt => (
                                     <button 
@@ -525,7 +617,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     </div>
                 ))}
 
-                {currentStep === 3 && (
+                {currentStep === 5 && (
                     <div style={{ 
                         width: '100%', 
                         minHeight: mapExpanded ? '480px' : '300px', 
@@ -583,7 +675,23 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                                 setIsTerminated(false);
                                                 setError('');
                                                 const gpsUpdate = { latitude: lat, longitude: lng, municipality: mun, is_out_of_coverage: false };
-                                                handleInput(undefined, '📍 Ubicación confirmada', gpsUpdate);
+                                                setLeadData(prev => ({ ...prev, ...gpsUpdate }));
+                                                leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
+                                                setIsTyping(true);
+                                                setTimeout(() => {
+                                                    setIsTyping(false);
+                                                    const welcomeText = locale === 'en'
+                                                        ? "📍 Location confirmed! You are within our active coverage area."
+                                                        : "📍 ¡Ubicación confirmada! Te encuentras dentro de nuestra zona de cobertura.";
+                                                    const promptText = locale === 'en'
+                                                        ? "To offer you our best wholesale deal, what is your average monthly purchases volume in COP?"
+                                                        : "Para ofrecerte nuestra mejor oferta, ¿cuál es tu volumen promedio de compras mensuales de alimentos en COP?";
+                                                    setMessages(prev => [...prev, 
+                                                        { id: Date.now(), text: welcomeText, sender: 'bot' },
+                                                        { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['> $30M COP (Large)', 'Between $10M and $30M COP (Medium)', 'Less than $10M COP (Small)'] : ['> $30M COP (Grande)', 'Entre $10M y $30M COP (Mediano)', 'Menos de $10M COP (Pequeño)'] }
+                                                    ]);
+                                                    setCurrentStep(6);
+                                                }, 1000);
                                             } else {
                                                 const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
                                                 const isNear = distance <= 2000;
@@ -655,7 +763,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 <form onSubmit={handleInput} style={{ padding: '1.2rem', backgroundColor: 'white', borderTop: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: '0 0 5px 10px', fontWeight: 'bold' }}>{error}</p>}
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {currentStep === 3 ? (
+                        {currentStep === 5 ? (
                             leadData.latitude && leadData.longitude ? (
                                 <button 
                                     type="button" 
@@ -665,7 +773,23 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                         const inside = isInsidePolygon({ lat, lng }, b2bGeofence);
                                         if (inside) {
                                             const gpsUpdate = { is_out_of_coverage: false };
-                                            handleInput(undefined, '📍 Ubicación confirmada', gpsUpdate);
+                                            setLeadData(prev => ({ ...prev, ...gpsUpdate }));
+                                            leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
+                                            setIsTyping(true);
+                                            setTimeout(() => {
+                                                setIsTyping(false);
+                                                const welcomeText = locale === 'en'
+                                                    ? "📍 Location confirmed! You are within our active coverage area."
+                                                    : "📍 ¡Ubicación confirmada! Te encuentras dentro de nuestra zona de cobertura.";
+                                                const promptText = locale === 'en'
+                                                    ? "To offer you our best wholesale deal, what is your average monthly purchases volume in COP?"
+                                                    : "Para ofrecerte nuestra mejor oferta, ¿cuál es tu volumen promedio de compras mensuales de alimentos en COP?";
+                                                setMessages(prev => [...prev, 
+                                                    { id: Date.now(), text: welcomeText, sender: 'bot' },
+                                                    { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['> $30M COP (Large)', 'Between $10M and $30M COP (Medium)', 'Less than $10M COP (Small)'] : ['> $30M COP (Grande)', 'Entre $10M y $30M COP (Mediano)', 'Menos de $10M COP (Pequeño)'] }
+                                                ]);
+                                                setCurrentStep(6);
+                                            }, 1000);
                                         } else {
                                             const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
                                             const isNear = distance <= 2000;
@@ -729,10 +853,10 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 value={inputValue}
                                 onChange={(e) => { setInputValue(e.target.value); setError(''); }}
                                 placeholder={
-                                    currentStep === 6 && !leadData.is_out_of_coverage ? (locale === 'en' ? "E.g. 901234567-1 (Optional)" : "Ej: 901234567-1 (Opcional)") :
+                                    currentStep === 8 ? (locale === 'en' ? "E.g. 901234567-1 (Optional)" : "Ej: 901234567-1 (Opcional)") :
                                     currentStep === 1 ? (locale === 'en' ? "Your name or position" : "Tu nombre o cargo") : 
-                                    ((!leadData.is_out_of_coverage && currentStep === 7) || (leadData.is_out_of_coverage && currentStep === 4)) ? (locale === 'en' ? "E.g. 3001234567" : "Ej: 3001234567") : 
-                                    ((!leadData.is_out_of_coverage && currentStep === 8) || (leadData.is_out_of_coverage && currentStep === 5)) ? "you@email.com" : 
+                                    currentStep === 2 ? (locale === 'en' ? "E.g. 3001234567" : "Ej: 3001234567") : 
+                                    currentStep === 3 ? "you@email.com" : 
                                     t.b2b.bot.placeholder
                                 }
                                 autoFocus
@@ -748,8 +872,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 }}
                             />
                         )}
-                        <button type="submit" disabled={currentStep === 3} style={{
-                            backgroundColor: currentStep === 3 ? '#E5E7EB' : 'var(--primary)',
+                        <button type="submit" disabled={currentStep === 5} style={{
+                            backgroundColor: currentStep === 5 ? '#E5E7EB' : 'var(--primary)',
                             color: 'white',
                             border: 'none',
                             borderRadius: '50%',
@@ -759,7 +883,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontSize: '1.5rem',
-                            cursor: currentStep === 3 ? 'default' : 'pointer',
+                            cursor: currentStep === 5 ? 'default' : 'pointer',
                             transition: 'transform 0.1s'
                         }}>
                             ➤
@@ -817,6 +941,34 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                             <button className="btn" style={{ backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.9rem', padding: '12px', borderRadius: '12px', fontWeight: 'bold' }}>💎 Plan Premium: Selección de Origen</button>
                                         )}
                                     </div>
+                                </div>
+                            )}
+                            {quoteId && (
+                                <div style={{ marginTop: '1.5rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#F0FDF4', borderRadius: '16px', border: '1.5px solid #BBF7D0' }}>
+                                    <p style={{ color: '#166534', fontWeight: '800', fontSize: '0.9rem', marginBottom: '0.8rem' }}>
+                                        📄 {locale === 'en' ? "Custom Pre-Quotation generated!" : "¡Pre-Cotización personalizada generada!"}
+                                    </p>
+                                    <a 
+                                        href={`/admin/commercial/quotes/${quoteId}/print`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        style={{
+                                            backgroundColor: 'var(--primary)',
+                                            color: 'white',
+                                            textDecoration: 'none',
+                                            fontWeight: '800',
+                                            padding: '12px 24px',
+                                            borderRadius: '99px',
+                                            fontSize: '0.9rem',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: '0 4px 12px rgba(21, 128, 61, 0.2)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        📥 {locale === 'en' ? "Download Pre-Quotation (PDF)" : "Descargar Pre-Cotización (PDF)"}
+                                    </a>
                                 </div>
                             )}
                             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '1rem' }}>

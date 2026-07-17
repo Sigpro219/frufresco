@@ -2580,7 +2580,29 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                             <div>
                                 <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tamaño</label>
-                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>{leadData.business_size || 'No especificado'}</div>
+                                <div style={{ 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: '800', 
+                                    color: (() => {
+                                        const size = leadData.business_size || '';
+                                        if (size.includes('Grande') || size.includes('30M')) return '#15803D';
+                                        if (size.includes('Mediano') || size.includes('10M')) return '#B45309';
+                                        if (size.includes('Pequeño') || size.includes('< 10M')) return '#B91C1C';
+                                        return '#334155';
+                                    })(),
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    marginTop: '2px'
+                                }}>
+                                    {(() => {
+                                        const size = leadData.business_size || '';
+                                        if (size.includes('Grande') || size.includes('30M')) return '🟢 ' + size;
+                                        if (size.includes('Mediano') || size.includes('10M')) return '🟡 ' + size;
+                                        if (size.includes('Pequeño') || size.includes('< 10M')) return '🔴 ' + size;
+                                        return size || 'No especificado';
+                                    })()}
+                                </div>
                             </div>
                         </div>
 
@@ -2781,7 +2803,20 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         {client.nit && <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit}</div>}
                         <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
                             {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
-                            {(client as any).business_size && <span style={{ fontSize: '0.65rem', backgroundColor: '#F0FDF4', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_size}</span>}
+                            {(client as any).business_size && (() => {
+                                const size = (client as any).business_size;
+                                let bg = '#F3F4F6';
+                                let textCol = '#374151';
+                                if (size.includes('Grande') || size.includes('30M')) { bg = '#DCFCE7'; textCol = '#15803D'; }
+                                else if (size.includes('Mediano') || size.includes('10M')) { bg = '#FEF3C7'; textCol = '#B45309'; }
+                                else if (size.includes('Pequeño') || size.includes('< 10M') || size.includes('Peq')) { bg = '#FEE2E2'; textCol = '#B91C1C'; }
+                                return (
+                                    <span style={{ fontSize: '0.65rem', backgroundColor: bg, color: textCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                        {size.includes('Grande') || size.includes('30M') ? '🟢 ' : size.includes('Mediano') || size.includes('10M') ? '🟡 ' : '🔴 '}
+                                        {size}
+                                    </span>
+                                );
+                            })()}
                         </div>
                     </>
                 ) : (
