@@ -443,14 +443,18 @@ export default function PricingSettingsPage() {
             .select('id, name, sku, accounting_id, category, base_price, unit_of_measure')
             .eq('is_active', true)
             .ilike('name', `%${term}%`)
-            .limit(10);
-        if (data) setTemplateProductsFound(data);
+            .limit(30);
+        if (data) {
+            // Filter out products already present in templateItems
+            const filtered = data.filter(p => !templateItems.some(item => item.product_id === p.id));
+            setTemplateProductsFound(filtered.slice(0, 10));
+        }
     };
 
     const addProductToTemplate = async (productId: string) => {
         if (!selectedTemplate) return;
         if (templateItems.some(item => item.product_id === productId)) {
-            alert('El producto ya se encuentra en esta plantilla');
+            alert('El producto ya se encuentra en esta lista');
             return;
         }
         const { error } = await supabase
@@ -459,7 +463,10 @@ export default function PricingSettingsPage() {
         if (error) {
             alert('Error al agregar producto: ' + error.message);
         } else {
-            fetchTemplateItems(selectedTemplate.id);
+            // Fetch updated list of items
+            await fetchTemplateItems(selectedTemplate.id);
+            // Refresh counts in list sidebar
+            await fetchTemplates();
             setSelectedTemplateProduct(null);
             setTemplateProductSearch('');
             setTemplateProductsFound([]);
@@ -2336,7 +2343,7 @@ export default function PricingSettingsPage() {
                                                             >
                                                                 <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
                                                                 <span style={{ color: '#475569' }}>{p.name}</span>
-                                                                <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginLeft: '6px' }}>({p.sku})</span>
+                                                                
                                                             </div>
                                                         ))}
                                                     </div>
