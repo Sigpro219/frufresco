@@ -28,7 +28,13 @@ interface Product {
     keywords?: string;
     tags?: string[];
     capabilities?: string[];
+    accounting_id?: number | null;
 }
+
+const formatNumberWithDots = (val: number) => {
+    if (val === undefined || val === null || isNaN(val)) return '0';
+    return Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
 
 function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: any) {
     return (
@@ -65,8 +71,13 @@ function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: 
     );
 }
 
-function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
+function ManualCostInput({ productId, onSave, savingId, currentManual, cellState }: any) {
     const [val, setVal] = useState(currentManual ? String(currentManual) : '');
+    const labelColor = cellState?.labelColor || '#9CA3AF';
+    const borderVal = cellState?.border || '1px solid #D1D5DB';
+    const textVal = cellState?.text || '#1E40AF';
+    const bgVal = cellState?.bg || '#F8FAFC';
+    const badgeVal = cellState?.badge || 'Sin Referencia';
     
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
@@ -84,14 +95,14 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                         }
                     }}
                     style={{
-                        width: '75px',
-                        padding: '0.4rem',
-                        borderRadius: '6px',
-                        border: savingId === productId ? '2px solid #10B981' : '2px solid #D1D5DB',
+                        width: '95px',
+                        padding: '0.4rem 0.2rem',
+                        borderRadius: '8px',
+                        border: savingId === productId ? '2px solid #10B981' : `2px solid ${labelColor}`,
                         textAlign: 'center',
                         fontSize: '0.9rem',
-                        fontWeight: '700',
-                        color: '#1E40AF',
+                        fontWeight: '800',
+                        color: textVal,
                         outline: 'none',
                         backgroundColor: savingId === productId ? '#F0FDF4' : 'white',
                         transition: 'all 0.3s ease'
@@ -108,22 +119,33 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                         padding: '0.4rem',
                         width: '32px',
                         height: '32px',
-                        backgroundColor: val ? '#2563EB' : '#E2E8F0',
-                        color: val ? 'white' : '#94A3B8',
+                        backgroundColor: val ? labelColor : '#E2E8F0',
+                        color: 'white',
                         border: 'none',
-                        borderRadius: '6px',
+                        borderRadius: '8px',
                         cursor: val ? 'pointer' : 'not-allowed',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        boxShadow: val ? `0 4px 6px ${labelColor}20` : 'none'
                     }}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 </button>
             </div>
-            <span style={{ fontSize: '0.55rem', color: savingId === productId ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', textAlign: 'center' }}>
-                {savingId === productId ? '✓ Guardado' : 'Sin Referencia'}
+            <span style={{ 
+                fontSize: '0.6rem', 
+                color: savingId === productId ? '#10B981' : labelColor, 
+                fontWeight: '900', 
+                textTransform: 'uppercase', 
+                textAlign: 'center',
+                backgroundColor: savingId === productId ? '#DCFCE7' : `${labelColor}15`,
+                padding: '2px 8px',
+                borderRadius: '6px',
+                display: 'inline-block'
+            }}>
+                {savingId === productId ? '✓ Guardado' : badgeVal}
             </span>
         </div>
     );
@@ -144,6 +166,11 @@ export default function CostMatrixPage() {
     const [isAuthorizing, setIsAuthorizing] = useState(false);
     const [sortField, setSortField] = useState<string | null>(null);
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState('');
+    const [importSuccess, setImportSuccess] = useState('');
+    const [importFile, setImportFile] = useState<File | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -310,6 +337,63 @@ export default function CostMatrixPage() {
         return (latest.normalized_price * alpha) + (previous.normalized_price * (1 - alpha));
     };
 
+    const getCostCellState = (productId: string) => {
+        const smart = calculateSmartCost(productId);
+        const manual = manualOverrides[productId];
+        
+        if (!manual) {
+            if (smart === 0) {
+                return {
+                    bg: '#FEF2F2',
+                    text: '#991B1B',
+                    border: '1px solid #FCA5A5',
+                    badge: '❌ Sin Referencia',
+                    labelColor: '#EF4444'
+                };
+            } else {
+                return {
+                    bg: '#FFFBEB',
+                    text: '#B45309',
+                    border: '1px solid #FCD34D',
+                    badge: '⏳ Por Autorizar',
+                    labelColor: '#F59E0B'
+                };
+            }
+        }
+        
+        const daysSinceUpdate = differenceInDays(new Date(), new Date(manual.updated_at));
+        const isOutdated = daysSinceUpdate >= 15;
+        
+        if (isOutdated) {
+            return {
+                bg: '#FEF3C7',
+                text: '#92400E',
+                border: '1px solid #F59E0B',
+                badge: `⚠️ Desactualizado`,
+                labelColor: '#D97706'
+            };
+        }
+        
+        const isAligned = smart > 0 && Math.abs(manual.manual_cost - smart) < 1;
+        if (isAligned) {
+            return {
+                bg: '#E8F5E9',
+                text: '#2E7D32',
+                border: '1px solid #81C784',
+                badge: '✅ Autorizado (IA)',
+                labelColor: '#4CAF50'
+            };
+        }
+        
+        return {
+            bg: '#E3F2FD',
+            text: '#1565C0',
+            border: '1px solid #64B5F6',
+            badge: '✍️ Manual Vigente',
+            labelColor: '#2196F3'
+        };
+    };
+
     const handleExport = () => {
         const data = filteredProducts.map(p => {
             const hist = purchaseHistory[p.id] || [];
@@ -317,7 +401,7 @@ export default function CostMatrixPage() {
             const manual = manualOverrides[p.id]?.manual_cost;
             
             return {
-                'SKU': p.sku,
+                'accounting_id': p.accounting_id || '',
                 'Producto': p.name,
                 'Categoría': CATEGORY_MAP[p.category] || p.category,
                 'Unidad': p.unit_of_measure,
@@ -332,6 +416,124 @@ export default function CostMatrixPage() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Matriz de Costos");
         XLSX.writeFile(wb, `Frufresco_CostMatrix_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    };
+
+    const handleExportTemplate = () => {
+        const data = products.map(p => {
+            const currentManual = manualOverrides[p.id]?.manual_cost || 0;
+            return {
+                'accounting_id': p.accounting_id || '',
+                'Producto': p.name || '',
+                'Unidad': p.unit_of_measure || '',
+                'Costo Actual': currentManual ? Math.round(currentManual) : 0,
+                'Nuevo Costo': '',
+                'Fecha Última Actualización': manualOverrides[p.id]?.updated_at ? format(new Date(manualOverrides[p.id].updated_at), 'yyyy-MM-dd') : 'Sin Registro'
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Plantilla de Costos");
+        XLSX.writeFile(wb, `Plantilla_Costos_Frufresco_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    };
+
+    const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportFile(file);
+        setImportError('');
+        setImportSuccess('');
+    };
+
+    const processImport = async () => {
+        if (!importFile) {
+            setImportError('Por favor selecciona un archivo Excel.');
+            return;
+        }
+        setImporting(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const bstr = evt.target?.result;
+                    const wb = XLSX.read(bstr, { type: 'binary' });
+                    const wsname = wb.SheetNames[0];
+                    const ws = wb.Sheets[wsname];
+                    const rawData = XLSX.utils.sheet_to_json(ws);
+                    
+                    if (rawData.length === 0) {
+                        throw new Error('El archivo está vacío.');
+                    }
+                    
+                    const productMap: Record<number, Product> = {};
+                    products.forEach(p => {
+                        if (p.accounting_id !== undefined && p.accounting_id !== null) {
+                            productMap[p.accounting_id] = p;
+                        }
+                    });
+                    
+                    const upsertData: any[] = [];
+                    let processedCount = 0;
+                    
+                    for (const row of rawData as any[]) {
+                        const accIdRaw = row['accounting_id'];
+                        const newCostRaw = row['Nuevo Costo'];
+                        
+                        if (accIdRaw === undefined || accIdRaw === null) continue;
+                        
+                        const accId = parseInt(accIdRaw);
+                        if (isNaN(accId)) continue;
+                        
+                        if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
+                        
+                        const newCost = parseFloat(newCostRaw);
+                        if (isNaN(newCost) || newCost <= 0) continue;
+                        
+                        const prod = productMap[accId];
+                        if (prod) {
+                            upsertData.push({
+                                product_id: prod.id,
+                                manual_cost: newCost,
+                                updated_at: new Date().toISOString(),
+                                updated_by: 'EXCEL-BULK-UPDATE',
+                                is_active: true
+                            });
+                            processedCount++;
+                        }
+                    }
+                    
+                    if (upsertData.length === 0) {
+                        throw new Error('No se encontraron registros válidos para actualizar. Verifica el accounting_id y que la columna "Nuevo Costo" tenga números válidos.');
+                    }
+                    
+                    const batchSize = 50;
+                    for (let i = 0; i < upsertData.length; i += batchSize) {
+                        const batch = upsertData.slice(i, i + batchSize);
+                        const { error } = await supabase
+                            .from('commercial_cost_matrix')
+                            .upsert(batch);
+                        
+                        if (error) throw error;
+                    }
+                    
+                    setImportSuccess(`¡Actualización masiva completada! Se procesaron ${processedCount} productos con éxito.`);
+                    await fetchData();
+                    setImportFile(null);
+                } catch (err: any) {
+                    console.error('Error parsing excel:', err);
+                    setImportError(err.message || 'Error al procesar el archivo Excel.');
+                } finally {
+                    setImporting(false);
+                }
+            };
+            reader.readAsBinaryString(importFile);
+        } catch (err: any) {
+            console.error('Error reading file:', err);
+            setImportError(err.message || 'Error al leer el archivo.');
+            setImporting(false);
+        }
     };
 
     const handleSort = (field: string) => {
@@ -390,8 +592,8 @@ export default function CostMatrixPage() {
         pendingCost: products.filter(p => !manualOverrides[p.id] && calculateSmartCost(p.id) === 0).length,
         expiringSoon: products.filter(p => {
             const m = manualOverrides[p.id];
-            if (!m) return false;
-            return differenceInDays(new Date(), new Date(m.updated_at)) > 45;
+            if (!m) return true;
+            return differenceInDays(new Date(), new Date(m.updated_at)) >= 15;
         }).length
     };
 
@@ -487,8 +689,8 @@ export default function CostMatrixPage() {
             <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
                 
                 {/* --- HEADER LINE --- */}
-                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 350px' }}>
+                <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
+                    <div>
                         <Link href="/admin/commercial" style={{ 
                             textDecoration: 'none', 
                             color: '#94A3B8', 
@@ -503,7 +705,7 @@ export default function CostMatrixPage() {
                             ← Volver
                         </Link>
                         <h1 style={{ 
-                            fontSize: '1.8rem', 
+                            fontSize: '2rem', 
                             fontWeight: '900', 
                             color: '#0F172A', 
                             margin: 0, 
@@ -511,7 +713,6 @@ export default function CostMatrixPage() {
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: '0.6rem',
-                            whiteSpace: 'nowrap'
                         }}>
                             Matriz Comercial <span style={{ color: '#0EA5E9', filter: 'drop-shadow(0 0 8px rgba(14, 165, 233, 0.2))' }}>Delta</span>
                         </h1>
@@ -520,131 +721,116 @@ export default function CostMatrixPage() {
                         </p>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', padding: '0.6rem', borderRadius: '16px', backdropFilter: 'blur(10px)', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <label style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estrategia:</label>
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={() => handleAuthorizeAll()}
+                            disabled={isAuthorizing}
+                            style={{ 
+                                padding: '0 1.2rem', 
+                                height: '42px',
+                                borderRadius: '12px', 
+                                border: 'none', 
+                                background: isAuthorizing ? '#64748B' : 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', 
+                                color: 'white', 
+                                fontWeight: '900', 
+                                cursor: isAuthorizing ? 'not-allowed' : 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                fontSize: '0.85rem',
+                                gap: '0.5rem',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s',
+                                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)'
+                            }}
+                            onMouseEnter={(e) => !isAuthorizing && (e.currentTarget.style.transform = 'translateY(-1px)')}
+                            onMouseLeave={(e) => !isAuthorizing && (e.currentTarget.style.transform = 'translateY(0)')}
+                        >
+                            <Brain size={18} className={isAuthorizing ? 'animate-pulse' : ''} />
+                            {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
+                        </button>
+                        
+                        {/* Carga Masiva Segmented Container */}
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.4rem', 
+                            backgroundColor: 'white', 
+                            padding: '0.3rem 0.6rem', 
+                            borderRadius: '12px', 
+                            border: '1px solid #DDD6FE', 
+                            height: '42px',
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
+                        }}>
+                            <span style={{ fontWeight: '950', fontSize: '0.65rem', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Carga Masiva:</span>
+                            
+                            {/* Download template icon-button */}
                             <button 
-                                onClick={() => setIsSmartModalOpen(true)}
+                                onClick={handleExportTemplate}
+                                title="Descargar Plantilla Excel"
                                 style={{ 
-                                    padding: '0.4rem 0.8rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #BAE6FD', 
-                                    backgroundColor: '#F0F9FF', 
-                                    color: '#0369A1', 
-                                    fontWeight: '800', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    fontSize: '0.85rem'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
-                            >
-                                <Brain size={18} /> CI-Delta v2
-                            </button>
-                         </div>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <label style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filtrar:</label>
-                            <select 
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ 
-                                    padding: '0.4rem 0.8rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #E2E8F0', 
-                                    backgroundColor: 'white', 
-                                    fontWeight: '800', 
-                                    minWidth: '150px',
-                                    fontSize: '0.85rem',
-                                    color: '#1E293B',
-                                    outline: 'none',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <option value="Todas">Todo el Catálogo</option>
-                                {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
-                            </select>
-                         </div>
-                         
-                         <div style={{ display: 'flex', gap: '0.4rem' }}>
-                            <button 
-                                onClick={fetchData} 
-                                title="Sincronizar Datos"
-                                style={{ 
-                                    width: '38px',
-                                    height: '38px',
-                                    borderRadius: '10px', 
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px', 
                                     border: 'none', 
-                                    backgroundColor: '#0F172A', 
-                                    color: 'white', 
+                                    backgroundColor: '#EFF6FF', 
+                                    color: '#1E40AF', 
                                     cursor: 'pointer', 
                                     display: 'flex', 
                                     alignItems: 'center', 
                                     justifyContent: 'center',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
-                            >
-                                <RefreshCw size={20} />
-                            </button>
-                            <button
-                                onClick={() => handleAuthorizeAll()}
-                                disabled={isAuthorizing}
-                                style={{ 
-                                    padding: '0 1rem', 
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: '1px solid #0EA5E9', 
-                                    backgroundColor: isAuthorizing ? '#F1F5F9' : '#0F172A', 
-                                    color: 'white', 
-                                    fontWeight: '900', 
-                                    cursor: isAuthorizing ? 'not-allowed' : 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    fontSize: '0.8rem',
-                                    gap: '0.5rem',
-                                    justifyContent: 'center',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
-                                }}
-                                onMouseEnter={(e) => !isAuthorizing && (e.currentTarget.style.backgroundColor = '#1E293B')}
-                                onMouseLeave={(e) => !isAuthorizing && (e.currentTarget.style.backgroundColor = '#0F172A')}
-                            >
-                                <Brain size={20} className={isAuthorizing ? 'animate-pulse' : ''} />
-                                {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
-                            </button>
-                            <button onClick={handleExport}
-                                style={{ 
-                                    padding: '0 1rem', 
-                                    height: '38px',
-                                    borderRadius: '10px', 
-                                    border: '1px solid #10B981', 
-                                    backgroundColor: '#ECFDF5', 
-                                    color: '#065F46', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.8rem',
-                                    cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
                             >
-                                <BarChart3 size={18} /> Exportar
+                                <TrendingDown size={16} />
                             </button>
-                         </div>
+
+                            {/* Upload file icon-button */}
+                            <button 
+                                onClick={() => setIsImportModalOpen(true)}
+                                title="Subir Archivo Excel (Cargar Costos)"
+                                style={{ 
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: '#F5F3FF', 
+                                    color: '#6D28D9', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
+                            >
+                                <TrendingUp size={16} />
+                            </button>
+                        </div>
+
+                        <button onClick={handleExport}
+                            style={{ 
+                                padding: '0 1.2rem', 
+                                height: '42px',
+                                borderRadius: '12px', 
+                                border: '1px solid #A7F3D0', 
+                                backgroundColor: '#ECFDF5', 
+                                color: '#065F46', 
+                                fontWeight: '800', 
+                                fontSize: '0.85rem',
+                                cursor: 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.4rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                        >
+                            <BarChart3 size={18} /> Exportar Reporte
+                        </button>
                     </div>
                 </div>
 
@@ -679,9 +865,9 @@ export default function CostMatrixPage() {
                             icon={<TrendingDown size={20} />}
                         />
                         <StatCard 
-                            label="Alertas Comerciales" 
-                            value={stats.pendingCost} 
-                            subValue={stats.expiringSoon > 0 ? `⌛ ${stats.expiringSoon}` : 'Al día'}
+                            label="Precios Desactualizados (15d+)" 
+                            value={stats.expiringSoon} 
+                            subValue={stats.pendingCost > 0 ? `⚠️ ${stats.pendingCost} Sin Costo` : 'Al día'}
                             color="#C2410C" 
                             bg="#FFF7ED"
                             icon={<ShieldAlert size={20} />} 
@@ -689,9 +875,11 @@ export default function CostMatrixPage() {
                     </div>
                 )}
 
-                <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                {/* --- FILTERS & SEARCH ROW --- */}
+                <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Search Bar Container */}
                     <div style={{ 
-                        flex: 1,
+                        flex: '1 1 400px',
                         display: 'flex', 
                         alignItems: 'center', 
                         backgroundColor: 'white', 
@@ -705,7 +893,7 @@ export default function CostMatrixPage() {
                         <Search size={18} color="#94A3B8" />
                         <input 
                             type="text"
-                            placeholder="Buscar productos..."
+                            placeholder="Buscar productos por nombre, SKU, keywords o tags (@tag)..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{ 
@@ -728,56 +916,136 @@ export default function CostMatrixPage() {
                             </button>
                         )}
                     </div>
-                    
-                    {/* Tooltip Icon for search help */}
-                    <div 
-                        style={{ position: 'relative' }} 
-                        onMouseEnter={() => setShowHelp(true)}
-                        onMouseLeave={() => setShowHelp(false)}
-                    >
-                        <div style={{ 
-                            cursor: 'help', 
-                            color: showHelp ? 'var(--primary)' : '#9CA3AF',
-                            backgroundColor: 'white',
-                            padding: '0.8rem',
-                            borderRadius: '10px',
-                            border: '1px solid #E5E7EB',
-                            display: 'flex',
-                            alignItems: 'center',
-                            transition: 'all 0.2s'
-                        }}>
-                            <Info size={20} />
-                        </div>
-                        
-                        {showHelp && (
-                            <div style={{
-                                position: 'absolute',
-                                top: '110%',
-                                right: 0,
-                                backgroundColor: '#1F2937',
-                                color: 'white',
-                                padding: '1rem',
-                                borderRadius: '12px',
-                                width: '280px',
-                                fontSize: '0.8rem',
-                                zIndex: 100,
-                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                                transition: 'all 0.2s ease',
-                                pointerEvents: 'none',
-                                opacity: 1
-                            }}>
-                                <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
-                                <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
-                                    <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
-                                    <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
-                                    <li><b>SKU:</b> Busca por código exacto.</li>
-                                </ul>
-                            </div>
-                        )}
+
+                    {/* Filter controls row */}
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                         {/* Strategy Selector Button */}
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0', height: '42px' }}>
+                            <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Estrategia:</span>
+                            <button 
+                                onClick={() => setIsSmartModalOpen(true)}
+                                style={{ 
+                                    padding: '0.3rem 0.6rem', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #BAE6FD', 
+                                    backgroundColor: '#F0F9FF', 
+                                    color: '#0369A1', 
+                                    fontWeight: '800', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    fontSize: '0.8rem'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                            >
+                                <Brain size={16} /> CI-Delta v2
+                            </button>
+                         </div>
+
+                         {/* Category Filter Select */}
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0', height: '42px' }}>
+                            <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Categoría:</span>
+                            <select 
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                style={{ 
+                                    padding: '0.2rem 0.4rem', 
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: 'transparent', 
+                                    fontWeight: '800', 
+                                    minWidth: '150px',
+                                    fontSize: '0.8rem',
+                                    color: '#1E293B',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="Todas">Todo el Catálogo</option>
+                                {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
+                            </select>
+                         </div>
+
+                         {/* Refresh button */}
+                         <button 
+                             onClick={fetchData} 
+                             title="Sincronizar Datos"
+                             style={{ 
+                                 width: '42px',
+                                 height: '42px',
+                                 borderRadius: '12px', 
+                                 border: 'none', 
+                                 backgroundColor: '#0F172A', 
+                                 color: 'white', 
+                                 cursor: 'pointer', 
+                                 display: 'flex', 
+                                 alignItems: 'center', 
+                                 justifyContent: 'center',
+                                 transition: 'all 0.2s',
+                                 boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
+                             }}
+                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
+                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
+                         >
+                             <RefreshCw size={18} />
+                         </button>
+
+                         {/* Help Tooltip Icon */}
+                         <div 
+                             style={{ position: 'relative' }} 
+                             onMouseEnter={() => setShowHelp(true)}
+                             onMouseLeave={() => setShowHelp(false)}
+                         >
+                             <div style={{ 
+                                 cursor: 'help', 
+                                 color: showHelp ? 'var(--primary)' : '#9CA3AF',
+                                 backgroundColor: 'white',
+                                 padding: '0.7rem',
+                                 borderRadius: '12px',
+                                 border: '1px solid #E5E7EB',
+                                 display: 'flex',
+                                 alignItems: 'center',
+                                 height: '42px',
+                                 transition: 'all 0.2s'
+                             }}>
+                                 <Info size={18} />
+                             </div>
+                             
+                             {showHelp && (
+                                 <div style={{
+                                     position: 'absolute',
+                                     top: '110%',
+                                     right: 0,
+                                     backgroundColor: '#1F2937',
+                                     color: 'white',
+                                     padding: '1rem',
+                                     borderRadius: '12px',
+                                     width: '280px',
+                                     fontSize: '0.8rem',
+                                     zIndex: 100,
+                                     boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                     transition: 'all 0.2s ease',
+                                     pointerEvents: 'none',
+                                     opacity: 1
+                                 }}>
+                                     <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
+                                     <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
+                                         <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
+                                         <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
+                                         <li><b>SKU:</b> Busca por código exacto.</li>
+                                     </ul>
+                                 </div>
+                             )}
+                         </div>
                     </div>
                 </div>
-
-
 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '5rem', color: '#6B7280' }}>Cargando historial de precios...</div>
@@ -938,6 +1206,7 @@ export default function CostMatrixPage() {
                                         const history = purchaseHistory[p.id] || [];
                                         const smartCost = effectiveCosts[p.id] || 0;
                                         const harvestStatus = getHarvestStatus(p.id);
+                                        const cellState = getCostCellState(p.id);
 
                                         return (
                                             <Fragment key={p.id}>
@@ -982,39 +1251,67 @@ export default function CostMatrixPage() {
                                                                 {p.unit_of_measure}
                                                             </span>
                                                         </div>
+                                                        {(() => {
+                                                            const m = manualOverrides[p.id];
+                                                            const isOutdated = !m || differenceInDays(new Date(), new Date(m.updated_at)) >= 15;
+                                                            if (isOutdated) {
+                                                                return (
+                                                                    <div style={{ marginTop: '0.3rem' }}>
+                                                                        <span style={{ 
+                                                                            fontSize: '0.65rem', 
+                                                                            color: '#B45309', 
+                                                                            backgroundColor: '#FEF3C7', 
+                                                                            padding: '2px 6px', 
+                                                                            borderRadius: '6px', 
+                                                                            fontWeight: '800',
+                                                                            border: '1px solid #FCD34D',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}>
+                                                                            <Clock size={12} /> Desactualizado (+15d)
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
                                                     </td>
                                                     
                                                     {/* Row Cells for 8 purchases */}
                                                     {(() => {
-                                                        // Find min normalized price for the medal
                                                         const prices = history.map(h => h.normalized_price);
                                                         const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
 
                                                         return [...Array(8)].map((_, i) => {
                                                             const purchase = history[i];
                                                             const isBestPrice = purchase && purchase.normalized_price === minPrice && prices.length > 1;
+                                                            const mOverride = i === 0 && !purchase ? manualOverrides[p.id] : null;
 
                                                             return (
                                                                 <td key={i} className={i > 0 ? "col-compra-old" : "col-compra"} style={{ padding: '0.6rem', borderLeft: '1px solid #F9FAFB', textAlign: 'center', position: 'relative' }}>
-                                                                    {purchase ? (
+                                                                    {purchase || mOverride ? (
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                                                             <div style={{ 
                                                                                 fontWeight: '800', 
-                                                                                color: isBestPrice ? '#15803D' : '#059669', 
+                                                                                color: mOverride ? '#1E40AF' : (isBestPrice ? '#15803D' : '#059669'), 
                                                                                 fontSize: '0.9rem',
-                                                                                backgroundColor: isBestPrice ? '#DCFCE7' : '#ECFDF5',
+                                                                                backgroundColor: mOverride ? '#EFF6FF' : (isBestPrice ? '#DCFCE7' : '#ECFDF5'),
                                                                                 padding: '0.3rem',
                                                                                 borderRadius: '6px',
-                                                                                border: isBestPrice ? '1px solid #4ADE80' : '1px solid #D1FAE5',
+                                                                                border: mOverride ? '1px solid #BFDBFE' : (isBestPrice ? '1px solid #4ADE80' : '1px solid #D1FAE5'),
                                                                                 position: 'relative'
                                                                             }}>
-                                                                                ${Math.round(purchase.normalized_price).toLocaleString()}
+                                                                                ${formatNumberWithDots(purchase ? purchase.normalized_price : mOverride.manual_cost)}
                                                                                 {isBestPrice && (
                                                                                     <div style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '1rem', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))' }} title="Mejor precio histórico">🎖️</div>
                                                                                 )}
+                                                                                {mOverride && (
+                                                                                    <div style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '0.9rem' }} title="Costo manual de referencia">✍️</div>
+                                                                                )}
                                                                             </div>
                                                                             <div style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: 'bold' }}>
-                                                                                {format(new Date(purchase.created_at), 'dd MMM', { locale: es })}
+                                                                                {format(new Date(purchase ? purchase.created_at : mOverride.updated_at), 'dd MMM', { locale: es })}
                                                                             </div>
                                                                         </div>
                                                                     ) : (
@@ -1032,11 +1329,12 @@ export default function CostMatrixPage() {
                                                         width: '160px',
                                                         borderLeft: '2px solid #E5E7EB', 
                                                         textAlign: 'center',
-                                                        backgroundColor: manualOverrides[p.id] ? '#EFF6FF' : '#F0FDF4',
+                                                        backgroundColor: cellState.bg,
                                                         position: 'sticky',
                                                         right: '160px',
                                                         zIndex: 5,
-                                                        boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
+                                                        boxShadow: '-2px 0 5px rgba(0,0,0,0.02)',
+                                                        transition: 'all 0.3s ease'
                                                     }}>
                                                         {(() => {
                                                             const smart = calculateSmartCost(p.id);
@@ -1048,22 +1346,30 @@ export default function CostMatrixPage() {
                                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                                                                         <div style={{ 
                                                                             fontWeight: '900', 
-                                                                            color: isAligned ? '#10B981' : '#1E293B',
+                                                                            color: cellState.text,
                                                                             fontSize: '1.2rem',
                                                                             display: 'flex',
                                                                             alignItems: 'center',
                                                                             gap: '0.4rem'
                                                                         }}>
-                                                                            ${Math.round(smart).toLocaleString()}
+                                                                            ${formatNumberWithDots(smart)}
                                                                             {isAligned && <span title="Precio Autorizado por IA"><CheckCircle2 size={16} color="#10B981" /></span>}
                                                                             {harvestStatus === 'harvest' && <span title="RECOMENDACIÓN: ABUNDANCIA ESTACIONAL"><Brain size={16} color="#0EA5E9" className="animate-pulse" /></span>}
                                                                         </div>
-                                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                            Sugerido IA
-                                                                        </div>
+                                                                        <span style={{ 
+                                                                            fontSize: '0.6rem', 
+                                                                            color: cellState.labelColor, 
+                                                                            fontWeight: '900', 
+                                                                            textTransform: 'uppercase',
+                                                                            backgroundColor: `${cellState.labelColor}15`,
+                                                                            padding: '2px 8px',
+                                                                            borderRadius: '6px'
+                                                                        }}>
+                                                                            {cellState.badge}
+                                                                        </span>
                                                                         {currentManual && !isAligned && (
-                                                                            <div style={{ fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                                                                                ✍️ Manual: ${Math.round(currentManual).toLocaleString()}
+                                                                            <div style={{ fontSize: '0.55rem', color: '#1E40AF', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px', marginTop: '0.2rem' }}>
+                                                                                ✍️ Manual: ${formatNumberWithDots(currentManual)}
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -1076,6 +1382,7 @@ export default function CostMatrixPage() {
                                                                     currentManual={currentManual}
                                                                     savingId={savingId}
                                                                     onSave={handleSaveManualCost}
+                                                                    cellState={cellState}
                                                                 />
                                                             );
                                                         })()}
@@ -1234,6 +1541,116 @@ export default function CostMatrixPage() {
                                     <div style={{ fontSize: '0.8rem', color: '#9A3412', marginTop: '0.8rem', lineHeight: '1.4' }}>
                                         Basado en el modelo de Holt-Winters simplificado. Las señales manuales se integran con un peso prioritario sobre la inercia del algoritmo.
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- IMPORT MODAL --- */}
+                {isImportModalOpen && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem',
+                        backdropFilter: 'blur(4px)',
+                        fontFamily: 'system-ui, sans-serif'
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '24px',
+                            maxWidth: '600px',
+                            width: '100%',
+                            padding: '2.5rem',
+                            position: 'relative',
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+                        }}>
+                            <button 
+                                onClick={() => {
+                                    setIsImportModalOpen(false);
+                                    setImportFile(null);
+                                    setImportError('');
+                                    setImportSuccess('');
+                                }}
+                                style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+                            >
+                                <X size={30} />
+                            </button>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <div style={{ backgroundColor: '#F5F3FF', padding: '1rem', borderRadius: '16px', color: '#6D28D9' }}>
+                                    <TrendingUp size={40} />
+                                </div>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#111827' }}>Importación Masiva de Costos</h2>
+                                    <p style={{ margin: 0, color: '#6B7280', fontWeight: '600', fontSize: '0.85rem' }}>Carga masiva utilizando el identificador único <b>accounting_id</b></p>
+                                </div>
+                            </div>
+
+                            {importError && (
+                                <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.8rem 1.2rem', borderRadius: '12px', marginBottom: '1.2rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                                    ❌ {importError}
+                                </div>
+                            )}
+
+                            {importSuccess && (
+                                <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', color: '#166534', padding: '0.8rem 1.2rem', borderRadius: '12px', marginBottom: '1.2rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                                    ✅ {importSuccess}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <div style={{ border: '2px dashed #DDD6FE', padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', backgroundColor: '#F9F5FF' }}>
+                                    <input 
+                                        type="file" 
+                                        accept=".xlsx, .xls"
+                                        onChange={handleImportExcel}
+                                        id="excel-file-upload"
+                                        style={{ display: 'none' }}
+                                    />
+                                    <label htmlFor="excel-file-upload" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ color: '#8B5CF6' }}><TrendingUp size={36} /></div>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#4C1D95' }}>
+                                            {importFile ? importFile.name : 'Selecciona o arrastra tu archivo Excel'}
+                                        </span>
+                                        <span style={{ fontSize: '0.75rem', color: '#7C3AED' }}>Formatos aceptados: .xlsx, .xls</span>
+                                    </label>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.8rem' }}>
+                                    <button 
+                                        onClick={() => {
+                                            setIsImportModalOpen(false);
+                                            setImportFile(null);
+                                            setImportError('');
+                                            setImportSuccess('');
+                                        }}
+                                        style={{ padding: '0.6rem 1.2rem', borderRadius: '10px', border: '1px solid #E2E8F0', backgroundColor: 'white', color: '#475569', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        onClick={processImport}
+                                        disabled={importing || !importFile}
+                                        style={{ 
+                                            padding: '0.6rem 1.2rem', 
+                                            borderRadius: '10px', 
+                                            border: 'none', 
+                                            backgroundColor: !importFile ? '#E2E8F0' : '#8B5CF6', 
+                                            color: 'white', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.85rem', 
+                                            cursor: !importFile ? 'not-allowed' : 'pointer',
+                                            boxShadow: importFile ? '0 4px 12px rgba(139, 92, 246, 0.2)' : 'none'
+                                        }}
+                                    >
+                                        {importing ? 'Procesando...' : 'Cargar Costos'}
+                                    </button>
                                 </div>
                             </div>
                         </div>

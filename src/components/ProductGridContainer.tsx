@@ -23,26 +23,138 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     const { data: { session } } = await serverSupabase.auth.getSession();
     const userId = session?.user?.id;
 
-    let pricingModelId = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2C
+    let pricingModelId = userId ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2B (General Institucional) vs B2C
+    let agreementItems: any[] = [];
+    let hasActiveAgreement = false;
+
+    const campaignMap = new Map<string, { value: number; type: string; name: string }>();
+
     if (userId) {
         const { data: profile } = await serverSupabase
             .from('profiles')
-            .select('pricing_model_id')
+            .select('pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
             .eq('id', userId)
             .single();
-        if (profile?.pricing_model_id) {
-            pricingModelId = profile.pricing_model_id;
+        const resolvedModelId = profile?.pricing_model_id || (profile?.parent as any)?.pricing_model_id;
+        if (resolvedModelId) {
+            pricingModelId = resolvedModelId;
+        }
+
+        // Check if this client (or their matrix parent) has an active agreement quote
+        const effectiveClientId = profile?.parent_id || userId;
+        const { data: activeAgreement } = await serverSupabase
+            .from('quotes')
+            .select('id, start_date, valid_until')
+            .eq('client_id', effectiveClientId)
+            .eq('status', 'agreement')
+            .maybeSingle();
+
+        if (activeAgreement) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const start = activeAgreement.start_date?.split('T')[0];
+            const end = activeAgreement.valid_until?.split('T')[0];
+            let isVigente = true;
+            if (start && start > todayStr) isVigente = false;
+            if (end && end < todayStr) isVigente = false;
+
+            if (isVigente) {
+                hasActiveAgreement = true;
+                const { data: qItems } = await serverSupabase
+                    .from('quote_items')
+                    .select('product_id, unit_price')
+                    .eq('quote_id', activeAgreement.id);
+                if (qItems) {
+                    agreementItems = qItems;
+                }
+            }
+        }
+
+        // Check for active campaigns targeting this client
+        const { data: targetCampaigns } = await serverSupabase
+            .from('campaign_targets')
+            .select('campaign_id')
+            .eq('profile_id', effectiveClientId);
+
+        if (targetCampaigns && targetCampaigns.length > 0) {
+            const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
+            const nowIso = new Date().toISOString();
+            const { data: activeCamps } = await serverSupabase
+                .from('commercial_campaigns')
+                .select('*')
+                .in('id', campIds)
+                .eq('status', 'active')
+                .lte('start_date', nowIso)
+                .gte('end_date', nowIso);
+
+            if (activeCamps && activeCamps.length > 0) {
+                const activeCampIds = activeCamps.map((c: any) => c.id);
+                const { data: items } = await serverSupabase
+                    .from('campaign_items')
+                    .select('campaign_id, product_id, adjustment_value')
+                    .in('campaign_id', activeCampIds);
+
+                items?.forEach((item: any) => {
+                    const camp = activeCamps.find((c: any) => c.id === item.campaign_id);
+                    if (camp) {
+                        campaignMap.set(item.product_id, {
+                            value: item.adjustment_value,
+                            type: camp.type,
+                            name: camp.name
+                        });
+                    }
+                });
+            }
         }
     }
 
     // 1. Data Fetching for the Grid (Optimized with Cache)
     const [
-        allVisible,
+        allVisibleRaw,
         translationCache
     ] = await Promise.all([
         getVisibleProducts(pricingModelId),
         locale === 'en' ? getTranslationCache() : Promise.resolve({})
     ]);
+
+    const applyCommercialPrices = (plist: any[]) => {
+        const agreementPriceMap = new Map(agreementItems.map(item => [item.product_id, item.unit_price]));
+        return plist.map(p => {
+            const agreementPrice = agreementPriceMap.get(p.id);
+            const basePrice = agreementPrice !== undefined 
+                ? agreementPrice 
+                : (p.pricing_model_prices?.[0]?.price ?? p.base_price ?? 0);
+
+            const campaignAdj = campaignMap.get(p.id);
+            let finalPrice = basePrice;
+            let campaignInfo: any = null;
+
+            if (campaignAdj) {
+                if (campaignAdj.type === 'fixed_price') {
+                    finalPrice = campaignAdj.value;
+                } else if (campaignAdj.type === 'margin_adjustment') {
+                    finalPrice = basePrice * (1 + campaignAdj.value / 100);
+                }
+                campaignInfo = {
+                    originalPrice: basePrice,
+                    campaignName: campaignAdj.name,
+                    adjustmentValue: campaignAdj.value,
+                    type: campaignAdj.type
+                };
+            }
+
+            return {
+                ...p,
+                pricing_model_prices: [
+                    {
+                        price: finalPrice
+                    }
+                ],
+                campaign_info: campaignInfo
+            };
+        });
+    };
+
+    const allVisible = applyCommercialPrices(allVisibleRaw);
 
     // Fetch nicknames if user is logged in
     const { data: nicknamesData } = userId 
@@ -149,7 +261,8 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
 
         console.log("DEBUG SEARCH:", { q, searchQueries, searchTerms, orConditionsLen: orConditions.length, dbErr: dbErr?.message, dbCount: dbProducts?.length });
 
-        const foundProducts = applyNicknames(dbProducts || []);
+        const dbProductsWithPrices = applyCommercialPrices(dbProducts || []);
+        const foundProducts = applyNicknames(dbProductsWithPrices);
 
         if (foundProducts.length === 0 && suggestedCatCode) {
             let catProducts: any[] = [];
@@ -175,11 +288,9 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             } else {
                 catProducts = resCat.data || [];
             }
-            
-            if (catProducts && catProducts.length > 0) {
-                rawProducts = applyNicknames(catProducts);
-                fallbackCategoryName = CATEGORY_MAP[suggestedCatCode] || suggestedCatCode;
-            }
+            const catProductsWithPrices = applyCommercialPrices(catProducts || []);
+            rawProducts = applyNicknames(catProductsWithPrices);
+            fallbackCategoryName = CATEGORY_MAP[suggestedCatCode] || suggestedCatCode;
         } else {
             const merged = [...memoryFiltered];
             const existingIds = new Set(merged.map(p => p.id));

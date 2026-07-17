@@ -30,7 +30,7 @@ async function runBulkTranslation() {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
     // 2. Fetch products needing translation
     console.log('📡 Fetching products missing translations...');

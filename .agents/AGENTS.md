@@ -31,4 +31,4 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 ---
 
 ## 3. Reglas de Git y Despliegue
-* **Auto-Push a Remoto:** Siempre ejecuta `git push --all origin` automáticamente después de realizar commits locales tras completar cualquier tarea, sin esperar a que el usuario lo solicite de forma explícita.
+* **Push a Remoto:** Queda estrictamente prohibido realizar `git push` a cualquier rama remota a menos que el usuario lo solicite expresamente. Las tareas deben completarse únicamente con commits locales.
