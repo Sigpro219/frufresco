@@ -65,7 +65,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                 return;
             }
 
-            const pricingModelId = profile?.pricing_model_id || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+            const pricingModelId = profile?.pricing_model_id || (profile ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee');
 
             let fetchedData: any[] = [];
             const { data, error } = await supabase

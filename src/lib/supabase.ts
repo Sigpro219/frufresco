@@ -120,5 +120,6 @@ export interface Product {
     description_en?: string | null;
     inherit_price?: boolean;
     pricing_model_prices?: { price: number }[];
+    campaign_info?: any;
 }
  

@@ -59,8 +59,8 @@ export async function POST(req: Request) {
         // 3. Intentar mejorar con IA (Opcional, si falla usamos la base de arriba)
         if (GEMINI_KEY) {
             try {
-                console.log(`📡 Intentando optimización con IA (Gemini 2.5)...`);
-                const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`, {
+                console.log(`📡 Intentando optimización con IA (Gemini 3.5)...`);
+                const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_KEY}`, {
 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

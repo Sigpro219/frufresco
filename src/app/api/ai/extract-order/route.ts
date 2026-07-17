@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     }
 
     // Modelos alternativos en caso de indisponibilidad por alta demanda
-    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash"];
+    const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-1.5-flash-latest"];
     let result = null;
     let lastError = null;
 

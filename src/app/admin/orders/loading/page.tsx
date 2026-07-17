@@ -218,7 +218,22 @@ export default function OrderLoadingPage() {
             }
 
             const profileObj = selectedOrder.profiles;
-            const modelId = profileObj?.pricing_model_id || null;
+            let modelId = profileObj?.pricing_model_id || null;
+
+            if (!modelId && profileObj?.parent_id) {
+                try {
+                    const { data: parentProfile } = await supabase
+                        .from('profiles')
+                        .select('pricing_model_id')
+                        .eq('id', profileObj.parent_id)
+                        .single();
+                    if (parentProfile?.pricing_model_id) {
+                        modelId = parentProfile.pricing_model_id;
+                    }
+                } catch (e) {
+                    console.error('Error fetching parent profile pricing model:', e);
+                }
+            }
             const deliveryDate = editDeliveryDate || selectedOrder.delivery_date;
 
             // Load Client exceptions for B2B client
@@ -336,7 +351,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id, parent_id)')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 

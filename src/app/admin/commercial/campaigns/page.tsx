@@ -26,6 +26,7 @@ export default function CampaignsPage() {
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
+    const [showGuide, setShowGuide] = useState(false);
     const [step, setStep] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     
@@ -184,12 +185,96 @@ export default function CampaignsPage() {
                                 ← Volver al Dashboard
                             </Link>
                         </div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '950', color: '#0F172A', margin: 0, letterSpacing: '-1.5px' }}>
-                            Campañas Temporales
-                        </h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h1 style={{ fontSize: '2.5rem', fontWeight: '950', color: '#0F172A', margin: 0, letterSpacing: '-1.5px' }}>
+                                Campañas Temporales
+                            </h1>
+                            <button 
+                                onClick={() => setShowGuide(!showGuide)}
+                                title="¿Cómo funciona?"
+                                style={{ 
+                                    background: '#EFF6FF', 
+                                    border: '1px solid #BFDBFE', 
+                                    color: '#2563EB', 
+                                    borderRadius: '50%', 
+                                    width: '28px', 
+                                    height: '28px', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    fontWeight: 'bold', 
+                                    fontSize: '0.9rem',
+                                    transition: 'all 0.2s',
+                                    outline: 'none',
+                                    marginTop: '8px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#DBEAFE'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = '#EFF6FF'}
+                            >
+                                ?
+                            </button>
+                        </div>
                         <p style={{ color: '#64748B', fontSize: '1.1rem', marginTop: '0.3rem' }}>
                             Gestiona estrategias de precios por tiempo limitado para clientes con contrato.
                         </p>
+                        {showGuide && (
+                            <div style={{ 
+                                marginTop: '1rem', 
+                                backgroundColor: '#EFF6FF', 
+                                border: '1px solid #BFDBFE', 
+                                borderRadius: '20px', 
+                                padding: '1.5rem', 
+                                color: '#1E3A8A', 
+                                fontSize: '0.9rem', 
+                                lineHeight: '1.6', 
+                                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.02)',
+                                position: 'relative',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.8rem',
+                                maxWidth: '700px'
+                            }}>
+                                <button 
+                                    onClick={() => setShowGuide(false)}
+                                    style={{ position: 'absolute', right: '1rem', top: '1rem', background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer', fontWeight: 'bold' }}
+                                >
+                                    <X size={16} />
+                                </button>
+                                <div style={{ fontWeight: '800', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    💡 Guía Rápida: ¿Cómo funcionan las Campañas Temporales?
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '0.5rem' }}>
+                                    <div>
+                                        <div style={{ fontWeight: '700', marginBottom: '0.2rem' }}>1. Programación y Vigencia</div>
+                                        <div style={{ color: '#1E40AF', fontSize: '0.85rem' }}>
+                                            Define las fechas de inicio y fin. La campaña se aplicará automáticamente en los pedidos cuya fecha de entrega esté dentro del rango de vigencia.
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: '700', marginBottom: '0.2rem' }}>2. Destinatarios y Alcance</div>
+                                        <div style={{ color: '#1E40AF', fontSize: '0.85rem' }}>
+                                            Elige qué clientes B2B participan. Los clientes públicos o B2C no verán estas alteraciones de precio.
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: '700', marginBottom: '0.2rem' }}>3. Variar Utilidad (%)</div>
+                                        <div style={{ color: '#1E40AF', fontSize: '0.85rem' }}>
+                                            Suma o resta un porcentaje al precio base/contrato del producto (ej: introduce <b>-10</b> para dar un 10% de descuento).
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: '700', marginBottom: '0.2rem' }}>4. Precio Fijo ($)</div>
+                                        <div style={{ color: '#1E40AF', fontSize: '0.85rem' }}>
+                                            Sobrescribe el precio final del producto con un valor absoluto neto (ej: introduce <b>5500</b> para fijar el precio en $5,500).
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', fontStyle: 'italic', borderTop: '1px solid #DBEAFE', paddingTop: '0.5rem', color: '#2563EB', marginTop: '0.5rem' }}>
+                                    * Nota: Mientras una campaña esté activa, tendrá prioridad absoluta sobre modelos de precios base y contratos comerciales.
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <button 
                         onClick={() => {

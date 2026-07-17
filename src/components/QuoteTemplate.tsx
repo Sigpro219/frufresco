@@ -7,6 +7,8 @@ interface QuoteItem {
     description: string;
     quantity: number;
     unitPrice: number;
+    ivaRate?: number;
+    ivaAmount?: number;
 }
 
 interface QuoteTemplateProps {
@@ -37,7 +39,11 @@ export default function QuoteTemplate({
     }, []);
 
     const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-    const iva = subtotal * 0.19;
+    const iva = items.reduce((acc, item) => {
+        if (item.ivaAmount !== undefined) return acc + item.ivaAmount;
+        const rate = item.ivaRate !== undefined ? item.ivaRate : 19;
+        return acc + (item.quantity * item.unitPrice * (rate / 100));
+    }, 0);
     const total = subtotal + iva;
 
     const formatCurrency = (val: number) => {
@@ -180,7 +186,7 @@ export default function QuoteTemplate({
                         <span>${formatCurrency(subtotal)}</span>
                     </div>
                     <div className="summary-row">
-                        <span>IVA (19%)</span>
+                        <span>Impuestos (IVA)</span>
                         <span>${formatCurrency(iva)}</span>
                     </div>
                     <div className="summary-row total">
