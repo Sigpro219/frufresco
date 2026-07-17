@@ -3125,7 +3125,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         email_3: (editData as any)?.email_3 || '',
         notify_email_1: (editData as any)?.notify_email_1 !== undefined ? (editData as any).notify_email_1 : true,
         notify_email_2: (editData as any)?.notify_email_2 || false,
-        notify_email_3: (editData as any)?.notify_email_3 || false
+        notify_email_3: (editData as any)?.notify_email_3 || false,
+        commercial_references_urls: (editData as any)?.commercial_references_urls || []
     });
     const [saving, setSaving] = useState(false);
 
@@ -3221,7 +3222,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         const fetchParents = async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone, rut_url, mercantile_registry_url, legal_rep_id_url')
+                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone, rut_url, mercantile_registry_url, legal_rep_id_url, commercial_references_urls')
                 .eq('role', 'b2b_client')
                 .eq('is_corporate_parent', true);
             if (data) setPotentialParents(data);
@@ -4336,6 +4337,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <DocumentUploadField label="Registro RUT (PDF)" url={formData.rut_url} onUpload={(url) => setFormData({...formData, rut_url: url})} readOnly={isReadOnly} />
                                         <DocumentUploadField label="Cámara de Comercio" url={formData.mercantile_registry_url} onUpload={(url) => setFormData({...formData, mercantile_registry_url: url})} readOnly={isReadOnly} />
                                         <DocumentUploadField label="Cédula Representante Legal" url={formData.legal_rep_id_url} onUpload={(url) => setFormData({...formData, legal_rep_id_url: url})} readOnly={isReadOnly} />
+                                        <DocumentUploadField 
+                                            label="Referencias Comerciales" 
+                                            urls={formData.commercial_references_urls} 
+                                            onUploadMultiple={(urls) => setFormData({...formData, commercial_references_urls: urls})} 
+                                            readOnly={isReadOnly} 
+                                        />
                                     </div>
                                 </section>
 
@@ -4544,9 +4551,26 @@ function FormField({ label, value, onChange, type = 'text', required = false, st
     );
 }
 
-function DocumentUploadField({ label, url, onUpload, readOnly = false }: { label: string, url: string | undefined, onUpload: (url: string) => void, readOnly?: boolean }) {
+function DocumentUploadField({ 
+    label, 
+    url, 
+    urls, 
+    onUpload, 
+    onUploadMultiple, 
+    readOnly = false 
+}: { 
+    label: string, 
+    url?: string, 
+    urls?: string[], 
+    onUpload?: (url: string) => void, 
+    onUploadMultiple?: (urls: string[]) => void, 
+    readOnly?: boolean 
+}) {
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const isMultiple = !!onUploadMultiple || !!urls;
+    const count = isMultiple ? (urls?.length || 0) : (url ? 1 : 0);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -4568,7 +4592,12 @@ function DocumentUploadField({ label, url, onUpload, readOnly = false }: { label
                 .from('client-documents')
                 .getPublicUrl(filePath);
             
-            onUpload(publicUrl);
+            if (isMultiple) {
+                const currentUrls = urls || [];
+                onUploadMultiple?.([...currentUrls, publicUrl]);
+            } else {
+                onUpload?.(publicUrl);
+            }
             window.showToast?.(`Archivo subido correctamente`, 'success');
         } catch (err: any) {
             console.error('Error uploading document:', err);
@@ -4580,36 +4609,128 @@ function DocumentUploadField({ label, url, onUpload, readOnly = false }: { label
     };
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '28px', height: '28px', backgroundColor: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-                    {url ? (
-                        <Check size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '28px', height: '28px', backgroundColor: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                        {count > 0 ? (
+                            <Check size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+                        ) : (
+                            <FileText size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                        )}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textMain, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>{label}</div>
+                </div>
+                
+                {/* Count Badge / Status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {count === 0 ? (
+                        <span style={{ 
+                            fontSize: '0.65rem', 
+                            color: '#EF4444', 
+                            backgroundColor: '#FEF2F2', 
+                            padding: '0.2rem 0.5rem', 
+                            borderRadius: '6px', 
+                            fontWeight: '700', 
+                            fontFamily: THEME.typography.fontFamilySecondary 
+                        }}>
+                            PENDIENTE
+                        </span>
                     ) : (
-                        <FileText size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                        <span style={{ 
+                            fontSize: '0.65rem', 
+                            color: '#047857', 
+                            backgroundColor: '#ECFDF5', 
+                            padding: '0.2rem 0.5rem', 
+                            borderRadius: '6px', 
+                            fontWeight: '700', 
+                            fontFamily: THEME.typography.fontFamilySecondary 
+                        }}>
+                            {count} {count === 1 ? 'DOCUMENTO' : 'DOCUMENTOS'}
+                        </span>
+                    )}
+
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="application/pdf,image/*" />
+                    
+                    {!readOnly && (!isMultiple ? !url : true) && (
+                        <button 
+                            type="button" 
+                            onClick={() => fileInputRef.current?.click()} 
+                            disabled={uploading}
+                            style={{ 
+                                padding: '0.4rem 0.8rem', 
+                                borderRadius: THEME.radius.sm, 
+                                backgroundColor: uploading ? '#E2E8F0' : THEME.colors.primary, 
+                                color: 'white', 
+                                fontSize: '0.65rem', 
+                                fontWeight: '600', 
+                                border: 'none', 
+                                cursor: 'pointer', 
+                                fontFamily: THEME.typography.fontFamilySecondary 
+                            }}
+                        >
+                            {uploading ? '...' : 'SUBIR'}
+                        </button>
                     )}
                 </div>
-                <div style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textMain, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>{label}</div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="application/pdf,image/*" />
-                {url && (
-                    <a href={url} target="_blank" rel="noreferrer" style={{ padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', color: THEME.colors.primary, fontSize: '0.65rem', fontWeight: '600', textDecoration: 'none', border: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', fontFamily: THEME.typography.fontFamilySecondary }}>VER</a>
-                )}
-                {!readOnly && (
-                    <button 
-                        type="button" 
-                        onClick={() => fileInputRef.current?.click()} 
-                        disabled={uploading}
-                        style={{ padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, backgroundColor: uploading ? '#E2E8F0' : THEME.colors.primary, color: 'white', fontSize: '0.65rem', fontWeight: '600', border: 'none', cursor: 'pointer', fontFamily: THEME.typography.fontFamilySecondary }}
-                    >
-                        {uploading ? '...' : (url ? 'CAMBIAR' : 'SUBIR')}
-                    </button>
-                )}
-                {readOnly && !url && (
-                    <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>PENDIENTE</span>
-                )}
-            </div>
+
+            {/* Documents List details section */}
+            {count > 0 && (
+                <div style={{ 
+                    borderTop: `1px solid ${THEME.colors.border}`, 
+                    paddingTop: '0.5rem', 
+                    marginTop: '0.25rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.4rem'
+                }}>
+                    {!isMultiple ? (
+                        // Single document view row
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Archivo principal cargado</span>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <a href={url} target="_blank" rel="noreferrer" style={{ padding: '0.3rem 0.6rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', color: THEME.colors.primary, fontSize: '0.65rem', fontWeight: '600', textDecoration: 'none', border: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', fontFamily: THEME.typography.fontFamilySecondary }}>VER</a>
+                                {!readOnly && (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        style={{ padding: '0.3rem 0.6rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', color: THEME.colors.textSecondary, fontSize: '0.65rem', fontWeight: '600', border: `1px solid ${THEME.colors.border}`, cursor: 'pointer', fontFamily: THEME.typography.fontFamilySecondary }}
+                                    >
+                                        CAMBIAR
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        // Multiple documents view list
+                        urls && urls.map((u, idx) => {
+                            const cleanName = `Documento #${idx + 1}`;
+                            return (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
+                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textMain, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>{cleanName}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <a href={u} target="_blank" rel="noreferrer" style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', backgroundColor: 'white', color: THEME.colors.primary, fontSize: '0.65rem', fontWeight: '600', textDecoration: 'none', border: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', fontFamily: THEME.typography.fontFamilySecondary }}>VER</a>
+                                        {!readOnly && (
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    const updated = urls.filter((_, i) => i !== idx);
+                                                    onUploadMultiple?.(updated);
+                                                }}
+                                                style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+                                                title="Eliminar referencia"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
         </div>
     );
 }
