@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
-import { THEME } from '@/lib/adminTheme';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import {
     AlertTriangle,
     Check,
@@ -35,7 +35,11 @@ import {
     HelpCircle,
     Info,
     UploadCloud,
-    Download
+    Download,
+    Plus,
+    User,
+    List,
+    Grid
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -143,6 +147,7 @@ export default function ClientsModule() {
     };
 
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [hoveredTab, setHoveredTab] = useState<string | null>(null);
     const [clientsB2B, setClientsB2B] = useState<Profile[]>([]);
     const [clientsB2C, setClientsB2C] = useState<Profile[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -983,7 +988,7 @@ export default function ClientsModule() {
     };
 
     return (
-        <div style={{ backgroundColor: '#F0F2F5', height: '100%' }}>
+        <div style={{ backgroundColor: THEME.colors.background, height: '100%' }}>
             <Toast />
 
 
@@ -1046,35 +1051,45 @@ export default function ClientsModule() {
                         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)',
                         border: '1px solid rgba(13, 122, 87, 0.08)'
                     }}>
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
-                                style={{
-                                    padding: '0.45rem 1.1rem',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    background: activeTab === tab.id ? THEME.colors.primary : 'transparent',
-                                    color: activeTab === tab.id ? 'white' : '#4E6157',
-                                    fontWeight: activeTab === tab.id ? '700' : '500',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.8rem',
-                                    boxShadow: activeTab === tab.id ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
-                                }}
-                            >
-                                <span style={{ 
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    color: activeTab === tab.id ? 'white' : '#4E6157',
-                                    opacity: activeTab === tab.id ? 1 : 0.8
-                                }}>{tab.icon}</span>
-                                {tab.label}
-                            </button>
-                        ))}
+                        {tabs.map(tab => {
+                            const isActive = activeTab === tab.id;
+                            const isHovered = hoveredTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+                                    onMouseEnter={() => setHoveredTab(tab.id)}
+                                    onMouseLeave={() => setHoveredTab(null)}
+                                    style={{
+                                        padding: '0.45rem 1.1rem',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: isActive 
+                                            ? THEME.colors.primary 
+                                            : (isHovered ? THEME.colors.primaryLight : 'transparent'),
+                                        color: isActive 
+                                            ? 'white' 
+                                            : (isHovered ? THEME.colors.textMain : '#4E6157'),
+                                        fontWeight: isActive ? '700' : '500',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.8rem',
+                                        boxShadow: isActive ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
+                                    }}
+                                >
+                                    <span style={{ 
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        color: isActive ? 'white' : (isHovered ? THEME.colors.textMain : '#4E6157'),
+                                        opacity: isActive ? 1 : 0.8
+                                    }}>{tab.icon}</span>
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 </header>
 
@@ -1095,70 +1110,79 @@ export default function ClientsModule() {
                         {activeTab === 'b2b' && hasEditPermission() && (
                             <button 
                                 onClick={() => handleCreateClient('b2b_client')}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 style={{ 
-                                    backgroundColor: '#0891B2', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     whiteSpace: 'nowrap',
                                     height: '40px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.85rem',
+                                    transition: 'background-color 0.2s'
                                 }}
                             >
-                                <span>➕</span> Nuevo Institucional
+                                <Plus size={16} strokeWidth={1.5} /> Nuevo Institucional
                             </button>
                         )}
                         {activeTab === 'b2c' && hasEditPermission() && (
                             <button 
                                 onClick={() => handleCreateClient('b2c_client')}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 style={{ 
-                                    backgroundColor: '#10B981', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     whiteSpace: 'nowrap',
                                     height: '40px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.85rem',
+                                    transition: 'background-color 0.2s'
                                 }}
                             >
-                                <span>👤</span> Nuevo Cliente Hogar
+                                <User size={16} strokeWidth={1.5} /> Nuevo Cliente Hogar
                             </button>
                         )}
                         {activeTab === 'leads' && hasEditPermission() && (
                             <button 
                                 onClick={() => setIsLeadModalOpen(true)}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 style={{ 
-                                    backgroundColor: '#8B5CF6', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     whiteSpace: 'nowrap',
                                     height: '40px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.85rem',
+                                    transition: 'background-color 0.2s'
                                 }}
                             >
-                                <span>📢</span> Nuevo Prospecto
+                                <Mail size={16} strokeWidth={1.5} /> Nuevo Prospecto
                             </button>
                         )}
 
@@ -1229,10 +1253,14 @@ export default function ClientsModule() {
                                     backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
                                     boxShadow: viewMode === 'list' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px'
                                 }}
                             >
-                                📋
+                                <List size={16} strokeWidth={1.5} style={{ color: viewMode === 'list' ? THEME.colors.primary : '#64748B' }} />
                             </button>
                             <button 
                                 onClick={() => setViewMode('grid')}
@@ -1243,10 +1271,14 @@ export default function ClientsModule() {
                                     backgroundColor: viewMode === 'grid' ? 'white' : 'transparent',
                                     boxShadow: viewMode === 'grid' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px'
                                 }}
                             >
-                                🔲
+                                <Grid size={16} strokeWidth={1.5} style={{ color: viewMode === 'grid' ? THEME.colors.primary : '#64748B' }} />
                             </button>
                         </div>
 
@@ -1409,12 +1441,12 @@ export default function ClientsModule() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 {/* Top Row: Main KPIs */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
-                                    <KPICard title="CLIENTES B2B" value={clientsB2B.length} icon={<Building2 size={20} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Institucionales" />
-                                    <KPICard title="CLIENTES B2C" value={clientsB2C.length} icon={<Home size={20} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Consumidores" />
+                                    <KPICard title="CLIENTES B2B" value={clientsB2B.length} icon={<Building2 size={18} strokeWidth={1.5} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Institucionales" />
+                                    <KPICard title="CLIENTES B2C" value={clientsB2C.length} icon={<Home size={18} strokeWidth={1.5} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Consumidores" />
                                     <KPICard 
                                         title="TAREAS CRÍTICAS" 
                                         value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
-                                        icon={<AlertTriangle size={20} />} 
+                                        icon={<AlertTriangle size={18} strokeWidth={1.5} />} 
                                         color="#EAEFEA" 
                                         textColor="#0D7A57" 
                                         subtitle="Prioridad comercial" 
@@ -1424,29 +1456,29 @@ export default function ClientsModule() {
                                 {/* Middle Row: Funnel & Critical Tasks & Sales */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
                                     {/* Funnel Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                                             <div>
-                                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <BarChart3 size={18} style={{ color: '#0D7A57' }} /> Embudo Comercial
                                                 </h3>
-                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Trayectoria del prospecto</p>
+                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Trayectoria del prospecto</p>
                                             </div>
-                                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center', minWidth: '54px' }}>
-                                                <div style={{ fontSize: '0.55rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</div>
-                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', lineHeight: '1.2' }}>{leads.length}</div>
+                                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.35rem 0.75rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, textAlign: 'center', minWidth: '54px' }}>
+                                                <div style={{ fontSize: '0.55rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: THEME.colors.textMain, lineHeight: '1.2' }}>{leads.length}</div>
                                             </div>
                                         </div>
                                         <FunnelGraphic leads={leads} />
                                     </div>
 
                                     {/* Sales Distribution Pie Chart */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{ marginBottom: '1.2rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <BarChart3 size={18} style={{ color: '#0D7A57' }} /> Distribución de Ventas
                                             </h3>
-                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Balance B2B vs B2C</p>
+                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Balance B2B vs B2C</p>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '160px' }}>
                                             <SalesPieChart 
@@ -1457,9 +1489,9 @@ export default function ClientsModule() {
                                     </div>
 
                                     {/* Task Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <AlertTriangle size={18} style={{ color: '#0D7A57' }} /> Alertas de Seguimiento
                                             </h3>
                                             <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Tareas críticas pendientes</p>
@@ -1479,10 +1511,10 @@ export default function ClientsModule() {
                                                         />
                                                     ))
                                             ) : (
-                                                <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: '#F0FDF4', borderRadius: '32px', border: '2px dashed #DCFCE7' }}>
-                                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏆</div>
-                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#166534' }}>¡Gran trabajo comercial!</h4>
-                                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: '#15803D', fontWeight: '600' }}>No tienes tareas pendientes vencidas en este momento.</p>
+                                                <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.lg, border: '1px dashed #A7F3D0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <Check size={28} strokeWidth={1.5} style={{ color: THEME.colors.primary, marginBottom: '1rem' }} />
+                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>¡Gran trabajo comercial!</h4>
+                                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>No tienes tareas pendientes vencidas en este momento.</p>
                                                 </div>
                                             )}
                                         </div>
@@ -1510,16 +1542,16 @@ export default function ClientsModule() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>IDENTIFICACIÓN / CLIENTE</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>COMERCIAL</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>COMERCIAL</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1557,15 +1589,15 @@ export default function ClientsModule() {
                                         {clientsB2C.length === 0 && <EmptyState text="No hay clientes hogar registrados aún." />}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CLIENTE / IDENTIFICACIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>DIRECCIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1603,16 +1635,16 @@ export default function ClientsModule() {
                                         {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>PROSPECTO / EMPRESA</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>SEGUIMIENTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2105,27 +2137,28 @@ function KPICard({ title, value, icon, color, textColor, subtitle }: { title: st
         <div style={{
             backgroundColor: 'white',
             padding: '1.5rem',
-            borderRadius: '16px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+            borderRadius: THEME.radius.lg,
+            boxShadow: THEME.shadow.sm,
             display: 'flex',
             alignItems: 'center',
             gap: '1.5rem',
-            border: '1px solid #E2E8F0',
-            transition: 'all 0.2s ease-in-out',
-            cursor: 'default'
+            border: `1px solid ${THEME.colors.border}`,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            cursor: 'default',
+            fontFamily: THEME.typography.fontFamilySecondary
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.05)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.02)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
         }}>
-            <div style={{ backgroundColor: color, width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textColor, flexShrink: 0 }}>
+            <div style={{ backgroundColor: color, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textColor, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{title}</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#1E293B', margin: '0.2rem 0', lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem', fontFamily: THEME.typography.fontFamilyMain }}>{title}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0.2rem 0', lineHeight: 1.1 }}>{value}</div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '500' }}>{subtitle}</div>
             </div>
         </div>
@@ -2160,24 +2193,24 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                     alignItems: 'center',
                     justifyContent: 'center'
                 }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</span>
-                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#1E293B', marginTop: '2px' }}>${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, marginTop: '2px' }}>{formatMoney(total)}</span>
                 </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#0D7A57', marginTop: '4px' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2B</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0D7A57', marginTop: '2px' }}>${totalB2B.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2B</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0D7A57', marginTop: '2px' }}>{formatMoney(totalB2B)}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94A3B8', marginTop: '1px' }}>{Math.round(b2bPercent)}% del total</div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', borderTop: '1px solid #F1F5F9', paddingTop: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '1rem' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#7E8F9F', marginTop: '4px' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2C</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E293B', marginTop: '2px' }}>${totalB2C.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2C</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain, marginTop: '2px' }}>{formatMoney(totalB2C)}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94A3B8', marginTop: '1px' }}>{Math.round(b2cPercent)}% del total</div>
                     </div>
                 </div>
@@ -2314,18 +2347,27 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     return (
         <div 
             onClick={onViewDetails}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = THEME.shadow.lg;
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = THEME.shadow.md;
+            }}
             style={{ 
                 backgroundColor: 'white', 
-                borderRadius: '24px', 
+                borderRadius: THEME.radius.lg, 
                 padding: '2rem', 
-                boxShadow: '0 8px 30px rgba(0,0,0,0.04)',
-                border: '1px solid #F0F2F5',
+                boxShadow: THEME.shadow.md,
+                border: `1px solid ${THEME.colors.border}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1.5rem',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
         >
             {/* Tag / Status Area */}
@@ -2433,7 +2475,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         borderColor: profileData.is_corporate_parent ? '#BAE6FD' : '#FFEDD5',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                     }}>
-                        <span style={{ fontSize: '0.8rem' }}>{profileData.is_corporate_parent ? '🏰' : '📍'}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                            {profileData.is_corporate_parent ? <Building2 size={12} strokeWidth={1.5} /> : <MapPin size={12} strokeWidth={1.5} />}
+                        </span>
                         <span style={{ 
                             fontSize: '0.6rem', 
                             fontWeight: '900', 
@@ -2449,47 +2493,47 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
             {/* Header Info */}
             <div style={{ marginTop: '0.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1A202C', paddingRight: '100px', lineHeight: '1.3' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: THEME.colors.textMain, paddingRight: '100px', lineHeight: '1.3' }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
-                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: '#718096', fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
-                {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
+                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
+                {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>{isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
             </div>
 
             {/* Content Fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
                 {(isB2B || isLead || isB2C) && (
-                    <InfoRow icon="📞" label="Contacto" value={data.phone} />
+                    <InfoRow icon="" label="Contacto" value={data.phone} />
                 )}
                 {(isB2B || isLead || isB2C) && (
-                    <InfoRow icon="📧" label="Email" value={data.email} />
+                    <InfoRow icon="" label="Email" value={data.email} />
                 )}
                 {((isB2B && profileData?.nit) || (isLead && leadData?.nit)) && (
-                    <InfoRow icon="🆔" label="NIT" value={isB2B ? profileData?.nit : leadData?.nit} />
+                    <InfoRow icon="" label="NIT" value={isB2B ? profileData?.nit : leadData?.nit} />
                 )}
                 {(isB2B || isB2C) && profileData && (
                     <InfoRow 
-                        icon="📍" 
+                        icon="" 
                         label="Ubicación" 
                         value={`${profileData.address || ''}${profileData.municipality || profileData.city ? `, ${profileData.municipality || profileData.city}` : ''}${profileData.department ? `, ${profileData.department}` : ''}`} 
                     />
                 )}
                 {isLead && leadData && (
                     <InfoRow 
-                        icon="📍" 
+                        icon="" 
                         label="Ubicación" 
                         value={`${leadData.address || ''}${leadData.municipality ? `, ${leadData.municipality}` : ''}`} 
                     />
                 )}
                 {((isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude) || (isLead && leadData && leadData.latitude && leadData.longitude) ? (
-                    <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '700', paddingLeft: '1.5rem' }}>
-                        🌐 {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
+                    <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700', paddingLeft: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={12} strokeWidth={1.5} /> {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
                         <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
                     </div>
                 ) : null}
                 {isB2B && profileData && (
-                    <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.6rem' }}>⚙️ MODELO DE COTIZACIÓN</label>
+                    <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>MODELO DE COTIZACIÓN</label>
                         <select 
                             value={profileData.pricing_model_id || ''} 
                             onChange={(e) => onUpdatePricingModel && onUpdatePricingModel(profileData.id, e.target.value)}
@@ -2528,11 +2572,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
                         {profileData.needs_crates && (
                             <div style={{ backgroundColor: '#F0F9FF', color: '#0369A1', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <span>🧺</span> CON CANASTAS
+                                <Package size={12} strokeWidth={1.5} /> CON CANASTAS
                             </div>
                         )}
                         <div style={{ backgroundColor: '#F8FAFC', color: '#475569', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>📄</span> {
+                            <FileText size={12} strokeWidth={1.5} /> {
                                 profileData.document_type === 'invoice' 
                                     ? (profileData.print_invoice ? 'FACTURA IMPRESA' : 'FACTURA DIGITAL')
                                     : (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)')
@@ -2543,7 +2587,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
                 {isB2B && profileData && profileData.delivery_restrictions && (
                     <div style={{ backgroundColor: '#FFFBEB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'block', marginBottom: '0.2rem' }}>⚠️ RESTRICCIONES</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.2rem' }}><AlertTriangle size={12} strokeWidth={1.5} /> RESTRICCIONES</span>
                         <span style={{ fontSize: '0.8rem', color: '#92400E', display: 'block', marginBottom: '0.4rem' }}>{profileData.delivery_restrictions}</span>
                         
                         {profileData.logistics_data && profileData.logistics_data.windows && profileData.logistics_data.windows.length > 0 && (
@@ -2557,7 +2601,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                 gap: '8px',
                                 marginTop: '0.5rem'
                             }}>
-                                <span style={{ fontSize: '1.2rem' }}>🤖</span>
+                                <Cpu size={12} strokeWidth={1.5} style={{ color: '#92400E' }} />
                                 <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#92400E', lineHeight: '1.2' }}>
                                     FRANJA ESTRUCTURADA: {formatTimeWindow(profileData.logistics_data)}
                                 </span>
@@ -2567,8 +2611,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 )}
                 {isB2C && profileData && profileData.total_orders !== undefined && (
                     <>
-                        <InfoRow icon="🛒" label="Actividad" value={`${profileData.total_orders || 0} Pedidos | $${(profileData.total_spent || 0).toLocaleString()} totales`} />
-                        {profileData.last_order && <InfoRow icon="📅" label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
+                        <InfoRow icon="" label="Actividad" value={`${formatNumber(profileData.total_orders || 0)} Pedidos | ${formatMoney(profileData.total_spent || 0)} totales`} />
+                        {profileData.last_order && <InfoRow icon="" label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
                     </>
                 )}
                 {isLead && leadData && (
@@ -2642,7 +2686,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         )}
 
                         <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.4rem' }}>ESTADO DE GESTIÓN</label>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>ESTADO DE GESTIÓN</label>
                             <select
                                 value={leadData.status}
                                 onChange={(e) => onUpdateStatus && onUpdateStatus(leadData.id, e.target.value)}
@@ -2650,30 +2694,30 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                     width: '100%', 
                                     padding: '0.8rem', 
                                     borderRadius: '12px', 
-                                    border: '1px solid #E2E8F0',
+                                    border: `1px solid ${THEME.colors.border}`,
                                     fontWeight: '700',
                                     backgroundColor: '#F8FAFC'
                                 }}
                             >
-                                <option value="new">🆕 Nuevo Contacto</option>
-                                <option value="contacted">📞 Contactado</option>
-                                <option value="converted">✅ Convertido a Cliente</option>
-                                <option value="rejected">❌ Descartado</option>
+                                <option value="new">Nuevo Contacto</option>
+                                <option value="contacted">Contactado</option>
+                                <option value="converted">Convertido a Cliente</option>
+                                <option value="rejected">Descartado</option>
                             </select>
                         </div>
 
                         {leadData.latitude && leadData.longitude ? (
-                            <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: '#F0FDF4', borderRadius: '12px', border: '1px solid #DCFCE7', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.1rem' }}>📍</span>
+                            <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: THEME.colors.primaryLight, borderRadius: '12px', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <MapPin size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                 <div>
-                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', display: 'block' }}>UBICACIÓN VERIFICADA</label>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#15803D' }}>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.primary, display: 'block' }}>UBICACIÓN VERIFICADA</label>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textMain }}>
                                         {leadData.latitude.toFixed(6)}, {leadData.longitude.toFixed(6)}
                                         <a 
                                             href={`https://www.google.com/maps?q=${leadData.latitude},${leadData.longitude}`} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            style={{ marginLeft: '10px', color: '#0891B2', textDecoration: 'none', fontSize: '0.75rem', fontWeight: '900' }}
+                                            style={{ marginLeft: '10px', color: THEME.colors.primary, textDecoration: 'none', fontSize: '0.75rem', fontWeight: '900' }}
                                         >
                                             Abrir Mapa ↗
                                         </a>
@@ -2682,7 +2726,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         ) : (
                             <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: '#FEF2F2', borderRadius: '12px', border: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                <AlertTriangle size={16} strokeWidth={1.5} style={{ color: '#EF4444' }} />
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#991B1B', display: 'block' }}>SIN UBICACIÓN GPS</label>
                                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#B91C1C' }}>
@@ -2692,9 +2736,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         )}
                         {leadData.notes && (
-                            <div style={{ backgroundColor: '#F0FDF4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #DCFCE7' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', display: 'block', marginBottom: '0.2rem' }}>📝 NOTA</span>
-                                <span style={{ fontSize: '0.8rem', color: '#166534' }}>{leadData.notes}</span>
+                            <div style={{ backgroundColor: THEME.colors.primaryLight, padding: '0.8rem', borderRadius: '12px', border: '1px solid #A7F3D0' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, display: 'block', marginBottom: '0.2rem' }}>NOTA</span>
+                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textMain }}>{leadData.notes}</span>
                             </div>
                         )}
                     </>
@@ -2704,12 +2748,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
             {/* Actions */}
             <div 
                 onClick={(e) => e.stopPropagation()}
-                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F0F2F5', display: 'flex', gap: '0.5rem' }}
+                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '0.5rem' }}
             >
                 {onViewDetails && (
                     <button 
                         onClick={onViewDetails}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s' }} 
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
@@ -2719,7 +2763,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {(isB2B || isB2C) && onEdit && (
                     <button 
                         onClick={onEdit}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
                         Editar
                     </button>
@@ -2727,9 +2773,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {isLead && onRegisterContact && (
                     <button 
                         onClick={onRegisterContact}
-                        style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        style={{ flex: 1.5, padding: '0.5rem 0.8rem', borderRadius: '8px', border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.75rem' }}
                     >
-                        <span>✅</span> Registrar Contacto
+                        <Check size={14} strokeWidth={1.5} /> Contacto
                     </button>
                 )}
                 {isLead && onScheduleTask && (
@@ -2738,16 +2784,18 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             const date = window.prompt('Fecha de siguiente contacto (AAAA-MM-DD):', new Date(Date.now() + 86400000).toISOString().split('T')[0]);
                             if (date) onScheduleTask(date);
                         }}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
-                        📅 Tarea
+                        <Sliders size={14} strokeWidth={1.5} /> Tarea
                     </button>
                 )}
                 <button 
                     onClick={handleWhatsApp}
-                    style={{ padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#25D366', color: 'white', fontWeight: '800', cursor: 'pointer' }}
+                    style={{ padding: '0.5rem 0.8rem', borderRadius: '8px', border: 'none', background: '#25D366', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.75rem' }}
                 >
-                    💬 WhatsApp
+                    <Phone size={14} strokeWidth={1.5} /> WhatsApp
                 </button>
             </div>
         </div>
@@ -2791,18 +2839,18 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
 
     return (
         <tr 
-            style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s', cursor: 'pointer' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+            style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s', cursor: 'pointer' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAF9')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             onClick={onViewDetails}
         >
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
                 {isLead ? (
                     <>
-                        {client.nit && <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit}</div>}
+                        {client.nit && <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit}</div>}
                         <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                            {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
+                            {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
                             {(client as any).business_size && (() => {
                                 const size = (client as any).business_size;
                                 let bg = '#F3F4F6';
@@ -2812,7 +2860,6 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                                 else if (size.includes('Pequeño') || size.includes('< 10M') || size.includes('Peq')) { bg = '#FEE2E2'; textCol = '#B91C1C'; }
                                 return (
                                     <span style={{ fontSize: '0.65rem', backgroundColor: bg, color: textCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                        {size.includes('Grande') || size.includes('30M') ? '🟢 ' : size.includes('Mediano') || size.includes('10M') ? '🟡 ' : '🔴 '}
                                         {size}
                                     </span>
                                 );
@@ -2821,34 +2868,34 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                     </>
                 ) : (
                     <>
-                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
-                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
                             {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
-                            {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0' }}>🧺 SI</span>}
-                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0' }}>
-                                📄 {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
+                            {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
+                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
                             </span>
                         </div>
                     </>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
-                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>📞 {client.phone}</div>
-                {client.email && <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '600', marginTop: '2px' }}>📧 {client.email}</div>}
+                <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>{client.phone}</div>
+                {client.email && <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', marginTop: '2px' }}>{client.email}</div>}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
                     {displayCity ? `${displayCity} / ` : ''}{displayMunicipality || '---'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{displayAddress || '---'}</div>
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 {isB2B ? (
                     <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0891B2' }}>{selectedModel?.name || 'Varios'}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: THEME.colors.primary }}>{selectedModel?.name || 'Varios'}</div>
+                        <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>Modelo de Precios</div>
                     </div>
                 ) : isLead ? (
                     <span style={{ 
@@ -2870,7 +2917,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                     <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Hogar</span>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 {isLead ? (
                     <div>
                         {(client as any).last_contact_date ? (
@@ -2896,33 +2943,39 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                             </div>
                         )}
                         {(client.latitude && client.longitude) ? (
-                            <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900' }}>🗺️ GPS OK</div>
+                            <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '2px' }}><MapPin size={10} strokeWidth={1.5} /> GPS OK</div>
                         ) : (
-                            <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>📍 NO GPS</div>
+                            <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '2px' }}><MapPin size={10} strokeWidth={1.5} /> NO GPS</div>
                         )}
                     </>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                     {!isLead && onEdit && (
                         <button 
                             onClick={onEdit} 
-                            style={{ background: '#F1F5F9', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            style={{ background: '#F1F5F9', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Editar"
-                        >✏️</button>
+                        >
+                            <Edit2 size={14} strokeWidth={1.5} style={{ color: '#475569' }} />
+                        </button>
                     )}
                     <button 
                         onClick={handleWhatsApp} 
-                        style={{ background: '#DCFCE7', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                        style={{ background: '#DCFCE7', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="WhatsApp"
-                    >💬</button>
+                    >
+                        <Phone size={14} strokeWidth={1.5} style={{ color: '#166534' }} />
+                    </button>
                     {onRegisterContact && (
                         <button 
                             onClick={onRegisterContact} 
-                            style={{ background: '#F3E8FF', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            style={{ background: '#F3E8FF', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Registrar Contacto"
-                        >📞</button>
+                        >
+                            <Check size={14} strokeWidth={1.5} style={{ color: '#6B21A8' }} />
+                        </button>
                     )}
                 </div>
             </td>
@@ -2933,10 +2986,10 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
 function InfoRow({ icon, label, value }: { icon: string, label: string, value: string | number | undefined | null }) {
     return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem' }}>{icon}</span>
+            {icon && <span style={{ fontSize: '1rem' }}>{icon}</span>}
             <div style={{ fontSize: '0.78rem' }}>
-                <span style={{ color: '#718096', fontWeight: '600' }}>{label}: </span>
-                <span style={{ color: '#1A202C', fontWeight: '800' }}>{value || 'N/A'}</span>
+                <span style={{ color: THEME.colors.textSecondary, fontWeight: '600' }}>{label}: </span>
+                <span style={{ color: THEME.colors.textMain, fontWeight: '800' }}>{value || 'N/A'}</span>
             </div>
         </div>
     );
@@ -2944,9 +2997,9 @@ function InfoRow({ icon, label, value }: { icon: string, label: string, value: s
 
 function EmptyState({ text }: { text: string }) {
     return (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: '24px', border: '2px dashed #E2E8F0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔦</div>
-            <p style={{ color: '#718096', fontWeight: '700' }}>{text}</p>
+        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Search size={32} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }} />
+            <p style={{ color: THEME.colors.textSecondary, fontWeight: '700' }}>{text}</p>
         </div>
     );
 }
