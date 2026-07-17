@@ -4860,6 +4860,193 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         if (!error) fetchData();
     };
 
+    const handleExportExcel = () => {
+        try {
+            // 1. Prepare data for sheet 1: Excepciones y Notas
+            const sheet1Data = products.map(p => {
+                const exc = exceptions.find(e => e.product_id === p.id);
+                const subProduct = exc?.substitution_product_id ? products.find(prod => prod.id === exc.substitution_product_id) : null;
+                
+                let varString = '';
+                if (exc?.preferred_options && Object.keys(exc.preferred_options).length > 0) {
+                    varString = Object.entries(exc.preferred_options)
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join(' | ');
+                }
+
+                return {
+                    'CODIGO_CONTABLE': p.accounting_id || '',
+                    'SKU_MAESTRO': p.sku || '',
+                    'PRODUCTO': p.name || '',
+                    'NOMBRE_FACTURA': exc?.nickname || '',
+                    'VARIACION_REQUERIDA': varString,
+                    'NOTA_PICKING': exc?.picking_note || '',
+                    'SUSTITUTO_CODIGO_CONTABLE': subProduct?.accounting_id || '',
+                    'NOTA_ENTREGA': exc?.delivery_note || ''
+                };
+            });
+
+            // 2. Prepare data for sheet 2: Variantes Estandarizadas
+            const sheet2Data: any[] = [];
+            products.forEach(p => {
+                if (p.options_config && p.options_config.length > 0) {
+                    p.options_config.forEach((opt: any) => {
+                        sheet2Data.push({
+                            'CODIGO_CONTABLE': p.accounting_id || '',
+                            'SKU_MAESTRO': p.sku || '',
+                            'PRODUCTO': p.name || '',
+                            'ATRIBUTO': opt.name || '',
+                            'VALORES_PERMITIDOS': opt.values ? opt.values.join(', ') : ''
+                        });
+                    });
+                } else {
+                    sheet2Data.push({
+                        'CODIGO_CONTABLE': p.accounting_id || '',
+                        'SKU_MAESTRO': p.sku || '',
+                        'PRODUCTO': p.name || '',
+                        'ATRIBUTO': 'Sin atributos',
+                        'VALORES_PERMITIDOS': 'Producto base'
+                    });
+                }
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws1 = XLSX.utils.json_to_sheet(sheet1Data);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Excepciones y Notas');
+            
+            const ws2 = XLSX.utils.json_to_sheet(sheet2Data);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Variantes Estandarizadas');
+
+            XLSX.writeFile(wb, `Excepciones_Logisticas_B2B_${clientId.slice(0,8)}.xlsx`);
+            window.showToast?.('Planilla descargada con éxito', 'success');
+        } catch (err: any) {
+            console.error('Error exporting Excel:', err);
+            window.showToast?.('Error al descargar planilla: ' + err.message, 'error');
+        }
+    };
+
+    const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        setLoading(true);
+        try {
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const bstr = evt.target?.result;
+                    const wb = XLSX.read(bstr, { type: 'binary' });
+                    
+                    const wsname = wb.SheetNames[0];
+                    const ws = wb.Sheets[wsname];
+                    const rawData: any[] = XLSX.utils.sheet_to_json(ws);
+                    
+                    if (rawData.length === 0) {
+                        throw new Error('La planilla está vacía.');
+                    }
+
+                    const upsertRows: any[] = [];
+                    
+                    for (let i = 0; i < rawData.length; i++) {
+                        const row = rawData[i];
+                        const rowNum = i + 2;
+                        
+                        const accId = row.CODIGO_CONTABLE;
+                        if (accId === undefined || accId === '') continue;
+
+                        const product = products.find(p => String(p.accounting_id) === String(accId));
+                        if (!product) {
+                            throw new Error(`Fila ${rowNum}: El Código Contable "${accId}" no corresponde a ningún producto activo.`);
+                        }
+
+                        const varReq = row.VARIACION_REQUERIDA || '';
+                        const parsedPrefOptions: Record<string, string> = {};
+                        
+                        if (varReq.trim()) {
+                            const parts = String(varReq).split('|');
+                            for (const part of parts) {
+                                const kv = part.split(':');
+                                if (kv.length !== 2) {
+                                    throw new Error(`Fila ${rowNum}: Formato de variación inválido en "${part}". Debe ser "Atributo: Valor" y estar separado por barra vertical (|).`);
+                                }
+                                const attrName = kv[0].trim();
+                                const attrVal = kv[1].trim();
+                                
+                                const configOpt = product.options_config?.find((opt: any) => opt.name.toLowerCase() === attrName.toLowerCase());
+                                if (!configOpt) {
+                                    throw new Error(`Fila ${rowNum}: El atributo "${attrName}" no está configurado para el producto "${product.name}".`);
+                                }
+                                
+                                const valAllowed = configOpt.values?.find((v: string) => v.toLowerCase() === attrVal.toLowerCase());
+                                if (!valAllowed) {
+                                    throw new Error(`Fila ${rowNum}: El valor "${attrVal}" no es válido para el atributo "${configOpt.name}". Opciones válidas: ${configOpt.values?.join(', ')}.`);
+                                }
+
+                                parsedPrefOptions[configOpt.name] = valAllowed;
+                            }
+                        }
+
+                        let substitutionProductId = null;
+                        const subAccId = row.SUSTITUTO_CODIGO_CONTABLE;
+                        if (subAccId !== undefined && subAccId !== '') {
+                            const subProduct = products.find(p => String(p.accounting_id) === String(subAccId));
+                            if (!subProduct) {
+                                throw new Error(`Fila ${rowNum}: El Código Contable del Sustituto "${subAccId}" no corresponde a ningún producto activo.`);
+                            }
+                            if (subProduct.id === product.id) {
+                                throw new Error(`Fila ${rowNum}: El producto sustituto no puede ser el mismo producto original.`);
+                            }
+                            substitutionProductId = subProduct.id;
+                        }
+
+                        const nickname = String(row.NOMBRE_FACTURA || '').trim();
+                        const pickingNote = String(row.NOTA_PICKING || '').trim();
+                        const deliveryNote = String(row.NOTA_ENTREGA || '').trim();
+
+                        const existingExc = exceptions.find(e => e.product_id === product.id);
+
+                        if (nickname || pickingNote || deliveryNote || Object.keys(parsedPrefOptions).length > 0 || substitutionProductId) {
+                            upsertRows.push({
+                                id: existingExc?.id || undefined,
+                                customer_id: clientId,
+                                product_id: product.id,
+                                nickname: nickname || null,
+                                picking_note: pickingNote || null,
+                                substitution_product_id: substitutionProductId,
+                                delivery_note: deliveryNote || null,
+                                preferred_options: parsedPrefOptions
+                            });
+                        } else if (existingExc) {
+                            await supabase.from('product_nicknames').delete().eq('id', existingExc.id);
+                        }
+                    }
+
+                    if (upsertRows.length > 0) {
+                        const { error: upsertErr } = await supabase
+                            .from('product_nicknames')
+                            .upsert(upsertRows);
+                        
+                        if (upsertErr) throw upsertErr;
+                    }
+
+                    window.showToast?.('Planilla cargada y excepciones sincronizadas con éxito', 'success');
+                    fetchData();
+                } catch (err: any) {
+                    console.error('Error parsing sheet:', err);
+                    window.showToast?.(err.message || 'Error al procesar planilla', 'error');
+                } finally {
+                    setLoading(false);
+                    e.target.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        } catch (err: any) {
+            console.error('Error reading file:', err);
+            window.showToast?.('Error al leer el archivo', 'error');
+            setLoading(false);
+        }
+    };
+
     // Find original product helper
     const getProductDetails = (id: string) => {
         return products.find(p => p.id === id);
@@ -4902,30 +5089,88 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                 </header>
 
                 <div ref={scrollableRef} style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
-                    {/* INSTRUCTIVO DE USO */}
+                    {/* INSTRUCTIVO DE USO E IMPORTACIÓN/EXPORTACIÓN */}
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <button
-                            onClick={() => setShowGuide(!showGuide)}
-                            style={{
-                                background: '#EFF6FF',
-                                border: '1px solid #BFDBFE',
-                                color: '#1D4ED8',
-                                padding: '8px 16px',
-                                borderRadius: '8px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s',
-                                fontFamily: THEME.typography.fontFamilySecondary
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                        >
-                            📖 {showGuide ? 'Ocultar Instructivo de Uso' : 'Ver Instructivo de Uso (Guía Operativa)'}
-                        </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: showGuide ? '1rem' : '0' }}>
+                            <button
+                                onClick={() => setShowGuide(!showGuide)}
+                                style={{
+                                    background: '#EFF6FF',
+                                    border: '1px solid #BFDBFE',
+                                    color: '#1D4ED8',
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.2s',
+                                    fontFamily: THEME.typography.fontFamilySecondary
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                            >
+                                📖 {showGuide ? 'Ocultar Instructivo de Uso' : 'Ver Instructivo (Guía Operativa)'}
+                            </button>
+
+                            {!readOnly && (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={handleExportExcel}
+                                        type="button"
+                                        style={{
+                                            background: '#ECFDF5',
+                                            border: '1px solid #A7F3D0',
+                                            color: '#047857',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            transition: 'all 0.2s',
+                                            fontFamily: THEME.typography.fontFamilySecondary
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                    >
+                                        📥 Descargar Planilla
+                                    </button>
+
+                                    <label
+                                        style={{
+                                            background: '#EEF2FF',
+                                            border: '1px solid #C7D2FE',
+                                            color: '#4F46E5',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            transition: 'all 0.2s',
+                                            fontFamily: THEME.typography.fontFamilySecondary
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0E7FF'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EEF2FF'}
+                                    >
+                                        📤 Cargar Planilla
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx, .xls" 
+                                            onChange={handleImportExcel} 
+                                            style={{ display: 'none' }} 
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
 
                         {showGuide && (
                             <div style={{
@@ -5244,6 +5489,56 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     </div>
                                 </div>
 
+                                {/* B. VARIACIONES ESTANDARIZADAS */}
+                                {selectedOriginalProd && selectedOriginalProd.options_config && selectedOriginalProd.options_config.length > 0 && (
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', display: 'block', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            Variación Estandarizada Requerida
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                                            {selectedOriginalProd.options_config.map((option: any) => {
+                                                const selectedValue = newException.preferred_options?.[option.name] || '';
+                                                return (
+                                                    <div key={option.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                        <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            {option.name}
+                                                        </label>
+                                                        <select
+                                                            value={selectedValue}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const updatedOptions = { ...newException.preferred_options };
+                                                                if (val) {
+                                                                    updatedOptions[option.name] = val;
+                                                                } else {
+                                                                    delete updatedOptions[option.name];
+                                                                }
+                                                                setNewException({ ...newException, preferred_options: updatedOptions });
+                                                            }}
+                                                            style={{
+                                                                height: '38px',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #E2E8F0',
+                                                                padding: '0 0.5rem',
+                                                                fontSize: '0.8rem',
+                                                                backgroundColor: 'white',
+                                                                fontFamily: THEME.typography.fontFamilySecondary,
+                                                                color: THEME.colors.textMain,
+                                                                outline: 'none'
+                                                            }}
+                                                        >
+                                                            <option value="">-- Sin especificar --</option>
+                                                            {option.values?.map((val: string) => (
+                                                                <option key={val} value={val}>{val}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* D. NOTAS Y ALIAS */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                     <FormField 
@@ -5303,6 +5598,20 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     <div>
                                                         <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
                                                         <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Preferred options (Standardized variants) */}
+                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Variante: </span>
+                                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                            {Object.entries(exc.preferred_options).map(([key, val]) => (
+                                                                <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                    {key}: {val as string}
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
 
