@@ -788,6 +788,9 @@ export default function CommercialAgreementsModule() {
     const warningCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'warning').length;
     const expiredCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'expired').length;
 
+    const totalMargin = agreementItems.reduce((sum, item) => sum + (item.margin_percent || 0), 0);
+    const averageMargin = agreementItems.length > 0 ? totalMargin / agreementItems.length : 0;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', fontFamily: THEME.typography.fontFamilySecondary }}>
             
@@ -1154,6 +1157,15 @@ export default function CommercialAgreementsModule() {
                                 <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block' }}>PRODUCTOS CARGADOS:</span>
                                 <strong style={{ fontSize: '0.85rem', color: THEME.colors.primary }}>
                                     {loadingItems ? 'Cargando...' : `${agreementItems.length} ítems`}
+                                </strong>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block' }}>MARGEN PROMEDIO:</span>
+                                <strong style={{ 
+                                    fontSize: '0.85rem', 
+                                    color: averageMargin >= 20 ? '#059669' : averageMargin >= 10 ? '#D97706' : '#DC2626' 
+                                }}>
+                                    {loadingItems ? 'Cargando...' : `${(Math.round(averageMargin * 10) / 10).toFixed(1)}%`}
                                 </strong>
                             </div>
                         </div>
