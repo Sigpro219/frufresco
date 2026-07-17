@@ -1163,7 +1163,7 @@ export default function CommercialAgreementsModule() {
                                 <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block' }}>MARGEN PROMEDIO:</span>
                                 <strong style={{ 
                                     fontSize: '0.85rem', 
-                                    color: averageMargin >= 20 ? '#059669' : averageMargin >= 10 ? '#D97706' : '#DC2626' 
+                                    color: averageMargin >= 50 ? '#059669' : averageMargin >= 20 ? '#D97706' : '#DC2626' 
                                 }}>
                                     {loadingItems ? 'Cargando...' : `${(Math.round(averageMargin * 10) / 10).toFixed(1)}%`}
                                 </strong>
