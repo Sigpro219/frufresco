@@ -36,6 +36,26 @@ export default function PricingSettingsPage() {
     const [selectedModel, setSelectedModel] = useState<any>(null);
     const [rules, setRules] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]); // For search
+    const [activeTab, setActiveTab] = useState<'models' | 'templates'>('models');
+
+    // Templates (Preformas) State
+    const [templates, setTemplates] = useState<any[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [templateItems, setTemplateItems] = useState<any[]>([]);
+    const [loadingTemplateItems, setLoadingTemplateItems] = useState(false);
+    const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+    const [newTemplateName, setNewTemplateName] = useState('');
+    const [newTemplateDesc, setNewTemplateDesc] = useState('');
+    const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+    const [editTemplateName, setEditTemplateName] = useState('');
+    const [editTemplateDesc, setEditTemplateDesc] = useState('');
+    const [templateProductSearch, setTemplateProductSearch] = useState('');
+    const [selectedTemplateProduct, setSelectedTemplateProduct] = useState<any>(null);
+    const [templateSearchFilter, setTemplateSearchFilter] = useState('');
+    const [uploadingTemplateExcel, setUploadingTemplateExcel] = useState(false);
+    const [showTemplateExcelModal, setShowTemplateExcelModal] = useState(false);
+    const [templateProductsFound, setTemplateProductsFound] = useState<any[]>([]);
 
     // UI
     const [loadingModels, setLoadingModels] = useState(true);
@@ -297,6 +317,248 @@ export default function PricingSettingsPage() {
             setRules([]);
         }
     }, [selectedModel]);
+
+    useEffect(() => {
+        if (activeTab === 'templates') {
+            fetchTemplates();
+        }
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (selectedTemplate && activeTab === 'templates') {
+            fetchTemplateItems(selectedTemplate.id);
+        }
+    }, [selectedTemplate, activeTab]);
+
+    // --- TEMPLATE ACTIONS ---
+    const [templateCounts, setTemplateCounts] = useState<Record<string, number>>({});
+
+    const fetchTemplates = async () => {
+        setLoadingTemplates(true);
+        const { data, error } = await supabase
+            .from('quote_templates')
+            .select('*')
+            .order('name', { ascending: true });
+        if (data) {
+            setTemplates(data);
+            
+            // Fetch counts
+            const { data: countRows } = await supabase
+                .from('quote_template_items')
+                .select('template_id');
+            const counts: Record<string, number> = {};
+            if (countRows) {
+                countRows.forEach((row: any) => {
+                    counts[row.template_id] = (counts[row.template_id] || 0) + 1;
+                });
+            }
+            setTemplateCounts(counts);
+
+            if (data.length > 0) {
+                const stillExists = selectedTemplate ? data.some(t => t.id === selectedTemplate.id) : false;
+                if (!stillExists) {
+                    setSelectedTemplate(data[0]);
+                }
+            } else {
+                setSelectedTemplate(null);
+            }
+        }
+        setLoadingTemplates(false);
+    };
+
+    const fetchTemplateItems = async (templateId: string) => {
+        setLoadingTemplateItems(true);
+        const { data, error } = await supabase
+            .from('quote_template_items')
+            .select('product_id, products(id, name, sku, accounting_id, category, base_price, unit_of_measure)')
+            .eq('template_id', templateId);
+        if (data) {
+            const flattened = data.map((item: any) => ({
+                product_id: item.product_id,
+                ...item.products
+            })).filter(item => item.id);
+            setTemplateItems(flattened);
+        } else {
+            setTemplateItems([]);
+        }
+        setLoadingTemplateItems(false);
+    };
+
+    const createTemplate = async () => {
+        if (!newTemplateName.trim()) return alert('El nombre es obligatorio');
+        const { data, error } = await supabase
+            .from('quote_templates')
+            .insert([{ name: newTemplateName, description: newTemplateDesc }])
+            .select()
+            .single();
+        if (error) {
+            alert('Error al crear plantilla: ' + error.message);
+        } else if (data) {
+            setTemplates([...templates, data]);
+            setSelectedTemplate(data);
+            setIsCreatingTemplate(false);
+            setNewTemplateName('');
+            setNewTemplateDesc('');
+        }
+    };
+
+    const saveTemplateChanges = async () => {
+        if (!selectedTemplate) return;
+        const { error } = await supabase
+            .from('quote_templates')
+            .update({ name: editTemplateName, description: editTemplateDesc })
+            .eq('id', selectedTemplate.id);
+        if (error) {
+            alert('Error al actualizar plantilla: ' + error.message);
+        } else {
+            const updated = { ...selectedTemplate, name: editTemplateName, description: editTemplateDesc };
+            setSelectedTemplate(updated);
+            setTemplates(templates.map(t => t.id === updated.id ? updated : t));
+            setIsEditingTemplate(false);
+        }
+    };
+
+    const deleteTemplate = async (id: string, name: string) => {
+        if (!confirm(`¿Estás seguro de eliminar la plantilla "${name}"? Se borrarán todos los productos asociados a ella.`)) return;
+        const { error } = await supabase
+            .from('quote_templates')
+            .delete()
+            .eq('id', id);
+        if (error) {
+            alert('Error al eliminar plantilla: ' + error.message);
+        } else {
+            const remaining = templates.filter(t => t.id !== id);
+            setTemplates(remaining);
+            setSelectedTemplate(remaining.length > 0 ? remaining[0] : null);
+        }
+    };
+
+    const searchTemplateProducts = async (term: string) => {
+        if (!term) {
+            setTemplateProductsFound([]);
+            return;
+        }
+        const { data } = await supabase
+            .from('products')
+            .select('id, name, sku, accounting_id, category, base_price, unit_of_measure')
+            .eq('is_active', true)
+            .ilike('name', `%${term}%`)
+            .limit(10);
+        if (data) setTemplateProductsFound(data);
+    };
+
+    const addProductToTemplate = async (productId: string) => {
+        if (!selectedTemplate) return;
+        if (templateItems.some(item => item.product_id === productId)) {
+            alert('El producto ya se encuentra en esta plantilla');
+            return;
+        }
+        const { error } = await supabase
+            .from('quote_template_items')
+            .insert([{ template_id: selectedTemplate.id, product_id: productId }]);
+        if (error) {
+            alert('Error al agregar producto: ' + error.message);
+        } else {
+            fetchTemplateItems(selectedTemplate.id);
+            setSelectedTemplateProduct(null);
+            setTemplateProductSearch('');
+            setTemplateProductsFound([]);
+        }
+    };
+
+    const removeProductFromTemplate = async (productId: string) => {
+        if (!selectedTemplate) return;
+        const { error } = await supabase
+            .from('quote_template_items')
+            .delete()
+            .eq('template_id', selectedTemplate.id)
+            .eq('product_id', productId);
+        if (error) {
+            alert('Error al remover producto: ' + error.message);
+        } else {
+            setTemplateItems(templateItems.filter(item => item.product_id !== productId));
+        }
+    };
+
+    const exportTemplateExcel = () => {
+        if (!selectedTemplate || templateItems.length === 0) return alert('No hay productos para exportar');
+        const dataToExport = templateItems.map(item => ({
+            'ID ERP': item.accounting_id || '',
+            'SKU': item.sku || '',
+            'Producto': item.name || '',
+            'Categoría': CATEGORY_MAP[item.category] || item.category || '',
+            'Precio Base': item.base_price || 0
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Productos');
+        XLSX.writeFile(workbook, `Plantilla_${selectedTemplate.name.replace(/\s+/g, '_')}.xlsx`);
+    };
+
+    const handleTemplateExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedTemplate) return;
+        
+        setUploadingTemplateExcel(true);
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const data = XLSX.utils.sheet_to_json(ws) as any[];
+                
+                if (data.length === 0) throw new Error('El archivo Excel está vacío.');
+                
+                const skus = data.map(row => String(row['SKU'] || row['sku'] || '').trim()).filter(Boolean);
+                const erps = data.map(row => String(row['ID ERP'] || row['id erp'] || row['ID_ERP'] || '').trim()).filter(Boolean);
+                
+                if (skus.length === 0 && erps.length === 0) {
+                    throw new Error('No se encontraron columnas "SKU" o "ID ERP" válidas en el Excel.');
+                }
+                
+                let query = supabase.from('products').select('id, sku, accounting_id');
+                if (skus.length > 0 && erps.length > 0) {
+                    const skuString = skus.map(s => `'${s}'`).join(',');
+                    const erpString = erps.map(e => Number(e)).filter(n => !isNaN(n)).join(',');
+                    query = query.or(`sku.in.(${skuString}),accounting_id.in.(${erpString})`);
+                } else if (skus.length > 0) {
+                    const skuString = skus.map(s => `'${s}'`).join(',');
+                    query = query.or(`sku.in.(${skuString})`);
+                } else {
+                    const erpString = erps.map(e => Number(e)).filter(n => !isNaN(n)).join(',');
+                    query = query.or(`accounting_id.in.(${erpString})`);
+                }
+                
+                const { data: matchedProds, error: fetchErr } = await query;
+                if (fetchErr) throw fetchErr;
+                if (!matchedProds || matchedProds.length === 0) {
+                    throw new Error('No se encontró ningún producto coincidente en el sistema.');
+                }
+                
+                const itemsToInsert = matchedProds.map(p => ({
+                    template_id: selectedTemplate.id,
+                    product_id: p.id
+                }));
+                
+                const { error: insertErr } = await supabase
+                    .from('quote_template_items')
+                    .upsert(itemsToInsert, { onConflict: 'template_id,product_id' });
+                    
+                if (insertErr) throw insertErr;
+                
+                alert(`¡Éxito! Se cargaron/actualizaron ${matchedProds.length} productos en la plantilla.`);
+                fetchTemplateItems(selectedTemplate.id);
+            } catch (err: any) {
+                alert('Error procesando Excel: ' + err.message);
+            } finally {
+                setUploadingTemplateExcel(false);
+                setShowTemplateExcelModal(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
 
     // --- MODEL ACTIONS ---
     const createModel = async () => {
@@ -935,7 +1197,46 @@ export default function PricingSettingsPage() {
                     </Link>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2.5fr', gap: '2rem', alignItems: 'start' }}>
+                {/* Tab Navigation */}
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem' }}>
+                    <button
+                        onClick={() => setActiveTab('models')}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            border: 'none',
+                            background: 'none',
+                            fontSize: '1rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
+                            borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                            paddingBottom: '0.8rem',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        📈 Modelos de Precios
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('templates')}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            border: 'none',
+                            background: 'none',
+                            fontSize: '1rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
+                            borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                            paddingBottom: '0.8rem',
+                            transition: 'all 0.15s'
+                        }}
+                    >
+                        📋 Plantillas de Cotización (Preformas)
+                    </button>
+                </div>
+
+                {activeTab === 'models' ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2.5fr', gap: '2rem', alignItems: 'start' }}>
 
                     {/* --- LEFT: MODELS LIST --- */}
                     <div style={{ 
@@ -1791,6 +2092,443 @@ export default function PricingSettingsPage() {
                         </div>
                     )}
                 </div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2.5fr', gap: '2rem', alignItems: 'start' }}>
+                        {/* --- LEFT: TEMPLATES LIST --- */}
+                        <div style={{ 
+                            backgroundColor: 'white', 
+                            borderRadius: THEME.radius.lg, 
+                            boxShadow: THEME.shadow.md, 
+                            border: `1px solid ${THEME.colors.border}`,
+                            position: 'sticky',
+                            top: '105px',
+                            alignSelf: 'start'
+                        }}>
+                            <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h2 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Plantillas / Preformas</h2>
+                                <button 
+                                    onClick={() => setIsCreatingTemplate(true)} 
+                                    style={{ 
+                                        padding: '0.4rem 0.6rem', 
+                                        borderRadius: '6px', 
+                                        border: 'none', 
+                                        backgroundColor: THEME.colors.primary, 
+                                        color: 'white', 
+                                        cursor: 'pointer', 
+                                        fontWeight: 'bold',
+                                        fontSize: '1rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.15)'
+                                    }}
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            </div>
+
+                            {/* CREATE TEMPLATE FORM */}
+                            {isCreatingTemplate && (
+                                <div style={{ padding: '1.25rem', backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <input 
+                                        placeholder="Nombre (ej: Lista Larga)" 
+                                        value={newTemplateName} 
+                                        onChange={e => setNewTemplateName(e.target.value)} 
+                                        style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                    />
+                                    <input 
+                                        placeholder="Descripción (ej: Plantilla con catálogo completo)" 
+                                        value={newTemplateDesc} 
+                                        onChange={e => setNewTemplateDesc(e.target.value)} 
+                                        style={{ width: '100%', padding: '0.55rem', marginBottom: '0.8rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
+                                    />
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button onClick={createTemplate} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Guardar</button>
+                                        <button onClick={() => setIsCreatingTemplate(false)} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', backgroundColor: '#D1D5DB', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', color: '#374151' }}>Cancelar</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TEMPLATES LIST */}
+                            <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+                                {loadingTemplates ? (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando plantillas...</div>
+                                ) : templates.length === 0 ? (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay plantillas creadas.</div>
+                                ) : (
+                                    templates.map(t => (
+                                        <div
+                                            key={t.id}
+                                            onClick={() => {
+                                                setSelectedTemplate(t);
+                                                setIsEditingTemplate(false);
+                                            }}
+                                            style={{
+                                                padding: '1.25rem',
+                                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                                cursor: 'pointer',
+                                                backgroundColor: selectedTemplate?.id === t.id ? '#F0FDF4' : 'white',
+                                                borderLeft: selectedTemplate?.id === t.id ? `4px solid ${THEME.colors.primary}` : '4px solid transparent',
+                                                transition: 'background 0.2s'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ flex: 1, paddingRight: '0.5rem' }}>
+                                                    <div style={{ fontWeight: '800', fontSize: '1.05rem', color: THEME.colors.textMain, marginBottom: '0.2rem' }}>
+                                                        {t.name}
+                                                    </div>
+                                                    {t.description && (
+                                                        <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
+                                                            {t.description}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{
+                                                    backgroundColor: selectedTemplate?.id === t.id ? '#D1FAE5' : '#F3F4F6',
+                                                    padding: '0.3rem 0.6rem',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    color: selectedTemplate?.id === t.id ? '#065F46' : '#475569'
+                                                }}>
+                                                    {templateCounts[t.id] || 0} SKU
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* --- RIGHT: TEMPLATE ITEMS VIEW --- */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            {selectedTemplate ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    {/* TEMPLATE DETAILS HEADER */}
+                                    {isEditingTemplate ? (
+                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ marginBottom: '1rem' }}>
+                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Nombre de la Plantilla</label>
+                                                <input
+                                                    value={editTemplateName}
+                                                    onChange={e => setEditTemplateName(e.target.value)}
+                                                    style={{ width: '100%', padding: '0.55rem', fontSize: '1.1rem', fontWeight: 'bold', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
+                                                />
+                                            </div>
+                                            <div style={{ marginBottom: '1rem' }}>
+                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Descripción</label>
+                                                <input
+                                                    value={editTemplateDesc}
+                                                    onChange={e => setEditTemplateDesc(e.target.value)}
+                                                    style={{ width: '100%', padding: '0.55rem', border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                                <button onClick={saveTemplateChanges} style={{ padding: '0.55rem 1.25rem', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)', fontSize: '0.85rem' }}>
+                                                    <Save size={16} /> Guardar Cambios
+                                                </button>
+                                                <button onClick={() => setIsEditingTemplate(false)} style={{ padding: '0.55rem 1.25rem', backgroundColor: 'white', color: THEME.colors.textSecondary, border: `1px solid ${THEME.colors.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <h1 style={{ ...THEME.typography.h1, color: THEME.colors.textMain, margin: 0 }}>{selectedTemplate.name}</h1>
+                                                {selectedTemplate.description && (
+                                                    <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{selectedTemplate.description}</p>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                                <button
+                                                    onClick={() => {
+                                                        setEditTemplateName(selectedTemplate.name);
+                                                        setEditTemplateDesc(selectedTemplate.description || '');
+                                                        setIsEditingTemplate(true);
+                                                    }}
+                                                    style={{ color: '#2563EB', backgroundColor: '#F0F7FF', border: '1px solid #DBEAFE', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+                                                >
+                                                    <Edit3 size={14} /> Editar
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteTemplate(selectedTemplate.id, selectedTemplate.name)}
+                                                    style={{ color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FEE2E2', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+                                                >
+                                                    <Trash2 size={14} /> Eliminar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* TEMPLATE ITEMS TABLE CARD */}
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
+                                        {/* TABLE ACTIONS / SEARCH / EXCEL */}
+                                        <div style={{ padding: '1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                            
+                                            {/* Local filter inside the template */}
+                                            <div style={{ position: 'relative', width: '280px' }}>
+                                                <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar en esta plantilla..."
+                                                    value={templateSearchFilter}
+                                                    onChange={e => setTemplateSearchFilter(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.55rem 0.55rem 0.55rem 2.25rem',
+                                                        borderRadius: '8px',
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.85rem',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                            </div>
+
+                                            {/* Product Search & Addition Selector */}
+                                            <div style={{ position: 'relative', width: '300px' }}>
+                                                <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="🔍 Buscar y agregar producto..."
+                                                    value={templateProductSearch}
+                                                    onChange={e => {
+                                                        setTemplateProductSearch(e.target.value);
+                                                        searchTemplateProducts(e.target.value);
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.55rem 0.55rem 0.55rem 2.25rem',
+                                                        borderRadius: '8px',
+                                                        border: `1px solid #10B981`,
+                                                        fontSize: '0.85rem',
+                                                        outline: 'none',
+                                                        backgroundColor: '#F0FDF4'
+                                                    }}
+                                                />
+                                                {templateProductsFound.length > 0 && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '100%',
+                                                        left: 0,
+                                                        right: 0,
+                                                        backgroundColor: 'white',
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        borderRadius: '8px',
+                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                                        zIndex: 20,
+                                                        maxHeight: '250px',
+                                                        overflowY: 'auto',
+                                                        marginTop: '4px'
+                                                    }}>
+                                                        {templateProductsFound.map(p => (
+                                                            <div
+                                                                key={p.id}
+                                                                onClick={() => addProductToTemplate(p.id)}
+                                                                style={{
+                                                                    padding: '0.75rem 1rem',
+                                                                    cursor: 'pointer',
+                                                                    borderBottom: `1px solid ${THEME.colors.border}`,
+                                                                    fontSize: '0.85rem',
+                                                                    transition: 'background 0.15s',
+                                                                    textAlign: 'left'
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                            >
+                                                                <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
+                                                                <span style={{ color: '#475569' }}>{p.name}</span>
+                                                                <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginLeft: '6px' }}>({p.sku})</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Import/Export buttons */}
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button
+                                                    onClick={exportTemplateExcel}
+                                                    style={{ padding: '0.55rem 1rem', backgroundColor: '#EAFDF4', color: '#0D7A57', border: '1px solid #BBF7D0', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                                                >
+                                                    <FileDown size={14} /> Exportar Excel
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowTemplateExcelModal(true)}
+                                                    style={{ padding: '0.55rem 1rem', backgroundColor: '#EAFDF4', color: '#0D7A57', border: '1px solid #BBF7D0', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                                                >
+                                                    <FileUp size={14} /> Importar Excel
+                                                </button>
+                                            </div>
+
+                                        </div>
+
+                                        {/* TABLE VIEW */}
+                                        {loadingTemplateItems ? (
+                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando productos de la plantilla...</div>
+                                        ) : templateItems.length === 0 ? (
+                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta plantilla no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
+                                        ) : (
+                                            <div style={{ overflowX: 'auto' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                                    <thead>
+                                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%' }}>ID ERP</th>
+                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '25%' }}>SKU</th>
+                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%' }}>Producto</th>
+                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%' }}>Categoría</th>
+                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right' }}>Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {templateItems
+                                                            .filter(item => {
+                                                                const term = templateSearchFilter.toLowerCase().trim();
+                                                                if (!term) return true;
+                                                                return (item.name || '').toLowerCase().includes(term) || 
+                                                                       (item.sku || '').toLowerCase().includes(term) || 
+                                                                       String(item.accounting_id || '').includes(term);
+                                                            })
+                                                            .map(item => (
+                                                                <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                                    <td style={{ padding: '0.9rem 1.25rem', fontWeight: '800', color: '#475569' }}>
+                                                                        {item.accounting_id || '—'}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.9rem 1.25rem', color: THEME.colors.textSecondary, fontFamily: 'monospace' }}>
+                                                                        {item.sku || '—'}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.9rem 1.25rem', fontWeight: '800', color: THEME.colors.textMain }}>
+                                                                        {item.name}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.9rem 1.25rem' }}>
+                                                                        <span style={{
+                                                                            backgroundColor: '#F1F5F9',
+                                                                            color: '#475569',
+                                                                            padding: '0.2rem 0.5rem',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: '700'
+                                                                        }}>
+                                                                            {CATEGORY_MAP[item.category] || item.category}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={{ padding: '0.9rem 1.25rem', textAlign: 'right' }}>
+                                                                        <button
+                                                                            onClick={() => removeProductFromTemplate(item.product_id)}
+                                                                            style={{
+                                                                                background: 'none',
+                                                                                border: 'none',
+                                                                                color: '#DC2626',
+                                                                                cursor: 'pointer',
+                                                                                padding: '0.25rem',
+                                                                                borderRadius: '4px'
+                                                                            }}
+                                                                            title="Remover de la plantilla"
+                                                                        >
+                                                                            <Trash2 size={16} />
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
+                                    <div style={{ fontSize: '3.5rem', marginBottom: '1.25rem' }}>👈</div>
+                                    <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una plantilla</h3>
+                                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige una plantilla o preforma de la lista de la izquierda para editar su catálogo de productos.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL CARGA EXCEL PARA PLANTILLAS --- */}
+                {showTemplateExcelModal && selectedTemplate && (
+                    <div style={{ 
+                        position: 'fixed', 
+                        top: 0, 
+                        left: 0, 
+                        right: 0, 
+                        bottom: 0, 
+                        backgroundColor: 'rgba(15, 23, 42, 0.4)', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        zIndex: 100,
+                        backdropFilter: 'blur(4px)'
+                    }}>
+                        <div style={{ 
+                            backgroundColor: 'white', 
+                            borderRadius: '16px', 
+                            padding: '2rem', 
+                            width: '450px', 
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            border: '1px solid #E2E8F0',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '1.25rem'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: THEME.colors.textMain }}>
+                                    Cargar Productos (.xlsx)
+                                </h3>
+                                <button 
+                                    onClick={() => setShowTemplateExcelModal(false)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary }}
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            
+                            <p style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary, margin: 0, lineHeight: '1.4' }}>
+                                Sube un archivo Excel para actualizar la plantilla. Debe contener una columna llamada <strong>"SKU"</strong> o <strong>"ID ERP"</strong>.
+                            </p>
+
+                            <label style={{
+                                border: '2px dashed #BFDBFE',
+                                backgroundColor: '#F8FAFC',
+                                borderRadius: '12px',
+                                padding: '2rem',
+                                textAlign: 'center',
+                                cursor: uploadingTemplateExcel ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = '#3B82F6'}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = '#BFDBFE'}
+                            >
+                                {uploadingTemplateExcel ? (
+                                    <>
+                                        <RefreshCw size={24} className="animate-spin" style={{ color: '#2563EB' }} />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#2563EB' }}>Cargando productos...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <FileUp size={24} style={{ color: '#2563EB' }} />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: THEME.colors.textMain }}>Seleccionar archivo Excel</span>
+                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>Formatos .xlsx, .xls</span>
+                                    </>
+                                )}
+                                <input 
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleTemplateExcelUpload}
+                                    disabled={uploadingTemplateExcel}
+                                    style={{ display: 'none' }}
+                                />
+                            </label>
+                        </div>
+                    </div>
+                )}
 
                 {/* --- MODAL PREMIUM CARGA/DESCARGA EXCEL --- */}
                 {showExcelModal && selectedModel && (
