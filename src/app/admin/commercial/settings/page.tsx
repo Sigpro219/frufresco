@@ -1191,48 +1191,46 @@ export default function PricingSettingsPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilyMain }}>
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-                <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.75rem' }}>
                     <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
                         <ArrowLeft size={16} /> Volver a Comercial
                     </Link>
-                </div>
 
-                {/* Tab Navigation */}
-                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem' }}>
-                    <button
-                        onClick={() => setActiveTab('models')}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            border: 'none',
-                            background: 'none',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
-                            borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                            paddingBottom: '0.8rem',
-                            transition: 'all 0.15s'
-                        }}
-                    >
-                        📈 Modelos de Precios
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('templates')}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            border: 'none',
-                            background: 'none',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
-                            borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
-                            paddingBottom: '0.8rem',
-                            transition: 'all 0.15s'
-                        }}
-                    >
-                        📋 Plantillas de Cotización (Preformas)
-                    </button>
+                    {/* Tab Navigation */}
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button
+                            onClick={() => setActiveTab('models')}
+                            style={{
+                                padding: '0.45rem 0.9rem',
+                                border: 'none',
+                                background: 'none',
+                                fontSize: '0.9rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                color: activeTab === 'models' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                borderBottom: activeTab === 'models' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            📈 Modelos de Precios
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('templates')}
+                            style={{
+                                padding: '0.45rem 0.9rem',
+                                border: 'none',
+                                background: 'none',
+                                fontSize: '0.9rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                color: activeTab === 'templates' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                borderBottom: activeTab === 'templates' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            📋 Listas de Cotización
+                        </button>
+                    </div>
                 </div>
 
                 {activeTab === 'models' ? (
@@ -2105,7 +2103,7 @@ export default function PricingSettingsPage() {
                             alignSelf: 'start'
                         }}>
                             <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h2 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Plantillas / Preformas</h2>
+                                <h2 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: THEME.colors.textMain }}>Listas de Cotización</h2>
                                 <button 
                                     onClick={() => setIsCreatingTemplate(true)} 
                                     style={{ 
@@ -2137,7 +2135,7 @@ export default function PricingSettingsPage() {
                                         style={{ width: '100%', padding: '0.55rem', marginBottom: '0.6rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
                                     />
                                     <input 
-                                        placeholder="Descripción (ej: Plantilla con catálogo completo)" 
+                                        placeholder="Descripción (ej: Lista con catálogo de productos sugeridos)" 
                                         value={newTemplateDesc} 
                                         onChange={e => setNewTemplateDesc(e.target.value)} 
                                         style={{ width: '100%', padding: '0.55rem', marginBottom: '0.8rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem' }} 
@@ -2152,9 +2150,9 @@ export default function PricingSettingsPage() {
                             {/* TEMPLATES LIST */}
                             <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
                                 {loadingTemplates ? (
-                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando plantillas...</div>
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando listas...</div>
                                 ) : templates.length === 0 ? (
-                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay plantillas creadas.</div>
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay listas creadas.</div>
                                 ) : (
                                     templates.map(t => (
                                         <div
@@ -2191,7 +2189,7 @@ export default function PricingSettingsPage() {
                                                     fontWeight: '800',
                                                     color: selectedTemplate?.id === t.id ? '#065F46' : '#475569'
                                                 }}>
-                                                    {templateCounts[t.id] || 0} SKU
+                                                    {templateCounts[t.id] || 0} Prod.
                                                 </div>
                                             </div>
                                         </div>
@@ -2208,7 +2206,7 @@ export default function PricingSettingsPage() {
                                     {isEditingTemplate ? (
                                         <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}` }}>
                                             <div style={{ marginBottom: '1rem' }}>
-                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Nombre de la Plantilla</label>
+                                                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Nombre de la Lista</label>
                                                 <input
                                                     value={editTemplateName}
                                                     onChange={e => setEditTemplateName(e.target.value)}
@@ -2271,7 +2269,7 @@ export default function PricingSettingsPage() {
                                                 <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                                                 <input
                                                     type="text"
-                                                    placeholder="Buscar en esta plantilla..."
+                                                    placeholder="Buscar en esta lista..."
                                                     value={templateSearchFilter}
                                                     onChange={e => setTemplateSearchFilter(e.target.value)}
                                                     style={{
@@ -2365,17 +2363,16 @@ export default function PricingSettingsPage() {
 
                                         {/* TABLE VIEW */}
                                         {loadingTemplateItems ? (
-                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando productos de la plantilla...</div>
+                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando productos de la lista...</div>
                                         ) : templateItems.length === 0 ? (
-                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta plantilla no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
+                                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Esta lista no tiene productos asociados. Usa el buscador de arriba para agregar.</div>
                                         ) : (
                                             <div style={{ overflowX: 'auto' }}>
                                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                                     <thead>
                                                         <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                             <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%' }}>ID ERP</th>
-                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '25%' }}>SKU</th>
-                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '35%' }}>Producto</th>
+                                                            <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '60%' }}>Producto</th>
                                                             <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '15%' }}>Categoría</th>
                                                             <th style={{ ...THEME.typography.tableHeader, padding: '0.9rem 1.25rem', width: '10%', textAlign: 'right' }}>Acciones</th>
                                                         </tr>
@@ -2386,16 +2383,12 @@ export default function PricingSettingsPage() {
                                                                 const term = templateSearchFilter.toLowerCase().trim();
                                                                 if (!term) return true;
                                                                 return (item.name || '').toLowerCase().includes(term) || 
-                                                                       (item.sku || '').toLowerCase().includes(term) || 
                                                                        String(item.accounting_id || '').includes(term);
                                                             })
                                                             .map(item => (
                                                                 <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                                     <td style={{ padding: '0.9rem 1.25rem', fontWeight: '800', color: '#475569' }}>
                                                                         {item.accounting_id || '—'}
-                                                                    </td>
-                                                                    <td style={{ padding: '0.9rem 1.25rem', color: THEME.colors.textSecondary, fontFamily: 'monospace' }}>
-                                                                        {item.sku || '—'}
                                                                     </td>
                                                                     <td style={{ padding: '0.9rem 1.25rem', fontWeight: '800', color: THEME.colors.textMain }}>
                                                                         {item.name}
@@ -2423,7 +2416,7 @@ export default function PricingSettingsPage() {
                                                                                 padding: '0.25rem',
                                                                                 borderRadius: '4px'
                                                                             }}
-                                                                            title="Remover de la plantilla"
+                                                                            title="Remover de la lista"
                                                                         >
                                                                             <Trash2 size={16} />
                                                                         </button>
@@ -2440,8 +2433,8 @@ export default function PricingSettingsPage() {
                             ) : (
                                 <div style={{ padding: '4rem 2rem', textAlign: 'center', color: THEME.colors.textSecondary, border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, backgroundColor: 'white' }}>
                                     <div style={{ fontSize: '3.5rem', marginBottom: '1.25rem' }}>👈</div>
-                                    <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una plantilla</h3>
-                                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige una plantilla o preforma de la lista de la izquierda para editar su catálogo de productos.</p>
+                                    <h3 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '800' }}>Selecciona una lista</h3>
+                                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>Elige una lista de cotización de la izquierda para editar su catálogo de productos.</p>
                                 </div>
                             )}
                         </div>
@@ -2487,7 +2480,7 @@ export default function PricingSettingsPage() {
                             </div>
                             
                             <p style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary, margin: 0, lineHeight: '1.4' }}>
-                                Sube un archivo Excel para actualizar la plantilla. Debe contener una columna llamada <strong>"SKU"</strong> o <strong>"ID ERP"</strong>.
+                                Sube un archivo Excel para actualizar la lista. Debe contener una columna llamada <strong>"SKU"</strong> o <strong>"ID ERP"</strong>.
                             </p>
 
                             <label style={{
