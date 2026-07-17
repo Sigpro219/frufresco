@@ -384,15 +384,13 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             // 2. Auto-generate pre-quotation (only for active 'new' leads)
             if (newLeadId && (statusValue === 'new')) {
                 let colorTag = 'rojo';
-                let templateName = 'Lista Pequeña';
                 const size = finalData.business_size || '';
                 if (size.includes('Grande') || size.includes('30M')) {
                     colorTag = 'verde';
-                    templateName = 'Lista Larga';
                 } else if (size.includes('Mediano') || size.includes('10M')) {
                     colorTag = 'amarillo';
-                    templateName = 'Lista Mediana';
                 }
+                const templateName = 'Lista Pequeña'; // Always use short list preform for pre-quotations
 
                 // Query model by color_tag
                 const { data: matchedModel } = await supabase
