@@ -52,7 +52,7 @@ export default function PricingSettingsPage() {
 
     // Editing State
     const [isEditingModel, setIsEditingModel] = useState(false);
-    const [editModelData, setEditModelData] = useState({ name: '', description: '', margin: 0 });
+    const [editModelData, setEditModelData] = useState<{ name: string; description: string; margin: number; color_tag: string | null }>({ name: '', description: '', margin: 0, color_tag: null });
 
     const [ruleProductSearch, setRuleProductSearch] = useState('');
     const [ruleSelectedProduct, setRuleSelectedProduct] = useState<any>(null);
@@ -368,7 +368,8 @@ export default function PricingSettingsPage() {
             .update({
                 name: editModelData.name,
                 description: editModelData.description,
-                base_margin_percent: editModelData.margin
+                base_margin_percent: editModelData.margin,
+                color_tag: editModelData.color_tag
             })
             .eq('id', selectedModel.id);
 
@@ -376,7 +377,13 @@ export default function PricingSettingsPage() {
             alert('Error actualizando: ' + error.message);
         } else {
             // Update local state
-            const updated = { ...selectedModel, name: editModelData.name, description: editModelData.description, base_margin_percent: editModelData.margin };
+            const updated = { 
+                ...selectedModel, 
+                name: editModelData.name, 
+                description: editModelData.description, 
+                base_margin_percent: editModelData.margin,
+                color_tag: editModelData.color_tag
+            };
             setSelectedModel(updated);
             // Update list
             setModels(models.map(m => m.id === updated.id ? updated : m));
@@ -995,18 +1002,23 @@ export default function PricingSettingsPage() {
                                 >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <div style={{ flex: 1, paddingRight: '1rem' }}>
-                                            <div style={{ fontWeight: '800', fontSize: '1.05rem', color: THEME.colors.textMain, marginBottom: '0.2rem' }}>
-                                                {(() => {
-                                                    const parts = m.name.split(/(\d+\s*días)/i);
-                                                    return parts.map((part, i) => (
-                                                        <span key={i} style={{ 
-                                                            color: /(\d+\s*días)/i.test(part) ? '#0D7A57' : 'inherit',
-                                                            fontSize: /(\d+\s*días)/i.test(part) ? '0.95em' : 'inherit'
-                                                        }}>
-                                                            {part}
-                                                        </span>
-                                                    ));
-                                                })()}
+                                            <div style={{ fontWeight: '800', fontSize: '1.05rem', color: THEME.colors.textMain, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                {m.color_tag === 'verde' && <span title="Semáforo B2B: Verde (Grande)" style={{ fontSize: '0.9rem' }}>🟢</span>}
+                                                {m.color_tag === 'amarillo' && <span title="Semáforo B2B: Amarillo (Mediano)" style={{ fontSize: '0.9rem' }}>🟡</span>}
+                                                {m.color_tag === 'rojo' && <span title="Semáforo B2B: Rojo (Pequeño)" style={{ fontSize: '0.9rem' }}>🔴</span>}
+                                                <div>
+                                                    {(() => {
+                                                        const parts = m.name.split(/(\d+\s*días)/i);
+                                                        return parts.map((part, i) => (
+                                                            <span key={i} style={{ 
+                                                                color: /(\d+\s*días)/i.test(part) ? '#0D7A57' : 'inherit',
+                                                                fontSize: /(\d+\s*días)/i.test(part) ? '0.95em' : 'inherit'
+                                                            }}>
+                                                                {part}
+                                                            </span>
+                                                        ));
+                                                    })()}
+                                                </div>
                                             </div>
                                             {m.description && (
                                                 <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
@@ -1066,6 +1078,73 @@ export default function PricingSettingsPage() {
                                             style={{ width: '100px', padding: '0.55rem', fontSize: '1.1rem', fontWeight: 'bold', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}`, borderRadius: '6px', marginTop: '0.2rem' }}
                                         />
                                     </div>
+                                    <div style={{ marginBottom: '1.25rem' }}>
+                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'block', marginBottom: '0.4rem' }}>
+                                             Asignar Semáforo (Clasificación B2B)
+                                         </label>
+                                         <div style={{ display: 'flex', gap: '10px' }}>
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'verde' ? null : 'verde' })}
+                                                 style={{
+                                                     padding: '0.4rem 0.8rem',
+                                                     borderRadius: '6px',
+                                                     border: editModelData.color_tag === 'verde' ? '2px solid #10B981' : '1px solid #E2E8F0',
+                                                     backgroundColor: editModelData.color_tag === 'verde' ? '#DCFCE7' : 'white',
+                                                     color: editModelData.color_tag === 'verde' ? '#15803D' : '#475569',
+                                                     fontWeight: '800',
+                                                     fontSize: '0.85rem',
+                                                     cursor: 'pointer',
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     gap: '4px',
+                                                     transition: 'all 0.15s'
+                                                 }}
+                                             >
+                                                 🟢 Verde (Grande)
+                                             </button>
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'amarillo' ? null : 'amarillo' })}
+                                                 style={{
+                                                     padding: '0.4rem 0.8rem',
+                                                     borderRadius: '6px',
+                                                     border: editModelData.color_tag === 'amarillo' ? '2px solid #F59E0B' : '1px solid #E2E8F0',
+                                                     backgroundColor: editModelData.color_tag === 'amarillo' ? '#FEF3C7' : 'white',
+                                                     color: editModelData.color_tag === 'amarillo' ? '#B45309' : '#475569',
+                                                     fontWeight: '800',
+                                                     fontSize: '0.85rem',
+                                                     cursor: 'pointer',
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     gap: '4px',
+                                                     transition: 'all 0.15s'
+                                                 }}
+                                             >
+                                                 🟡 Amarillo (Mediano)
+                                             </button>
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => setEditModelData({ ...editModelData, color_tag: editModelData.color_tag === 'rojo' ? null : 'rojo' })}
+                                                 style={{
+                                                     padding: '0.4rem 0.8rem',
+                                                     borderRadius: '6px',
+                                                     border: editModelData.color_tag === 'rojo' ? '2px solid #EF4444' : '1px solid #E2E8F0',
+                                                     backgroundColor: editModelData.color_tag === 'rojo' ? '#FEE2E2' : 'white',
+                                                     color: editModelData.color_tag === 'rojo' ? '#B91C1C' : '#475569',
+                                                     fontWeight: '800',
+                                                     fontSize: '0.85rem',
+                                                     cursor: 'pointer',
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     gap: '4px',
+                                                     transition: 'all 0.15s'
+                                                 }}
+                                             >
+                                                 🔴 Rojo (Pequeño)
+                                             </button>
+                                         </div>
+                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem' }}>
                                         <button 
                                             onClick={saveModelChanges} 
@@ -1227,7 +1306,8 @@ export default function PricingSettingsPage() {
                                                     setEditModelData({
                                                         name: selectedModel.name,
                                                         description: selectedModel.description,
-                                                        margin: selectedModel.base_margin_percent
+                                                        margin: selectedModel.base_margin_percent,
+                                                        color_tag: selectedModel.color_tag || null
                                                     });
                                                     setIsEditingModel(true);
                                                 }}
