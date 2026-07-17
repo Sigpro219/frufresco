@@ -4876,7 +4876,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                 return {
                     'CODIGO_CONTABLE': p.accounting_id || '',
-                    'SKU_MAESTRO': p.sku || '',
                     'PRODUCTO': p.name || '',
                     'NOMBRE_FACTURA': exc?.nickname || '',
                     'VARIACION_REQUERIDA': varString,
@@ -4893,7 +4892,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     p.options_config.forEach((opt: any) => {
                         sheet2Data.push({
                             'CODIGO_CONTABLE': p.accounting_id || '',
-                            'SKU_MAESTRO': p.sku || '',
                             'PRODUCTO': p.name || '',
                             'ATRIBUTO': opt.name || '',
                             'VALORES_PERMITIDOS': opt.values ? opt.values.join(', ') : ''
@@ -4902,7 +4900,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                 } else {
                     sheet2Data.push({
                         'CODIGO_CONTABLE': p.accounting_id || '',
-                        'SKU_MAESTRO': p.sku || '',
                         'PRODUCTO': p.name || '',
                         'ATRIBUTO': 'Sin atributos',
                         'VALORES_PERMITIDOS': 'Producto base'
