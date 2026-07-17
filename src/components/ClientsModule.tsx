@@ -3312,14 +3312,29 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
     // Initialización / Actualización del Mapa Interactivo
     useEffect(() => {
-        if (!mapRef.current || !window.google || isLead) return;
+        if (!mapRef.current || !window.google) return;
 
-        const latVal = parseFloat(String(formData.latitude));
-        const lngVal = parseFloat(String(formData.longitude));
-        
-        // Bogotá center generic coords if null
-        const lat = !isNaN(latVal) ? latVal : 4.6097;
-        const lng = !isNaN(lngVal) ? lngVal : -74.0817; 
+        let latVal = 4.6097;
+        let lngVal = -74.0817;
+        let draggable = !isReadOnly;
+
+        if (isLead) {
+            draggable = false;
+            if (editData?.latitude && editData?.longitude) {
+                latVal = parseFloat(String(editData.latitude));
+                lngVal = parseFloat(String(editData.longitude));
+            } else {
+                return;
+            }
+        } else {
+            const latF = parseFloat(String(formData.latitude));
+            const lngF = parseFloat(String(formData.longitude));
+            latVal = !isNaN(latF) ? latF : 4.6097;
+            lngVal = !isNaN(lngF) ? lngF : -74.0817;
+        }
+
+        const lat = latVal;
+        const lng = lngVal;
 
         if (!mapInstance.current) {
             mapInstance.current = new window.google.maps.Map(mapRef.current, {
@@ -3333,45 +3348,42 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             markerInstance.current = new window.google.maps.Marker({
                 position: { lat, lng },
                 map: mapInstance.current,
-                draggable: !isReadOnly,
+                draggable: draggable,
                 animation: window.google.maps.Animation.DROP
             });
 
-            // Sincronizar el arrastre del marcador con el formulario
-            markerInstance.current.addListener('dragend', () => {
-                if (!markerInstance.current) return;
-                const pos = markerInstance.current.getPosition();
-                if (!pos) return;
-                setFormData(prev => ({
-                    ...prev,
-                    latitude: pos.lat().toFixed(7),
-                    longitude: pos.lng().toFixed(7),
-                    geocoding_status: 'manual'
-                }));
-            });
+            if (!isLead) {
+                markerInstance.current.addListener('dragend', () => {
+                    if (!markerInstance.current) return;
+                    const pos = markerInstance.current.getPosition();
+                    if (!pos) return;
+                    setFormData(prev => ({
+                        ...prev,
+                        latitude: pos.lat().toFixed(7),
+                        longitude: pos.lng().toFixed(7),
+                        geocoding_status: 'manual'
+                    }));
+                });
 
-            // Click en mapa para mover marcador
-            mapInstance.current.addListener('click', (e: google.maps.MapMouseEvent) => {
-                if (isReadOnly) return;
-                const pos = e.latLng;
-                if (!pos || !markerInstance.current) return;
-                markerInstance.current.setPosition(pos);
-                setFormData(prev => ({
-                    ...prev,
-                    latitude: pos.lat().toFixed(7),
-                    longitude: pos.lng().toFixed(7),
-                    geocoding_status: 'manual'
-                }));
-            });
-        } else {
-            // Solo actualizamos posición si no estamos en modo "Manual" (para no romper la interacción del usuario)
-            if (formData.geocoding_status === 'verified') {
-                const newPos = { lat, lng };
-                mapInstance.current?.setCenter(newPos);
-                markerInstance.current?.setPosition(newPos);
+                mapInstance.current.addListener('click', (e: google.maps.MapMouseEvent) => {
+                    if (isReadOnly) return;
+                    const pos = e.latLng;
+                    if (!pos || !markerInstance.current) return;
+                    markerInstance.current.setPosition(pos);
+                    setFormData(prev => ({
+                        ...prev,
+                        latitude: pos.lat().toFixed(7),
+                        longitude: pos.lng().toFixed(7),
+                        geocoding_status: 'manual'
+                    }));
+                });
             }
+        } else {
+            const newPos = { lat, lng };
+            mapInstance.current.setCenter(newPos);
+            markerInstance.current?.setPosition(newPos);
         }
-    }, [formData.latitude, formData.longitude, formData.geocoding_status, isReadOnly, isLead]);
+    }, [formData.latitude, formData.longitude, formData.geocoding_status, editData?.latitude, editData?.longitude, isReadOnly, isLead]);
 
     const handleGeocode = async () => {
         if (!formData.address) {
@@ -3600,6 +3612,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <div>
                                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tamaño de Negocio</span>
                                             <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#334155', marginTop: '0.2rem' }}>{(editData as any)?.business_size || 'No especificado'}</div>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>NIT</span>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#334155', marginTop: '0.2rem' }}>{editData?.nit || 'No registrado'}</div>
                                         </div>
                                     </div>
                                 </section>
