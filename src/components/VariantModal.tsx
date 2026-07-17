@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Product, supabase } from '@/lib/supabase';
 
@@ -46,6 +46,51 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
         }
         fetchMasterAttributes();
     }, []);
+
+    const prevLengthRef = useRef(options.length);
+
+    useEffect(() => {
+        // Focus the first input or the add button when the modal mounts
+        setTimeout(() => {
+            const firstInput = document.getElementById('attr-name-0') || 
+                               document.getElementById('attr-values-0') || 
+                               document.getElementById('btn-add-attribute');
+            if (firstInput) {
+                firstInput.focus();
+                if ((firstInput as any).select) (firstInput as any).select();
+            }
+        }, 100);
+    }, []);
+
+    useEffect(() => {
+        if (options.length > prevLengthRef.current) {
+            const newIndex = options.length - 1;
+            setTimeout(() => {
+                const newInput = document.getElementById(`attr-name-${newIndex}`);
+                if (newInput) {
+                    newInput.focus();
+                    if ((newInput as any).select) (newInput as any).select();
+                }
+            }, 50);
+        }
+        prevLengthRef.current = options.length;
+    }, [options.length]);
+
+    useEffect(() => {
+        if (readOnly) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === '+' || e.key === 'Add') {
+                e.preventDefault();
+                addOption();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [options, readOnly]);
 
 
     const handleUpload = async (id: string, file: File) => {
@@ -167,7 +212,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 20000,
+            zIndex: 25000,
             padding: '1rem'
         }}>
             <div style={{
@@ -194,6 +239,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                             <h3 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0, color: '#111827' }}>1. Configurar Atributos</h3>
                             {options.length < 3 && (
                                 <button 
+                                    id="btn-add-attribute"
                                     onClick={addOption}
                                     style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', border: '2px dashed #3B82F6', color: '#1E40AF', fontWeight: '700', background: '#EFF6FF', cursor: 'pointer', fontSize: '0.9rem' }}
                                 >
@@ -215,10 +261,25 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                         <div style={{ display: 'flex', gap: '6px' }}>
                                                             <input
+                                                                id={`attr-name-${idx}`}
                                                                 type="text"
                                                                 placeholder="Nombre del Atributo (Ej: Madurez)"
                                                                 value={opt.name}
                                                                 onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        document.getElementById(`attr-values-${idx}`)?.focus();
+                                                                    } else if (e.key === 'ArrowDown') {
+                                                                        e.preventDefault();
+                                                                        const next = document.getElementById(`attr-name-${idx + 1}`);
+                                                                        if (next) (next as any).focus();
+                                                                    } else if (e.key === 'ArrowUp') {
+                                                                        e.preventDefault();
+                                                                        const prev = document.getElementById(`attr-name-${idx - 1}`);
+                                                                        if (prev) (prev as any).focus();
+                                                                    }
+                                                                }}
                                                                 style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem' }}
                                                             />
                                                             <button
@@ -239,6 +300,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
                                             return (
                                                 <select
+                                                    id={`attr-name-${idx}`}
                                                     value={opt.name}
                                                     onChange={(e) => {
                                                         const val = e.target.value;
@@ -247,6 +309,12 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                             updateOption(idx, '', '');
                                                         } else {
                                                             updateOption(idx, val, '');
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            document.getElementById(`attr-values-${idx}`)?.focus();
                                                         }
                                                     }}
                                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
@@ -263,10 +331,36 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
                                         <input
+                                            id={`attr-values-${idx}`}
                                             type="text"
                                             placeholder="Valores (Verde, Pintón, Maduro... separados por comas)"
                                             value={opt.values.join(', ')}
                                             onChange={(e) => updateOption(idx, opt.name, e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (idx < options.length - 1) {
+                                                        const next = document.getElementById(`attr-name-${idx + 1}`) || document.getElementById(`attr-values-${idx + 1}`);
+                                                        if (next) next.focus();
+                                                    } else {
+                                                        const firstPrice = document.getElementById('variant-price-0');
+                                                        if (firstPrice) {
+                                                            firstPrice.focus();
+                                                            (firstPrice as HTMLInputElement).select();
+                                                        } else {
+                                                            document.getElementById('btn-save-variants')?.focus();
+                                                        }
+                                                    }
+                                                } else if (e.key === 'ArrowDown') {
+                                                    e.preventDefault();
+                                                    const next = document.getElementById(`attr-values-${idx + 1}`);
+                                                    if (next) next.focus();
+                                                } else if (e.key === 'ArrowUp') {
+                                                    e.preventDefault();
+                                                    const prev = document.getElementById(`attr-values-${idx - 1}`);
+                                                    if (prev) prev.focus();
+                                                }
+                                            }}
                                             style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', width: '100%' }}
                                         />
                                         {(() => {
@@ -422,6 +516,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                         <td style={{ padding: '1.2rem 1rem', textAlign: 'center' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
                                                 <input 
+                                                    id={`variant-price-${idx}`}
                                                     type="number"
                                                     disabled={readOnly}
                                                     value={v.price_adjustment_percent || 0}
@@ -430,6 +525,25 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                         setVariants(prev => prev.map(variant => 
                                                             variant.id === v.id ? { ...variant, price_adjustment_percent: isNaN(val) ? 0 : val } : variant
                                                         ));
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            const next = document.getElementById(`variant-price-${idx + 1}`) as HTMLInputElement | null;
+                                                            if (next) {
+                                                                next.focus();
+                                                                next.select();
+                                                            } else if (e.key === 'Enter') {
+                                                                document.getElementById('btn-save-variants')?.focus();
+                                                            }
+                                                        } else if (e.key === 'ArrowUp') {
+                                                            e.preventDefault();
+                                                            const prev = document.getElementById(`variant-price-${idx - 1}`) as HTMLInputElement | null;
+                                                            if (prev) {
+                                                                prev.focus();
+                                                                prev.select();
+                                                            }
+                                                        }
                                                     }}
                                                     style={{ width: '70px', padding: '0.4rem', borderRadius: '6px', border: '1px solid #D1D5DB', textAlign: 'center', fontWeight: '800', color: (v.price_adjustment_percent || 0) > 0 ? '#059669' : (v.price_adjustment_percent || 0) < 0 ? '#DC2626' : '#111827', opacity: readOnly ? 0.7 : 1 }}
                                                 />
@@ -480,6 +594,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                     <button onClick={onClose} style={{ padding: '1rem 2rem', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: '600' }}>{readOnly ? 'Cerrar' : 'Cancelar'}</button>
                     {!readOnly && (
                         <button
+                            id="btn-save-variants"
                             onClick={handleSave}
                             disabled={isSaving}
                             style={{ padding: '1rem 3rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '800', cursor: 'pointer', fontSize: '1.2rem' }}

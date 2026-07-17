@@ -18,15 +18,39 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     const { data: { session } } = await serverSupabase.auth.getSession();
     const userId = session?.user?.id;
 
-    let pricingModelId = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2C
+    let pricingModelId = userId ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2B (General Institucional) vs B2C
+    let agreementItems: any[] = [];
+    let hasActiveAgreement = false;
+
     if (userId) {
         const { data: profile } = await serverSupabase
             .from('profiles')
-            .select('pricing_model_id')
+            .select('pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
             .eq('id', userId)
             .single();
-        if (profile?.pricing_model_id) {
-            pricingModelId = profile.pricing_model_id;
+        const resolvedModelId = profile?.pricing_model_id || (profile?.parent as any)?.pricing_model_id;
+        if (resolvedModelId) {
+            pricingModelId = resolvedModelId;
+        }
+
+        // Check if this client (or their matrix parent) has an active agreement quote
+        const effectiveClientId = profile?.parent_id || userId;
+        const { data: activeAgreement } = await serverSupabase
+            .from('quotes')
+            .select('id')
+            .eq('client_id', effectiveClientId)
+            .eq('status', 'agreement')
+            .maybeSingle();
+
+        if (activeAgreement) {
+            hasActiveAgreement = true;
+            const { data: qItems } = await serverSupabase
+                .from('quote_items')
+                .select('product_id, unit_price')
+                .eq('quote_id', activeAgreement.id);
+            if (qItems) {
+                agreementItems = qItems;
+            }
         }
     }
 
@@ -52,6 +76,21 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
         product = resFallback.data;
     } else {
         product = resProduct.data;
+    }
+
+    // Override main product price if it's in the agreement
+    if (hasActiveAgreement && agreementItems.length > 0 && product) {
+        const agreementItem = agreementItems.find(item => item.product_id === product.id);
+        if (agreementItem) {
+            product = {
+                ...product,
+                pricing_model_prices: [
+                    {
+                        price: agreementItem.unit_price
+                    }
+                ]
+            };
+        }
     }
 
     // 2. Fetch "You May Also Like" - Priorizar misma categoría y con foto
@@ -80,6 +119,25 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
         relatedProductsRaw = resFallback.data || [];
     } else {
         relatedProductsRaw = resRelated.data || [];
+    }
+
+    // Override related products' prices if they are in the agreement
+    if (hasActiveAgreement && agreementItems.length > 0 && relatedProductsRaw.length > 0) {
+        const agreementPriceMap = new Map(agreementItems.map(item => [item.product_id, item.unit_price]));
+        relatedProductsRaw = relatedProductsRaw.map(p => {
+            const agreementPrice = agreementPriceMap.get(p.id);
+            if (agreementPrice !== undefined) {
+                return {
+                    ...p,
+                    pricing_model_prices: [
+                        {
+                            price: agreementPrice
+                        }
+                    ]
+                };
+            }
+            return p;
+        });
     }
 
     const dailySeed = new Date().getDate();

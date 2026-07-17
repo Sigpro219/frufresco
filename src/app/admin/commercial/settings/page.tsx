@@ -80,7 +80,9 @@ export default function PricingSettingsPage() {
         if (data) {
             // Lógica de ordenamiento personalizado
             const sortedData = [...data].sort((a, b) => {
-                // 1. Prioridad para Clientes B2C
+                // 1. Prioridad para General Institucional (1) y Clientes B2C (2)
+                if (a.name === 'General Institucional') return -1;
+                if (b.name === 'General Institucional') return 1;
                 if (a.name === 'Clientes B2C') return -1;
                 if (b.name === 'Clientes B2C') return 1;
 

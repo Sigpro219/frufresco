@@ -48,6 +48,55 @@ export function isInsidePolygon(point: Point, polygon: Point[], graceMarginMeter
 }
 
 /**
+ * Calculates the distance between two coordinates in meters using the Haversine formula.
+ */
+export function getDistanceInMeters(p1: Point, p2: Point): number {
+    const R = 6371e3; // Earth radius in meters
+    const phi1 = p1.lat * Math.PI / 180;
+    const phi2 = p2.lat * Math.PI / 180;
+    const deltaPhi = (p2.lat - p1.lat) * Math.PI / 180;
+    const deltaLambda = (p2.lng - p1.lng) * Math.PI / 180;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
+/**
+ * Calculates the shortest distance in meters between a point and a line segment.
+ */
+export function distanceToSegmentInMeters(p: Point, a: Point, b: Point): number {
+    const x = p.lat, y = p.lng, x1 = a.lat, y1 = a.lng, x2 = b.lat, y2 = b.lng;
+    const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+    if (l2 === 0) return getDistanceInMeters(p, a);
+    let t = ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const closestPoint = {
+        lat: x1 + t * (x2 - x1),
+        lng: y1 + t * (y2 - y1)
+    };
+    return getDistanceInMeters(p, closestPoint);
+}
+
+/**
+ * Gets the minimum distance in meters between a point and the boundary of a polygon.
+ */
+export function getDistanceToPolygon(point: Point, polygon: Point[]): number {
+    if (polygon.length === 0) return Infinity;
+    let minDistance = Infinity;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const dist = distanceToSegmentInMeters(point, polygon[i], polygon[j]);
+        if (dist < minDistance) {
+            minDistance = dist;
+        }
+    }
+    return minDistance;
+}
+
+/**
  * Calculates the shortest distance between a point and a line segment.
  */
 function distanceToSegment(p: Point, a: Point, b: Point): number {

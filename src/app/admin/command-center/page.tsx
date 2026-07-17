@@ -955,6 +955,54 @@ export default function CommandCenter() {
                                     </button>
                                 </div>
                             </section>
+
+                            {/* SECCIÓN: ENRUTAMIENTO DE CORREOS (WEBHOOKS) */}
+                            <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #E5E7EB' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                                    <span style={{ fontSize: '1.4rem' }}>📯</span>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Enrutamiento de Correos (Webhooks)</h2>
+                                </div>
+                                <p style={{ fontSize: '0.8rem', color: '#6B7280', marginBottom: '1.5rem' }}>
+                                    Configura los correos electrónicos institucionales que capturan los webhooks de entrada. 
+                                    Los correos dirigidos a Pedidos se procesarán por IA; los dirigidos a Comercial se guardarán en la bandeja de CRM.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correo de Ingesta de Pedidos (AI)</label>
+                                        <input 
+                                            type="email" 
+                                            defaultValue={settings.find(s => s.key === 'inbox_email_orders')?.value || 'pedidos@frufresco.com'} 
+                                            onBlur={(e) => handleUpdateSetting('inbox_email_orders', e.target.value)} 
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '12px', 
+                                                border: '1px solid #D1D5DB', 
+                                                fontSize: '0.85rem',
+                                                outline: 'none',
+                                                color: '#1E293B',
+                                                fontWeight: '600'
+                                            }} 
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correo Comercial (CRM)</label>
+                                        <input 
+                                            type="email" 
+                                            defaultValue={settings.find(s => s.key === 'inbox_email_commercial')?.value || 'contacto@investmentscortes.com'} 
+                                            onBlur={(e) => handleUpdateSetting('inbox_email_commercial', e.target.value)} 
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '12px', 
+                                                border: '1px solid #D1D5DB', 
+                                                fontSize: '0.85rem',
+                                                outline: 'none',
+                                                color: '#1E293B',
+                                                fontWeight: '600'
+                                            }} 
+                                        />
+                                    </div>
+                                </div>
+                            </section>
                         </div>
                     )}
 

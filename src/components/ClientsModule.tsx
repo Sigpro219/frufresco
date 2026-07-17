@@ -31,9 +31,14 @@ import {
     Building2,
     Users,
     ChevronRight,
-    Home
+    Home,
+    HelpCircle,
+    Info,
+    UploadCloud,
+    Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import CommercialAgreementsModule from './CommercialAgreementsModule';
 
 declare global {
     interface Window {
@@ -95,6 +100,7 @@ interface Profile {
 interface Lead {
     id: string;
     company_name?: string;
+    nit?: string;
     contact_name: string;
     phone: string;
     email?: string;
@@ -104,6 +110,8 @@ interface Lead {
     business_size?: string;
     latitude?: number;
     longitude?: number;
+    address?: string;
+    municipality?: string;
     last_contact_date?: string;
     next_contact_date?: string;
     contact_count?: number;
@@ -143,6 +151,7 @@ export default function ClientsModule() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Partial<Profile> | null>(null);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
@@ -152,6 +161,21 @@ export default function ClientsModule() {
     const [dragging, setDragging] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isFormReadOnly, setIsFormReadOnly] = useState(false);
+
+    // Lead Conversion Modal State
+    const [conversionLead, setConversionLead] = useState<Lead | null>(null);
+    const [conversionCompanyName, setConversionCompanyName] = useState('');
+    const [conversionNit, setConversionNit] = useState('');
+    const [conversionPhone, setConversionPhone] = useState('');
+    const [conversionAddress, setConversionAddress] = useState('');
+    const [conversionCreateAgreement, setConversionCreateAgreement] = useState(false);
+    const [conversionStartDate, setConversionStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [conversionDurationValue, setConversionDurationValue] = useState<number>(2);
+    const [conversionDurationUnit, setConversionDurationUnit] = useState<string>('weeks');
+    const [conversionFile, setConversionFile] = useState<File | null>(null);
+    const [conversionItems, setConversionItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
+    const [converting, setConverting] = useState(false);
+    const [parsingFile, setParsingFile] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -239,6 +263,33 @@ export default function ClientsModule() {
     };
 
     const handleUpdateLeadStatus = async (id: string, newStatus: string) => {
+        if (newStatus === 'converted') {
+            const lead = leads.find(l => l.id === id);
+            if (lead) {
+                let parsedAddress = lead.address || '';
+                let parsedNit = lead.nit ? String(lead.nit) : '';
+                if (!parsedAddress) {
+                    const notesText = lead.notes || '';
+                    if (notesText.includes('ORIG:')) {
+                        const origMatch = notesText.match(/ORIG:\s*([^|]+)/);
+                        if (origMatch) parsedAddress = origMatch[1].trim();
+                    }
+                }
+                setConversionLead(lead);
+                setConversionCompanyName(lead.company_name || lead.contact_name || '');
+                setConversionNit(parsedNit);
+                setConversionPhone(lead.phone || '');
+                setConversionAddress(parsedAddress);
+                setConversionCreateAgreement(false);
+                setConversionStartDate(new Date().toISOString().split('T')[0]);
+                setConversionDurationValue(2);
+                setConversionDurationUnit('weeks');
+                setConversionFile(null);
+                setConversionItems([]);
+                return;
+            }
+        }
+
         const { error } = await supabase
             .from('leads')
             .update({ status: newStatus })
@@ -249,6 +300,225 @@ export default function ClientsModule() {
         } else {
             setLeads(leads.map(l => l.id === id ? { ...l, status: newStatus } : l));
             window.showToast?.('Estado de lead actualizado', 'success');
+        }
+    };
+
+    const downloadConversionTemplate = async () => {
+        try {
+            const { data: products, error } = await supabase
+                .from('products')
+                .select('accounting_id, name, base_price, unit_of_measure')
+                .eq('is_active', true)
+                .order('name');
+            
+            if (error) throw error;
+            if (!products || products.length === 0) {
+                window.showToast?.('No se encontraron productos activos', 'error');
+                return;
+            }
+            
+            const rows = products.map(p => ({
+                'ID Producto (Cod. Contable)': p.accounting_id,
+                'Nombre del Producto': p.name,
+                'U.M.': p.unit_of_measure || 'Unidad',
+                'Costo Base (Referencia)': p.base_price || 0,
+                'Precio Acordado': ''
+            }));
+            
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Precios B2B');
+            XLSX.writeFile(workbook, 'Plantilla_Acuerdo_Comercial.xlsx');
+            window.showToast?.('Plantilla descargada con éxito', 'success');
+        } catch (err: any) {
+            console.error(err);
+            window.showToast?.('Error al descargar plantilla: ' + err.message, 'error');
+        }
+    };
+
+    const handleConversionFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        setConversionFile(file);
+        setParsingFile(true);
+        
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                
+                const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                if (rawRows.length === 0) {
+                    throw new Error('El archivo está vacío');
+                }
+                
+                const headers = Object.keys(rawRows[0]);
+                const idCol = headers.find(h => /idProducto|id_producto|accounting_id|cod.*contable|codigo|código|id/i.test(h));
+                const priceCol = headers.find(h => /precio|price|acordado|neto/i.test(h));
+                const nameCol = headers.find(h => /nombre|producto/i.test(h)) || '';
+                
+                if (!idCol || !priceCol) {
+                    throw new Error('No se encontraron las columnas Código y Precio');
+                }
+                
+                const parsedItems: any[] = [];
+                let rowCount = 0;
+                
+                rawRows.forEach((row) => {
+                    const idVal = String(row[idCol] || '').trim();
+                    const priceVal = parseFloat(String(row[priceCol] || '').replace(/[^0-9.-]/g, ''));
+                    const nameVal = nameCol ? String(row[nameCol] || '') : '';
+                    
+                    if (idVal && !isNaN(priceVal)) {
+                        parsedItems.push({
+                            accounting_id: idVal,
+                            unit_price: priceVal,
+                            product_name: nameVal
+                        });
+                        rowCount++;
+                    }
+                });
+                
+                if (parsedItems.length === 0) {
+                    throw new Error('No se encontraron filas válidas con Código y Precio');
+                }
+                
+                setConversionItems(parsedItems);
+                window.showToast?.(`Se cargaron ${rowCount} productos válidos desde el Excel`, 'success');
+            } catch (err: any) {
+                console.error(err);
+                window.showToast?.('Error al leer Excel: ' + err.message, 'error');
+                setConversionFile(null);
+                setConversionItems([]);
+            } finally {
+                setParsingFile(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleConversionSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!conversionLead) return;
+        
+        setConverting(true);
+        try {
+            const { data: newProfile, error: profileErr } = await supabase
+                .from('profiles')
+                .insert({
+                    company_name: conversionCompanyName,
+                    contact_name: conversionLead.contact_name,
+                    email: conversionLead.email,
+                    phone: conversionPhone,
+                    address: conversionAddress,
+                    nit: conversionNit ? parseInt(conversionNit.replace(/[^0-9]/g, '')) : null,
+                    role: 'b2b_client',
+                    is_active: true
+                })
+                .select()
+                .single();
+                
+            if (profileErr) throw profileErr;
+            
+            const { error: leadErr } = await supabase
+                .from('leads')
+                .update({ status: 'converted' })
+                .eq('id', conversionLead.id);
+                
+            if (leadErr) throw leadErr;
+            
+            if (conversionCreateAgreement && conversionItems.length > 0) {
+                const expiry = new Date(conversionStartDate + 'T12:00:00');
+                if (conversionDurationUnit === 'days') {
+                    expiry.setDate(expiry.getDate() + conversionDurationValue);
+                } else if (conversionDurationUnit === 'weeks') {
+                    expiry.setDate(expiry.getDate() + conversionDurationValue * 7);
+                } else if (conversionDurationUnit === 'months') {
+                    expiry.setMonth(expiry.getMonth() + conversionDurationValue);
+                } else if (conversionDurationUnit === 'years') {
+                    expiry.setFullYear(expiry.getFullYear() + conversionDurationValue);
+                }
+                const calculatedValidUntil = expiry.toISOString();
+                
+                const { data: dbProducts, error: dbProdErr } = await supabase
+                    .from('products')
+                    .select('id, name, base_price, accounting_id');
+                    
+                if (dbProdErr) throw dbProdErr;
+                
+                const productMap: Record<string, any> = {};
+                dbProducts.forEach(p => {
+                    if (p.accounting_id !== null && p.accounting_id !== undefined) {
+                        productMap[String(p.accounting_id)] = p;
+                    }
+                });
+                
+                const { data: newQuote, error: insertQErr } = await supabase
+                    .from('quotes')
+                    .insert({
+                        client_id: newProfile.id,
+                        client_name: newProfile.company_name || newProfile.contact_name,
+                        status: 'agreement',
+                        start_date: conversionStartDate ? new Date(conversionStartDate).toISOString() : new Date().toISOString(),
+                        valid_until: calculatedValidUntil,
+                        version: 1,
+                        subtotal_amount: 0,
+                        total_tax_amount: 0,
+                        total_amount: 0
+                    })
+                    .select()
+                    .single();
+                    
+                if (insertQErr) throw insertQErr;
+                
+                const itemsToInsert: any[] = [];
+                conversionItems.forEach(item => {
+                    const dbProduct = productMap[String(item.accounting_id)];
+                    if (dbProduct) {
+                        const basePrice = dbProduct.base_price || 0;
+                        const negotiatedPrice = item.unit_price;
+                        const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
+                        
+                        itemsToInsert.push({
+                            quote_id: newQuote.id,
+                            product_id: dbProduct.id,
+                            product_name: dbProduct.name,
+                            quantity: 1,
+                            cost_basis: basePrice,
+                            margin_percent: marginPercent,
+                            unit_price: negotiatedPrice,
+                            iva_rate: 0,
+                            iva_amount: 0,
+                            total_price: negotiatedPrice
+                        });
+                    }
+                });
+                
+                if (itemsToInsert.length > 0) {
+                    const batchSize = 100;
+                    for (let i = 0; i < itemsToInsert.length; i += batchSize) {
+                        const batch = itemsToInsert.slice(i, i + batchSize);
+                        const { error: insertItemsErr } = await supabase
+                            .from('quote_items')
+                            .insert(batch);
+                        if (insertItemsErr) throw insertItemsErr;
+                    }
+                }
+            }
+            
+            window.showToast?.('Prospecto convertido a cliente con éxito', 'success');
+            setConversionLead(null);
+            
+            fetchData();
+        } catch (err: any) {
+            console.error(err);
+            window.showToast?.('Error en conversión: ' + err.message, 'error');
+        } finally {
+            setConverting(false);
         }
     };
 
@@ -639,9 +909,10 @@ export default function ClientsModule() {
 
     const tabs = [
         { id: 'dashboard', label: 'Resumen', icon: <BarChart3 size={16} /> },
-        { id: 'b2b', label: 'Institucionales', icon: <Building2 size={16} /> },
-        { id: 'b2c', label: 'Hogar', icon: <Users size={16} /> },
         { id: 'leads', label: 'Prospectos', icon: <Mail size={16} /> },
+        { id: 'b2b', label: 'Institucionales', icon: <Building2 size={16} /> },
+        { id: 'agreements', label: 'Acuerdos Institucionales', icon: <FileText size={16} /> },
+        { id: 'b2c', label: 'Hogar', icon: <Users size={16} /> },
     ];
 
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
@@ -730,6 +1001,14 @@ export default function ClientsModule() {
                 />
             )}
 
+            {/* MODAL FORMULARIO PROSPECTO MANUAL (NUEVO) */}
+            {isLeadModalOpen && (
+                <LeadFormModal 
+                    onClose={() => setIsLeadModalOpen(false)} 
+                    onRefresh={fetchData}
+                />
+            )}
+
             {/* MODAL EXCEPCIONES (NICKNAMES) */}
             {isNicknameModalOpen && nicknameClientId && (
                 <ClientExceptionsModal 
@@ -800,7 +1079,7 @@ export default function ClientsModule() {
                 </header>
 
                 {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (COMPACTA) */}
-                {activeTab !== 'dashboard' && (
+                {activeTab !== 'dashboard' && activeTab !== 'agreements' && (
                     <div style={{ 
                         display: 'flex', 
                         gap: '0.8rem', 
@@ -857,6 +1136,29 @@ export default function ClientsModule() {
                                 }}
                             >
                                 <span>👤</span> Nuevo Cliente Hogar
+                            </button>
+                        )}
+                        {activeTab === 'leads' && hasEditPermission() && (
+                            <button 
+                                onClick={() => setIsLeadModalOpen(true)}
+                                style={{ 
+                                    backgroundColor: '#8B5CF6', 
+                                    color: 'white', 
+                                    padding: '0 1.2rem', 
+                                    borderRadius: '10px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    whiteSpace: 'nowrap',
+                                    height: '40px',
+                                    fontSize: '0.85rem'
+                                }}
+                            >
+                                <span>📢</span> Nuevo Prospecto
                             </button>
                         )}
 
@@ -1328,6 +1630,11 @@ export default function ClientsModule() {
                                 )}
                             </div>
                         )}
+
+                        {/* AGREEMENTS VIEW */}
+                        {activeTab === 'agreements' && (
+                            <CommercialAgreementsModule />
+                        )}
                     </>
                 )}
             </div>
@@ -1447,6 +1754,344 @@ export default function ClientsModule() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* MODAL CONVERSIÓN DE LEAD */}
+            {conversionLead && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                    <form 
+                        onSubmit={handleConversionSubmit}
+                        style={{ 
+                            backgroundColor: 'white', 
+                            borderRadius: THEME.radius.lg || '12px', 
+                            width: '95%', 
+                            maxWidth: '540px', 
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', 
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            maxHeight: '90vh'
+                        }}
+                    >
+                        {/* Modal Header */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid #E2E8F0`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Building2 size={18} style={{ color: '#0D7A57' }} />
+                                <h3 style={{ margin: 0, fontWeight: '900', color: '#1E293B' }}>Convertir Prospecto a Cliente B2B</h3>
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => setConversionLead(null)} 
+                                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+                            
+                            {/* Client Information */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Razón Social / Nombre Comercial:</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={conversionCompanyName} 
+                                    onChange={(e) => setConversionCompanyName(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '10px', 
+                                        borderRadius: '8px', 
+                                        border: `1px solid #CBD5E1`,
+                                        fontSize: '0.85rem'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>NIT / Identificación:</label>
+                                    <input 
+                                        type="text" 
+                                        value={conversionNit} 
+                                        onChange={(e) => setConversionNit(e.target.value)}
+                                        placeholder="Ej: 900123456"
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '10px', 
+                                            borderRadius: '8px', 
+                                            border: `1px solid #CBD5E1`,
+                                            fontSize: '0.85rem'
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Teléfono:</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        value={conversionPhone} 
+                                        onChange={(e) => setConversionPhone(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '10px', 
+                                            borderRadius: '8px', 
+                                            border: `1px solid #CBD5E1`,
+                                            fontSize: '0.85rem'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Dirección:</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={conversionAddress} 
+                                    onChange={(e) => setConversionAddress(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '10px', 
+                                        borderRadius: '8px', 
+                                        border: `1px solid #CBD5E1`,
+                                        fontSize: '0.85rem'
+                                    }}
+                                />
+                            </div>
+
+                            {/* Checkbox to create agreement */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.5rem 0' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="create_agreement"
+                                    checked={conversionCreateAgreement} 
+                                    onChange={(e) => setConversionCreateAgreement(e.target.checked)}
+                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="create_agreement" style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B', cursor: 'pointer' }}>
+                                    ¿Inicializar Acuerdo Comercial de Precios Congelados B2B?
+                                </label>
+                            </div>
+
+                            {/* Conditional Agreement Fields */}
+                            {conversionCreateAgreement && (
+                                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    
+                                    {/* EXPLANATORY COMPONENT WITH HELP ICON */}
+                                    <div style={{ 
+                                        backgroundColor: '#EFF6FF', 
+                                        border: '1px solid #BFDBFE', 
+                                        padding: '1rem', 
+                                        borderRadius: '12px', 
+                                        display: 'flex', 
+                                        gap: '10px', 
+                                        alignItems: 'flex-start' 
+                                    }}>
+                                        <HelpCircle size={20} style={{ color: '#2563EB', flexShrink: 0, marginTop: '2px' }} />
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 'bold', color: '#1E40AF' }}>
+                                                ¿Cómo funciona la Carga Masiva de Precios?
+                                            </h4>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#1E3A8A', lineHeight: '1.4' }}>
+                                                Puedes descargar la plantilla pre-rellenada con todos tus productos activos y colocar el precio en la columna vacía, o subir tu propio Excel personalizado. El sistema identificará de forma inteligente las columnas buscando:
+                                            </p>
+                                            <ul style={{ margin: '6px 0 0 0', paddingLeft: '1.2rem', fontSize: '0.75rem', color: '#1E3A8A', lineHeight: '1.4' }}>
+                                                <li><strong>Identificador de Producto:</strong> Cabeceras como <em>idProducto, accounting_id, código, cod. contable, id</em>.</li>
+                                                <li><strong>Precio Acordado:</strong> Cabeceras como <em>precio, precio acordado, price, precio neto</em>.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Fecha de Inicio:</label>
+                                                <input 
+                                                    type="date" 
+                                                    required={conversionCreateAgreement}
+                                                    value={conversionStartDate} 
+                                                    onChange={(e) => setConversionStartDate(e.target.value)}
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '10px', 
+                                                        borderRadius: '8px', 
+                                                        border: `1px solid #CBD5E1`,
+                                                        fontSize: '0.85rem'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Duración:</label>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input 
+                                                        type="number"
+                                                        min="1"
+                                                        required={conversionCreateAgreement}
+                                                        value={conversionDurationValue}
+                                                        onChange={(e) => setConversionDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
+                                                        style={{ 
+                                                            width: '80px', 
+                                                            padding: '10px', 
+                                                            borderRadius: '8px', 
+                                                            border: `1px solid #CBD5E1`,
+                                                            fontSize: '0.85rem',
+                                                            textAlign: 'center'
+                                                        }}
+                                                    />
+                                                    <select
+                                                        value={conversionDurationUnit}
+                                                        onChange={(e) => setConversionDurationUnit(e.target.value)}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '10px',
+                                                            borderRadius: '8px',
+                                                            border: `1px solid #CBD5E1`,
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                    >
+                                                        <option value="days">Días</option>
+                                                        <option value="weeks">Semanas</option>
+                                                        <option value="months">Meses</option>
+                                                        <option value="years">Años</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {(() => {
+                                            const expiry = new Date(conversionStartDate + 'T12:00:00');
+                                            if (conversionDurationUnit === 'days') {
+                                                expiry.setDate(expiry.getDate() + conversionDurationValue);
+                                            } else if (conversionDurationUnit === 'weeks') {
+                                                expiry.setDate(expiry.getDate() + conversionDurationValue * 7);
+                                            } else if (conversionDurationUnit === 'months') {
+                                                expiry.setMonth(expiry.getMonth() + conversionDurationValue);
+                                            } else if (conversionDurationUnit === 'years') {
+                                                expiry.setFullYear(expiry.getFullYear() + conversionDurationValue);
+                                            }
+                                            const formattedExpiry = expiry.toLocaleDateString('es-ES', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric'
+                                            });
+                                            return (
+                                                <div style={{ 
+                                                    marginTop: '10px', 
+                                                    fontSize: '0.8rem', 
+                                                    color: '#64748B',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}>
+                                                    <span>📅 El acuerdo vencerá el:</span>
+                                                    <strong style={{ color: '#0D7A57' }}>{formattedExpiry}</strong>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' }}>Lista de Precios (Excel):</span>
+                                            <button
+                                                type="button"
+                                                onClick={downloadConversionTemplate}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#0D7A57',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <Download size={14} /> Descargar Plantilla
+                                            </button>
+                                        </div>
+
+                                        <div style={{
+                                            border: `2px dashed ${conversionFile ? '#0D7A57' : '#CBD5E1'}`,
+                                            backgroundColor: conversionFile ? '#F0FDF4' : '#F8FAFC',
+                                            borderRadius: '12px',
+                                            padding: '1.5rem',
+                                            textAlign: 'center',
+                                            cursor: 'pointer',
+                                            position: 'relative',
+                                            transition: 'all 0.2s'
+                                        }}>
+                                            <input 
+                                                type="file" 
+                                                accept=".xlsx, .xls"
+                                                onChange={handleConversionFileUpload}
+                                                style={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    opacity: 0,
+                                                    cursor: 'pointer'
+                                                }}
+                                            />
+                                            <UploadCloud size={32} style={{ color: conversionFile ? '#0D7A57' : '#94A3B8', margin: '0 auto 8px auto' }} />
+                                            {conversionFile ? (
+                                                <div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>{conversionFile.name}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
+                                                        {conversionItems.length} productos detectados listos para cargar
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#1E293B' }}>Selecciona o arrastra tu archivo Excel</div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>
+                                                        Formatos soportados: .xlsx, .xls
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid #E2E8F0`, display: 'flex', gap: '10px', backgroundColor: '#F9FAFB' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => setConversionLead(null)} 
+                                style={{ 
+                                    flex: 1, 
+                                    padding: '10px', 
+                                    borderRadius: '8px', 
+                                    border: `1px solid #CBD5E1`, 
+                                    backgroundColor: 'white', 
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer' 
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                type="submit" 
+                                disabled={converting || parsingFile || (conversionCreateAgreement && conversionItems.length === 0)}
+                                style={{ 
+                                    flex: 2, 
+                                    padding: '10px', 
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: (conversionCreateAgreement && conversionItems.length === 0) || converting ? '#CBD5E1' : '#0D7A57', 
+                                    color: 'white', 
+                                    fontWeight: 'bold',
+                                    cursor: (conversionCreateAgreement && conversionItems.length === 0) || converting ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {converting ? 'Procesando...' : 'Convertir y Guardar'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
         </div>
@@ -1819,8 +2464,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {(isB2B || isLead || isB2C) && (
                     <InfoRow icon="📧" label="Email" value={data.email} />
                 )}
-                {isB2B && profileData?.nit && (
-                    <InfoRow icon="🆔" label="NIT" value={profileData.nit} />
+                {((isB2B && profileData?.nit) || (isLead && leadData?.nit)) && (
+                    <InfoRow icon="🆔" label="NIT" value={isB2B ? profileData?.nit : leadData?.nit} />
                 )}
                 {(isB2B || isB2C) && profileData && (
                     <InfoRow 
@@ -1829,12 +2474,19 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         value={`${profileData.address || ''}${profileData.municipality || profileData.city ? `, ${profileData.municipality || profileData.city}` : ''}${profileData.department ? `, ${profileData.department}` : ''}`} 
                     />
                 )}
-                {(isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude && (
+                {isLead && leadData && (
+                    <InfoRow 
+                        icon="📍" 
+                        label="Ubicación" 
+                        value={`${leadData.address || ''}${leadData.municipality ? `, ${leadData.municipality}` : ''}`} 
+                    />
+                )}
+                {((isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude) || (isLead && leadData && leadData.latitude && leadData.longitude) ? (
                     <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '700', paddingLeft: '1.5rem' }}>
-                        🌐 {profileData.latitude.toFixed(4)}, {profileData.longitude.toFixed(4)} 
+                        🌐 {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
                         <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
                     </div>
-                )}
+                ) : null}
                 {isB2B && profileData && (
                     <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
                         <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.6rem' }}>⚙️ MODELO DE COTIZACIÓN</label>
@@ -1928,7 +2580,29 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                             <div>
                                 <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tamaño</label>
-                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>{leadData.business_size || 'No especificado'}</div>
+                                <div style={{ 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: '800', 
+                                    color: (() => {
+                                        const size = leadData.business_size || '';
+                                        if (size.includes('Grande') || size.includes('30M')) return '#15803D';
+                                        if (size.includes('Mediano') || size.includes('10M')) return '#B45309';
+                                        if (size.includes('Pequeño') || size.includes('< 10M')) return '#B91C1C';
+                                        return '#334155';
+                                    })(),
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    marginTop: '2px'
+                                }}>
+                                    {(() => {
+                                        const size = leadData.business_size || '';
+                                        if (size.includes('Grande') || size.includes('30M')) return '🟢 ' + size;
+                                        if (size.includes('Mediano') || size.includes('10M')) return '🟡 ' + size;
+                                        if (size.includes('Pequeño') || size.includes('< 10M')) return '🔴 ' + size;
+                                        return size || 'No especificado';
+                                    })()}
+                                </div>
                             </div>
                         </div>
 
@@ -2125,10 +2799,26 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
                 {isLead ? (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                        {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
-                        {(client as any).business_size && <span style={{ fontSize: '0.65rem', backgroundColor: '#F0FDF4', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_size}</span>}
-                    </div>
+                    <>
+                        {client.nit && <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit}</div>}
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                            {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
+                            {(client as any).business_size && (() => {
+                                const size = (client as any).business_size;
+                                let bg = '#F3F4F6';
+                                let textCol = '#374151';
+                                if (size.includes('Grande') || size.includes('30M')) { bg = '#DCFCE7'; textCol = '#15803D'; }
+                                else if (size.includes('Mediano') || size.includes('10M')) { bg = '#FEF3C7'; textCol = '#B45309'; }
+                                else if (size.includes('Pequeño') || size.includes('< 10M') || size.includes('Peq')) { bg = '#FEE2E2'; textCol = '#B91C1C'; }
+                                return (
+                                    <span style={{ fontSize: '0.65rem', backgroundColor: bg, color: textCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                        {size.includes('Grande') || size.includes('30M') ? '🟢 ' : size.includes('Mediano') || size.includes('10M') ? '🟡 ' : '🔴 '}
+                                        {size}
+                                    </span>
+                                );
+                            })()}
+                        </div>
+                    </>
                 ) : (
                     <>
                         <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
@@ -2259,11 +2949,125 @@ function EmptyState({ text }: { text: string }) {
 
 
 
+function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose: () => void }) {
+    const [items, setItems] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchItems = async () => {
+            setLoading(true);
+            try {
+                const { data } = await supabase
+                    .from('quote_items')
+                    .select('*, products:product_id (name, accounting_id, unit_of_measure)')
+                    .eq('quote_id', agreement.id)
+                    .order('created_at');
+                if (data) setItems(data);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchItems();
+    }, [agreement.id]);
+
+    const formatAgreementNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `ACI ${day}${month} ${paddedSeq}`;
+    };
+
+    const agreementId = formatAgreementNumber(agreement.quote_number, agreement.created_at);
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid #E2E8F0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.2rem 2rem', borderBottom: '1px solid #F1F5F9', background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.2rem' }}>📜</span>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: '#1E293B' }}>Precios Congelados: {agreementId}</h3>
+                            <span style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios / Acuerdo Institucional activo</span>
+                        </div>
+                    </div>
+                    <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #E2E8F0', cursor: 'pointer', color: '#64748B', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: '2rem', flex: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', backgroundColor: '#F8FAFC', padding: '1rem 1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.8rem', color: '#475569' }}>
+                        <div><strong>Vigencia:</strong> {agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'} al {agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}</div>
+                        {agreement.model_snapshot_name && <div><strong>Modelo Base:</strong> {agreement.model_snapshot_name}</div>}
+                    </div>
+
+                    {loading ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '3rem 0' }}>
+                            <Loader2 size={24} className="animate-spin" style={{ color: '#0D7A57' }} />
+                            <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>Cargando catálogo congelado...</span>
+                        </div>
+                    ) : items.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: '#64748B', fontSize: '0.85rem', fontStyle: 'italic', padding: '2rem 0' }}>Este acuerdo no tiene productos vinculados.</p>
+                    ) : (
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: '800' }}>
+                                        <th style={{ padding: '0.75rem 1rem' }}>Producto</th>
+                                        <th style={{ padding: '0.75rem 1rem' }}>UoM</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Base</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>IVA</th>
+                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio con IVA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map(item => {
+                                        const ivaPercent = item.iva_rate || 0;
+                                        const basePrice = item.unit_price || 0;
+                                        const ivaAmount = basePrice * (ivaPercent / 100);
+                                        const totalPrice = basePrice + ivaAmount;
+
+                                        return (
+                                            <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
+                                                <td style={{ padding: '0.75rem 1rem', fontWeight: '700' }}>
+                                                    {item.products?.name || 'Producto Desconocido'}
+                                                    {item.products?.accounting_id && <span style={{ display: 'block', fontSize: '0.6rem', color: '#94A3B8', fontWeight: 'normal', marginTop: '2px' }}>Cód. Contable: {item.products.accounting_id}</span>}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>{item.products?.unit_of_measure || 'un'}</td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '600' }}>${basePrice.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#64748B' }}>{ivaPercent}%</td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0D7A57' }}>${totalPrice.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '1.2rem 2rem', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#F8FAFC' }}>
+                    <button onClick={onClose} style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean }) {
     const isEdit = !!editData && !!editData.id;
     const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
+    const isB2B = role === 'b2b_client';
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
         razon_social: editData?.razon_social || '',
@@ -2349,11 +3153,75 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     }, [editData?.id]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
+    const [branches, setBranches] = useState<Profile[]>([]);
+
+    const fetchBranches = async () => {
+        if (!editData?.id || !formData.is_corporate_parent) return;
+        const { data } = await supabase
+            .from('profiles')
+            .select('id, company_name, contact_name, branch_id, phone, address, pricing_model_id')
+            .eq('parent_id', editData.id);
+        if (data) setBranches(data);
+    };
+
+    useEffect(() => {
+        fetchBranches();
+    }, [editData?.id, formData.is_corporate_parent]);
+
+    const [agreement, setAgreement] = useState<any>(null);
+    const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+    const [loadingAgreement, setLoadingAgreement] = useState(false);
+    const [inheritedFromParent, setInheritedFromParent] = useState(false);
+
+    const fetchAgreement = async () => {
+        if (!editData?.id) return;
+        setLoadingAgreement(true);
+        try {
+            if (formData.parent_id) {
+                const { data: parentData } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
+                    .eq('client_id', formData.parent_id)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
+
+                if (parentData) {
+                    setAgreement(parentData);
+                    setInheritedFromParent(true);
+                } else {
+                    setAgreement(null);
+                }
+            } else {
+                const { data: ownData } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, status, start_date, valid_until, client_id, model_snapshot_name, created_at')
+                    .eq('client_id', editData.id)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
+
+                if (ownData) {
+                    setAgreement(ownData);
+                    setInheritedFromParent(false);
+                } else {
+                    setAgreement(null);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching customer agreement:', err);
+        } finally {
+            setLoadingAgreement(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAgreement();
+    }, [editData?.id, formData.parent_id]);
+
     useEffect(() => {
         const fetchParents = async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone')
+                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone, rut_url, mercantile_registry_url, legal_rep_id_url')
                 .eq('role', 'b2b_client')
                 .eq('is_corporate_parent', true);
             if (data) setPotentialParents(data);
@@ -2597,6 +3465,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             setIsExceptionsModalOpen(false);
                             fetchExceptionCount();
                         }} 
+                    />
+                )}
+                {isAgreementModalOpen && agreement && (
+                    <AgreementDetailsModal
+                        agreement={agreement}
+                        onClose={() => setIsAgreementModalOpen(false)}
                     />
                 )}
                 {/* HEADER PREMIUM */}
@@ -2949,22 +3823,121 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                                 <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
-                                                <select 
-                                                    value={formData.pricing_model_id} 
-                                                    onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
-                                                    disabled={isReadOnly}
-                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
-                                                >
-                                                    <option value="">Seleccionar...</option>
-                                                    {pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-                                                </select>
+                                                {agreement ? (() => {
+                                                    const expiry = agreement.valid_until;
+                                                    const status = (() => {
+                                                        if (!expiry) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
+                                                        const exp = new Date(expiry);
+                                                        const today = new Date();
+                                                        today.setHours(0,0,0,0);
+                                                        const diff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                        if (diff < 0) return { label: 'Vencido', color: '#EF4444', bgColor: '#FEF2F2', type: 'expired' };
+                                                        if (diff <= 15) return { label: `Vence en ${diff}d`, color: '#D97706', bgColor: '#FFFBEB', type: 'warning' };
+                                                        return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
+                                                    })();
+                                                    
+                                                    const agreementId = (() => {
+                                                        const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
+                                                        const day = String(date.getDate()).padStart(2, '0');
+                                                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                        const paddedSeq = String(agreement.quote_number).padStart(4, '0');
+                                                        return `ACI ${day}${month} ${paddedSeq}`;
+                                                    })();
+
+                                                    return (
+                                                        <div 
+                                                            onClick={() => setIsAgreementModalOpen(true)}
+                                                            title="Haga clic para ver los precios congelados del acuerdo"
+                                                            style={{ 
+                                                                padding: '0.8rem 1rem', 
+                                                                borderRadius: THEME.radius.md, 
+                                                                backgroundColor: status.bgColor, 
+                                                                border: `1.5px solid ${status.type === 'expired' ? '#FCA5A5' : status.type === 'warning' ? '#FDE68A' : '#A7F3D0'}`, 
+                                                                color: status.color, 
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.25rem',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                position: 'relative'
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span style={{ fontSize: '0.9rem' }}>📜</span>
+                                                                    <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#1E293B' }}>
+                                                                        {agreementId}
+                                                                    </span>
+                                                                    {inheritedFromParent && (
+                                                                        <span style={{ fontSize: '0.6rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                            Matriz
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span style={{ fontSize: '0.55rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', backgroundColor: status.type === 'expired' ? '#FEE2E2' : status.type === 'warning' ? '#FEF3C7' : '#D1FAE5', color: status.color, textTransform: 'uppercase' }}>
+                                                                    {status.label}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                                                                <span>Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                                                                <span style={{ fontSize: '0.6rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline' }}>Ver Precios →</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })() : (
+                                                    <select 
+                                                        value={formData.pricing_model_id} 
+                                                        onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
+                                                        disabled={isReadOnly || !!formData.parent_id}
+                                                        style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: (isReadOnly || !!formData.parent_id) ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: (isReadOnly || !!formData.parent_id) ? 'default' : 'pointer' }}
+                                                    >
+                                                        {formData.parent_id ? (() => {
+                                                             const parent = potentialParents.find(p => p.id === formData.parent_id);
+                                                             const parentModel = parent && pricingModels ? pricingModels.find(m => m.id === parent.pricing_model_id) : null;
+                                                             return (
+                                                                 <option value="">
+                                                                     {parentModel ? `Heredado de Matriz: ${parentModel.name}` : 'Heredado de Matriz: Modelo B2C'}
+                                                                 </option>
+                                                             );
+                                                        })() : (
+                                                             <option value="">Seleccionar...</option>
+                                                        )}
+                                                        {!formData.parent_id && pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
+                                                    </select>
+                                                )}
                                             </div>
                                             <FormField label="Días de Pago" value={formData.payment_days} onChange={(v) => setFormData({...formData, payment_days: parseInt(v) || 0})} type="number" readOnly={isReadOnly} />
                                         </div>
+
+                                        {/* WARNING DE ACUERDO VENCIDO O INEXISTENTE */}
+                                        {loadingAgreement ? (
+                                            <div style={{ padding: '0.8rem', borderRadius: '12px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Loader2 size={14} className="animate-spin" />
+                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Buscando Acuerdo Institucional...</span>
+                                            </div>
+                                        ) : !agreement ? (
+                                            <div style={{ 
+                                                padding: '1rem', 
+                                                borderRadius: THEME.radius.lg, 
+                                                backgroundColor: '#FEF2F2', 
+                                                border: '1.5px solid #FCA5A5', 
+                                                color: '#B91C1C', 
+                                                marginTop: '1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                fontFamily: THEME.typography.fontFamilySecondary
+                                            }}>
+                                                <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>
+                                                    {formData.parent_id ? 'La Casa Matriz no cuenta con un Acuerdo Institucional vigente.' : 'El cliente no cuenta con un Acuerdo Institucional vigente.'}
+                                                </span>
+                                            </div>
+                                        ) : null}
                                         {!formData.is_corporate_parent && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                                                <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
-                                                <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                                 <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
                                             </div>
                                         )}
@@ -3353,6 +4326,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             {/* BLOQUE CONDICIONAL: EXPEDIENTE (MATRIZ) VS OPERACIÓN (SUCURSAL) */}
                             {formData.is_corporate_parent ? (
+                                <>
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                         <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Folder size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
@@ -3364,6 +4338,52 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <DocumentUploadField label="Cédula Representante Legal" url={formData.legal_rep_id_url} onUpload={(url) => setFormData({...formData, legal_rep_id_url: url})} readOnly={isReadOnly} />
                                     </div>
                                 </section>
+
+                                    {/* BLOQUE: SUCURSALES (ONLY FOR CORPORATE PARENT) */}
+                                    {isB2B && editData?.id && (
+                                        <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, marginTop: '1.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                                <div style={{ width: '32px', height: '32px', backgroundColor: '#F0FDF4', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🏢</div>
+                                                <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
+                                            </div>
+                                            {branches.length === 0 ? (
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', fontFamily: THEME.typography.fontFamilySecondary }}>No hay sucursales asociadas a esta Casa Matriz.</p>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', marginTop: '1rem' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        <thead>
+                                                            <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#64748B', fontWeight: '800' }}>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Sucursal</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Contacto</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>ID Sucursal</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Dirección</th>
+                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Modelo Precios</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {branches.map(branch => {
+                                                                const modelName = pricingModels?.find(m => m.id === branch.pricing_model_id)?.name || 'Heredado';
+                                                                return (
+                                                                    <tr key={branch.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
+                                                                        <td style={{ padding: '0.6rem 0.4rem', fontWeight: '700' }}>{branch.company_name}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>{branch.contact_name} {branch.phone && `(${branch.phone})`}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem', fontWeight: '600' }}>{branch.branch_id || '---'}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>{branch.address}</td>
+                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>
+                                                                            <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: branch.pricing_model_id ? '#EFF6FF' : '#F1F5F9', color: branch.pricing_model_id ? '#1D4ED8' : '#475569', fontSize: '0.65rem', fontWeight: '700' }}>
+                                                                                {modelName}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </section>
+                                    )}
+                                </>
                             ) : (
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
@@ -4220,6 +5240,170 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         )}
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+interface LeadFormModalProps {
+    onClose: () => void;
+    onRefresh: () => void;
+}
+
+function LeadFormModal({ onClose, onRefresh }: LeadFormModalProps) {
+    const [companyName, setCompanyName] = useState('');
+    const [contactName, setContactName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
+    const [nit, setNit] = useState('');
+    const [address, setAddress] = useState('');
+    const [municipality, setMunicipality] = useState('Bogotá');
+    const [businessType, setBusinessType] = useState('Restaurante');
+    const [businessSize, setBusinessSize] = useState('Standard');
+    const [notes, setNotes] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!contactName || !phone) {
+            setError('Nombre de contacto y teléfono son requeridos.');
+            return;
+        }
+        setError('');
+        setLoading(true);
+        try {
+            const { error: insertErr } = await supabase
+                .from('leads')
+                .insert([{
+                    company_name: companyName || null,
+                    contact_name: contactName,
+                    phone: phone,
+                    email: email || null,
+                    nit: nit ? parseInt(nit.replace(/[^0-9]/g, '')) : null,
+                    address: address || null,
+                    municipality: municipality || null,
+                    business_type: businessType,
+                    business_size: businessSize,
+                    notes: notes || null,
+                    status: 'new'
+                }]);
+
+            if (insertErr) throw insertErr;
+            onRefresh();
+            onClose();
+        } catch (err: any) {
+            console.error('Error creating lead:', err);
+            setError(err.message || 'Error al guardar el prospecto.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 9999, backdropFilter: 'blur(4px)',
+            fontFamily: 'system-ui, sans-serif'
+        }}>
+            <div style={{
+                backgroundColor: 'white',
+                borderRadius: '16px',
+                padding: '2rem',
+                width: '100%',
+                maxWidth: '600px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800', color: '#0F172A' }}>📢 Crear Nuevo Prospecto (Lead)</h3>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748B' }}>✕</button>
+                </div>
+
+                {error && (
+                    <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Razón Social / Empresa</label>
+                            <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ej: FruFresco S.A.S" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Nombre de Contacto *</label>
+                            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} required placeholder="Ej: Juan Pérez" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Teléfono *</label>
+                            <input type="text" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="Ej: 3001234567" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Correo Electrónico</label>
+                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Ej: contacto@empresa.com" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>NIT / Documento</label>
+                            <input type="text" value={nit} onChange={e => setNit(e.target.value)} placeholder="Ej: 901393217" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Municipio / Ciudad</label>
+                            <input type="text" value={municipality} onChange={e => setMunicipality(e.target.value)} placeholder="Ej: Bogotá" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Dirección de Despacho</label>
+                        <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Ej: Calle 100 # 15-20" style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none' }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Tipo de Negocio</label>
+                            <select value={businessType} onChange={e => setBusinessType(e.target.value)} style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none', backgroundColor: 'white' }}>
+                                <option value="Restaurante">Restaurante</option>
+                                <option value="Hotel">Hotel</option>
+                                <option value="Colegio">Colegio</option>
+                                <option value="Casino/Catering">Casino/Catering</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Tamaño</label>
+                            <select value={businessSize} onChange={e => setBusinessSize(e.target.value)} style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none', backgroundColor: 'white' }}>
+                                <option value="Small">Pequeño / Boutique</option>
+                                <option value="Standard">Mediano / Standard</option>
+                                <option value="Chain">Grande / Cadena</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase' }}>Notas / Observaciones</label>
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ej: Requiere factura formal de inmediato..." rows={3} style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', outline: 'none', resize: 'none' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                        <button type="button" onClick={onClose} style={{ padding: '0.625rem 1.25rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', cursor: 'pointer', backgroundColor: 'white', color: '#475569', fontWeight: 'bold' }}>
+                            Cancelar
+                        </button>
+                        <button type="submit" disabled={loading} style={{ padding: '0.625rem 1.25rem', borderRadius: '8px', border: 'none', fontSize: '0.9rem', cursor: 'pointer', backgroundColor: '#8B5CF6', color: 'white', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)' }}>
+                            {loading ? 'Guardando...' : 'Crear Prospecto'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );

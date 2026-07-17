@@ -29,7 +29,7 @@ interface PolygonProps extends google.maps.PolygonOptions {
     onPathChange?: (newPath: Point[]) => void;
 }
 
-const Polygon = forwardRef((props: PolygonProps, ref) => {
+export const Polygon = forwardRef((props: PolygonProps, ref) => {
     const { paths, onPathChange, ...options } = props;
     const map = useMap();
     const maps = useMapsLibrary('maps');

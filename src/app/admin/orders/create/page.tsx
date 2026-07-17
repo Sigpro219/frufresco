@@ -180,6 +180,7 @@ function CreateOrderContent() {
     const [conversions, setConversions] = useState<any[]>([]);
     const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
     const [customPriceIds, setCustomPriceIds] = useState<Set<string>>(new Set());
+    const [campaignPrices, setCampaignPrices] = useState<Record<string, { value: number; type: string; name: string }>>({});
     const [activePricingModel, setActivePricingModel] = useState<any>(null);
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
@@ -283,6 +284,18 @@ function CreateOrderContent() {
     const [editingStagedItemIdx, setEditingStagedItemIdx] = useState<number | null>(null);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        if (manageConversionsProduct) {
+            setTimeout(() => {
+                const qty1 = document.getElementById('new-conv-qty-1') as HTMLInputElement | null;
+                if (qty1) {
+                    qty1.focus();
+                    qty1.select();
+                }
+            }, 100);
+        }
+    }, [manageConversionsProduct]);
 
     useEffect(() => {
         if (selectedProductForModal) {
@@ -406,6 +419,47 @@ function CreateOrderContent() {
     const [showFloatingDoc, setShowFloatingDoc] = useState(false);
     const [isFloatingDocExpanded, setIsFloatingDocExpanded] = useState(false);
 
+    // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // ── ESC: cierra modales en orden de prioridad (más específico → más general) ──
+            if (e.key === 'Escape') {
+                if (variantConfigProduct) { setVariantConfigProduct(null); return; }
+                if (manageConversionsProduct) { setManageConversionsProduct(null); return; }
+                if (selectedProductForModal) { setSelectedProductForModal(null); return; }
+                if (showMapPicker) { setShowMapPicker(false); return; }
+                if (showFloatingDoc) { setShowFloatingDoc(false); return; }
+                if (deleteConfirm) { setDeleteConfirm(null); return; }
+                if (duplicateConfirm) { setDuplicateConfirm(null); return; }
+                return;
+            }
+
+            // Los atajos Alt solo aplican cuando el modal de producto está abierto
+            if (!selectedProductForModal) return;
+
+            // Alt+V → Editar Variantes
+            if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
+                if (!variantConfigProduct && !manageConversionsProduct) {
+                    e.preventDefault();
+                    setVariantConfigProduct(selectedProductForModal);
+                }
+                return;
+            }
+
+            // Alt+E → Editar Equivalencias
+            if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
+                if (!variantConfigProduct && !manageConversionsProduct) {
+                    e.preventDefault();
+                    setManageConversionsProduct(selectedProductForModal);
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedProductForModal, variantConfigProduct, manageConversionsProduct, showMapPicker, showFloatingDoc, deleteConfirm, duplicateConfirm]);
+
     useEffect(() => {
         loadData();
     }, []);
@@ -444,49 +498,89 @@ function CreateOrderContent() {
             }
 
             if (currentProfile) {
-                modelId = currentProfile.pricing_model_id || null;
+                let resolvedModelId = currentProfile.pricing_model_id;
+                if (!resolvedModelId && currentProfile.parent_id) {
+                    const parent = clients.find(c => c.id === currentProfile.parent_id);
+                    if (parent) {
+                        resolvedModelId = parent.pricing_model_id;
+                    }
+                }
+                modelId = resolvedModelId || null;
             }
 
             let resolvedModel: any = null;
             let expired = false;
             let b2cFallback = false;
+            let activeAgreement: any = null;
 
-            // 1. Fetch current pricing model if defined
-            if (modelId) {
-                const { data: pm } = await supabase
-                    .from('pricing_models')
-                    .select('*')
-                    .eq('id', modelId)
-                    .single();
+            // Check if there is an active agreement for the client (or matrix parent)
+            if (clientType === 'B2B' && currentProfile) {
+                const effectiveClientId = currentProfile.parent_id || currentProfile.id;
+                const { data } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, start_date, valid_until')
+                    .eq('client_id', effectiveClientId)
+                    .eq('status', 'agreement')
+                    .maybeSingle();
                 
-                if (pm) {
-                    resolvedModel = pm;
-                    // Validate expiration against deliveryDate
-                    if (deliveryDate) {
-                        const delivery = deliveryDate.split('T')[0];
-                        const start = pm.start_date?.split('T')[0];
-                        const end = pm.end_date?.split('T')[0];
-                        if (start && start > delivery) {
-                            expired = true;
-                        }
-                        if (end && end < delivery) {
-                            expired = true;
-                        }
+                if (data) {
+                    const checkDate = deliveryDate ? deliveryDate.split('T')[0] : new Date().toISOString().split('T')[0];
+                    const start = data.start_date?.split('T')[0];
+                    const end = data.valid_until?.split('T')[0];
+                    let isValid = true;
+                    if (start && start > checkDate) isValid = false;
+                    if (end && end < checkDate) isValid = false;
+
+                    if (isValid) {
+                        activeAgreement = data;
                     }
                 }
             }
 
-            // 2. Fallback to Clientes B2C if no model or if expired
-            if (!resolvedModel || expired) {
-                b2cFallback = true;
-                const { data: b2cModel } = await supabase
-                    .from('pricing_models')
-                    .select('*')
-                    .eq('name', 'Clientes B2C')
-                    .single();
-                
-                if (b2cModel) {
-                    resolvedModel = b2cModel;
+            if (activeAgreement) {
+                resolvedModel = {
+                    id: activeAgreement.id,
+                    name: `Acuerdo ${activeAgreement.quote_number}`,
+                    is_agreement: true
+                };
+            } else {
+                // 1. Fetch current pricing model if defined
+                if (modelId) {
+                    const { data: pm } = await supabase
+                        .from('pricing_models')
+                        .select('*')
+                        .eq('id', modelId)
+                        .single();
+                    
+                    if (pm) {
+                        resolvedModel = pm;
+                        // Validate expiration against deliveryDate
+                        if (deliveryDate) {
+                            const delivery = deliveryDate.split('T')[0];
+                            const start = pm.start_date?.split('T')[0];
+                            const end = pm.end_date?.split('T')[0];
+                            if (start && start > delivery) {
+                                expired = true;
+                            }
+                            if (end && end < delivery) {
+                                expired = true;
+                            }
+                        }
+                    }
+                }
+
+                // 2. Fallback to Clientes B2C if no model or if expired
+                if (!resolvedModel || expired) {
+                    b2cFallback = true;
+                    const { data: b2cModel } = await supabase
+                        .from('pricing_models')
+                        .select('*')
+                        .eq('name', 'Clientes B2C')
+                        .single();
+                    
+                    if (b2cModel) {
+                        resolvedModel = b2cModel;
+                    }
                 }
             }
 
@@ -494,13 +588,14 @@ function CreateOrderContent() {
             setIsB2CDefault(b2cFallback);
             setIsContractExpired(expired);
 
-            // 3. Load prices for the resolved model with fallback B2C prices
+            // 3. Load prices for the resolved contract/model with baseline fallback prices
             if (resolvedModel) {
                 const map: Record<string, number> = {};
                 const customIds = new Set<string>();
 
-                // Fetch B2C prices first if active model is not Clientes B2C
-                if (resolvedModel.name !== 'Clientes B2C') {
+                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback to Clientes B2C
+                let baselineModelId = modelId;
+                if (!baselineModelId) {
                     const { data: b2cModel } = await supabase
                         .from('pricing_models')
                         .select('id')
@@ -508,35 +603,108 @@ function CreateOrderContent() {
                         .single();
                     
                     if (b2cModel) {
-                        const { data: b2cPrices } = await supabase
-                            .from('pricing_model_prices')
-                            .select('product_id, price')
-                            .eq('model_id', b2cModel.id);
-                        
-                        b2cPrices?.forEach((p: any) => {
-                            map[p.product_id] = p.price;
-                        });
+                        baselineModelId = b2cModel.id;
                     }
                 }
 
-                // Fetch active model prices
-                const { data: activePrices } = await supabase
-                    .from('pricing_model_prices')
-                    .select('product_id, price')
-                    .eq('model_id', resolvedModel.id);
-                
-                activePrices?.forEach((p: any) => {
-                    map[p.product_id] = p.price;
-                    if (resolvedModel.name !== 'Clientes B2C') {
+                if (baselineModelId) {
+                    const { data: baselinePrices } = await supabase
+                        .from('pricing_model_prices')
+                        .select('product_id, price')
+                        .eq('model_id', baselineModelId);
+                    
+                    baselinePrices?.forEach((p: any) => {
+                        map[p.product_id] = p.price;
+                    });
+                }
+
+                if (activeAgreement) {
+                    // Fetch agreement prices from quote_items
+                    const { data: qItems } = await supabase
+                        .from('quote_items')
+                        .select('product_id, unit_price')
+                        .eq('quote_id', activeAgreement.id);
+                    
+                    qItems?.forEach((p: any) => {
+                        map[p.product_id] = p.unit_price;
                         customIds.add(p.product_id);
+                    });
+                } else {
+                    // Fetch active model prices
+                    const { data: activePrices } = await supabase
+                        .from('pricing_model_prices')
+                        .select('product_id, price')
+                        .eq('model_id', resolvedModel.id);
+                    
+                    activePrices?.forEach((p: any) => {
+                        map[p.product_id] = p.price;
+                        if (resolvedModel.name !== 'Clientes B2C') {
+                            customIds.add(p.product_id);
+                        }
+                    });
+                }
+
+                // Fetch active campaigns targeting this B2B client
+                const campMap: Record<string, { value: number; type: string; name: string }> = {};
+                const effectiveClientId = selectedClient;
+                if (clientType === 'B2B' && effectiveClientId) {
+                    const { data: targetCampaigns } = await supabase
+                        .from('campaign_targets')
+                        .select('campaign_id')
+                        .eq('profile_id', effectiveClientId);
+
+                    if (targetCampaigns && targetCampaigns.length > 0) {
+                        const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
+                        const nowIso = new Date().toISOString();
+                        const { data: activeCamps } = await supabase
+                            .from('commercial_campaigns')
+                            .select('*')
+                            .in('id', campIds)
+                            .eq('status', 'active')
+                            .lte('start_date', nowIso)
+                            .gte('end_date', nowIso);
+
+                        if (activeCamps && activeCamps.length > 0) {
+                            const activeCampIds = activeCamps.map((c: any) => c.id);
+                            const { data: items } = await supabase
+                                .from('campaign_items')
+                                .select('campaign_id, product_id, adjustment_value')
+                                .in('campaign_id', activeCampIds);
+
+                            items?.forEach((item: any) => {
+                                const camp = activeCamps.find((c: any) => c.id === item.campaign_id);
+                                if (camp) {
+                                    campMap[item.product_id] = {
+                                        value: item.adjustment_value,
+                                        type: camp.type,
+                                        name: camp.name
+                                    };
+                                }
+                            });
+                        }
+                    }
+                }
+
+                // Apply campaign price overrides to the resolved prices map
+                Object.keys(campMap).forEach((productId) => {
+                    const basePrice = map[productId] || 0;
+                    if (basePrice > 0) {
+                        const campaign = campMap[productId];
+                        if (campaign.type === 'fixed_price') {
+                            map[productId] = campaign.value;
+                        } else if (campaign.type === 'margin_adjustment') {
+                            map[productId] = basePrice * (1 + campaign.value / 100);
+                        }
                     }
                 });
 
+                setCampaignPrices(campMap);
                 setContractPrices(map);
                 setCustomPriceIds(customIds);
             } else {
                 setContractPrices({});
                 setCustomPriceIds(new Set());
+                setCampaignPrices({});
             }
         }
 
@@ -574,9 +742,27 @@ function CreateOrderContent() {
                 .eq('is_active', true)
                 .order('contact_name', { ascending: true });
 
-            const fetchConversions = supabase
-                .from('product_conversions')
-                .select('*');
+            const fetchConversions = (async () => {
+                let allConvs: any[] = [];
+                let hasMore = true;
+                let from = 0;
+                const limit = 1000;
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('product_conversions')
+                        .select('*')
+                        .range(from, from + limit - 1);
+                    if (error) return { data: null, error };
+                    if (data && data.length > 0) {
+                        allConvs = [...allConvs, ...data];
+                        from += limit;
+                        if (data.length < limit) hasMore = false;
+                    } else {
+                        hasMore = false;
+                    }
+                }
+                return { data: allConvs, error: null };
+            })();
 
             const [resB2B, resB2C, resConvs] = await Promise.all([fetchB2B, fetchB2C, fetchConversions]);
 
@@ -1992,7 +2178,7 @@ function CreateOrderContent() {
                                                                 gap: '4px',
                                                                 width: 'fit-content'
                                                             }}>
-                                                                <span>🏷️ {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
+                                                                <span>🏷️ {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
                                                                 {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                             </div>
                                                         )}
@@ -3066,17 +3252,45 @@ function CreateOrderContent() {
                                                                 </span>
                                                             )}
                                                             {/* Pricing Source Badge */}
-                                                            {contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (
-                                                                customPriceIds.has(item.product.id) ? (
-                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        Tarifa Contrato
-                                                                    </span>
-                                                                ) : (
-                                                                    <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        Tarifa B2C (Defecto)
-                                                                    </span>
-                                                                )
-                                                            ) : (
+                                                            {campaignPrices[item.product.id] ? (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    ⚡ {campaignPrices[item.product.id].name} ({campaignPrices[item.product.id].type === 'fixed_price' ? 'Precio Fijo' : `${campaignPrices[item.product.id].value > 0 ? '+' : ''}${campaignPrices[item.product.id].value}%`})
+                                                                </span>
+                                                            ) : contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (() => {
+                                                                const isAgreement = activePricingModel?.is_agreement;
+                                                                const hasCustomPrice = customPriceIds.has(item.product.id);
+                                                                if (isAgreement) {
+                                                                    if (hasCustomPrice) {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                Tarifa Acuerdo
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        const currentProfile = clients.find(c => c.id === selectedClient);
+                                                                        const hasB2BModel = !!(currentProfile?.pricing_model_id || (currentProfile?.parent_id && clients.find(c => c.id === currentProfile.parent_id)?.pricing_model_id));
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                {hasB2BModel ? 'Fuera de Acuerdo (B2B)' : 'Fuera de Acuerdo (B2C)'}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                } else {
+                                                                    if (hasCustomPrice) {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                Tarifa Contrato
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                Tarifa B2C (Defecto)
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                }
+                                                            })() : (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                     ⚠️ Sin Precio
                                                                 </span>
@@ -3666,11 +3880,7 @@ function CreateOrderContent() {
                                 <button
                                     type="button"
                                     tabIndex={-1}
-                                    onClick={() => {
-                                        if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
-                                            setManageConversionsProduct(selectedProductForModal);
-                                        }
-                                    }}
+                                    onClick={() => setManageConversionsProduct(selectedProductForModal)}
                                     style={{
                                         background: 'none',
                                         border: 'none',
@@ -3762,6 +3972,7 @@ function CreateOrderContent() {
                                     </label>
                                     <input
                                         id="modal-qty-input"
+                                        autoComplete="off"
                                         type="text"
                                         value={modalQuantity}
                                         onChange={(e) => {
@@ -4009,7 +4220,7 @@ function CreateOrderContent() {
                     <div style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 13000, backdropFilter: 'blur(3px)'
+                        zIndex: 25000, backdropFilter: 'blur(3px)'
                     }} onClick={() => setManageConversionsProduct(null)}>
 
                         <div
@@ -4105,10 +4316,37 @@ function CreateOrderContent() {
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ flex: 1 }}>
-                                            <input id="new-conv-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                            <input 
+                                                id="new-conv-qty-1" 
+                                                type="number" 
+                                                defaultValue="1" 
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        document.getElementById('new-conv-unit-1')?.focus();
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} 
+                                            />
                                         </div>
                                         <div style={{ flex: 2 }}>
-                                            <select id="new-conv-unit-1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}>
+                                            <select 
+                                                id="new-conv-unit-1" 
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === 'ArrowRight') {
+                                                        e.preventDefault();
+                                                        const qty2 = document.getElementById('new-conv-qty-2');
+                                                        if (qty2) {
+                                                            qty2.focus();
+                                                            (qty2 as HTMLInputElement).select();
+                                                        }
+                                                    } else if (e.key === 'ArrowLeft') {
+                                                        e.preventDefault();
+                                                        document.getElementById('new-conv-qty-1')?.focus();
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}
+                                            >
                                                 <option value="">Selecciona unidad</option>
                                                 {DYNAMIC_UNITS.map(u => (
                                                     <option key={u} value={u}>{u}</option>
@@ -4123,7 +4361,21 @@ function CreateOrderContent() {
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ flex: 1 }}>
-                                            <input id="new-conv-qty-2" type="number" placeholder="Ej: 0.3" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                            <input 
+                                                id="new-conv-qty-2" 
+                                                type="number" 
+                                                placeholder="Ej: 0.3" 
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleAdd();
+                                                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        document.getElementById('new-conv-unit-1')?.focus();
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} 
+                                            />
                                         </div>
                                         <div style={{ flex: 2 }}>
                                             <div style={{ width: '100%', padding: '0.5rem', backgroundColor: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', fontWeight: '800', textAlign: 'center', color: '#15803D', fontSize: '0.9rem' }}>

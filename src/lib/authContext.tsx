@@ -18,6 +18,7 @@ interface Profile {
     document_type?: string;
     remission_with_prices?: boolean;
     needs_password_change?: boolean;
+    parent_id?: string;
     custom_permissions?: string[];
 }
 
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🔄 Cargando perfil para:', userId);
         let query = supabase
             .from('profiles')
-            .select('*')
+            .select('*, parent:parent_id(pricing_model_id)')
             .eq('id', userId);
             
         if (signal) query = query.abortSignal(signal);
@@ -99,7 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     return;
                 }
                 console.log('✅ Perfil cargado:', data.role);
-                setProfile(data as Profile);
+                const profileData = {
+                    ...data,
+                    pricing_model_id: data.parent_id ? data.parent?.pricing_model_id : data.pricing_model_id
+                };
+                setProfile(profileData as Profile);
             } else {
                 console.warn('⚠️ Perfil no encontrado en la tabla profiles.');
             }
