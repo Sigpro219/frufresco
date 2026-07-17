@@ -1227,7 +1227,7 @@ export default function CommercialAgreementsModule() {
                                                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
                                                     {item.iva_rate}%
                                                 </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#2563EB', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
                                                     {Math.round(item.margin_percent * 10) / 10}%
                                                 </td>
                                             </tr>
