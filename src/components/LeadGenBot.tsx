@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
-import { isInsidePolygon, Point } from '../lib/geoUtils';
+import { isInsidePolygon, Point, getDistanceToPolygon } from '../lib/geoUtils';
 import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
 import { User } from 'lucide-react';
 import { translations, Locale } from '../lib/translations';
@@ -57,6 +57,9 @@ type Message = {
 
 type LeadData = {
     is_out_of_coverage: boolean;
+    is_near_coverage?: boolean;
+    distance_to_coverage?: number;
+    wants_coverage_call?: boolean;
     company_name: string;
     nit: string;
     business_type: string;
@@ -83,6 +86,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     const [inputValue, setInputValue] = useState('');
     const [leadData, setLeadData] = useState<LeadData>({ 
         is_out_of_coverage: false,
+        is_near_coverage: false,
+        distance_to_coverage: 0,
+        wants_coverage_call: false,
         company_name: '', nit: '', business_type: '', business_size: '', 
         contact_name: '', phone: '', email: '', 
         address: '', municipality: '', latitude: null, longitude: null 
@@ -225,6 +231,36 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 sender: 'bot',
                 options: locale === 'en' ? ['Restaurant', 'Hotel', 'School', 'Casino/Catering', 'Other'] : ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
             }];
+        } else if (currentStep === 10) { // Borderline call prompt response
+            const lowerText = userText.toLowerCase();
+            const agreed = lowerText.includes('sí') || lowerText.includes('si') || lowerText.includes('yes') || lowerText.includes('agendar');
+            
+            const nextUpdate = { wants_coverage_call: agreed };
+            const mergedData = { ...updatedLeadData, ...nextUpdate };
+            
+            const nextText = agreed 
+                ? (locale === 'en' ? "Great! We will schedule a call to review your location. What is your cell phone number?" : "¡Excelente elección! Agendaremos una llamada para revisar tu caso. ¿A qué número de celular te contactamos?")
+                : (locale === 'en' ? "Understood. We can still save your contact for future route openings. What is your cell phone number?" : "Entendido. De todas formas nos gustaría guardar tu contacto para cuando abramos rutas. ¿A qué número de celular te contactamos?");
+            
+            nextBotMessages = [{
+                id: Date.now() + 1,
+                text: nextText,
+                sender: 'bot'
+            }];
+            
+            leadDataRef.current = mergedData;
+            setLeadData(mergedData);
+            setCurrentStep(4); // Transition to waitlist phone step (Step 4)
+            
+            let delay = 0;
+            nextBotMessages.forEach((msg, index) => {
+                delay += 1000 + (index * 800);
+                setTimeout(() => {
+                    if (index === nextBotMessages.length - 1) setIsTyping(false);
+                    setMessages(prev => [...prev, msg]);
+                }, delay);
+            });
+            return;
         } else if (!updatedLeadData.is_out_of_coverage) {
             // IN COVERAGE Normal B2B Flow
             if (currentStep === 4) { // Captured Type
@@ -334,8 +370,15 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
         setIsTyping(true);
         setIsSubmitting(true);
         try {
-            const notesTag = finalData.is_out_of_coverage ? ' | [ZONA SIN COBERTURA]' : '';
-            const statusValue = finalData.is_out_of_coverage ? 'rejected' : 'new';
+            const isNearCall = finalData.is_near_coverage && finalData.wants_coverage_call;
+            const notesTag = finalData.is_out_of_coverage 
+                ? (isNearCall 
+                    ? ` | [ZONA PRÓXIMA - SOLICITA LLAMADA COBERTURA (a ${Math.round(finalData.distance_to_coverage || 0)}m)]` 
+                    : ` | [ZONA SIN COBERTURA (a ${Math.round(finalData.distance_to_coverage || 0)}m)]`)
+                : '';
+            const statusValue = finalData.is_out_of_coverage 
+                ? (isNearCall ? 'new' : 'rejected')
+                : 'new';
             // Construct notes from partial data if needed
             const { error } = await supabase
                 .from('leads')
@@ -454,7 +497,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             {msg.text}
                         </div>
                         
-                        {msg.sender === 'bot' && msg.options && (currentStep === 4 || currentStep === 5) && (
+                        {msg.sender === 'bot' && msg.options && (currentStep === 4 || currentStep === 5 || currentStep === 10) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
                                 {msg.options.map(opt => (
                                     <button 
@@ -542,17 +585,40 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                                 const gpsUpdate = { latitude: lat, longitude: lng, municipality: mun, is_out_of_coverage: false };
                                                 handleInput(undefined, '📍 Ubicación confirmada', gpsUpdate);
                                             } else {
-                                                const gpsUpdate = { latitude: lat, longitude: lng, municipality: mun, is_out_of_coverage: true };
+                                                const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
+                                                const isNear = distance <= 2000;
+                                                const gpsUpdate = { 
+                                                    latitude: lat, 
+                                                    longitude: lng, 
+                                                    municipality: mun, 
+                                                    is_out_of_coverage: true, 
+                                                    is_near_coverage: isNear,
+                                                    distance_to_coverage: distance
+                                                };
                                                 setLeadData(prev => ({ ...prev, ...gpsUpdate }));
                                                 leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
                                                 setIsTyping(true);
                                                 setTimeout(() => {
                                                     setIsTyping(false);
-                                                    setMessages(prev => [...prev, 
-                                                        { id: Date.now(), text: t.b2b.bot.outOfZone, sender: 'bot' },
-                                                        { id: Date.now() + 1, text: (t.b2b.bot as any).outOfZoneWaitlist, sender: 'bot' }
-                                                    ]);
-                                                    setCurrentStep(4); // Advance directly to waitlist phone step
+                                                    if (isNear) {
+                                                        const welcomeText = locale === 'en'
+                                                            ? `You are very close! Your location is about ${Math.round(distance)} meters from our active coverage area.`
+                                                            : `¡Estás muy cerca! Tu ubicación está a unos ${Math.round(distance)} metros de nuestra zona de cobertura activa.`;
+                                                        const promptText = locale === 'en'
+                                                            ? "Would you like us to schedule a call right away to check if we can enable delivery for your business?"
+                                                            : "¿Te gustaría que agendemos una llamada de inmediato para revisar si podemos habilitar la entrega para tu negocio?";
+                                                        setMessages(prev => [...prev, 
+                                                            { id: Date.now(), text: welcomeText, sender: 'bot' },
+                                                            { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['Yes, schedule call', 'No, thanks'] : ['Sí, agendar llamada', 'No, gracias'] }
+                                                        ]);
+                                                        setCurrentStep(10);
+                                                    } else {
+                                                        setMessages(prev => [...prev, 
+                                                            { id: Date.now(), text: t.b2b.bot.outOfZone, sender: 'bot' },
+                                                            { id: Date.now() + 1, text: (t.b2b.bot as any).outOfZoneWaitlist, sender: 'bot' }
+                                                        ]);
+                                                        setCurrentStep(4);
+                                                    }
                                                 }, 1000);
                                             }
                                         });
@@ -601,17 +667,37 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                             const gpsUpdate = { is_out_of_coverage: false };
                                             handleInput(undefined, '📍 Ubicación confirmada', gpsUpdate);
                                         } else {
-                                            const gpsUpdate = { is_out_of_coverage: true };
+                                            const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
+                                            const isNear = distance <= 2000;
+                                            const gpsUpdate = { 
+                                                is_out_of_coverage: true, 
+                                                is_near_coverage: isNear,
+                                                distance_to_coverage: distance
+                                            };
                                             setLeadData(prev => ({ ...prev, ...gpsUpdate }));
                                             leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
                                             setIsTyping(true);
                                             setTimeout(() => {
                                                 setIsTyping(false);
-                                                setMessages(prev => [...prev, 
-                                                    { id: Date.now(), text: t.b2b.bot.outOfZone, sender: 'bot' },
-                                                    { id: Date.now() + 1, text: (t.b2b.bot as any).outOfZoneWaitlist, sender: 'bot' }
-                                                ]);
-                                                setCurrentStep(4);
+                                                if (isNear) {
+                                                    const welcomeText = locale === 'en'
+                                                        ? `You are very close! Your location is about ${Math.round(distance)} meters from our active coverage area.`
+                                                        : `¡Estás muy cerca! Tu ubicación está a unos ${Math.round(distance)} metros de nuestra zona de cobertura activa.`;
+                                                    const promptText = locale === 'en'
+                                                        ? "Would you like us to schedule a call right away to check if we can enable delivery for your business?"
+                                                        : "¿Te gustaría que agendemos una llamada de inmediato para revisar si podemos habilitar la entrega para tu negocio?";
+                                                    setMessages(prev => [...prev, 
+                                                        { id: Date.now(), text: welcomeText, sender: 'bot' },
+                                                        { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['Yes, schedule call', 'No, thanks'] : ['Sí, agendar llamada', 'No, gracias'] }
+                                                    ]);
+                                                    setCurrentStep(10);
+                                                } else {
+                                                    setMessages(prev => [...prev, 
+                                                        { id: Date.now(), text: t.b2b.bot.outOfZone, sender: 'bot' },
+                                                        { id: Date.now() + 1, text: (t.b2b.bot as any).outOfZoneWaitlist, sender: 'bot' }
+                                                    ]);
+                                                    setCurrentStep(4);
+                                                }
                                             }, 1000);
                                         }
                                     }}
