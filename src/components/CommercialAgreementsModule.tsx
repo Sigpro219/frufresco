@@ -124,7 +124,7 @@ export default function CommercialAgreementsModule() {
             // Fetch quotes where status is 'agreement' and join profiles
             const { data, error } = await supabase
                 .from('quotes')
-                .select('*, profiles:client_id (company_name, contact_name, nit, phone, address)')
+                .select('*, profiles:client_id (company_name, contact_name, nit, phone, address), items:quote_items(margin_percent)')
                 .eq('status', 'agreement')
                 .order('created_at', { ascending: false });
 
@@ -951,6 +951,7 @@ export default function CommercialAgreementsModule() {
                                 <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Vigencia</th>
                                 <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Duración</th>
                                 <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Estado</th>
+                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen Promedio</th>
                                 <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Acciones</th>
                             </tr>
                         </thead>
@@ -1032,6 +1033,22 @@ export default function CommercialAgreementsModule() {
                                             }}>
                                                 {status.label}
                                             </span>
+                                        </td>
+                                        <td style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>
+                                            {(() => {
+                                                const rowItems = (agreement as any).items || [];
+                                                const totalRowMargin = rowItems.reduce((sum: number, item: any) => sum + (item.margin_percent || 0), 0);
+                                                const rowAvgMargin = rowItems.length > 0 ? totalRowMargin / rowItems.length : 0;
+                                                return (
+                                                    <span style={{ 
+                                                        color: rowAvgMargin >= 50 ? '#059669' : rowAvgMargin >= 20 ? '#D97706' : '#DC2626', 
+                                                        fontWeight: 'bold',
+                                                        fontSize: '0.85rem'
+                                                    }}>
+                                                        {(Math.round(rowAvgMargin * 10) / 10).toFixed(1)}%
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right' }}>
                                             <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
