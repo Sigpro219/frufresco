@@ -1036,7 +1036,7 @@ export default function CommercialAgreementsModule() {
                                         </td>
                                         <td style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>
                                             {(() => {
-                                                const rowItems = (agreement as any).items || [];
+                                                const rowItems = (agreement as any).items || (agreement as any).quote_items || [];
                                                 const totalRowMargin = rowItems.reduce((sum: number, item: any) => sum + (item.margin_percent || 0), 0);
                                                 const rowAvgMargin = rowItems.length > 0 ? totalRowMargin / rowItems.length : 0;
                                                 return (
@@ -1049,7 +1049,7 @@ export default function CommercialAgreementsModule() {
                                                             {(Math.round(rowAvgMargin * 10) / 10).toFixed(1)}%
                                                         </span>
                                                         <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
-                                                            ({rowItems.length} prod / {!(agreement as any).items ? 'NULL' : 'OK'})
+                                                            ({rowItems.length} prod / {!(agreement as any).items ? (!(agreement as any).quote_items ? 'BOTH NULL' : 'Q_ITEMS OK') : 'ITEMS OK'})
                                                         </span>
                                                     </div>
                                                 );
