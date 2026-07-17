@@ -1040,13 +1040,18 @@ export default function CommercialAgreementsModule() {
                                                 const totalRowMargin = rowItems.reduce((sum: number, item: any) => sum + (item.margin_percent || 0), 0);
                                                 const rowAvgMargin = rowItems.length > 0 ? totalRowMargin / rowItems.length : 0;
                                                 return (
-                                                    <span style={{ 
-                                                        color: rowAvgMargin >= 50 ? '#059669' : rowAvgMargin >= 20 ? '#D97706' : '#DC2626', 
-                                                        fontWeight: 'bold',
-                                                        fontSize: '0.85rem'
-                                                    }}>
-                                                        {(Math.round(rowAvgMargin * 10) / 10).toFixed(1)}%
-                                                    </span>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <span style={{ 
+                                                            color: rowAvgMargin >= 50 ? '#059669' : rowAvgMargin >= 20 ? '#D97706' : '#DC2626', 
+                                                            fontWeight: 'bold',
+                                                            fontSize: '0.85rem'
+                                                        }}>
+                                                            {(Math.round(rowAvgMargin * 10) / 10).toFixed(1)}%
+                                                        </span>
+                                                        <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
+                                                            ({rowItems.length} prod / {!(agreement as any).items ? 'NULL' : 'OK'})
+                                                        </span>
+                                                    </div>
                                                 );
                                             })()}
                                         </td>
