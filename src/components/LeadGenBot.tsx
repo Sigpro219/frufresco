@@ -383,32 +383,64 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
             // 2. Auto-generate pre-quotation (only for active 'new' leads)
             if (newLeadId && (statusValue === 'new')) {
-                // Determine model
-                let modelId = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15'; // Default fallback General Institucional
-                let modelName = 'General Institucional';
-                
+                let colorTag = 'rojo';
+                let templateName = 'Lista Pequeña';
                 const size = finalData.business_size || '';
                 if (size.includes('Grande') || size.includes('30M')) {
-                    modelId = '7a5c8375-ec2b-4b5d-a979-d48907459c20'; // Grande 30 días
-                    modelName = 'Grande 30 días';
+                    colorTag = 'verde';
+                    templateName = 'Lista Larga';
                 } else if (size.includes('Mediano') || size.includes('10M')) {
-                    modelId = 'dfddd8ad-2c77-4026-a0c2-14f97f2e3510'; // Mediano 30 días
-                    modelName = 'Mediano 30 días';
-                } else if (size.includes('Pequeño') || size.includes('< 10M')) {
-                    modelId = 'c0ae55d8-cc70-4f56-b3e0-8a15b34b77ca'; // Pequeño 30 días
-                    modelName = 'Pequeño 30 días';
+                    colorTag = 'amarillo';
+                    templateName = 'Lista Mediana';
                 }
 
-                // Fetch 5 active popular products
-                const { data: popularProds } = await supabase
-                    .from('products')
-                    .select('id, name, base_price, iva_rate, sku')
-                    .eq('is_active', true)
-                    .gt('base_price', 0)
-                    .limit(5);
+                // Query model by color_tag
+                const { data: matchedModel } = await supabase
+                    .from('pricing_models')
+                    .select('id, name')
+                    .eq('color_tag', colorTag)
+                    .limit(1)
+                    .single();
 
-                if (popularProds && popularProds.length > 0) {
-                    const prodIds = popularProds.map(p => p.id);
+                const modelId = matchedModel?.id || 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
+                const modelName = matchedModel?.name || 'General Institucional';
+
+                // Fetch template ID
+                const { data: templateData } = await supabase
+                    .from('quote_templates')
+                    .select('id')
+                    .eq('name', templateName)
+                    .limit(1)
+                    .single();
+
+                let productsToQuote: any[] = [];
+                if (templateData) {
+                    // Fetch items for this template
+                    const { data: templateItems } = await supabase
+                        .from('quote_template_items')
+                        .select('product_id, products(id, name, base_price, iva_rate, sku)')
+                        .eq('template_id', templateData.id);
+
+                    if (templateItems && templateItems.length > 0) {
+                        productsToQuote = templateItems
+                            .map((ti: any) => ti.products)
+                            .filter((p: any) => p && Number(p.base_price) > 0);
+                    }
+                }
+
+                // Fallback to active products if template not found or empty
+                if (productsToQuote.length === 0) {
+                    const { data: activeProds } = await supabase
+                        .from('products')
+                        .select('id, name, base_price, iva_rate, sku')
+                        .eq('is_active', true)
+                        .gt('base_price', 0)
+                        .limit(15);
+                    if (activeProds) productsToQuote = activeProds;
+                }
+
+                if (productsToQuote.length > 0) {
+                    const prodIds = productsToQuote.map(p => p.id);
                     
                     // Fetch pricing model prices cache
                     const { data: modelPrices } = await supabase
@@ -422,9 +454,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     let total = 0;
                     const itemsToInsert = [];
 
-                    for (const p of popularProds) {
+                    for (const p of productsToQuote) {
                         const cached = modelPrices?.find(mp => mp.product_id === p.id);
-                        const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * 1.15;
+                        const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * (colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15);
 
                         const qty = 10; // Default quantity for pre-quotation
                         const itemSubtotal = unitPrice * qty;
@@ -441,7 +473,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             product_name: p.name,
                             quantity: qty,
                             cost_basis: p.base_price,
-                            margin_percent: modelName.includes('Grande') ? 5 : modelName.includes('Mediano') ? 10 : 15,
+                            margin_percent: colorTag === 'verde' ? 5 : colorTag === 'amarillo' ? 10 : 15,
                             unit_price: unitPrice,
                             iva_rate: itemTaxRate,
                             iva_amount: itemTax,
