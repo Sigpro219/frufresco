@@ -2860,7 +2860,11 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         backgroundColor: (client as any).status === 'new' ? '#EEF2FF' : '#FFFBEB',
                         color: (client as any).status === 'new' ? '#4F46E5' : '#D97706'
                     }}>
-                        {(client as any).status}
+                        {(client as any).status === 'new' ? 'NUEVO' : 
+                         (client as any).status === 'contacted' ? 'CONTACTADO' : 
+                         (client as any).status === 'converted' ? 'CONVERTIDO' : 
+                         (client as any).status === 'rejected' ? 'DESCARTADO' : 
+                         (client as any).status}
                     </span>
                 ) : (
                     <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Hogar</span>
