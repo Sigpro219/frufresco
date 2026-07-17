@@ -179,7 +179,7 @@ function CreateQuotePageContent() {
             if (cErr) console.warn('Error fetching profiles:', cErr);
             if (cData) setClients(cData || []);
 
-            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email').order('company_name');
+            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email, business_type, business_size').order('company_name');
             if (lErr) console.warn('Error fetching leads:', lErr);
             if (lData) setLeads(lData || []);
 
@@ -943,11 +943,43 @@ function CreateQuotePageContent() {
                                         <div style={{ fontSize: '0.7rem', color: selectedLeadId ? '#16A34A' : appSettings.primary_color, fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
                                             {selectedLeadId ? 'Prospecto Seleccionado (CRM)' : 'Cliente Seleccionado'}
                                         </div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>{clientName}</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>
+                                            {clientName}
+                                        </div>
                                         {selectedLeadId ? (
-                                            <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>
-                                                Lead ID: #{selectedLeadId} • Tel: {leads.find(l => l.id === selectedLeadId)?.phone || 'Sin teléfono'}
-                                            </div>
+                                            <>
+                                                <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>
+                                                    Lead ID: #{selectedLeadId} • Tel: {leads.find(l => l.id === selectedLeadId)?.phone || 'Sin teléfono'}
+                                                </div>
+                                                {(() => {
+                                                    const lead = leads.find(l => l.id === selectedLeadId);
+                                                    if (!lead) return null;
+                                                    const bType = lead.business_type;
+                                                    const bSize = lead.business_size;
+                                                    let sizeBg = '#F3F4F6';
+                                                    let sizeTextCol = '#374151';
+                                                    let sizeDot = '🔴 ';
+                                                    if (bSize) {
+                                                        if (bSize.includes('Grande') || bSize.includes('30M')) { sizeBg = '#DCFCE7'; sizeTextCol = '#15803D'; sizeDot = '🟢 '; }
+                                                        else if (bSize.includes('Mediano') || bSize.includes('10M')) { sizeBg = '#FEF3C7'; sizeTextCol = '#B45309'; sizeDot = '🟡 '; }
+                                                        else if (bSize.includes('Pequeño') || bSize.includes('< 10M') || bSize.includes('Peq')) { sizeBg = '#FEE2E2'; sizeTextCol = '#B91C1C'; sizeDot = '🔴 '; }
+                                                    }
+                                                    return (
+                                                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                            {bType && (
+                                                                <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                    {bType}
+                                                                </span>
+                                                            )}
+                                                            {bSize && (
+                                                                <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                    {sizeDot}{bSize}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </>
                                         ) : (
                                             selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>NIT: {selectedClientInfo.nit}</div>
                                         )}
