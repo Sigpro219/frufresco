@@ -229,13 +229,39 @@ export default function ProductCard({ product }: { product: Product }) {
                         }}>{displayName}</h3>
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.2rem 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.2rem 0', flexWrap: 'wrap' }}>
                         {product.base_price > 0 ? (
                             <>
-                                <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                    ${(Math.ceil(((product.pricing_model_prices?.[0]?.price || product.base_price || 0) * (product.web_conversion_factor || 1)) / 50) * 50).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
-                                    {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
-                                </span>
+                                {product.campaign_info ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '1.35rem', fontWeight: '900', color: '#DC2626', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                ${(Math.ceil(((product.pricing_model_prices?.[0]?.price || 0) * (product.web_conversion_factor || 1)) / 50) * 50).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                            </span>
+                                            <span style={{ fontSize: '0.95rem', textDecoration: 'line-through', color: '#94A3B8', fontWeight: '500' }}>
+                                                ${(Math.ceil((product.campaign_info.originalPrice * (product.web_conversion_factor || 1)) / 50) * 50).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                            </span>
+                                        </div>
+                                        <span style={{ 
+                                            fontSize: '0.7rem', 
+                                            backgroundColor: '#FEE2E2', 
+                                            color: '#EF4444', 
+                                            padding: '2px 6px', 
+                                            borderRadius: '6px', 
+                                            fontWeight: 'bold', 
+                                            display: 'inline-block',
+                                            alignSelf: 'flex-start',
+                                            marginTop: '2px'
+                                        }}>
+                                            ⚡ {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                        ${(Math.ceil(((product.pricing_model_prices?.[0]?.price || product.base_price || 0) * (product.web_conversion_factor || 1)) / 50) * 50).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                        {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
+                                    </span>
+                                )}
                                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>
                                     / {product.web_unit || product.unit_of_measure || 'Un'}
                                 </span>

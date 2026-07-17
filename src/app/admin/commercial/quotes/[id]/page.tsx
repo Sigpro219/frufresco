@@ -7,12 +7,29 @@ import { THEME } from '@/lib/adminTheme';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function QuoteDetailPage() {
+    const formatPrice = (value: number) => {
+        return new Intl.NumberFormat('es-CO', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        }).format(value);
+    };
+
+    const formatQuoteNumber = (seq: number, dateStr?: string) => {
+        const date = dateStr ? new Date(dateStr) : new Date();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const paddedSeq = String(seq).padStart(4, '0');
+        return `COT ${day}${month} ${paddedSeq}`;
+    };
+
     const params = useParams();
     const router = useRouter();
     const [quote, setQuote] = useState<any>(null);
+    const [lead, setLead] = useState<any>(null);
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [converting, setConverting] = useState(false);
+    const [creatingProfileFromLead, setCreatingProfileFromLead] = useState(false);
 
     // Client Selection for Conversion
     const [showClientModal, setShowClientModal] = useState(false);
@@ -52,6 +69,15 @@ export default function QuoteDetailPage() {
             return;
         }
         setQuote(qData);
+
+        if (qData.lead_id) {
+            const { data: lData } = await supabase
+                .from('leads')
+                .select('*')
+                .eq('id', qData.lead_id)
+                .single();
+            if (lData) setLead(lData);
+        }
 
         // Load Items (Joins product to get the name)
         const { data: iData } = await supabase
@@ -103,6 +129,48 @@ export default function QuoteDetailPage() {
         if (data) setClientResults(data);
     };
 
+    const handleConvertLeadToProfile = async () => {
+        if (!lead) return;
+        setCreatingProfileFromLead(true);
+        try {
+            const { data: newProfile, error: pErr } = await supabase
+                .from('profiles')
+                .insert([{
+                    role: 'b2b_client',
+                    company_name: lead.company_name || 'Negocio desde Lead',
+                    contact_name: lead.contact_name,
+                    phone: lead.phone,
+                    email: lead.email || null,
+                    address: lead.notes?.split('|')[0]?.replace('📍 GPS: ', '') || 'Bogotá',
+                    pricing_model_id: quote.model_id
+                }])
+                .select()
+                .single();
+
+            if (pErr) throw pErr;
+
+            const { error: qErr } = await supabase
+                .from('quotes')
+                .update({ client_id: newProfile.id })
+                .eq('id', quote.id);
+
+            if (qErr) throw qErr;
+
+            setSelectedClient(newProfile);
+            setQuote((prev: any) => ({ ...prev, client_id: newProfile.id }));
+            
+            setShowClientModal(false);
+            setShowConversionModal(true);
+            
+            alert('🎉 Se ha creado el perfil comercial B2B para: ' + (newProfile.company_name || newProfile.contact_name));
+        } catch (err: any) {
+            console.error('Error converting lead to profile:', err);
+            alert('Error al crear perfil de cliente: ' + err.message);
+        } finally {
+            setCreatingProfileFromLead(false);
+        }
+    };
+
     const submitConversion = async () => {
         if (!selectedClient) return;
         setConverting(true);
@@ -129,32 +197,46 @@ export default function QuoteDetailPage() {
 
                 if (oErr) throw oErr;
 
-                // 2. Create Order Items
-                const { error: iErr } = await supabase.from('order_items').insert(
-                    items.map(qi => ({
-                        order_id: order.id,
-                        product_id: qi.product_id,
-                        quantity: qi.quantity_estimated || 1,
-                        unit_price: (qi.final_price || 0) * (1 + ((qi.iva_rate || 0) / 100)),
-                        variant_label: '', // Podría sacarse del nombre si se desea
-                        nickname: qi.product_name || (qi.products?.name || '')
-                    }))
-                );
+                try {
+                    // 2. Create Order Items (populating tax-inclusive price, rate, and amount)
+                    const itemsData = items.map(qi => {
+                        const priceWithTax = Math.round((qi.unit_price || 0) * (1 + ((qi.iva_rate || 0) / 100)));
+                        const itemTotal = priceWithTax * (qi.quantity || 1);
+                        const rate = qi.iva_rate || 0;
+                        const ivaAmount = rate > 0 ? itemTotal * (rate / (100 + rate)) : 0;
+                        return {
+                            order_id: order.id,
+                            product_id: qi.product_id,
+                            quantity: qi.quantity || 1,
+                            unit_price: priceWithTax,
+                            variant_label: '',
+                            nickname: qi.product_name || (qi.products?.name || ''),
+                            iva_rate: rate,
+                            iva_amount: Math.round(ivaAmount)
+                        };
+                    });
 
-                if (iErr) throw iErr;
+                    const { error: iErr } = await supabase.from('order_items').insert(itemsData);
+                    if (iErr) throw iErr;
 
-                // 3. Update Quote Status
-                await supabase
-                    .from('quotes')
-                    .update({ status: 'converted', client_id: selectedClient.id, order_id: order.id }) 
-                    .eq('id', quote.id);
+                    // 3. Update Quote Status
+                    const { error: qErr } = await supabase
+                        .from('quotes')
+                        .update({ status: 'converted', client_id: selectedClient.id, order_id: order.id }) 
+                        .eq('id', quote.id);
+                    if (qErr) throw qErr;
 
-                alert('✅ ¡Pedido Creado Exitosamente!');
-                router.push(`/admin/orders/${order.id}`); 
+                    alert('✅ ¡Pedido Creado Exitosamente!');
+                    router.push(`/admin/orders/${order.id}`); 
+                } catch (innerErr) {
+                    console.error('Error during order items creation, rolling back order:', innerErr);
+                    await supabase.from('orders').delete().eq('id', order.id);
+                    throw innerErr;
+                }
 
             } else {
                 // Commercial Agreement Flow
-                await supabase
+                const { error: agreementErr } = await supabase
                     .from('quotes')
                     .update({ 
                         status: 'agreement', 
@@ -163,6 +245,8 @@ export default function QuoteDetailPage() {
                         notes: (quote.notes || '') + '\n[CONVERTIDO A ACUERDO COMERCIAL]'
                     })
                     .eq('id', quote.id);
+                
+                if (agreementErr) throw agreementErr;
                 
                 alert('✅ ¡Acuerdo Comercial Registrado!');
                 setShowConversionModal(false);
@@ -177,6 +261,12 @@ export default function QuoteDetailPage() {
         }
     };
 
+    const getDaysRemaining = (dateStr: string) => {
+        if (!dateStr) return null;
+        const diff = new Date(dateStr).getTime() - Date.now();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    };
+
     if (loading) return <div style={{ padding: '2rem' }}>Cargando...</div>;
     if (!quote) return <div style={{ padding: '2rem' }}>Cotización no encontrada.</div>;
 
@@ -187,10 +277,39 @@ export default function QuoteDetailPage() {
                     <Link href="/admin/commercial/quotes" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>
                 </div>
 
+                {quote.status === 'agreement' && (() => {
+                    const days = getDaysRemaining(quote.valid_until);
+                    if (days !== null && days <= 15) {
+                        return (
+                            <div style={{ 
+                                backgroundColor: days < 0 ? '#FEF2F2' : '#FFFBEB', 
+                                border: `1px solid ${days < 0 ? '#FECACA' : '#FDE68A'}`, 
+                                padding: '1rem', 
+                                borderRadius: '12px', 
+                                marginBottom: '1.5rem', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '10px' 
+                            }}>
+                                <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                                <div>
+                                    <div style={{ fontWeight: 'bold', color: days < 0 ? '#991B1B' : '#92400E' }}>
+                                        {days < 0 ? 'Este Acuerdo Comercial ha expirado' : `Este Acuerdo Comercial expira en ${days} días`}
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', color: days < 0 ? '#B91C1C' : '#B45309' }}>
+                                        Fecha límite: {new Date(quote.valid_until).toLocaleDateString()}. Los precios congelados dejarán de aplicarse después de esta fecha.
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
+
                 {/* HEADER CARD */}
                 <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div style={{ textTransform: 'uppercase', fontSize: '0.8rem', color: '#6B7280', fontWeight: 'bold' }}>Cotización #{quote.quote_number || '---'}</div>
+                        <div style={{ textTransform: 'uppercase', fontSize: '0.8rem', color: '#6B7280', fontWeight: 'bold' }}>{quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'Cotización'}</div>
                         <h1 style={{ fontSize: '2rem', margin: '0.5rem 0', fontWeight: '900' }}>{quote.client_name}</h1>
                         <div style={{ display: 'flex', gap: '1rem', color: '#4B5563' }}>
                             <span>Modelo: <strong>{quote.model_snapshot_name}</strong></span>
@@ -198,29 +317,78 @@ export default function QuoteDetailPage() {
                         </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669' }}>${quote.total_amount?.toLocaleString()}</div>
+                        <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669' }}>${formatPrice(quote.total_amount || 0)}</div>
                         <div style={{ marginBottom: '1rem' }}>Total Ofertado</div>
 
                         {quote.status === 'converted' ? (
-                            <Link href={quote.order_id ? `/admin/orders/${quote.order_id}` : '/admin/orders'} style={{ textDecoration: 'none' }}>
-                                <button style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    ✓ CONVERTIDA A PEDIDO
-                                    <span style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>Ver documento →</span>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <Link href={quote.order_id ? `/admin/orders/${quote.order_id}` : '/admin/orders'} style={{ textDecoration: 'none' }}>
+                                    <button style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        ✓ CONVERTIDA A PEDIDO
+                                        <span style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>Ver documento →</span>
+                                    </button>
+                                </Link>
+                                <button
+                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    🖨️ Imprimir
                                 </button>
-                            </Link>
+                            </div>
                         ) : quote.status === 'agreement' ? (
-                            <button disabled style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                🤝 ACUERDO COMERCIAL
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>(Vigente)</span>
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <button disabled style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    🤝 ACUERDO COMERCIAL
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>(Vigente)</span>
+                                </button>
+                                <button
+                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
                         ) : (
-                            <button
-                                onClick={handleConvertClick}
-                                disabled={converting}
-                                style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}
-                            >
-                                {converting ? 'Procesando...' : '🚀 Convertir a Pedido'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none' }}>
+                                    <button
+                                        style={{ 
+                                            backgroundColor: '#FFFBEB', 
+                                            color: '#D97706', 
+                                            border: '1px solid #F59E0B', 
+                                            padding: '0.8rem 1.5rem', 
+                                            borderRadius: '8px', 
+                                            fontWeight: 'bold', 
+                                            cursor: 'pointer', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '0.5rem',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FEF3C7';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FFFBEB';
+                                        }}
+                                    >
+                                        📝 Ajustar Precios
+                                    </button>
+                                </Link>
+                                <button
+                                    onClick={handleConvertClick}
+                                    disabled={converting}
+                                    style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}
+                                >
+                                    {converting ? 'Procesando...' : '🚀 Convertir a Pedido'}
+                                </button>
+                                <button
+                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -242,13 +410,13 @@ export default function QuoteDetailPage() {
                         <tbody>
                             {items.map(item => (
                                 <tr key={item.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.products?.name || 'Producto'}</td>
-                                    <td style={{ padding: '1rem' }}>{item.quantity_estimated} {item.unit || ''}</td>
-                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${item.base_cost?.toLocaleString()}</td>
-                                    <td style={{ padding: '1rem', color: '#2563EB', fontWeight: 'bold' }}>{item.margin_applied}%</td>
+                                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.product_name || item.products?.name || 'Producto'}</td>
+                                    <td style={{ padding: '1rem' }}>{item.quantity} {item.unit || ''}</td>
+                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${formatPrice(item.cost_basis || 0)}</td>
+                                    <td style={{ padding: '1rem', color: '#2563EB', fontWeight: 'bold' }}>{Math.round((item.margin_percent || 0) * 10) / 10}%</td>
                                     <td style={{ padding: '1rem', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem' }}>{item.iva_rate || 0}%</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${item.final_price?.toLocaleString()}</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${((item.quantity_estimated || 0) * (item.final_price || 0) * (1 + ((item.iva_rate || 0)/100)))?.toLocaleString()}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${formatPrice(item.unit_price || 0)}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${formatPrice((item.quantity || 0) * (item.unit_price || 0))}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -257,21 +425,21 @@ export default function QuoteDetailPage() {
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>Subtotal antes de impuestos</td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                                    ${(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity_estimated || 0) * (i.final_price || 0)), 0)).toLocaleString()}
+                                    ${formatPrice(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)), 0))}
                                 </td>
                             </tr>
                             <tr style={{ color: '#4B5563' }}>
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>Impuestos</td>
                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
-                                    ${(items.reduce((sum, i) => sum + ((i.quantity_estimated || 0) * (i.final_price || 0)) * ((i.iva_rate || 0) / 100), 0)).toLocaleString()}
+                                    ${formatPrice(quote?.total_tax_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)) * ((i.iva_rate || 0) / 100), 0))}
                                 </td>
                             </tr>
                             <tr style={{ backgroundColor: '#F9FAFB' }}>
                                 <td colSpan={5}></td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900' }}>Total</td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.5rem', color: '#059669' }}>
-                                    ${(quote?.total_amount || 0).toLocaleString()}
+                                    ${formatPrice(quote?.total_amount || 0)}
                                 </td>
                             </tr>
                         </tfoot>
@@ -285,8 +453,41 @@ export default function QuoteDetailPage() {
                     <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', width: '500px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
                         <h2 style={{ marginTop: 0 }}>Vincular a Cliente Real</h2>
                         <p style={{ color: '#4B5563', marginBottom: '1.5rem' }}>
-                            Para crear un pedido, esta cotización debe estar asignada a un usuario registrado en el sistema.
+                            Para crear un pedido o registrar un acuerdo comercial, esta cotización debe estar asignada a un usuario registrado en el sistema.
                         </p>
+
+                        {lead && (
+                            <div style={{ 
+                                backgroundColor: '#F0FDF4', 
+                                border: '1px solid #BBF7D0', 
+                                borderRadius: '8px', 
+                                padding: '1rem', 
+                                marginBottom: '1.5rem' 
+                            }}>
+                                <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 'bold', marginBottom: '4px' }}>✨ Prospecto Asociado Detectado</div>
+                                <div style={{ fontWeight: '900', color: '#14532D', fontSize: '1rem' }}>{lead.company_name || lead.contact_name}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#15803D', marginBottom: '10px' }}>
+                                    Tel: {lead.phone || 'Sin teléfono'} • Contacto: {lead.contact_name}
+                                </div>
+                                <button
+                                    onClick={handleConvertLeadToProfile}
+                                    disabled={creatingProfileFromLead}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '10px', 
+                                        backgroundColor: '#16A34A', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        borderRadius: '6px', 
+                                        fontWeight: 'bold', 
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem' 
+                                    }}
+                                >
+                                    {creatingProfileFromLead ? 'Creando Perfil...' : 'Convertir en Cliente B2B y Vincular'}
+                                </button>
+                            </div>
+                        )}
 
                         <div style={{ marginBottom: '1.5rem' }}>
                             <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>Buscar Cliente:</label>

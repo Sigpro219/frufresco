@@ -13,7 +13,7 @@ const getSupabaseAdmin = () => {
 };
 
 async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-1.5-flash-latest'];
   let lastError: any = null;
   for (const model of models) {
     try {
@@ -78,6 +78,18 @@ export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
+// Raise body size limit to 20 MB so emails with large PDF/Excel attachments
+// are not rejected by the Next.js body parser (default is 1 MB).
+// Without this Cloudmailin receives a 413 / "exceeded max size" error and
+// bounces the email back to the original sender.
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '20mb',
+    },
+  },
+};
+
 export async function POST(req: Request) {
   const supabaseAdmin = getSupabaseAdmin();
   
@@ -94,20 +106,21 @@ export async function POST(req: Request) {
       rawPayloadStr = await req.text();
       const payload = JSON.parse(rawPayloadStr);
 
-      // Save email immediately to the 'mail' table to ensure we have a record
+      // Save email immediately to the 'order_drafts' table to ensure we have a record
+      // Using extracted_items JSONB column to store the raw payload for debugging
       const { data: mailRecord, error: mailErr } = await supabaseAdmin
-        .from('mail')
+        .from('order_drafts')
         .insert([{
-          payload: payload,
-          sender_email: payload.headers?.from || payload.envelope?.from || 'desconocido',
-          subject: payload.headers?.subject || 'Sin Asunto',
-          status: 'pending'
+          email_subject: '[RAW_WEBHOOK] ' + (payload.headers?.subject || payload.headers?.Subject || 'Sin Asunto'),
+          source_email: payload.headers?.from || payload.headers?.From || payload.envelope?.from || 'desconocido',
+          status: 'pending',
+          extracted_items: { debug_payload: payload }
         }])
         .select()
         .single();
 
       if (mailErr) {
-        console.error('[Email Inbound] Error saving raw mail payload:', mailErr);
+        console.error('[Email Inbound] Error saving raw mail payload to drafts:', mailErr);
       }
 
       // 2. KICK OFF ASYNCHRONOUS PROCESSING
@@ -126,7 +139,27 @@ export async function POST(req: Request) {
           const subject = headers.subject || headers.Subject || '';
           const plainText = payload.plain || '';
           const htmlText = payload.html || '';
-          const attachments = payload.attachments || [];
+          let attachments = payload.attachments || [];
+          
+          // Filter out tiny signature images (typically inline images with cid or very small size)
+          attachments = attachments.filter((att: any) => {
+            if (!att.content) return false;
+            const lowerName = (att.file_name || att.filename || '').toLowerCase();
+            const mimeType = (att.content_type || '').toLowerCase();
+            const isImage = mimeType.startsWith('image/') || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp');
+            
+            // Base64 size estimation
+            const sizeInKB = att.content.length / 1.33 / 1024;
+            const isInline = !!(att.content_id || att.cid || (att.disposition && att.disposition.toLowerCase() === 'inline'));
+            
+            if (isImage) {
+              if ((sizeInKB < 60 && isInline) || sizeInKB < 15) {
+                console.log(`[Email Inbound] Ignorando adjunto de imagen pequeño/firma: ${lowerName} (${Math.round(sizeInKB)}KB, inline: ${isInline})`);
+                return false;
+              }
+            }
+            return true;
+          });
           
           // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
           let cleanedBodyText = plainText;
@@ -180,6 +213,64 @@ export async function POST(req: Request) {
           }
           recipientEmail = recipientEmail.trim().toLowerCase();
 
+          // --- INICIO ENRUTAMIENTO DINÁMICO ---
+          let inboxOrders = 'pedidos@frufresco.com';
+          let inboxCommercial = 'contacto@investmentscortes.com';
+          try {
+            const { data: dbSettings } = await supabaseAdmin
+              .from('app_settings')
+              .select('key, value')
+              .in('key', ['inbox_email_orders', 'inbox_email_commercial']);
+
+            if (dbSettings) {
+              const ordersSetting = dbSettings.find((s: any) => s.key === 'inbox_email_orders');
+              const commSetting = dbSettings.find((s: any) => s.key === 'inbox_email_commercial');
+              if (ordersSetting) inboxOrders = ordersSetting.value;
+              if (commSetting) inboxCommercial = commSetting.value;
+            }
+          } catch (err: any) {
+            console.error('[Email Inbound] Error querying app_settings for routing:', err.message);
+          }
+
+          const cleanInboxOrders = inboxOrders.toLowerCase().trim();
+          const cleanInboxCommercial = inboxCommercial.toLowerCase().trim();
+
+          // Check if matches Commercial Inbox address
+          if (recipientEmail === cleanInboxCommercial) {
+            console.log(`[Email Inbound] Route: COMMERCIAL inbox (${recipientEmail}). Skipping AI extraction.`);
+            if (mailId) {
+              await supabaseAdmin
+                .from('mail')
+                .update({ 
+                  is_inbound: true,
+                  inbox_type: 'commercial',
+                  status: 'received',
+                  to_email: recipientEmail,
+                  sender_email: senderEmail,
+                  message: { text: plainText, html: htmlText }
+                })
+                .eq('id', mailId);
+            }
+            return;
+          }
+
+          // Check if matches Orders Inbox address
+          if (recipientEmail === cleanInboxOrders) {
+            console.log(`[Email Inbound] Route: ORDERS inbox (${recipientEmail}). Running AI extraction.`);
+            if (mailId) {
+              await supabaseAdmin
+                .from('mail')
+                .update({ 
+                  is_inbound: true,
+                  inbox_type: 'orders',
+                  to_email: recipientEmail,
+                  sender_email: senderEmail
+                })
+                .eq('id', mailId);
+            }
+          }
+          // --- FIN ENRUTAMIENTO DINÁMICO ---
+
           const isCorporateRecipient = corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co');
 
           if (isCorporateSender && toField) {
@@ -220,57 +311,11 @@ export async function POST(req: Request) {
       items: []
     };
 
-    // 2. Parse email body or attachment with Gemi    // 2. Parse email body or attachments with Gemini
+    // 2. Parse email body or attachments with Gemini
     let uploadedAttachments: { name: string, url: string }[] = [];
     let parsedAttachments: any[] = [];
 
     if (attachments.length > 0) {
-      // 1. Upload ALL attachments to Supabase Storage
-      for (let i = 0; i < attachments.length; i++) {
-        const att = attachments[i];
-        const attFileName = att.file_name || att.filename || `adjunto_${i}.bin`;
-        const attBase64 = att.content;
-        const attMime = att.content_type || 'application/octet-stream';
-        
-        try {
-          // Ensure order-attachments bucket exists
-          try {
-            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
-          } catch (_) {}
-
-          const buffer = Buffer.from(attBase64, 'base64');
-          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
-          const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-            .from('order-attachments')
-            .upload(storagePath, buffer, {
-              contentType: attMime,
-              upsert: true
-            });
-
-          if (!uploadError) {
-            const { data: { publicUrl } } = supabaseAdmin.storage
-              .from('order-attachments')
-              .getPublicUrl(storagePath);
-            uploadedAttachments.push({
-              name: attFileName,
-              url: publicUrl
-            });
-            console.log(`[Email Inbound] Attachment ${i} (${attFileName}) uploaded to Supabase Storage: ${publicUrl}`);
-          } else {
-            console.error(`[Email Inbound] Failed to upload attachment ${i} (${attFileName}):`, uploadError);
-          }
-        } catch (uploadErr) {
-          console.error(`[Email Inbound] Storage upload handler crashed for attachment ${i}:`, uploadErr);
-        }
-      }
-
-      // Keep compatibility with existing code that references attachmentUrl/attachmentName
-      if (uploadedAttachments.length > 0) {
-        attachmentUrl = uploadedAttachments[0].url;
-        attachmentName = uploadedAttachments[0].name;
-      }
-
       // Define standard generic extraction prompt template
       const genericPrompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
@@ -297,13 +342,19 @@ export async function POST(req: Request) {
            - Si no hay información de horario, pon null.
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
+        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
              - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
              - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
              - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
              - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
+             - CRÍTICO - FECHAS POR ÍTEM: Si el documento tiene:
+                  (a) Una columna de fecha de entrega individual (ej. "F. Entrega", "Fecha Entrega", "Fecha", "Fecha de despacho"),
+                  (b) Secciones o grupos de productos separados por encabezados que contienen fechas distintas (ej. una sección "Entrega 23/07/2026" seguida de productos, y otra sección "Entrega 25/07/2026" con más productos),
+                  (c) O cualquier indicación de que cada producto tiene su propia fecha de entrega diferente a la global;
+                ENTONCES debes OBLIGATORIAMENTE asignar la fecha específica de entrega de cada producto en el campo "deliveryDate" de ese ítem en formato "YYYY-MM-DD". PROPAGA la fecha de la sección/encabezado más cercano a cada ítem si no hay columna explícita.
+                Si un ítem NO tiene fecha de entrega específica diferente a la general, coloca null en su "deliveryDate".
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
@@ -331,18 +382,24 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
+            { 
+              "originalName": "Nombre del Producto", 
+              "quantity": 10, 
+              "unit": "Kg / Lb / Unidad / Litro / null", 
+              "observations": "Cualquier nota u observación específica del producto o null",
+              "deliveryDate": "YYYY-MM-DD o null"
+            }
           ]
         }
       `;
 
-      // 2. Process EACH attachment sequentially or in parallel
-      for (let i = 0; i < attachments.length; i++) {
-        const attachment = attachments[i];
+      // Process ALL attachments in parallel (Storage upload + AI Parse)
+      const attachmentPromises = attachments.map(async (attachment, i) => {
         const attFileName = attachment.file_name || attachment.filename || `adjunto_${i}.bin`;
         const base64Data = attachment.content;
-        let mimeType = attachment.content_type || 'application/pdf';
+        let mimeType = attachment.content_type || 'application/octet-stream';
         const lowerName = attFileName.toLowerCase();
+        
         if (!attachment.content_type || attachment.content_type === 'application/octet-stream') {
           if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
           else if (lowerName.endsWith('.png')) mimeType = 'image/png';
@@ -352,11 +409,41 @@ export async function POST(req: Request) {
           else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
           else if (lowerName.endsWith('.csv')) mimeType = 'text/csv';
         }
-        const publicUrl = uploadedAttachments[i]?.url || '';
 
         const lowerMime = mimeType.toLowerCase();
         const attIsExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
+        // A. Upload to Supabase Storage in parallel
+        let publicUrl = '';
+        try {
+          try {
+            await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+          } catch (_) {}
+
+          const buffer = Buffer.from(base64Data, 'base64');
+          const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `${draftUuid}_${i}_${sanitizedFilename}`;
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from('order-attachments')
+            .upload(storagePath, buffer, {
+              contentType: mimeType,
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data: { publicUrl: pUrl } } = supabaseAdmin.storage
+              .from('order-attachments')
+              .getPublicUrl(storagePath);
+            publicUrl = pUrl;
+            console.log(`[Email Inbound] Parallel attachment ${i} (${attFileName}) uploaded to Supabase: ${publicUrl}`);
+          } else {
+            console.error(`[Email Inbound] Failed parallel upload for attachment ${i}:`, uploadError);
+          }
+        } catch (uploadErr) {
+          console.error(`[Email Inbound] Parallel storage upload handler crashed for attachment ${i}:`, uploadErr);
+        }
+
+        // B. Parse attachment text content if Excel, or call Gemini
         let attProgrammaticExcelItems: any[] = [];
         let attExcelTextContext = '';
 
@@ -373,75 +460,350 @@ export async function POST(req: Request) {
             }
             const aiRows = allRows.slice(0, 30);
             attExcelTextContext = JSON.stringify(aiRows);
-            console.log(`[Email Inbound] Extracted text (limited to 30 rows) from Excel attachment: ${attFileName}`);
+
+            // ═══════════════════════════════════════════════════════════════
+            // MOTOR INTELIGENTE DE PARSING DE EXCEL (Multi-Estrategia)
+            // ═══════════════════════════════════════════════════════════════
+
+            const isNumeric = (val: any): boolean => {
+              if (val === null || val === undefined) return false;
+              if (typeof val === 'number') return !isNaN(val);
+              const str = String(val).trim().replace(',', '.');
+              if (str === '') return false;
+              return !isNaN(Number(str));
+            };
+
+            const parseNum = (val: any): number => {
+              if (typeof val === 'number') return val;
+              return parseFloat(String(val || '').trim().replace(',', '.'));
+            };
+
+            // Diccionario de sinónimos para cada tipo de columna (con puntaje)
+            const NAME_SYNONYMS: [RegExp, number][] = [
+              [/^prod(ucto|uct|uctos)?$/i, 10],  // producto, product, productos
+              [/prod/i, 7],                        // prodcuto (typo), products, etc.
+              [/^desc(ripci[oó]n)?$/i, 10],
+              [/descrip/i, 7],
+              [/^nombre$/i, 10],
+              [/^item$/i, 9],
+              [/^art[ií]culo$/i, 10],
+              [/art[ií]cul/i, 7],
+              [/^material$/i, 9],
+              [/^detalle$/i, 9],
+              [/^sku$/i, 8],
+              [/^referencia$/i, 6],
+              [/^concepto$/i, 7],
+              [/^insumo/i, 8],
+              [/^mercancia/i, 7],
+              [/^fruta/i, 6],
+              [/^verdura/i, 6],
+              [/^bien$/i, 5],
+            ];
+            const QTY_SYNONYMS: [RegExp, number][] = [
+              [/^can(t(idad)?)?$/i, 10],           // can, cant, cantidad
+              [/^qty$/i, 10],
+              [/^quantity$/i, 10],
+              [/^unidades$/i, 8],
+              [/^pedid[oa]?$/i, 8],
+              [/^solicit/i, 7],
+              [/^total$/i, 5],
+              [/cant[\.\s]*(pedid|solicit|total)/i, 9],
+              [/^vol(umen)?$/i, 6],
+              [/^peso$/i, 6],
+              [/^pedir$/i, 7],
+              [/^orden$/i, 4],
+              [/^demanda$/i, 5],
+              [/^requerid/i, 7],
+              [/^necesidad$/i, 5],
+            ];
+            // Negative patterns: columns that LOOK like qty but aren't
+            const QTY_NEGATIVE: RegExp[] = [
+              /medida/i, /presentaci[oó]n/i, /precio/i, /valor/i, /costo/i,
+              /plu/i, /c[oó]digo/i, /barr?a/i, /ref(erencia)?$/i, /ean/i,
+            ];
+            const UNIT_SYNONYMS: [RegExp, number][] = [
+              [/^unidad$/i, 10],
+              [/^uom$/i, 10],
+              [/^ubm$/i, 10],
+              [/^medida$/i, 8],
+              [/^unid\.?$/i, 9],
+              [/^unit$/i, 10],
+              [/^presentaci[oó]n$/i, 8],
+              [/^um$/i, 7],
+              [/^emp(aque)?$/i, 6],
+            ];
+            const OBS_SYNONYMS: [RegExp, number][] = [
+              [/^obs(ervaci[oó]n(es)?)?$/i, 10],
+              [/^notas?$/i, 9],
+              [/^comentario/i, 8],
+              [/^especificaci[oó]n/i, 7],
+              [/^detalle$/i, 5],
+              [/^instrucciones$/i, 6],
+            ];
+            // Columns to SKIP (never treat as name or quantity)
+            const SKIP_COLUMNS: RegExp[] = [
+              /^plu$/i, /^c[oó]digo/i, /^cod\.?$/i, /^ref\.?$/i, /^ean$/i,
+              /^barr?a$/i, /^#$/i, /^no\.?$/i, /^n[uú]mero$/i, /^id$/i,
+              /^precio/i, /^valor/i, /^costo/i, /^total/i, /^subtotal/i,
+              /^iva/i, /^impuesto/i, /^descuento/i, /^\.t$/i, /^sede/i,
+              /^sucursal/i, /^bodega/i, /^almac[eé]n$/i, /^lote$/i,
+              /^fecha/i, /^f\.\s*entrega/i, /^entrega$/i, /^oc$/i,
+            ];
+
+            const scoreColumn = (val: string, synonyms: [RegExp, number][]): number => {
+              let best = 0;
+              for (const [regex, score] of synonyms) {
+                if (regex.test(val)) best = Math.max(best, score);
+              }
+              return best;
+            };
+
+            const isSkipColumn = (val: string): boolean => {
+              return SKIP_COLUMNS.some(rx => rx.test(val));
+            };
 
             let headerRowIdx = -1, nameColIdx = -1, qtyColIdx = -1, unitColIdx = -1, obsColIdx = -1;
+
+            // ─── ESTRATEGIA 1: Scoring por sinónimos de cabecera ───
+            let bestHeaderScore = 0;
             for (let r = 0; r < Math.min(allRows.length, 30); r++) {
               const row = allRows[r];
               if (!row || !Array.isArray(row)) continue;
-              let nameIdx = -1, qtyIdx = -1, unitIdx = -1, obsIdx = -1;
+
+              let rNameIdx = -1, rQtyIdx = -1, rUnitIdx = -1, rObsIdx = -1;
+              let rNameScore = 0, rQtyScore = 0;
+
               for (let c = 0; c < row.length; c++) {
-                const val = String(row[c] || '').toLowerCase().trim();
-                if (!val) continue;
-                if (val.match(/^(descripci[óo]n|producto|nombre|item|art[íi]culo|detalle|sku|desc|product|name)$/i) || val.match(/(descripci[óo]n\s+de\s+producto|nombre\s+del\s+producto|desc\s+producto)/i)) {
-                  if (nameIdx === -1) nameIdx = c;
-                } else if (val.match(/^(cant|cantidad|unidades|qty|quantity|cant\.?|cant\s+pedida)$/i)) {
-                  if (qtyIdx === -1 || (val === 'unidades' && qtyIdx !== -1)) {
-                    if (qtyIdx === -1) qtyIdx = c;
-                  }
-                } else if (val.match(/^(unidad|uom|medida|unid\.?|unit|presentaci[óo]n)$/i)) {
-                  if (unitIdx === -1) unitIdx = c;
-                } else if (val.match(/^(obs|observaci[óo]n|observaciones|notas|nota|obs\.?)$/i)) {
-                  if (obsIdx === -1) obsIdx = c;
-                }
+                const raw = row[c];
+                if (raw === null || raw === undefined) continue;
+                const val = String(raw).toLowerCase().replace(/[*_\-\.#]/g, '').trim();
+                if (!val || val.length > 40) continue;
+                if (isSkipColumn(val)) continue;
+
+                const ns = scoreColumn(val, NAME_SYNONYMS);
+                const qs = scoreColumn(val, QTY_SYNONYMS);
+                const us = scoreColumn(val, UNIT_SYNONYMS);
+                const os = scoreColumn(val, OBS_SYNONYMS);
+
+                // Check qty negative patterns
+                const isQtyNeg = QTY_NEGATIVE.some(rx => rx.test(val));
+
+                if (ns > rNameScore) { rNameIdx = c; rNameScore = ns; }
+                if (qs > rQtyScore && !isQtyNeg) { rQtyIdx = c; rQtyScore = qs; }
+                if (us > 0 && rUnitIdx === -1) rUnitIdx = c;
+                if (os > 0 && rObsIdx === -1) rObsIdx = c;
               }
-              if (nameIdx !== -1 && qtyIdx !== -1) {
+
+              const totalScore = rNameScore + rQtyScore;
+              if (rNameIdx !== -1 && rQtyIdx !== -1 && totalScore > bestHeaderScore) {
+                bestHeaderScore = totalScore;
                 headerRowIdx = r;
-                nameColIdx = nameIdx;
-                qtyColIdx = qtyIdx;
-                if (unitIdx !== -1) unitColIdx = unitIdx;
-                if (obsIdx !== -1) obsColIdx = obsIdx;
-                break;
+                nameColIdx = rNameIdx;
+                qtyColIdx = rQtyIdx;
+                unitColIdx = rUnitIdx;
+                obsColIdx = rObsIdx;
+              }
+            }
+            console.log(`[Excel Parser] Strategy 1 (Synonyms): headerRow=${headerRowIdx}, nameCol=${nameColIdx}, qtyCol=${qtyColIdx}, unitCol=${unitColIdx}, obsCol=${obsColIdx}, score=${bestHeaderScore}`);
+
+            // ─── ESTRATEGIA 2: Buscar fila con ≥2 celdas de texto corto (típicas cabeceras) ───
+            if (nameColIdx === -1 || qtyColIdx === -1) {
+              for (let r = 0; r < Math.min(allRows.length, 20); r++) {
+                const row = allRows[r];
+                if (!row || !Array.isArray(row)) continue;
+                const textCells: number[] = [];
+                row.forEach((cell: any, c: number) => {
+                  const val = String(cell || '').trim();
+                  if (val.length >= 2 && val.length <= 25 && isNaN(Number(val))) {
+                    textCells.push(c);
+                  }
+                });
+                if (textCells.length >= 2 && textCells.length <= 12) {
+                  // This row could be a header. Check if next rows have the pattern: text + number
+                  let dataRowsFound = 0;
+                  for (let dr = r + 1; dr < Math.min(r + 6, allRows.length); dr++) {
+                    const dRow = allRows[dr];
+                    if (!dRow || !Array.isArray(dRow)) continue;
+                    const hasText = textCells.some(c => dRow[c] && String(dRow[c]).trim().length > 3 && isNaN(Number(String(dRow[c]).trim())));
+                    const hasNum = textCells.some(c => {
+                      // Look at adjacent columns for numbers
+                      for (let nc = 0; nc < dRow.length; nc++) {
+                        if (nc !== c && isNumeric(dRow[nc]) && parseNum(dRow[nc]) > 0 && parseNum(dRow[nc]) <= 5000) return true;
+                      }
+                      return false;
+                    });
+                    if (hasText && hasNum) dataRowsFound++;
+                  }
+                  if (dataRowsFound >= 2) {
+                    // Use first text column as name, scan for qty column
+                    const candidateNameCol = textCells[0];
+                    let candidateQtyCol = -1;
+                    // Find first numeric column after candidate name
+                    for (let dr = r + 1; dr < Math.min(r + 10, allRows.length); dr++) {
+                      const dRow = allRows[dr];
+                      if (!dRow) continue;
+                      for (let c = 0; c < dRow.length; c++) {
+                        if (c === candidateNameCol) continue;
+                        const hdr = String(row[c] || '').toLowerCase().trim();
+                        if (isSkipColumn(hdr)) continue;
+                        if (isNumeric(dRow[c]) && parseNum(dRow[c]) > 0 && parseNum(dRow[c]) <= 5000) {
+                          candidateQtyCol = c;
+                          break;
+                        }
+                      }
+                      if (candidateQtyCol !== -1) break;
+                    }
+                    if (candidateQtyCol !== -1) {
+                      headerRowIdx = r;
+                      nameColIdx = candidateNameCol;
+                      qtyColIdx = candidateQtyCol;
+                      console.log(`[Excel Parser] Strategy 2 (Pattern): headerRow=${r}, nameCol=${candidateNameCol}, qtyCol=${candidateQtyCol}`);
+                      break;
+                    }
+                  }
+                }
               }
             }
 
+            // ─── ESTRATEGIA 3: Análisis estadístico de columnas ───
+            if (nameColIdx === -1 || qtyColIdx === -1) {
+              const maxCols = Math.max(...allRows.filter(r => Array.isArray(r)).map(r => r.length), 0);
+              const colStats: { textCount: number, numCount: number, avgLen: number, totalLen: number }[] = [];
+              for (let c = 0; c < maxCols; c++) {
+                let textCount = 0, numCount = 0, totalLen = 0;
+                for (let r = 0; r < Math.min(allRows.length, 50); r++) {
+                  const row = allRows[r];
+                  if (!row || !Array.isArray(row) || c >= row.length) continue;
+                  const val = row[c];
+                  if (val === null || val === undefined) continue;
+                  if (typeof val === 'number' || (typeof val === 'string' && !isNaN(Number(val.trim())) && val.trim() !== '')) {
+                    numCount++;
+                  } else if (typeof val === 'string' && val.trim().length > 2) {
+                    textCount++;
+                    totalLen += val.trim().length;
+                  }
+                }
+                colStats.push({ textCount, numCount, avgLen: textCount > 0 ? totalLen / textCount : 0, totalLen });
+              }
+
+              // Name column: most text cells with longest average length
+              let bestNameCol = -1, bestNameScore2 = 0;
+              for (let c = 0; c < colStats.length; c++) {
+                const s = colStats[c];
+                const score = s.textCount * s.avgLen;
+                if (s.textCount >= 3 && s.avgLen > 5 && score > bestNameScore2) {
+                  bestNameScore2 = score;
+                  bestNameCol = c;
+                }
+              }
+
+              // Qty column: numeric column with values in reasonable range (1-5000)
+              let bestQtyCol = -1, bestQtyCount = 0;
+              for (let c = 0; c < colStats.length; c++) {
+                if (c === bestNameCol) continue;
+                const s = colStats[c];
+                // Count how many values are in reasonable quantity range
+                let reasonableCount = 0;
+                for (let r = 0; r < Math.min(allRows.length, 50); r++) {
+                  const row = allRows[r];
+                  if (!row || !Array.isArray(row) || c >= row.length) continue;
+                  const n = parseNum(row[c]);
+                  if (!isNaN(n) && n > 0 && n <= 5000) reasonableCount++;
+                }
+                if (reasonableCount > bestQtyCount && s.numCount >= 2) {
+                  bestQtyCount = reasonableCount;
+                  bestQtyCol = c;
+                }
+              }
+
+              if (bestNameCol !== -1 && bestQtyCol !== -1) {
+                nameColIdx = bestNameCol;
+                qtyColIdx = bestQtyCol;
+                // Find header row: search upward from first data row
+                for (let r = 0; r < Math.min(allRows.length, 20); r++) {
+                  const row = allRows[r];
+                  if (!row || !Array.isArray(row)) continue;
+                  const nameCell = String(row[nameColIdx] || '').trim();
+                  if (nameCell.length >= 2 && nameCell.length <= 30 && isNaN(Number(nameCell))) {
+                    // Check if next row has actual data
+                    const nextRow = allRows[r + 1];
+                    if (nextRow && nextRow[nameColIdx] && String(nextRow[nameColIdx]).trim().length > 3) {
+                      headerRowIdx = r;
+                      break;
+                    }
+                  }
+                }
+                if (headerRowIdx === -1) headerRowIdx = 0;
+                console.log(`[Excel Parser] Strategy 3 (Stats): nameCol=${nameColIdx}, qtyCol=${qtyColIdx}, headerRow=${headerRowIdx}`);
+              }
+            }
+
+            // ─── ESTRATEGIA 4: Heurística simple (columna texto + columna número adyacente) ───
             if (nameColIdx === -1 || qtyColIdx === -1) {
               for (let r = 0; r < Math.min(allRows.length, 15); r++) {
                 const row = allRows[r];
                 if (!row || row.length < 2) continue;
-                if (typeof row[0] === 'string' && row[0].length > 3 && typeof row[1] === 'number') {
-                  headerRowIdx = r - 1;
-                  nameColIdx = 0;
-                  qtyColIdx = 1;
-                  break;
+                for (let c = 0; c < row.length - 1; c++) {
+                  const cellText = String(row[c] || '').trim();
+                  if (cellText.length > 3 && isNaN(Number(cellText)) && isNumeric(row[c + 1]) && parseNum(row[c + 1]) > 0 && parseNum(row[c + 1]) <= 5000) {
+                    headerRowIdx = r - 1;
+                    nameColIdx = c;
+                    qtyColIdx = c + 1;
+                    console.log(`[Excel Parser] Strategy 4 (Adjacent): headerRow=${headerRowIdx}, nameCol=${c}, qtyCol=${c + 1}`);
+                    break;
+                  }
                 }
-                if (typeof row[1] === 'string' && row[1].length > 3 && typeof row[2] === 'number') {
-                  headerRowIdx = r - 1;
-                  nameColIdx = 1;
-                  qtyColIdx = 2;
-                  break;
-                }
+                if (nameColIdx !== -1) break;
               }
             }
 
+            console.log(`[Excel Parser] Final detection: headerRow=${headerRowIdx}, nameCol=${nameColIdx}, qtyCol=${qtyColIdx}, unitCol=${unitColIdx}, obsCol=${obsColIdx}`);
+
+            // ─── EXTRACCIÓN DE FILAS ───
             const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+            const TOTAL_KEYWORDS = /^(total|subtotal|sub-total|gran total|suma|iva|impuesto|descuento|neto)/i;
+
             for (let r = startRow; r < allRows.length; r++) {
               const row = allRows[r];
               if (!row || !Array.isArray(row)) continue;
               const rawName = row[nameColIdx !== -1 ? nameColIdx : 0];
               const rawQty = row[qtyColIdx !== -1 ? qtyColIdx : 1];
               if (!rawName || String(rawName).trim() === '' || String(rawName).includes('--- HOJA:')) continue;
-              const qtyVal = parseFloat(String(rawQty || '').replace(',', '.'));
-              if (isNaN(qtyVal) || qtyVal <= 0) continue;
+
+              const nameStr = String(rawName).trim();
+              // Skip total/subtotal rows
+              if (TOTAL_KEYWORDS.test(nameStr)) continue;
+              // Skip rows that look like metadata (very short or very long)
+              if (nameStr.length <= 1 || nameStr.length > 200) continue;
+
+              const qtyVal = parseNum(rawQty);
+              if (isNaN(qtyVal) || qtyVal <= 0 || qtyVal > 50000) continue;
+
+              // Build unit value
+              let unitVal = 'Unidad';
+              if (unitColIdx !== -1 && row[unitColIdx] !== undefined && row[unitColIdx] !== null) {
+                const u = String(row[unitColIdx]).trim();
+                if (u.length > 0 && u.length < 20) unitVal = u;
+              }
+
+              // Build observations
+              let obsVal: string | null = null;
+              if (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null) {
+                const o = String(row[obsColIdx]).trim();
+                if (o.length > 0 && o.length < 500) obsVal = o;
+              }
+
               attProgrammaticExcelItems.push({
-                originalName: String(rawName).trim(),
+                originalName: nameStr,
                 quantity: qtyVal,
-                unit: unitColIdx !== -1 ? String(row[unitColIdx] || '').trim() : 'Unidad',
-                observations: (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null && String(row[obsColIdx]).trim() !== '') ? String(row[obsColIdx]).trim() : null
+                unit: unitVal,
+                observations: obsVal
               });
             }
+            console.log(`[Excel Parser] Extracted ${attProgrammaticExcelItems.length} items programmatically from ${attFileName}`);
+
           } catch (err) {
-            console.error('[Email Inbound] Error parsing Excel:', err);
+            console.error('[Email Inbound] Error parsing Excel programmatically:', err);
           }
         }
 
@@ -475,7 +837,7 @@ export async function POST(req: Request) {
           ${attExcelTextContext}
           TAREA:
           1. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el correo y el Excel.
-          2. IMPORTANTE EN EXCEL: Ya contamos con un lector programático rápido que extraerá la lista de productos del archivo. Por lo tanto, tu prioridad número 1 es extraer los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType'). Puedes dejar la lista de 'items' vacía [] o incluir solo los primeros 2 productos de muestra en el JSON.
+          2. IMPORTANTE EN EXCEL: Extrae la lista completa de productos del Excel/CSV en la propiedad 'items' (con 'originalName', 'quantity', 'unit' y 'observations' si aplica) para que sirva como respaldo por si nuestro lector automático rápido llega a fallar. Además, extrae los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType').
           3. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
           4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
           5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" o null.
@@ -489,7 +851,9 @@ export async function POST(req: Request) {
             "deliverySlot": "AM / PM / Cualquier hora / null",
             "deliveryDate": "YYYY-MM-DD o null",
             "clientType": "b2b_client o b2c_client",
-            "items": []
+            "items": [
+              { "originalName": "Nombre del producto", "quantity": 10, "unit": "Kg", "observations": null, "deliveryDate": "YYYY-MM-DD o null" }
+            ]
           }
           `;
           try {
@@ -499,9 +863,7 @@ export async function POST(req: Request) {
             const filterExcelItems = (items: any[], clientName: string) => {
               if (!items || items.length === 0) return [];
               return items.filter((itm: any) => {
-                // 1. Exclude transaction numbers, phone numbers, or NITs (> 5000)
                 if (itm.quantity > 5000) return false;
-                // 2. Exclude customer name/header row
                 if (clientName) {
                   const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                   const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -515,12 +877,16 @@ export async function POST(req: Request) {
 
             if (attProgrammaticExcelItems.length > 0) {
               attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
+            } else if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
+              attExtractedData.items = filterExcelItems(attExtractedData.items, attExtractedData.clientInDocument || '');
             } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
                 attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
               } else {
                 attExtractedData.items = [];
               }
+            } else {
+              attExtractedData.items = [];
             }
           } catch (e) {
             console.error('Failed to parse Gemini output for Excel content:', e);
@@ -543,7 +909,7 @@ export async function POST(req: Request) {
           }
         }
 
-        parsedAttachments.push({
+        return {
           name: attFileName,
           url: publicUrl,
           processed: false,
@@ -557,10 +923,23 @@ export async function POST(req: Request) {
           nit: attExtractedData.nit || null,
           clientType: attExtractedData.clientType || null,
           items: attExtractedData.items || []
-        });
+        };
+      });
+
+      parsedAttachments = await Promise.all(attachmentPromises);
+      uploadedAttachments = parsedAttachments.map(att => ({ name: att.name, url: att.url }));
+
+      // DIAGNOSTIC LOG: Show per-attachment AI extraction results for deliveryDate per item
+      parsedAttachments.forEach((att, i) => {
+        const uniqueDates = [...new Set((att.items || []).map((itm: any) => itm.deliveryDate || null))];
+        console.log(`[Email Inbound] [DIAG] Adjunto ${i+1}/${parsedAttachments.length}: "${att.name}" | globalDate=${att.deliveryDate} | itemDates=[${uniqueDates.join(', ')}] | items=${(att.items || []).length}`);
+      });
+
+      if (uploadedAttachments.length > 0) {
+        attachmentUrl = uploadedAttachments[0].url;
+        attachmentName = uploadedAttachments[0].name;
       }
 
-      // Initialize global extractedData with the first attachment's extraction for backwards compatibility
       if (parsedAttachments.length > 0) {
         extractedData = {
           clientInDocument: parsedAttachments[0].clientInDocument,
@@ -602,15 +981,19 @@ export async function POST(req: Request) {
            - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         3. Extrae la dirección de entrega de forma limpia.
            - DIRECCIÓN DE ENTREGA: Extrae únicamente la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78", "Carrera 15 # 134A 25, Apartamento 802, Barrio Cedritos, Bogotá"). Limpia cualquier texto extra de comentarios, solicitudes, despedida o firma. Quédate estrictamente con la nomenclatura geográfica de la dirección. NUNCA incluyas frases del cuerpo del correo como "Por favor confirmar disponibilidad...", "Adjunto pedido...", etc. Si no hay dirección explícita, devuelve null o vacío.
+        3. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
         4. Identifica la franja u horario de entrega. Si en el correo se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
            - Si el horario cubre tanto mañana como tarde (ej. "7:00 am a 4:00 pm", "todo el día", "cualquier hora"), asume "Cualquier hora".
            - Si se listan horarios por sede (ej. "Bosques de Athan: 7am a 4pm", "Clínica Roma: 7:30am a 11:50am"), intenta deducir cuál aplica basándote en el nombre o dirección del cliente. Si no se puede deducir o es el horario general (ej. "horario de recibo es de 7:00 a 11:00"), asume la jornada del horario general o la que corresponda (ej. "7:00 a 11:00 de la mañana" -> "AM").
-           - Si no hay información de horario, pon null.
-           - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
-        6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
+        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
+        6. Extrae todos los productos solicitados y su cantidad numérica.
+           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
+           - NO confundas el código PLU (primera columna) con la cantidad.
+           - IMPORTANTE: Si se especifica explícitamente una fecha de entrega en la misma línea o párrafo del producto (ej. "Hierbabuena para el 23/07"), extrae obligatoriamente esa fecha específica en el campo "deliveryDate" de ese ítem en formato "YYYY-MM-DD". Si el ítem no tiene una fecha de entrega específica por línea, coloca null.
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+           - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
            - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
            - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
@@ -636,7 +1019,7 @@ export async function POST(req: Request) {
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Tomate Chonto", "quantity": 15, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
+            { "originalName": "Tomate Chonto", "quantity": 15, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null", "deliveryDate": "YYYY-MM-DD o null" }
           ]
         }
       `;
@@ -1030,87 +1413,113 @@ export async function POST(req: Request) {
     }
 
     // 5. Save draft to public.order_drafts
-    // Use the predefined draftUuid so we can reference its short ID immediately
-    const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
+    const draftsToInsert: any[] = [];
 
-    const { data: newDraft, error: draftError } = await supabaseAdmin
+    const processSourceIntoDrafts = (sourceData: any, isFromAttachment: boolean, attIndex: number = 0, totalAtts: number = 0) => {
+      const items = Array.isArray(sourceData.items) ? sourceData.items : [];
+      const groups = new Map<string, any[]>();
+      
+      if (items.length === 0) {
+        const fallbackDate = sourceData.deliveryDate || targetDeliveryDate || null;
+        groups.set(String(fallbackDate), []);
+      } else {
+        items.forEach((itm: any) => {
+          const itemDate = itm.deliveryDate || sourceData.deliveryDate || targetDeliveryDate || null;
+          const key = String(itemDate);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(itm);
+        });
+      }
+
+      const numGroups = groups.size;
+      console.log(`[Email Inbound] [DIAG] processSourceIntoDrafts: att=${attIndex+1}/${totalAtts} | groups=${numGroups} | dateKeys=[${[...groups.keys()].join(', ')}]`);
+      let groupIndex = 0;
+
+      for (const [dateKey, groupedItems] of groups.entries()) {
+        groupIndex++;
+        const effectiveDate = dateKey === 'null' ? null : dateKey;
+        const isFirstGlobalDraft = draftsToInsert.length === 0;
+        const uniqueDraftUuid = isFirstGlobalDraft ? draftUuid : crypto.randomUUID();
+        const shortCode = `EML-${uniqueDraftUuid.substring(0, 6).toUpperCase()}`;
+        
+        let subjectSuffix = '';
+        if (totalAtts > 1) {
+           subjectSuffix += `[Adjunto ${attIndex + 1}/${totalAtts}]`;
+        }
+        if (numGroups > 1) {
+           subjectSuffix += ` [Pedido ${groupIndex}/${numGroups}]`;
+        }
+        
+        const finalSubject = `[${shortCode}] ${subjectSuffix ? subjectSuffix + ' ' : ''}${subject}`.trim().replace(/\s+/g, ' ');
+
+        draftsToInsert.push({
+          id: uniqueDraftUuid,
+          profile_id: profile ? profile.id : null,
+          client_detected_name: (sourceData.clientInDocument || extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
+          source_email: senderEmail,
+          email_subject: finalSubject,
+          email_body: currentPlainText,
+          extracted_items: [
+            { 
+              isMetadata: true, 
+              address: sourceData.address || extractedData.address || null,
+              addressDetected: addressDetected,
+              deliverySlot: sourceData.deliverySlot || finalDeliverySlot,
+              deliveryDate: effectiveDate,
+              phone: sourceData.phone || extractedData.phone || null,
+              nit: sourceData.nit || extractedData.nit || null,
+              clientType: sourceData.clientType || clientType,
+              attachmentUrl: sourceData.url || attachmentUrl || null,
+              attachmentName: sourceData.name || attachmentName || null,
+              attachments: isFromAttachment ? [{ ...sourceData, items: groupedItems }] : parsedAttachments.map((pa: any) => ({ ...pa, items: [] })),
+              emailHtml: htmlText || null
+            },
+            ...groupedItems.map((itm: any) => {
+              let originalName = String(itm.originalName || itm.name || '').trim();
+              originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
+              const nameLower = originalName.toLowerCase();
+              let observations = itm.observations || '';
+              
+              if (nameLower.includes('libra') || nameLower.includes('lb')) {
+                if (!observations.toLowerCase().includes('libra')) {
+                  observations = `Solicitado en Libras. ${observations}`.trim();
+                }
+                return { ...itm, originalName, unit: 'Lb', observations };
+              }
+              if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+                if (!observations.toLowerCase().includes('litro')) {
+                  observations = `Solicitado en Litros. ${observations}`.trim();
+                }
+                return { ...itm, originalName, unit: 'Litro', observations };
+              }
+              return { ...itm, originalName };
+            })
+          ],
+          status: 'pending'
+        });
+      }
+    };
+
+    if (parsedAttachments.length > 0) {
+      for (let index = 0; index < parsedAttachments.length; index++) {
+        processSourceIntoDrafts(parsedAttachments[index], true, index, parsedAttachments.length);
+      }
+    } else {
+      processSourceIntoDrafts(extractedData, false);
+    }
+
+    const { data: insertedDrafts, error: draftError } = await supabaseAdmin
       .from('order_drafts')
-      .insert({
-        id: draftUuid,
-        profile_id: profile ? profile.id : null,
-        client_detected_name: (extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
-        source_email: senderEmail,
-        email_subject: `[${shortCode}] ${subject}`,
-        email_body: currentPlainText,
-        extracted_items: [
-          { 
-            isMetadata: true, 
-            address: extractedData.address || null,
-            addressDetected: addressDetected,
-            deliverySlot: finalDeliverySlot,
-            deliveryDate: targetDeliveryDate || null,
-            phone: extractedData.phone || null,
-            nit: extractedData.nit || null,
-            clientType: clientType,
-            attachmentUrl: attachmentUrl || null,
-            attachmentName: attachmentName || null,
-            attachments: parsedAttachments,
-            emailHtml: htmlText || null
-          },
-          ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
-            let originalName = String(itm.originalName || itm.name || '').trim();
-            // Clean trailing package/quantity details like "x 1000 g", "x 500g", "1000 gr", etc.
-            originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
-            
-            const nameLower = originalName.toLowerCase();
-            let quantity = itm.quantity;
-            let observations = itm.observations || '';
-            
-            // Si el nombre original contiene la palabra 'libra' o 'libras' o 'lb'
-            if (nameLower.includes('libra') || nameLower.includes('lb')) {
-              // Si la unidad detectada en base de datos es Kg, 1 libra = 0.5 Kg.
-              // Indicamos en las observaciones que se solicitó en libras
-              if (!observations.toLowerCase().includes('libra')) {
-                observations = `Solicitado en Libras. ${observations}`.trim();
-              }
-              // Opcional: Podríamos convertir la cantidad a Kg (ej: 1 libra = 0.5 Kg) si se asume Kg por defecto
-              // Pero el frontend/sistema de equivalencias requiere saber la cantidad original y la unidad.
-              // Agregamos un flag de unidad 'Lb' o similar al objeto del item
-              return {
-                ...itm,
-                originalName: originalName,
-                unit: 'Lb',
-                observations: observations
-              };
-            }
-            if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
-              if (!observations.toLowerCase().includes('litro')) {
-                observations = `Solicitado en Litros. ${observations}`.trim();
-              }
-              return {
-                ...itm,
-                originalName: originalName,
-                unit: 'Litro',
-                observations: observations
-              };
-            }
-            return {
-              ...itm,
-              originalName: originalName
-            };
-          }) : [])
-        ],
-        status: 'pending'
-      })
-      .select()
-      .single();
+      .insert(draftsToInsert)
+      .select();
 
     if (draftError) {
       console.error('[Email Inbound] Error saving draft:', draftError);
       return NextResponse.json({ error: draftError.message }, { status: 500 });
     }
 
-    console.log('[Email Inbound] Draft created successfully:', newDraft.id);
+    const newDraft = insertedDrafts?.[0] || { id: draftsToInsert[0]?.id };
+    console.log('[Email Inbound] Draft(s) created successfully:', insertedDrafts?.map(d => d.id));
     supabaseAdmin.from('raw_emails').update({ status: 'success' }).eq('payload->>envelope->>from', fromField).then(()=>{}, ()=>{});
 
     // 4. Send confirmation email to the client using Nodemailer
@@ -1291,7 +1700,7 @@ export async function POST(req: Request) {
         }
         
         const clientName = extractedClientName || profile?.company_name || profile?.contact_name || '';
-        const draftIdStr = shortCode;
+        const draftIdStr = `EML-${newDraft.id.substring(0, 6).toUpperCase()}`;
 
         const emailHtml = `
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
@@ -1359,6 +1768,18 @@ export async function POST(req: Request) {
           if (mailId) {
             await supabaseAdmin.from('mail').update({ status: 'error', error_message: err?.message || 'Error parsing' }).eq('id', mailId);
           }
+          await supabaseAdmin.from('order_drafts').insert([{
+            email_subject: subject || 'Error en Ingesta',
+            source_email: fromField || 'desconocido',
+            status: 'rejected',
+            client_type: 'b2b_client',
+            items: [],
+            extracted_items: { 
+              error: err?.message || 'Fatal error in processMailAsync',
+              stack: err?.stack,
+              name: err?.name
+            }
+          }]);
         }
       };
 

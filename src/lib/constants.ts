@@ -6,7 +6,8 @@ export const CATEGORY_MAP: Record<string, string> = {
     'HO': 'Hortalizas',
     'LA': 'Lácteos',
     'DE': 'Despensa',
-    'CO': 'Congelados'
+    'CO': 'Congelados',
+    'PR': 'Procesados'
 };
 
 // Business Logic Cutoff Rules
@@ -22,5 +23,6 @@ export const REVERSE_CATEGORY_MAP: Record<string, string> = {
     'Hortalizas': 'HO',
     'Lácteos': 'LA',
     'Despensa': 'DE',
-    'Congelados': 'CO'
+    'Congelados': 'CO',
+    'Procesados': 'PR'
 };
