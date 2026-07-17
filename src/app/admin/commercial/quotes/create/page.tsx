@@ -701,7 +701,8 @@ function CreateQuotePageContent() {
     const filteredLeads = leads.filter(l => 
         (l.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
         (l.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
-        (l.phone?.toLowerCase().includes(clientSearch.toLowerCase()))
+        (l.phone?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+        (l.nit && String(l.nit).toLowerCase().includes(clientSearch.toLowerCase()))
     );
 
     const dropdownItems = [
@@ -856,7 +857,7 @@ function CreateQuotePageContent() {
                                                                 <span style={{ color: '#16A34A', marginRight: '4px' }}>[Prospecto]</span> {l.company_name || l.contact_name}
                                                             </div>
                                                             <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                                                Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
+                                                                {l.nit ? `NIT: ${l.nit} • ` : ''}Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
                                                             </div>
                                                         </div>
                                                     );
