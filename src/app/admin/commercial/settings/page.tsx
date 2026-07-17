@@ -363,6 +363,15 @@ export default function PricingSettingsPage() {
 
     const saveModelChanges = async () => {
         if (!selectedModel) return;
+
+        // If a color tag is selected, clear it from any other model first
+        if (editModelData.color_tag) {
+            await supabase
+                .from('pricing_models')
+                .update({ color_tag: null })
+                .eq('color_tag', editModelData.color_tag);
+        }
+
         const { error } = await supabase
             .from('pricing_models')
             .update({
@@ -385,8 +394,16 @@ export default function PricingSettingsPage() {
                 color_tag: editModelData.color_tag
             };
             setSelectedModel(updated);
-            // Update list
-            setModels(models.map(m => m.id === updated.id ? updated : m));
+            
+            // Update list clearing the tag from the previous model owner if reassigned
+            const updatedList = models.map(m => {
+                if (m.id === updated.id) return updated;
+                if (editModelData.color_tag && m.color_tag === editModelData.color_tag) {
+                    return { ...m, color_tag: null };
+                }
+                return m;
+            });
+            setModels(updatedList);
             setIsEditingModel(false);
         }
     };
