@@ -2268,30 +2268,85 @@ export default function PricingSettingsPage() {
 
                                     {/* TEMPLATE ITEMS TABLE CARD */}
                                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
-                                        {/* TABLE ACTIONS / SEARCH / EXCEL */}
-                                        <div style={{ padding: '1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                        {/* TABLE ACTIONS / SEARCH / EXCEL - Unified Single Row */}
+                                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                                             
-                                            {/* Local filter inside the template */}
-                                            <div style={{ position: 'relative', width: '280px' }}>
-                                                <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Buscar en esta lista..."
-                                                    value={templateSearchFilter}
-                                                    onChange={e => setTemplateSearchFilter(e.target.value)}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.55rem 0.55rem 0.55rem 2.25rem',
-                                                        borderRadius: '8px',
-                                                        border: `1px solid ${THEME.colors.border}`,
-                                                        fontSize: '0.85rem',
-                                                        outline: 'none'
-                                                    }}
-                                                />
+                                            {/* Left: Filter and Excel Actions Group */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                {/* Local filter inside the list */}
+                                                <div style={{ position: 'relative', width: '240px' }}>
+                                                    <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Buscar en esta lista..."
+                                                        value={templateSearchFilter}
+                                                        onChange={e => setTemplateSearchFilter(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.45rem 2rem 0.45rem 2.25rem',
+                                                            borderRadius: '8px',
+                                                            border: `1px solid ${THEME.colors.border}`,
+                                                            fontSize: '0.85rem',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                    {templateSearchFilter && (
+                                                        <button 
+                                                            onClick={() => setTemplateSearchFilter('')}
+                                                            style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Excel Actions Group */}
+                                                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                                                    <button
+                                                        onClick={exportTemplateExcel}
+                                                        title="Exportar lista a Excel"
+                                                        style={{
+                                                            padding: '0.45rem',
+                                                            backgroundColor: '#EAFDF4',
+                                                            color: '#0D7A57',
+                                                            border: '1px solid #BBF7D0',
+                                                            borderRadius: '8px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EAFDF4'}
+                                                    >
+                                                        <FileDown size={18} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setShowTemplateExcelModal(true)}
+                                                        title="Importar lista desde Excel"
+                                                        style={{
+                                                            padding: '0.45rem',
+                                                            backgroundColor: '#EAFDF4',
+                                                            color: '#0D7A57',
+                                                            border: '1px solid #BBF7D0',
+                                                            borderRadius: '8px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EAFDF4'}
+                                                    >
+                                                        <FileUp size={18} />
+                                                    </button>
+                                                </div>
                                             </div>
 
-                                            {/* Product Search & Addition Selector */}
-                                            <div style={{ position: 'relative', width: '300px' }}>
+                                            {/* Right: Product Search & Addition Selector */}
+                                            <div style={{ position: 'relative', width: '280px' }}>
                                                 <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                                                 <input
                                                     type="text"
@@ -2303,7 +2358,7 @@ export default function PricingSettingsPage() {
                                                     }}
                                                     style={{
                                                         width: '100%',
-                                                        padding: '0.55rem 0.55rem 0.55rem 2.25rem',
+                                                        padding: '0.45rem 2rem 0.45rem 2.25rem',
                                                         borderRadius: '8px',
                                                         border: `1px solid #10B981`,
                                                         fontSize: '0.85rem',
@@ -2311,6 +2366,17 @@ export default function PricingSettingsPage() {
                                                         backgroundColor: '#F0FDF4'
                                                     }}
                                                 />
+                                                {templateProductSearch && (
+                                                    <button 
+                                                        onClick={() => {
+                                                            setTemplateProductSearch('');
+                                                            setTemplateProductsFound([]);
+                                                        }}
+                                                        style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: 0 }}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
                                                 {templateProductsFound.length > 0 && (
                                                     <div style={{
                                                         position: 'absolute',
@@ -2343,29 +2409,11 @@ export default function PricingSettingsPage() {
                                                             >
                                                                 <span style={{ fontWeight: 'bold', color: '#1E293B', marginRight: '6px' }}>[{p.accounting_id || 'SIN ID'}]</span>
                                                                 <span style={{ color: '#475569' }}>{p.name}</span>
-                                                                
                                                             </div>
                                                         ))}
                                                     </div>
                                                 )}
                                             </div>
-
-                                            {/* Import/Export buttons */}
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button
-                                                    onClick={exportTemplateExcel}
-                                                    style={{ padding: '0.55rem 1rem', backgroundColor: '#EAFDF4', color: '#0D7A57', border: '1px solid #BBF7D0', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                                                >
-                                                    <FileDown size={14} /> Exportar Excel
-                                                </button>
-                                                <button
-                                                    onClick={() => setShowTemplateExcelModal(true)}
-                                                    style={{ padding: '0.55rem 1rem', backgroundColor: '#EAFDF4', color: '#0D7A57', border: '1px solid #BBF7D0', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                                                >
-                                                    <FileUp size={14} /> Importar Excel
-                                                </button>
-                                            </div>
-
                                         </div>
 
                                         {/* TABLE VIEW */}
