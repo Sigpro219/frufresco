@@ -114,7 +114,9 @@ export default function PrintQuotePage() {
 
     useEffect(() => {
         if (!loading && quote && logoLoaded) {
-            document.title = formatQuoteNumber(quote.quote_number, quote.created_at);
+            document.title = quote.lead_id 
+                ? `Pre-Cotización - ${quote.client_name}` 
+                : formatQuoteNumber(quote.quote_number, quote.created_at);
             const timer = setTimeout(() => {
                 window.print();
             }, 500);
@@ -258,14 +260,18 @@ export default function PrintQuotePage() {
                             <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
                         )}
                     </div>
-                    <div style={{ width: '50%', textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Cotización</div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{formatQuoteNumber(quote.quote_number, quote.created_at)}</div>
-                        <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                            <div>Fecha: {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
-                            <div>Validez: 30 días</div>
-                        </div>
-                    </div>
+                     <div style={{ width: '50%', textAlign: 'right' }}>
+                         <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                             {quote.lead_id ? 'Pre-Cotización B2B' : 'Cotización'}
+                         </div>
+                         <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>
+                             {quote.lead_id ? 'PROSPECTO' : formatQuoteNumber(quote.quote_number, quote.created_at)}
+                         </div>
+                         <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                             <div>Fecha: {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
+                             <div>Validez: 30 días</div>
+                         </div>
+                     </div>
                 </div>
 
                 {/* Table */}
@@ -330,6 +336,26 @@ export default function PrintQuotePage() {
                         </tr>
                     </tfoot>
                 </table>
+                
+                {quote.lead_id && (
+                    <div style={{
+                        marginTop: '2rem',
+                        padding: '1.25rem',
+                        backgroundColor: '#F0FDF4',
+                        borderLeft: `4px solid ${appSettings.primary_color || '#15803D'}`,
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                        pageBreakInside: 'avoid'
+                    }}>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: '#166534', marginBottom: '0.4rem' }}>
+                            💡 ¿Quieres recibir una oferta personalizada?
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#15803D', lineHeight: '1.4' }}>
+                            Esta es una pre-cotización estimada con precios estándar de tu categoría. 
+                            <strong> Ponte en contacto con nosotros al WhatsApp </strong> para formalizar tu cuenta y negociar tarifas especiales según tu consumo real.
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
