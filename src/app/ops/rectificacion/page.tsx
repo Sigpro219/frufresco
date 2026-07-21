@@ -16,13 +16,14 @@ interface RouteItem {
     id: string;
     vehicle_plate: string;
     driver_name?: string;
-    status: 'ready_for_rectification' | 'rectifying' | 'rectified' | 'in_transit' | 'completed' | string;
+    status: 'ready_for_rectification' | 'rectifying' | 'rectified' | 'in_transit' | 'completed' | 'in_picking' | string;
     total_orders: number;
     validated_orders?: number;
     total_kilos: number;
     created_at: string;
     check_mode?: 'digital' | 'paper';
     evidence_url?: string;
+    picking_pct: number;
 }
 
 export default function RectificacionListPage() {
@@ -44,50 +45,62 @@ export default function RectificacionListPage() {
                 .order('created_at', { ascending: false });
 
             if (!error && data && data.length > 0) {
-                const formatted = data.map((r: any) => ({
-                    id: r.id,
-                    vehicle_plate: r.vehicle_plate || 'SIN PLACA',
-                    driver_name: r.driver_name || 'Conductor Asignado',
-                    status: r.status || 'ready_for_rectification',
-                    total_orders: r.total_orders || 12,
-                    validated_orders: r.validated_orders || 0,
-                    total_kilos: r.total_kilos || 450,
-                    created_at: r.created_at,
-                    evidence_url: r.check_evidence_url
-                }));
+                const formatted = data.map((r: any) => {
+                    const pickingPct = r.picking_pct !== undefined ? r.picking_pct : (r.status === 'ready_for_rectification' || r.status === 'rectified' ? 100 : 0);
+                    let computedStatus = r.status || 'in_picking';
+                    if (pickingPct < 100 && computedStatus !== 'rectified' && computedStatus !== 'rectifying') {
+                        computedStatus = 'in_picking';
+                    }
+
+                    return {
+                        id: r.id,
+                        vehicle_plate: r.vehicle_plate || 'SIN PLACA',
+                        driver_name: r.driver_name || 'Conductor Asignado',
+                        status: computedStatus,
+                        total_orders: r.total_orders || 12,
+                        validated_orders: r.validated_orders || 0,
+                        total_kilos: r.total_kilos || 450,
+                        created_at: r.created_at,
+                        evidence_url: r.check_evidence_url,
+                        picking_pct: pickingPct
+                    };
+                });
                 setRoutes(formatted);
             } else {
                 // Mock Routes for Demo Mode
                 setRoutes([
                     {
+                        id: 'route-wfw369',
+                        vehicle_plate: 'WFW369',
+                        driver_name: 'GONZALEZ MARIO',
+                        status: 'in_picking',
+                        picking_pct: 0,
+                        total_orders: 11,
+                        validated_orders: 0,
+                        total_kilos: 1552,
+                        created_at: new Date().toISOString()
+                    },
+                    {
                         id: 'route-nhp287',
                         vehicle_plate: 'NHP287',
                         driver_name: 'GARCIA HENRY',
                         status: 'ready_for_rectification',
+                        picking_pct: 100,
                         total_orders: 25,
                         validated_orders: 0,
-                        total_kilos: 680,
+                        total_kilos: 3817,
                         created_at: new Date().toISOString()
                     },
                     {
                         id: 'route-pmw071',
                         vehicle_plate: 'PMW071',
                         driver_name: 'ALARCÓN JORGE',
-                        status: 'rectifying',
-                        total_orders: 18,
-                        validated_orders: 12,
-                        total_kilos: 520,
+                        status: 'in_picking',
+                        picking_pct: 21,
+                        total_orders: 5,
+                        validated_orders: 0,
+                        total_kilos: 1530,
                         created_at: new Date(Date.now() - 3600000).toISOString()
-                    },
-                    {
-                        id: 'route-tzx412',
-                        vehicle_plate: 'TZX412',
-                        driver_name: 'RODRIGUEZ CARLOS',
-                        status: 'rectified',
-                        total_orders: 30,
-                        validated_orders: 30,
-                        total_kilos: 910,
-                        created_at: new Date(Date.now() - 7200000).toISOString()
                     }
                 ]);
             }
@@ -109,7 +122,7 @@ export default function RectificacionListPage() {
 
     const stats = {
         total: routes.length,
-        ready: routes.filter(r => r.status === 'ready_for_rectification' || r.status === 'rectifying').length,
+        ready: routes.filter(r => (r.status === 'ready_for_rectification' || r.status === 'rectifying') && r.picking_pct === 100).length,
         completed: routes.filter(r => r.status === 'rectified' || r.status === 'completed').length
     };
 
@@ -147,7 +160,7 @@ export default function RectificacionListPage() {
                         <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--ops-text)' }}>{stats.total}</div>
                     </div>
                     <div style={{ padding: '0.6rem 1rem', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: '14px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#F59E0B', letterSpacing: '0.05em' }}>POR RECTIFICAR</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#F59E0B', letterSpacing: '0.05em' }}>LISTOS RECTIFICAR</div>
                         <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#F59E0B' }}>{stats.ready}</div>
                     </div>
                     <div style={{ padding: '0.6rem 1rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '14px', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
@@ -254,7 +267,32 @@ export default function RectificacionListPage() {
                     {filteredRoutes.map(route => {
                         const isCompleted = route.status === 'rectified' || route.status === 'completed';
                         const isRectifying = route.status === 'rectifying';
+                        const isPickingIncomplete = route.picking_pct < 100 && !isCompleted;
+                        const isReadyForRectify = (route.status === 'ready_for_rectification' || route.picking_pct === 100) && !isCompleted && !isRectifying;
                         const pct = route.total_orders > 0 ? Math.round(((route.validated_orders || 0) / route.total_orders) * 100) : 0;
+
+                        // Determinar texto y estilos de badge de estado
+                        let badgeLabel = 'LISTO PARA RECTIFICAR';
+                        let badgeBg = 'rgba(16, 185, 129, 0.15)';
+                        let badgeColor = '#10B981';
+                        let badgeBorder = 'rgba(16, 185, 129, 0.3)';
+
+                        if (isCompleted) {
+                            badgeLabel = 'DESPACHADO';
+                            badgeBg = 'rgba(16, 185, 129, 0.15)';
+                            badgeColor = '#10B981';
+                            badgeBorder = 'rgba(16, 185, 129, 0.3)';
+                        } else if (isRectifying) {
+                            badgeLabel = 'EN RECTIFICACIÓN';
+                            badgeBg = 'rgba(245, 158, 11, 0.15)';
+                            badgeColor = '#F59E0B';
+                            badgeBorder = 'rgba(245, 158, 11, 0.3)';
+                        } else if (isPickingIncomplete) {
+                            badgeLabel = `EN ALISTAMIENTO (${route.picking_pct}%)`;
+                            badgeBg = 'rgba(59, 130, 246, 0.15)';
+                            badgeColor = '#60A5FA';
+                            badgeBorder = 'rgba(59, 130, 246, 0.3)';
+                        }
 
                         return (
                             <div 
@@ -262,7 +300,7 @@ export default function RectificacionListPage() {
                                 style={{
                                     backgroundColor: 'var(--ops-surface)',
                                     borderRadius: '20px',
-                                    border: `1px solid ${isCompleted ? '#10B981' : isRectifying ? '#F59E0B' : 'var(--ops-border)'}`,
+                                    border: `1px solid ${isCompleted ? '#10B981' : isRectifying ? '#F59E0B' : isPickingIncomplete ? '#2563EB' : 'var(--ops-border)'}`,
                                     padding: '1.25rem',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -286,12 +324,12 @@ export default function RectificacionListPage() {
                                             fontWeight: '900',
                                             padding: '4px 8px',
                                             borderRadius: '8px',
-                                            backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isRectifying ? 'rgba(245, 158, 11, 0.15)' : 'rgba(99, 102, 241, 0.15)',
-                                            color: isCompleted ? '#10B981' : isRectifying ? '#F59E0B' : '#6366F1',
-                                            border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.3)' : isRectifying ? 'rgba(245, 158, 11, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`,
+                                            backgroundColor: badgeBg,
+                                            color: badgeColor,
+                                            border: `1px solid ${badgeBorder}`,
                                             letterSpacing: '0.05em'
                                         }}>
-                                            {isCompleted ? 'DESPACHADO' : isRectifying ? 'EN RECTIFICACIÓN' : 'LISTO PARA RECTIFICAR'}
+                                            {badgeLabel}
                                         </span>
                                     </div>
 
@@ -316,27 +354,37 @@ export default function RectificacionListPage() {
                                     <div style={{ marginBottom: '1.25rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: '800', marginBottom: '4px' }}>
                                             <span style={{ color: 'var(--ops-text-muted)' }}>Progreso de Cargue:</span>
-                                            <span style={{ color: isCompleted ? '#10B981' : 'var(--ops-primary)' }}>
+                                            <span style={{ color: isCompleted ? '#10B981' : isPickingIncomplete ? '#60A5FA' : 'var(--ops-primary)' }}>
                                                 {route.validated_orders || 0} / {route.total_orders} ({pct}%)
                                             </span>
                                         </div>
                                         <div style={{ height: '8px', width: '100%', backgroundColor: 'var(--ops-border)', borderRadius: '4px', overflow: 'hidden' }}>
-                                            <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isCompleted ? '#10B981' : 'var(--ops-primary)', borderRadius: '4px', transition: 'width 0.3s' }} />
+                                            <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isCompleted ? '#10B981' : isPickingIncomplete ? '#3B82F6' : 'var(--ops-primary)', borderRadius: '4px', transition: 'width 0.3s' }} />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Botón de Acción Principal */}
                                 <div>
-                                    <Link href={`/ops/rectificacion/${route.id}`} style={{ textDecoration: 'none' }}>
+                                    <Link 
+                                        href={`/ops/rectificacion/${route.id}`} 
+                                        style={{ textDecoration: 'none' }}
+                                        onClick={(e) => {
+                                            if (isPickingIncomplete) {
+                                                if (!confirm(`⚠️ ALISTAMIENTO AL ${route.picking_pct}%: Este camión aún no ha completado el 100% de alistamiento en el Tablero. ¿Deseas ingresar a la lista de rectificación de todas formas?`)) {
+                                                    e.preventDefault();
+                                                }
+                                            }
+                                        }}
+                                    >
                                         <button
                                             style={{
                                                 width: '100%',
                                                 padding: '0.75rem',
                                                 borderRadius: '12px',
                                                 border: 'none',
-                                                backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : 'var(--ops-primary)',
-                                                color: isCompleted ? '#10B981' : 'white',
+                                                backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isPickingIncomplete ? 'rgba(59, 130, 246, 0.2)' : 'var(--ops-primary)',
+                                                color: isCompleted ? '#10B981' : isPickingIncomplete ? '#60A5FA' : 'white',
                                                 fontWeight: '800',
                                                 fontSize: '0.85rem',
                                                 cursor: 'pointer',
@@ -344,13 +392,17 @@ export default function RectificacionListPage() {
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 gap: '8px',
-                                                boxShadow: isCompleted ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.25)',
+                                                boxShadow: isCompleted || isPickingIncomplete ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.25)',
                                                 transition: 'all 0.2s'
                                             }}
                                         >
                                             {isCompleted ? (
                                                 <>
                                                     <CheckCircle2 size={16} /> VER VALIDACIÓN COMPLETA
+                                                </>
+                                            ) : isPickingIncomplete ? (
+                                                <>
+                                                    <Layers size={16} /> EN ALISTAMIENTO ({route.picking_pct}%) <ChevronRight size={16} />
                                                 </>
                                             ) : (
                                                 <>
