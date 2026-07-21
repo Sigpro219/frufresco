@@ -271,10 +271,10 @@ export default function PrintQuotePage() {
                     </div>
                      <div style={{ width: '50%', textAlign: 'right' }}>
                          <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                             {quote.lead_id ? 'Pre-Cotización B2B' : 'Cotización'}
+                             {quote.lead_id ? 'Propuesta Comercial' : 'Cotización'}
                          </div>
                          <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>
-                             {quote.lead_id ? 'PROSPECTO' : formatQuoteNumber(quote.quote_number, quote.created_at)}
+                             {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'COTIZACIÓN'}
                          </div>
                          <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                              <div>Fecha: {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
