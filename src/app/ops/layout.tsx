@@ -314,38 +314,44 @@ function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: 
             position: 'relative',
             transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s',
             transformOrigin: 'bottom center',
-            paddingBottom: '2px'
+            paddingBottom: '4px'
         }}>
             <div className="icon-wrapper" style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center',
-                transition: 'color 0.2s, transform 0.2s'
+                transition: 'all 0.25s ease-in-out',
+                backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                padding: isActive ? '6px 16px' : '6px 12px',
+                borderRadius: '12px',
+                boxShadow: isActive ? '0 2px 10px rgba(16, 185, 129, 0.15), inset 0 0 0 1px rgba(16, 185, 129, 0.25)' : 'none'
             }}>
                 <Icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.2 : 1.8} style={{
-                    filter: isActive ? 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.35))' : 'none',
-                    transition: 'all 0.2s'
+                    filter: isActive ? 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.45))' : 'none',
+                    transition: 'all 0.2s',
+                    color: isActive ? 'var(--ops-primary)' : 'inherit'
                 }} />
             </div>
             <div style={{ 
                 fontSize: '0.55rem', 
-                fontWeight: 'bold', 
-                letterSpacing: '0.05em', 
-                marginTop: '2px',
+                fontWeight: isActive ? '900' : '700', 
+                letterSpacing: '0.06em', 
+                marginTop: '1px',
                 color: isActive ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
-                transition: 'color 0.2s'
+                transition: 'color 0.2s',
+                textShadow: isActive ? '0 0 8px rgba(16, 185, 129, 0.2)' : 'none'
             }}>{label}</div>
             
             {/* Indicador de MacBook Dock (Active Dot) */}
             {isActive && (
                 <div style={{
                     position: 'absolute',
-                    bottom: '-6px',
-                    width: '4px',
-                    height: '4px',
+                    bottom: '-4px',
+                    width: '6px',
+                    height: '6px',
                     borderRadius: '50%',
                     backgroundColor: 'var(--ops-primary)',
-                    boxShadow: '0 0 6px var(--ops-primary)'
+                    boxShadow: '0 0 8px var(--ops-primary)'
                 }} />
             )}
         </Link>
