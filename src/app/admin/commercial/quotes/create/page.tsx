@@ -302,7 +302,7 @@ function CreateQuotePageContent() {
             // 2. Fetch products details
             const { data: products, error: prodErr } = await supabase
                 .from('products')
-                .select('id, name, unit_of_measure, iva_rate, sku')
+                .select('id, name, unit_of_measure, iva_rate, sku, accounting_id')
                 .in('id', productIds)
                 .eq('is_active', true);
 
@@ -365,6 +365,7 @@ function CreateQuotePageContent() {
                     variant_id: null,
                     name: p.name,
                     sku: p.sku,
+                    accounting_id: p.accounting_id || p.sku || p.id?.slice(0, 8),
                     unit: p.unit_of_measure,
                     cost: cost,
                     margin: baseMargin,
@@ -375,7 +376,7 @@ function CreateQuotePageContent() {
                 });
             }
 
-            setItems(sortItemsBySku(loadedItems));
+            setItems(sortItemsByAccountingId(loadedItems));
         } catch (err: any) {
             console.error('Error loading template:', err);
             alert('Error al cargar plantilla: ' + (err.message || err));
@@ -391,6 +392,8 @@ function CreateQuotePageContent() {
             return idA.localeCompare(idB, 'es', { numeric: true, sensitivity: 'base' });
         });
     };
+
+    const sortItemsBySku = sortItemsByAccountingId;
 
     const getMarginForProduct = (productId: string, modelId: string, loadedRules: any[]) => {
         const model = models.find(m => m.id === modelId);
