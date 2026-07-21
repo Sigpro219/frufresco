@@ -382,6 +382,38 @@ export default function QuoteDetailPage() {
                                 >
                                     {converting ? 'Procesando...' : '🚀 Convertir a Pedido'}
                                 </button>
+                                <a
+                                    href={`/api/quotes/${quote.id}/excel`}
+                                    download
+                                    style={{ textDecoration: 'none' }}
+                                >
+                                    <button
+                                        style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '0.8rem 1.2rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s' }}
+                                        title="Descargar versión Excel (.xlsx) con fórmulas"
+                                    >
+                                        📊 Exportar Excel
+                                    </button>
+                                </a>
+                                <button
+                                    onClick={() => {
+                                        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                        const pdfUrl = `${origin}/admin/commercial/quotes/${quote.id}/print`;
+                                        const excelUrl = `${origin}/api/quotes/${quote.id}/excel`;
+                                        const text = encodeURIComponent(
+                                            `Hola *${quote.client_name || 'Cliente'}*, te compartimos tu propuesta comercial FruFresco:\n\n` +
+                                            `📄 *Documento PDF:* ${pdfUrl}\n` +
+                                            `📊 *Archivo Excel Editable:* ${excelUrl}\n\n` +
+                                            `Quedamos atentos a tus comentarios.`
+                                        );
+                                        const phone = (lead?.phone || selectedClient?.phone || '').replace(/\D/g, '');
+                                        const waUrl = phone ? `https://wa.me/57${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+                                        window.open(waUrl, '_blank');
+                                    }}
+                                    style={{ backgroundColor: '#25D366', color: 'white', border: 'none', padding: '0.8rem 1.2rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 2px 6px rgba(37,211,102,0.3)' }}
+                                    title="Compartir por WhatsApp con enlaces a PDF y Excel"
+                                >
+                                    📱 WhatsApp
+                                </button>
                                 <button
                                     onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
                                     style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
