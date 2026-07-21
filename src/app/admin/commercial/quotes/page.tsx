@@ -14,12 +14,85 @@ export default function QuotesListPage() {
         setLoading(true);
         const { data, error } = await supabase
             .from('quotes')
-            .select('*')
+            .select('*, profiles:client_id(role, company_name, contact_name), leads:lead_id(company_name, contact_name, business_type, business_size)')
             .neq('status', 'agreement')
             .order('created_at', { ascending: false });
 
         if (data) setQuotes(data);
         setLoading(false);
+    };
+
+    const renderClientTypeBadge = (quote: any) => {
+        if (quote.lead_id || quote.leads) {
+            const bType = quote.leads?.business_type;
+            return (
+                <div style={{ marginTop: '3px' }}>
+                    <span style={{ 
+                        fontSize: '0.68rem', 
+                        backgroundColor: '#DCFCE7', 
+                        color: '#15803D', 
+                        padding: '2px 6px', 
+                        borderRadius: '4px', 
+                        fontWeight: '800',
+                        display: 'inline-block' 
+                    }}>
+                        Prospecto (Lead){bType ? ` • ${bType}` : ''}
+                    </span>
+                </div>
+            );
+        }
+        
+        if (quote.profiles?.role === 'b2c_client') {
+            return (
+                <div style={{ marginTop: '3px' }}>
+                    <span style={{ 
+                        fontSize: '0.68rem', 
+                        backgroundColor: '#ECFDF5', 
+                        color: '#047857', 
+                        padding: '2px 6px', 
+                        borderRadius: '4px', 
+                        fontWeight: '800',
+                        display: 'inline-block' 
+                    }}>
+                        Cliente Hogar
+                    </span>
+                </div>
+            );
+        }
+        
+        if (quote.profiles?.role === 'b2b_client' || quote.client_id) {
+            return (
+                <div style={{ marginTop: '3px' }}>
+                    <span style={{ 
+                        fontSize: '0.68rem', 
+                        backgroundColor: '#E0F2FE', 
+                        color: '#0369A1', 
+                        padding: '2px 6px', 
+                        borderRadius: '4px', 
+                        fontWeight: '800',
+                        display: 'inline-block' 
+                    }}>
+                        Cliente Institucional
+                    </span>
+                </div>
+            );
+        }
+
+        return (
+            <div style={{ marginTop: '3px' }}>
+                <span style={{ 
+                    fontSize: '0.68rem', 
+                    backgroundColor: '#F1F5F9', 
+                    color: '#64748B', 
+                    padding: '2px 6px', 
+                    borderRadius: '4px', 
+                    fontWeight: '800',
+                    display: 'inline-block' 
+                }}>
+                    Cliente Manual
+                </span>
+            </div>
+        );
     };
 
     useEffect(() => {
@@ -170,90 +243,105 @@ export default function QuotesListPage() {
                                         <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
                                             {formatDate(quote.created_at)}
                                         </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
-                                            {quote.client_name}
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                            {quote.model_snapshot_name || '---'}
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.9rem' }}>
-                                            {formatMoney(quote.total_amount || 0)}
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1.25rem' }}>
-                                            {getStatusBadge(quote.status)}
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                            <Link href={`/admin/commercial/quotes/${quote.id}/print`} target="_blank" style={{ textDecoration: 'none' }}>
-                                                <button 
-                                                    title="Descargar PDF / Imprimir"
-                                                    style={{ 
-                                                        border: 'none',
-                                                        backgroundColor: '#EFF6FF',
-                                                        color: '#1D4ED8',
-                                                        padding: '0.35rem 0.75rem',
-                                                        borderRadius: THEME.radius.sm,
-                                                        cursor: 'pointer', 
-                                                        fontWeight: '700',
-                                                        fontSize: '0.75rem',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.currentTarget.style.backgroundColor = '#DBEAFE';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.currentTarget.style.backgroundColor = '#EFF6FF';
-                                                    }}
-                                                >
-                                                    <FileText size={12} strokeWidth={2} /> PDF
-                                                </button>
-                                            </Link>
-                                            <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none' }}>
-                                                <button style={{ 
-                                                    border: `1px solid ${THEME.colors.borderActive}`,
-                                                    backgroundColor: 'transparent',
-                                                    color: THEME.colors.textSecondary,
-                                                    padding: '0.35rem 0.75rem',
-                                                    borderRadius: THEME.radius.sm,
-                                                    cursor: 'pointer', 
-                                                    fontWeight: '600',
-                                                    fontSize: '0.75rem',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    transition: 'all 0.2s'
-                                                }}>
-                                                    Ver Detalle <ChevronRight size={12} strokeWidth={1.5} />
-                                                </button>
-                                            </Link>
-                                            <button 
-                                                onClick={() => handleDelete(quote.id, quote.quote_number)}
-                                                style={{ 
-                                                    color: '#EF4444', 
-                                                    background: 'none', 
-                                                    border: `1px solid ${THEME.colors.border}`, 
-                                                    cursor: 'pointer', 
-                                                    padding: '0.35rem', 
-                                                    borderRadius: THEME.radius.sm, 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    transition: 'all 0.2s' 
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.backgroundColor = '#FEE2E2';
-                                                    e.currentTarget.style.borderColor = '#EF4444';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.backgroundColor = 'transparent';
-                                                    e.currentTarget.style.borderColor = THEME.colors.border;
-                                                }}
-                                                title="Eliminar permanentemente"
-                                            >
-                                                <Trash2 size={14} strokeWidth={1.5} />
-                                            </button>
-                                        </td>
+                                        <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle' }}>
+                                             <div style={{ fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
+                                                 {quote.client_name}
+                                             </div>
+                                             {renderClientTypeBadge(quote)}
+                                         </td>
+                                         <td style={{ padding: '0.75rem 1.25rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', verticalAlign: 'middle' }}>
+                                             {quote.model_snapshot_name || '---'}
+                                         </td>
+                                         <td style={{ padding: '0.75rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.9rem', verticalAlign: 'middle' }}>
+                                             {formatMoney(quote.total_amount || 0)}
+                                         </td>
+                                         <td style={{ padding: '0.75rem 1.25rem', verticalAlign: 'middle' }}>
+                                             {getStatusBadge(quote.status)}
+                                         </td>
+                                         <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right', verticalAlign: 'middle' }}>
+                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                                 <Link href={`/admin/commercial/quotes/${quote.id}/print`} target="_blank" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                     <button 
+                                                         title="Descargar PDF / Imprimir"
+                                                         style={{ 
+                                                             height: '32px',
+                                                             boxSizing: 'border-box',
+                                                             border: '1px solid transparent',
+                                                             backgroundColor: '#EFF6FF',
+                                                             color: '#1D4ED8',
+                                                             padding: '0 0.75rem',
+                                                             borderRadius: THEME.radius.sm,
+                                                             cursor: 'pointer', 
+                                                             fontWeight: '700',
+                                                             fontSize: '0.75rem',
+                                                             display: 'inline-flex',
+                                                             alignItems: 'center',
+                                                             justifyContent: 'center',
+                                                             gap: '4px',
+                                                             transition: 'all 0.2s'
+                                                         }}
+                                                         onMouseEnter={(e) => {
+                                                             e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                         }}
+                                                         onMouseLeave={(e) => {
+                                                             e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                         }}
+                                                     >
+                                                         <FileText size={12} strokeWidth={2} /> PDF
+                                                     </button>
+                                                 </Link>
+                                                 <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                                                     <button style={{ 
+                                                         height: '32px',
+                                                         boxSizing: 'border-box',
+                                                         border: `1px solid ${THEME.colors.borderActive}`,
+                                                         backgroundColor: 'white',
+                                                         color: THEME.colors.textSecondary,
+                                                         padding: '0 0.75rem',
+                                                         borderRadius: THEME.radius.sm,
+                                                         cursor: 'pointer', 
+                                                         fontWeight: '600',
+                                                         fontSize: '0.75rem',
+                                                         display: 'inline-flex',
+                                                         alignItems: 'center',
+                                                         justifyContent: 'center',
+                                                         gap: '4px',
+                                                         transition: 'all 0.2s'
+                                                     }}>
+                                                         Ver Detalle <ChevronRight size={12} strokeWidth={1.5} />
+                                                     </button>
+                                                 </Link>
+                                                 <button 
+                                                     onClick={() => handleDelete(quote.id, quote.quote_number)}
+                                                     style={{ 
+                                                         height: '32px',
+                                                         width: '32px',
+                                                         boxSizing: 'border-box',
+                                                         color: '#EF4444', 
+                                                         backgroundColor: 'white', 
+                                                         border: `1px solid ${THEME.colors.border}`, 
+                                                         cursor: 'pointer', 
+                                                         padding: 0, 
+                                                         borderRadius: THEME.radius.sm, 
+                                                         display: 'inline-flex', 
+                                                         alignItems: 'center', 
+                                                         justifyContent: 'center',
+                                                         transition: 'all 0.2s' 
+                                                     }}
+                                                     onMouseEnter={(e) => {
+                                                         e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                                         e.currentTarget.style.borderColor = '#EF4444';
+                                                     }}
+                                                     onMouseLeave={(e) => {
+                                                         e.currentTarget.style.backgroundColor = 'white';
+                                                         e.currentTarget.style.borderColor = THEME.colors.border;
+                                                     }}
+                                                     title="Eliminar permanentemente"
+                                                 >
+                                                     <Trash2 size={14} strokeWidth={1.5} />
+                                                 </button>
+                                             </div>
+                                         </td>
                                     </tr>
                                 ))}
                             </tbody>

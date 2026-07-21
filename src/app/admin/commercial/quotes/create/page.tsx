@@ -982,7 +982,16 @@ function CreateQuotePageContent() {
                                                 })()}
                                             </>
                                         ) : (
-                                            selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>NIT: {selectedClientInfo.nit}</div>
+                                            <>
+                                                {selectedClientInfo && (
+                                                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.65rem', backgroundColor: selectedClientInfo.role === 'b2c_client' ? '#ECFDF5' : '#EFF6FF', color: selectedClientInfo.role === 'b2c_client' ? '#047857' : '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                            {selectedClientInfo.role === 'b2c_client' ? 'Cliente Hogar' : 'Cliente Institucional'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563', marginTop: '4px' }}>NIT: {selectedClientInfo.nit}</div>}
+                                            </>
                                         )}
                                     </div>
                                     <button 
