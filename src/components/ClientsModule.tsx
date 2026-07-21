@@ -94,6 +94,14 @@ interface Profile {
     collection_responsible_name?: string;
     collection_responsible_email?: string;
     collection_responsible_phone?: string;
+    comm_ref_1_name?: string;
+    comm_ref_1_nit?: string;
+    comm_ref_1_phone?: string;
+    comm_ref_1_email?: string;
+    comm_ref_2_name?: string;
+    comm_ref_2_nit?: string;
+    comm_ref_2_phone?: string;
+    comm_ref_2_email?: string;
     remission_copies?: number;
     id_zr?: string;
     id_lp?: string;
@@ -640,6 +648,8 @@ export default function ClientsModule() {
         // Tab 1: Clientes Base
         const exportData = allClients.map(c => {
             const parent = allClients.find(p => p.id === c.parent_id);
+            const pModel = pricingModels.find(m => m.id === c.pricing_model_id);
+
             return {
                 Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
                 ID_INTERNO: c.id,
@@ -654,6 +664,7 @@ export default function ClientsModule() {
                 Municipio: c.municipality || c.city || 'Bogotá',
                 Departamento: c.department || 'Cundinamarca',
                 Tipo_Cliente: c.role === 'b2c_client' ? 'HOGAR' : 'INSTITUCIONAL',
+                Modelo_Precios_Nombre: pModel?.name || '',
                 
                 // Jerarquía Comercial
                 Es_Matriz: c.is_corporate_parent ? 'SI' : 'NO',
@@ -677,6 +688,16 @@ export default function ClientsModule() {
                 Email_Cartera: c.collection_responsible_email || '',
                 Telefono_Cartera: c.collection_responsible_phone || '',
 
+                // Referencias Comerciales
+                Ref_Comercial_1_Nombre: c.comm_ref_1_name || '',
+                Ref_Comercial_1_NIT: c.comm_ref_1_nit || '',
+                Ref_Comercial_1_Telefono: c.comm_ref_1_phone || '',
+                Ref_Comercial_1_Email: c.comm_ref_1_email || '',
+                Ref_Comercial_2_Nombre: c.comm_ref_2_name || '',
+                Ref_Comercial_2_NIT: c.comm_ref_2_nit || '',
+                Ref_Comercial_2_Telefono: c.comm_ref_2_phone || '',
+                Ref_Comercial_2_Email: c.comm_ref_2_email || '',
+
                 // Operaciones y Logística (Sucursal / Hogar)
                 Requiere_Canastillas: c.needs_crates ? 'SI' : 'NO',
                 Tipo_Documento: c.document_type || 'invoice', // invoice | remission
@@ -684,6 +705,10 @@ export default function ClientsModule() {
                 Remision_Con_Precios: c.remission_with_prices ? 'SI' : 'NO',
                 Restricciones_Entrega: c.delivery_restrictions || '',
                 Copias_Remision: c.remission_copies || 2,
+                Latitud: c.latitude || '',
+                Longitud: c.longitude || '',
+                URL_RUT: c.rut_url || '',
+                URL_Camara_Comercio: c.mercantile_registry_url || '',
                 
                 // Códigos ERP de Integración
                 Codigo_ZR: c.id_zr || '',
@@ -695,44 +720,57 @@ export default function ClientsModule() {
         // Tab 2: Guía de Datos
         const guideHeaders = ["Campo Excel", "Requerido", "Aplica A", "Descripción y Valores Permitidos"];
         const guideRows = [
-            ["Estado", "NO", "Todos", "ACTIVO = Cuenta habilitada para ventas y pedidos. INACTIVO = Cuenta archivada/bloqueada."],
-            ["ID_INTERNO", "NO", "Todos", "Dejar intacto para actualizar el cliente existente. Borrar si desea crear uno nuevo."],
-            ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa (con DV separado o sin DV) o Cédula de Ciudadanía."],
-            ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del establecimiento."],
+            ["Estado", "NO", "Todos", "ACTIVO = Cuenta habilitada para ventas. INACTIVO = Cuenta archivada/deshabilitada."],
+            ["ID_INTERNO", "NO", "Todos", "ID único de Supabase. Dejar intacto para actualizar cliente existente. Dejar vacío si es nuevo."],
+            ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa o Cédula de Ciudadanía."],
+            ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del negocio."],
             ["Razon_Social", "SÍ (Institucionales)", "Institucional", "Razón social legal para facturación electrónica."],
-            ["Nombre_Contacto", "SÍ", "Todos", "Persona encargada de recibir el pedido o coordinar compras."],
-            ["Telefono", "SÍ", "Todos", "Teléfono celular de contacto principal."],
-            ["Email", "SÍ", "Todos", "Correo electrónico donde se enviarán avisos de pedido y facturación."],
-            ["Direccion", "SÍ", "Todos", "Dirección exacta del punto de entrega (sucursal o domicilio)."],
-            ["Ciudad", "SÍ", "Todos", "Ciudad principal (ej: Bogotá, Villavicencio)."],
-            ["Municipio", "SÍ", "Todos", "Municipio específico (ej: Bogotá, Restrepo, Acacías)."],
+            ["Nombre_Contacto", "SÍ", "Todos", "Persona encargada de recibir o coordinar."],
+            ["Telefono", "SÍ", "Todos", "Teléfono celular principal."],
+            ["Email", "SÍ", "Todos", "Correo electrónico de contacto y recepción."],
+            ["Direccion", "SÍ", "Todos", "Dirección de entrega."],
+            ["Ciudad", "SÍ", "Todos", "Ciudad (ej: Bogotá, Villavicencio)."],
+            ["Municipio", "SÍ", "Todos", "Municipio específico."],
             ["Departamento", "SÍ", "Todos", "Departamento político (ej: Cundinamarca, Meta)."],
-            ["Tipo_Cliente", "SÍ", "Todos", "Tipo de cuenta: INSTITUCIONAL o HOGAR."],
+            ["Tipo_Cliente", "SÍ", "Todos", "INSTITUCIONAL o HOGAR."],
+            ["Modelo_Precios_Nombre", "NO", "Institucional", "Nombre exacto del esquema de precios (ej: Lista Base, Lista VIP)."],
             ["Es_Matriz", "NO", "Institucional", "SI = Si centraliza la facturación y cartera. NO = Si es punto de entrega o independiente."],
-            ["NIT_Matriz_Padre", "NO", "Sucursal", "Escriba el NIT de la casa matriz si este cliente es una sucursal vinculada."],
-            ["Nombre_Matriz_Padre", "NO", "Sucursal", "Nombre de la matriz (como referencia)."],
-            ["Codigo_Sucursal", "NO", "Sucursal", "Identificador interno de la sucursal (ej: SUC-01, REST-CHIA)."],
-            ["Rol_Corporativo", "NO", "Sucursal", "Descripción del rol corporativo (ej: Bodega Central, Franquicia 2)."],
-            ["Cupo_Credito", "NO", "Matriz / Indep.", "Monto máximo en pesos aprobado para compras a crédito (ej: 5000000)."],
-            ["Condicion_Pago", "NO", "Matriz / Indep.", "Condición comercial de cartera: Contado, 8 Días, 15 Días, 30 Días."],
-            ["Responsable_IVA", "NO", "Matriz / Indep.", "SI / NO. Determina si aplica cobro de IVA en facturación."],
-            ["Gran_Contribuyente", "NO", "Matriz / Indep.", "SI / NO. Lógica fiscal colombiana."],
-            ["Autorretenedor", "NO", "Matriz / Indep.", "SI / NO. Lógica fiscal colombiana."],
-            ["Regimen_Simple", "NO", "Matriz / Indep.", "SI / NO. Régimen Simple de Tributación."],
+            ["NIT_Matriz_Padre", "NO", "Sucursal", "NIT de la casa matriz vinculada."],
+            ["Nombre_Matriz_Padre", "NO", "Sucursal", "Nombre de la matriz como referencia."],
+            ["Codigo_Sucursal", "NO", "Sucursal", "Código interno de sucursal (ej: SUC-01)."],
+            ["Rol_Corporativo", "NO", "Sucursal", "Descripción del rol (ej: Punto de Venta Mall)."],
+            ["Cupo_Credito", "NO", "Matriz / Indep.", "Monto máximo en pesos aprobado a crédito."],
+            ["Condicion_Pago", "NO", "Matriz / Indep.", "Condición de pago (ej: Contado, 8 Días, 15 Días, 30 Días)."],
+            ["Responsable_IVA", "NO", "Matriz / Indep.", "SI / NO."],
+            ["Gran_Contribuyente", "NO", "Matriz / Indep.", "SI / NO."],
+            ["Autorretenedor", "NO", "Matriz / Indep.", "SI / NO."],
+            ["Regimen_Simple", "NO", "Matriz / Indep.", "SI / NO."],
             ["Actividad_Economica", "NO", "Matriz / Indep.", "Código CIIU de actividad económica."],
-            ["Correos_Facturacion_Adicionales", "NO", "Matriz / Indep.", "Lista de correos separados por comas para copia de facturas."],
-            ["Responsable_Cartera", "NO", "Matriz / Indep.", "Nombre del contacto de contabilidad / pagos del cliente."],
-            ["Email_Cartera", "NO", "Matriz / Indep.", "Correo de contacto de pagos."],
-            ["Telefono_Cartera", "NO", "Matriz / Indep.", "Teléfono directo de tesorería/pagos."],
-            ["Requiere_Canastillas", "NO", "Todos", "SI / NO. Indica si el despacho requiere dejar canastillas plásticas."],
-            ["Tipo_Documento", "SÍ", "Todos", "invoice = Factura Electrónica. remission = Remisión (Orden de entrega)."],
-            ["Imprimir_Factura_Fisica", "NO", "Todos", "SI / NO. Indica si el transportador debe llevar copia impresa física."],
-            ["Remision_Con_Precios", "NO", "Todos", "SI / NO. Aplica si Tipo_Documento es remission (oculta o muestra precios al recibir)."],
-            ["Restricciones_Entrega", "NO", "Todos", "Horarios, parqueaderos, especificaciones logísticas de entrega."],
-            ["Copias_Remision", "NO", "Todos", "Número de copias físicas a imprimir (ej: 2)."],
-            ["Codigo_ZR", "NO", "Todos", "Código de zona de despacho para ruteo ERP."],
-            ["Codigo_LP", "NO", "Todos", "Código de lista de precios asignada en contabilidad."],
-            ["Dias_Pago", "NO", "Todos", "Plazo en días numéricos aprobado."]
+            ["Correos_Facturacion_Adicionales", "NO", "Matriz / Indep.", "Correos adicionales separados por comas."],
+            ["Responsable_Cartera", "NO", "Matriz / Indep.", "Nombre del contacto de contabilidad/pagos."],
+            ["Email_Cartera", "NO", "Matriz / Indep.", "Correo de pagos/cartera."],
+            ["Telefono_Cartera", "NO", "Matriz / Indep.", "Teléfono de pagos."],
+            ["Ref_Comercial_1_Nombre", "NO", "Matriz / Indep.", "Razón social proveedor de referencia 1."],
+            ["Ref_Comercial_1_NIT", "NO", "Matriz / Indep.", "NIT ref 1."],
+            ["Ref_Comercial_1_Telefono", "NO", "Matriz / Indep.", "Teléfono ref 1."],
+            ["Ref_Comercial_1_Email", "NO", "Matriz / Indep.", "Email ref 1."],
+            ["Ref_Comercial_2_Nombre", "NO", "Matriz / Indep.", "Razón social proveedor de referencia 2."],
+            ["Ref_Comercial_2_NIT", "NO", "Matriz / Indep.", "NIT ref 2."],
+            ["Ref_Comercial_2_Telefono", "NO", "Matriz / Indep.", "Teléfono ref 2."],
+            ["Ref_Comercial_2_Email", "NO", "Matriz / Indep.", "Email ref 2."],
+            ["Requiere_Canastillas", "NO", "Todos", "SI / NO."],
+            ["Tipo_Documento", "SÍ", "Todos", "invoice = Factura Electrónica. remission = Remisión."],
+            ["Imprimir_Factura_Fisica", "NO", "Todos", "SI / NO."],
+            ["Remision_Con_Precios", "NO", "Todos", "SI / NO."],
+            ["Restricciones_Entrega", "NO", "Todos", "Horarios y notas logísticas."],
+            ["Copias_Remision", "NO", "Todos", "Número de copias físicas."],
+            ["Latitud", "NO", "Todos", "Coordenada latitud (ej: 4.6097)."],
+            ["Longitud", "NO", "Todos", "Coordenada longitud (ej: -74.0817)."],
+            ["URL_RUT", "NO", "Matriz / Indep.", "Enlace al documento RUT."],
+            ["URL_Camara_Comercio", "NO", "Matriz / Indep.", "Enlace a Cámara de Comercio."],
+            ["Codigo_ZR", "NO", "Todos", "Código de zona ruteo ERP."],
+            ["Codigo_LP", "NO", "Todos", "Código lista de precios ERP."],
+            ["Dias_Pago", "NO", "Todos", "Días de plazo en número (ej: 15)."]
         ];
         const guideSheetData = [guideHeaders, ...guideRows];
 
@@ -742,62 +780,77 @@ export default function ClientsModule() {
 
         // Ajustar anchos
         wsClients['!cols'] = Object.keys(exportData[0] || {}).map(() => ({ wch: 20 }));
-        wsGuide['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 65 }];
+        wsGuide['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 65 }];
 
         XLSX.utils.book_append_sheet(workbook, wsClients, "Clientes_Master");
         XLSX.utils.book_append_sheet(workbook, wsGuide, "Guia_Campos");
 
         XLSX.writeFile(workbook, `CRM_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
-        window.showToast?.('Base de clientes exportada con éxito', 'success');
+        window.showToast?.('Base completa de clientes exportada con éxito', 'success');
     };
 
     const downloadClientsTemplate = () => {
         const headers = [
             "Estado", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
-            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", 
+            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
             "Regimen_Simple", "Actividad_Economica", "Correos_Facturacion_Adicionales", "Responsable_Cartera", 
-            "Email_Cartera", "Telefono_Cartera", "Requiere_Canastillas", "Tipo_Documento", "Imprimir_Factura_Fisica", 
-            "Remision_Con_Precios", "Restricciones_Entrega", "Copias_Remision", "Codigo_ZR", "Codigo_LP", "Dias_Pago"
+            "Email_Cartera", "Telefono_Cartera", "Ref_Comercial_1_Nombre", "Ref_Comercial_1_NIT", 
+            "Ref_Comercial_1_Telefono", "Ref_Comercial_1_Email", "Ref_Comercial_2_Nombre", "Ref_Comercial_2_NIT", 
+            "Ref_Comercial_2_Telefono", "Ref_Comercial_2_Email", "Requiere_Canastillas", "Tipo_Documento", 
+            "Imprimir_Factura_Fisica", "Remision_Con_Precios", "Restricciones_Entrega", "Copias_Remision", 
+            "Latitud", "Longitud", "URL_RUT", "URL_Camara_Comercio", "Codigo_ZR", "Codigo_LP", "Dias_Pago"
         ];
+
         const sample1 = [
             "ACTIVO", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
-            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
+            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
-            2000000, "15 Días", "SI", "NO", "NO", 
+            5000000, "15 Días", "SI", "NO", "NO", 
             "NO", "5611", "contabilidad@elgourmet.com", "Luz Marina Pérez", 
-            "pagos@elgourmet.com", "3001112233", "SI", "invoice", "NO", 
-            "SI", "Entregar por bahía de carga antes de las 11 AM", 2, "ZR-Norte", "LP-01", 15
+            "pagos@elgourmet.com", "3001112233", "Distribuidora La 80", "800111222-3",
+            "3108889900", "ventas@la80.com", "Comercializadora del Valle", "890333444-5",
+            "3127776655", "contacto@delvalle.com", "SI", "invoice", 
+            "NO", "SI", "Entregar por bahía de carga antes de las 11 AM", 2,
+            4.6853, -74.0521, "", "", "ZR-Norte", "LP-01", 15
         ];
+
         const sample2 = [
             "ACTIVO", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
-            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
+            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
             "NO", "5611", "", "", 
-            "", "", "NO", "remission", "NO", 
-            "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2, "ZR-Norte", "LP-01", 0
+            "", "", "", "",
+            "", "", "", "",
+            "", "", "NO", "remission", 
+            "NO", "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2,
+            4.7022, -74.0411, "", "", "ZR-Norte", "LP-01", 0
         ];
+
         const sample3 = [
             "ACTIVO", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
-            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", 
+            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
             "NO", "", "", "", 
-            "", "", "NO", "remission", "NO", 
-            "NO", "Dejar en portería si no se encuentra", 1, "ZR-Hogar-Norte", "LP-B2C", 0
+            "", "", "", "",
+            "", "", "", "",
+            "", "", "NO", "remission", 
+            "NO", "NO", "Dejar en portería si no se encuentra", 1,
+            4.7255, -74.0289, "", "", "ZR-Hogar-Norte", "LP-B2C", 0
         ];
 
         const dataSheet = [headers, sample1, sample2, sample3];
 
         const workbook = XLSX.utils.book_new();
         const wsTemplate = XLSX.utils.aoa_to_sheet(dataSheet);
-        wsTemplate['!cols'] = headers.map(() => ({ wch: 18 }));
+        wsTemplate['!cols'] = headers.map(() => ({ wch: 20 }));
 
         XLSX.utils.book_append_sheet(workbook, wsTemplate, "Plantilla_Clientes");
         XLSX.writeFile(workbook, "plantilla_carga_masiva_clientes.xlsx");
-        window.showToast?.('Plantilla de clientes descargada', 'success');
+        window.showToast?.('Plantilla completa de clientes descargada', 'success');
     };
 
     const processClientsFile = async () => {
@@ -818,14 +871,17 @@ export default function ClientsModule() {
 
             setLoading(true);
             try {
-                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true;
+                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true || val === '1';
 
-                // Primero buscaremos todos los NIT de matriz/padre para poder vincular parent_id si es sucursal
-                // Mapearemos los clientes y crearemos o actualizaremos sus perfiles
+                // Mapearemos todos los clientes con sus 51 atributos
                 const clientsToInsert = rows.map(row => {
                     const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
                     const estadoVal = (row.Estado || row.Activo || row['Estado (ACTIVO/INACTIVO)'] || '').toString().trim().toUpperCase();
                     const is_active = estadoVal === 'INACTIVO' || estadoVal === 'NO' || estadoVal === 'FALSE' || estadoVal === '0' ? false : true;
+
+                    // Buscar id de modelo de precios si especificaron nombre
+                    const modelName = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toLowerCase();
+                    const matchedModel = pricingModels.find(m => m.name.toLowerCase() === modelName);
 
                     return {
                         id: row.ID_INTERNO || undefined,
@@ -842,6 +898,7 @@ export default function ClientsModule() {
                         municipality: (row.Municipio || row.Ciudad || 'Bogotá').toString().trim(),
                         department: (row.Departamento || 'Cundinamarca').toString().trim(),
                         role: type_client === 'HOGAR' ? 'b2c_client' : 'b2b_client',
+                        pricing_model_id: matchedModel ? matchedModel.id : (row.pricing_model_id || null),
                         
                         // Jerarquía
                         is_corporate_parent: cleanBool(row.Es_Matriz),
@@ -849,7 +906,7 @@ export default function ClientsModule() {
                         corporate_role: (row.Rol_Corporativo || '').toString().trim() || null,
                         
                         // Financiera
-                        credit_limit: parseFloat(row.Cupo_Credito || '0'),
+                        credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
                         payment_terms: (row.Condicion_Pago || 'Contado').toString().trim(),
                         iva_responsible: cleanBool(row.Responsable_IVA),
                         is_gran_contribuyente: cleanBool(row.Gran_Contribuyente),
@@ -863,18 +920,32 @@ export default function ClientsModule() {
                         collection_responsible_email: (row.Email_Cartera || '').toString().trim() || null,
                         collection_responsible_phone: (row.Telefono_Cartera || '').toString().trim() || null,
 
-                        // Logística
+                        // Referencias Comerciales
+                        comm_ref_1_name: (row.Ref_Comercial_1_Nombre || '').toString().trim() || null,
+                        comm_ref_1_nit: (row.Ref_Comercial_1_NIT || '').toString().trim() || null,
+                        comm_ref_1_phone: (row.Ref_Comercial_1_Telefono || '').toString().trim() || null,
+                        comm_ref_1_email: (row.Ref_Comercial_1_Email || '').toString().trim() || null,
+                        comm_ref_2_name: (row.Ref_Comercial_2_Nombre || '').toString().trim() || null,
+                        comm_ref_2_nit: (row.Ref_Comercial_2_NIT || '').toString().trim() || null,
+                        comm_ref_2_phone: (row.Ref_Comercial_2_Telefono || '').toString().trim() || null,
+                        comm_ref_2_email: (row.Ref_Comercial_2_Email || '').toString().trim() || null,
+
+                        // Operaciones y Logística
                         needs_crates: cleanBool(row.Requiere_Canastillas),
                         document_type: (row.Tipo_Documento || 'invoice').toString().trim().toLowerCase(),
                         print_invoice: cleanBool(row.Imprimir_Factura_Fisica),
                         remission_with_prices: cleanBool(row.Remision_Con_Precios),
                         delivery_restrictions: (row.Restricciones_Entrega || '').toString().trim() || null,
-                        remission_copies: parseInt(row.Copias_Remision || '2'),
+                        remission_copies: parseInt(row.Copias_Remision || '2') || 2,
+                        latitude: parseFloat(row.Latitud || '0') || null,
+                        longitude: parseFloat(row.Longitud || '0') || null,
+                        rut_url: (row.URL_RUT || '').toString().trim() || null,
+                        mercantile_registry_url: (row.URL_Camara_Comercio || '').toString().trim() || null,
 
                         // ERP
                         id_zr: (row.Codigo_ZR || '').toString().trim() || null,
                         id_lp: (row.Codigo_LP || '').toString().trim() || null,
-                        payment_days: parseInt(row.Dias_Pago || '0'),
+                        payment_days: parseInt(row.Dias_Pago || '0') || 0,
                         geocoding_status: 'manual'
                     };
                 });
@@ -886,13 +957,12 @@ export default function ClientsModule() {
                 for (let i = 0; i < clientsToInsert.length; i += chunkSize) {
                     const chunk = clientsToInsert.slice(i, i + chunkSize);
                     // Usamos upsert para actualizar por ID o insertar si es nuevo
-                    const { data, error } = await supabase.from('profiles').upsert(chunk).select('id', 'nit');
+                    const { data, error } = await supabase.from('profiles').upsert(chunk).select('id, nit');
                     if (error) throw error;
                     if (data) insertedClients.push(...data);
                 }
 
-                // Intentar hacer la vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
-                // Esto lo hacemos en una pasada secundaria
+                // Vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
                 const branches = rows.filter(r => (r.NIT_Matriz_Padre || '').toString().trim() !== '' && !cleanBool(r.Es_Matriz));
                 if (branches.length > 0) {
                     const { data: allParents } = await supabase.from('profiles').select('id, nit').eq('is_corporate_parent', true);
@@ -913,12 +983,12 @@ export default function ClientsModule() {
                     }
                 }
 
-                window.showToast?.(`Base de datos de clientes actualizada: ${clientsToInsert.length} registros procesados`, 'success');
+                window.showToast?.(`Base de datos de clientes actualizada: ${clientsToInsert.length} registros procesados exitosamente`, 'success');
                 setIsBulkModalOpen(false);
                 setSelectedFile(null);
                 fetchData();
             } catch (err: any) {
-                console.error('Error en carga de clientes:', err);
+                console.error('Error en carga masiva de clientes:', err);
                 window.showToast?.('Error al procesar el archivo: ' + err.message, 'error');
             } finally {
                 setLoading(false);
