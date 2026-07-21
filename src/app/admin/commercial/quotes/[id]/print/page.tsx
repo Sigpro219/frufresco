@@ -244,23 +244,30 @@ export default function PrintQuotePage() {
                         <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{quote.client_name}</div>
                         {clientInfo ? (
                             <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                {clientInfo.company_name && <div>{clientInfo.company_name}</div>}
+                                {clientInfo.company_name && clientInfo.company_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
+                                    <div>{clientInfo.company_name}</div>
+                                )}
                                 {clientInfo.nit && <div>NIT: {clientInfo.nit}</div>}
-                                {clientInfo.contact_name && <div>Atención: {clientInfo.contact_name}</div>}
+                                {clientInfo.contact_name && clientInfo.contact_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
+                                    <div>Atención: {clientInfo.contact_name}</div>
+                                )}
                                 {clientInfo.phone && <div>Teléfono: {clientInfo.phone}</div>}
                                 {clientInfo.address && <div>Dirección: {clientInfo.address}</div>}
                             </div>
                         ) : lead ? (
                             <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                {lead.company_name && <div>{lead.company_name}</div>}
+                                {lead.company_name && lead.company_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
+                                    <div>{lead.company_name}</div>
+                                )}
                                 {lead.nit && <div>NIT: {lead.nit}</div>}
-                                {lead.contact_name && <div>Atención: {lead.contact_name}</div>}
+                                {lead.contact_name && lead.contact_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
+                                    <div>Atención: {lead.contact_name}</div>
+                                )}
                                 {lead.phone && <div>Teléfono: {lead.phone}</div>}
                                 {lead.email && <div>Email: {lead.email}</div>}
                                 {(lead.address || lead.municipality) && (
                                     <div>Dirección: {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
                                 )}
-                                {lead.business_type && <div>Tipo de Negocio: {lead.business_type}</div>}
                             </div>
                         ) : (
                             <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
@@ -293,7 +300,11 @@ export default function PrintQuotePage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {items.map((item, index) => {
+                        {[...items].sort((a, b) => {
+                            const skuA = (a.sku || a.products?.sku || a.product_name || a.products?.name || '').toString().toLowerCase();
+                            const skuB = (b.sku || b.products?.sku || b.product_name || b.products?.name || '').toString().toLowerCase();
+                            return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+                        }).map((item, index) => {
                             return (
                                 <tr key={item.id || index} className="item-row">
                                     <td style={{ fontSize: '1.1rem', fontWeight: '800', color: '#CBD5E1' }}>

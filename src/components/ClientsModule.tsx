@@ -98,6 +98,7 @@ interface Profile {
     id_zr?: string;
     id_lp?: string;
     payment_days?: number;
+    is_active?: boolean;
     created_at: string;
 }
 
@@ -229,7 +230,8 @@ export default function ClientsModule() {
             
             const normalizeProfile = (p: any) => ({
                 ...p,
-                phone: p.phone || p.contact_phone || ''
+                phone: p.phone || p.contact_phone || '',
+                is_active: p.is_active !== false
             });
             setClientsB2B((b2bData || []).map(normalizeProfile));
             setLeads(leadData || []);
@@ -246,8 +248,11 @@ export default function ClientsModule() {
 
     const [allAgreements, setAllAgreements] = useState<any[]>([]);
 
-    const getAgreementStatus = (clientId: string) => {
-        const clientAgreements = allAgreements.filter(a => a.client_id === clientId);
+    const getAgreementStatus = (clientId: string, parentId?: string) => {
+        let clientAgreements = allAgreements.filter(a => a.client_id === clientId);
+        if (clientAgreements.length === 0 && parentId) {
+            clientAgreements = allAgreements.filter(a => a.client_id === parentId);
+        }
         if (clientAgreements.length === 0) return 'none';
         
         const now = new Date();
@@ -265,6 +270,11 @@ export default function ClientsModule() {
         if (hasWarning) return 'warning';
         
         return 'none';
+    };
+
+    const isAgreementInherited = (clientId: string, parentId?: string) => {
+        const hasOwn = allAgreements.some(a => a.client_id === clientId);
+        return !hasOwn && !!parentId && allAgreements.some(a => a.client_id === parentId);
     };
 
     const handleUpdateLeadStatus = async (id: string, newStatus: string) => {
@@ -631,18 +641,19 @@ export default function ClientsModule() {
         const exportData = allClients.map(c => {
             const parent = allClients.find(p => p.id === c.parent_id);
             return {
+                Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
                 ID_INTERNO: c.id,
                 NIT_CEDULA: c.nit || '',
-                Nombre_Comercial: c.company_name || '',
-                Razon_Social: c.razon_social || '',
+                Nombre_Comercial: c.company_name || c.contact_name || '',
+                Razon_Social: c.razon_social || c.company_name || '',
                 Nombre_Contacto: c.contact_name || '',
-                Telefono: c.phone || '',
+                Telefono: c.phone || c.contact_phone || '',
                 Email: c.email || '',
                 Direccion: c.address || '',
                 Ciudad: c.city || 'Bogotá',
-                Municipio: c.municipality || 'Bogotá',
+                Municipio: c.municipality || c.city || 'Bogotá',
                 Departamento: c.department || 'Cundinamarca',
-                Tipo_Cliente: c.role === 'b2b_client' ? 'INSTITUCIONAL' : 'HOGAR',
+                Tipo_Cliente: c.role === 'b2c_client' ? 'HOGAR' : 'INSTITUCIONAL',
                 
                 // Jerarquía Comercial
                 Es_Matriz: c.is_corporate_parent ? 'SI' : 'NO',
@@ -684,6 +695,7 @@ export default function ClientsModule() {
         // Tab 2: Guía de Datos
         const guideHeaders = ["Campo Excel", "Requerido", "Aplica A", "Descripción y Valores Permitidos"];
         const guideRows = [
+            ["Estado", "NO", "Todos", "ACTIVO = Cuenta habilitada para ventas y pedidos. INACTIVO = Cuenta archivada/bloqueada."],
             ["ID_INTERNO", "NO", "Todos", "Dejar intacto para actualizar el cliente existente. Borrar si desea crear uno nuevo."],
             ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa (con DV separado o sin DV) o Cédula de Ciudadanía."],
             ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del establecimiento."],
@@ -741,7 +753,7 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "Estado", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
             "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", 
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
@@ -750,7 +762,7 @@ export default function ClientsModule() {
             "Remision_Con_Precios", "Restricciones_Entrega", "Copias_Remision", "Codigo_ZR", "Codigo_LP", "Dias_Pago"
         ];
         const sample1 = [
-            "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "ACTIVO", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
             "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
             "SI", "", "", "", "", 
             2000000, "15 Días", "SI", "NO", "NO", 
@@ -759,7 +771,7 @@ export default function ClientsModule() {
             "SI", "Entregar por bahía de carga antes de las 11 AM", 2, "ZR-Norte", "LP-01", 15
         ];
         const sample2 = [
-            "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "ACTIVO", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
             "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
@@ -768,7 +780,7 @@ export default function ClientsModule() {
             "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2, "ZR-Norte", "LP-01", 0
         ];
         const sample3 = [
-            "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "ACTIVO", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
             "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", 
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
@@ -812,9 +824,12 @@ export default function ClientsModule() {
                 // Mapearemos los clientes y crearemos o actualizaremos sus perfiles
                 const clientsToInsert = rows.map(row => {
                     const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
+                    const estadoVal = (row.Estado || row.Activo || row['Estado (ACTIVO/INACTIVO)'] || '').toString().trim().toUpperCase();
+                    const is_active = estadoVal === 'INACTIVO' || estadoVal === 'NO' || estadoVal === 'FALSE' || estadoVal === '0' ? false : true;
 
                     return {
                         id: row.ID_INTERNO || undefined,
+                        is_active: is_active,
                         nit: (row.NIT_CEDULA || '').toString().trim(),
                         company_name: (row.Nombre_Comercial || '').toString().trim(),
                         razon_social: (row.Razon_Social || row.Nombre_Comercial || '').toString().trim(),
@@ -931,37 +946,52 @@ export default function ClientsModule() {
             return searchTerms.every(term => {
                 // Special command handlers starting with @
                 if (term.startsWith('@')) {
-                    if (term === '@branch' || term === '@sucursal') {
+                    const cleanCmd = term.slice(1).trim().toLowerCase();
+                    if (!cleanCmd) return true;
+
+                    if (cleanCmd === 'branch' || cleanCmd === 'sucursal' || cleanCmd === 'sucursales') {
                         return !!record.parent_id;
                     }
-                    if (term === '@matrix' || term === '@matriz') {
+                    if (cleanCmd === 'matrix' || cleanCmd === 'matriz') {
                         return record.is_corporate_parent === true;
                     }
-                    if (term === '@activo') {
-                        return record.is_active === true || getAgreementStatus(String(record.id || '')) === 'active';
+                    if (cleanCmd === 'activo') {
+                        return record.is_active !== false;
                     }
-                    if (term === '@vencido' || term === '@inactivo') {
-                        return record.is_active === false || getAgreementStatus(String(record.id || '')) === 'warning';
+                    if (cleanCmd === 'inactivo' || cleanCmd === 'archivado') {
+                        return record.is_active === false;
                     }
-                    if (term === '@sin acuerdo' || term === '@sin_acuerdo' || term === '@sinacuerdo') {
-                        return getAgreementStatus(String(record.id || '')) === 'none';
+                    if (cleanCmd === 'acuerdo_activo' || cleanCmd === 'acuerdoactivo' || cleanCmd === 'acuerdo') {
+                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'active';
                     }
-                    if (term === '@nogps') {
+                    if (cleanCmd === 'vencido' || cleanCmd === 'por_vencer' || cleanCmd === 'expirado') {
+                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'warning';
+                    }
+                    if (cleanCmd === 'sin_acuerdo' || cleanCmd === 'sinacuerdo' || cleanCmd === 'sin acuerdo') {
+                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'none';
+                    }
+                    if (cleanCmd === 'nogps' || cleanCmd === 'singps') {
                         return !record.latitude || !record.longitude;
                     }
-                    if (term === '@bogota' || term === '@bogotá') {
-                        const cityVal = String(record.city || '').toLowerCase();
-                        const muniVal = String(record.municipality || '').toLowerCase();
-                        const deptVal = String(record.department || '').toLowerCase();
-                        return cityVal.includes('bogot') || muniVal.includes('bogot') || deptVal.includes('bogot');
+                    if (cleanCmd === 'gps' || cleanCmd === 'congps') {
+                        return !!record.latitude && !!record.longitude;
                     }
-                    if (term.startsWith('@nit')) {
-                        const valuePart = term.replace('@nit', '').replace(':', '').trim();
+                    if (cleanCmd.startsWith('nit')) {
+                        const valuePart = cleanCmd.replace('nit', '').replace(':', '').trim();
                         if (!valuePart) {
                             return !!record.nit;
                         }
                         return String(record.nit || '').toLowerCase().includes(valuePart);
                     }
+
+                    // Dinámico para cualquier ciudad / ubicación (ej: @villavicencio, @medellin, @cali, @bogota, @chia)
+                    const cityVal = String(record.city || '').toLowerCase();
+                    const muniVal = String(record.municipality || '').toLowerCase();
+                    const deptVal = String(record.department || '').toLowerCase();
+                    const addrVal = String(record.address || '').toLowerCase();
+                    const compVal = String(record.company_name || '').toLowerCase();
+
+                    return cityVal.includes(cleanCmd) || muniVal.includes(cleanCmd) || deptVal.includes(cleanCmd) || addrVal.includes(cleanCmd) || compVal.includes(cleanCmd);
                 }
 
                 // Default field searching
@@ -1093,18 +1123,23 @@ export default function ClientsModule() {
                     </div>
                 </header>
 
-                {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (COMPACTA) */}
+                {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (STICKY) */}
                 {activeTab !== 'dashboard' && activeTab !== 'agreements' && (
                     <div style={{ 
                         display: 'flex', 
                         gap: '0.8rem', 
                         alignItems: 'center', 
                         marginBottom: '1.2rem',
-                        backgroundColor: 'white',
-                        padding: '0.5rem 1rem',
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
-                        border: '1px solid #F1F5F9'
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(12px)',
+                        padding: '0.65rem 1.2rem',
+                        borderRadius: '20px',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                        border: '1px solid #E2E8F0',
+                        position: 'sticky',
+                        top: '0.5rem',
+                        zIndex: 90,
+                        transition: 'all 0.2s ease-in-out'
                     }}>
                         {/* BOTÓN DE CREACIÓN */}
                         {activeTab === 'b2b' && hasEditPermission() && (
@@ -1331,97 +1366,209 @@ export default function ClientsModule() {
                         </div>
 
                         {/* Botón Informativo (i) */}
-                        <div 
-                            onMouseEnter={() => setShowHelpTooltip(true)}
-                            onMouseLeave={() => setShowHelpTooltip(false)}
-                            style={{ 
-                                position: 'relative',
-                                width: '40px', 
-                                height: '40px', 
-                                borderRadius: '10px', 
-                                backgroundColor: '#EFF6FF', 
-                                color: '#2563EB', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                cursor: 'help',
-                                border: '1px solid #DBEAFE',
-                                fontSize: '1rem',
-                                fontWeight: '900',
-                                flexShrink: 0,
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            i
-                            {getActiveFilteredCount() !== null && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '-6px',
-                                    right: '-6px',
-                                    backgroundColor: '#10B981', // Emerald green
-                                    color: 'white',
-                                    fontSize: '0.65rem',
-                                    fontWeight: '900',
-                                    borderRadius: '9999px',
-                                    height: '18px',
-                                    minWidth: '18px',
-                                    padding: '0 5px',
-                                    display: 'flex',
-                                    alignItems: 'center',
+                        <div style={{ position: 'relative' }}>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowHelpTooltip(!showHelpTooltip);
+                                }}
+                                style={{ 
+                                    width: '40px', 
+                                    height: '40px', 
+                                    borderRadius: '10px', 
+                                    backgroundColor: showHelpTooltip ? '#ECFDF5' : '#EFF6FF', 
+                                    color: showHelpTooltip ? '#059669' : '#2563EB', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
                                     justifyContent: 'center',
-                                    border: '2px solid white',
-                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                                    animation: 'popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                    pointerEvents: 'none'
-                                }}>
-                                    {getActiveFilteredCount()}
-                                </div>
-                            )}
+                                    cursor: 'pointer',
+                                    border: '1px solid',
+                                    borderColor: showHelpTooltip ? '#A7F3D0' : '#DBEAFE',
+                                    fontSize: '1rem',
+                                    fontWeight: '900',
+                                    flexShrink: 0,
+                                    transition: 'all 0.2s',
+                                    boxShadow: showHelpTooltip ? '0 0 0 3px rgba(16, 185, 129, 0.15)' : 'none'
+                                }}
+                                title="Ver comandos de búsqueda (@)"
+                            >
+                                i
+                                {getActiveFilteredCount() !== null && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-6px',
+                                        right: '-6px',
+                                        backgroundColor: '#10B981', // Emerald green
+                                        color: 'white',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '900',
+                                        borderRadius: '9999px',
+                                        height: '18px',
+                                        minWidth: '18px',
+                                        padding: '0 5px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        border: '2px solid white',
+                                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                        animation: 'popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {getActiveFilteredCount()}
+                                    </div>
+                                )}
+                            </button>
+
                             {showHelpTooltip && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '48px',
-                                    right: '0',
-                                    width: '310px',
-                                    backgroundColor: '#1E293B',
-                                    color: 'white',
-                                    padding: '1.2rem',
-                                    borderRadius: '16px',
-                                    boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-                                    zIndex: 1000,
-                                    fontSize: '0.75rem',
-                                    lineHeight: '1.5',
-                                    pointerEvents: 'none',
-                                    animation: 'fadeInDown 0.2s ease-out'
-                                }}>
-                                    <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                        🚀 COMANDOS CRM (@)
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '10px' }}>
-                                        <div>
-                                            <b style={{ color: '#FCD34D' }}>@bogota</b>: Por ciudad<br/>
-                                            <b style={{ color: '#FCD34D' }}>@nit</b>: Por NIT<br/>
-                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo<br/>
-                                            <b style={{ color: '#FCD34D' }}>@sin acuerdo</b>: Sin acuerdo
+                                <>
+                                    {/* Backdrop transparente para cerrar al hacer clic afuera */}
+                                    <div 
+                                        onClick={() => setShowHelpTooltip(false)} 
+                                        style={{ position: 'fixed', inset: 0, zIndex: 999, cursor: 'default' }} 
+                                    />
+
+                                    <div 
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '48px',
+                                            right: '0',
+                                            width: '390px',
+                                            backgroundColor: '#FFFFFF',
+                                            color: '#1E293B',
+                                            padding: '1.25rem',
+                                            borderRadius: '20px',
+                                            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                                            border: '1px solid #E2E8F0',
+                                            zIndex: 1000,
+                                            fontSize: '0.75rem',
+                                            lineHeight: '1.5',
+                                            animation: 'fadeInDown 0.2s ease-out'
+                                        }}
+                                    >
+                                        {/* Encabezado Estilo FruFresco */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
+                                            <div>
+                                                <div style={{ fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
+                                                    <span style={{ fontSize: '1rem' }}>⚡</span> Comandos de Búsqueda (@)
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500', marginTop: '2px' }}>
+                                                    Haz clic en una opción o escribe cualquier ciudad (ej: <code style={{ backgroundColor: '#F1F5F9', color: '#059669', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>@villavicencio</code>)
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => setShowHelpTooltip(false)}
+                                                style={{ border: 'none', background: '#F1F5F9', color: '#64748B', width: '26px', height: '26px', borderRadius: '8px', cursor: 'pointer', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                ✕
+                                            </button>
                                         </div>
-                                        <div>
-                                            <b style={{ color: '#FCD34D' }}>@activo</b>: Acuerdo ok<br/>
-                                            <b style={{ color: '#FCD34D' }}>@vencido</b>: Expirado<br/>
-                                            <b style={{ color: '#FCD34D' }}>@matrix</b>: Casa Matriz<br/>
-                                            <b style={{ color: '#FCD34D' }}>@branch</b>: Sucursales
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            {/* SECCIÓN: ESTADO DE LA CUENTA */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Estado de la Cuenta
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@activo')}
+                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        🟢 @activo <span style={{ color: '#059669', fontWeight: '500' }}>Activas</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@inactivo')}
+                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        🔴 @inactivo <span style={{ color: '#DC2626', fontWeight: '500' }}>Inactivas</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* SECCIÓN: ESTRUCTURA CLIENTE */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Estructura Comercial
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@matriz')}
+                                                        style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        🏢 @matriz <span style={{ color: '#0284C7', fontWeight: '500' }}>Casas Matriz</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@sucursal')}
+                                                        style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', color: '#C2410C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        📍 @sucursal <span style={{ color: '#EA580C', fontWeight: '500' }}>Sucursales</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* SECCIÓN: ACUERDOS COMERCIALES */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Acuerdos Comerciales
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@acuerdo_activo')}
+                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        ⚡ @acuerdo_activo <span style={{ color: '#059669', fontWeight: '500' }}>Vigente</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@vencido')}
+                                                        style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        ⚠️ @vencido <span style={{ color: '#D97706', fontWeight: '500' }}>Por Vencer</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@sin_acuerdo')}
+                                                        style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#64748B', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        ⚪ @sin_acuerdo <span style={{ color: '#475569', fontWeight: '500' }}>Sin Acuerdo</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* SECCIÓN: UBICACIÓN Y CIUDADES (DINÁMICO) */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Ciudades y Geolocalización
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@villavicencio')}
+                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        🌆 @villavicencio
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@bogota')}
+                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        🌆 @bogota
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@nogps')}
+                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        🗺️ @nogps <span style={{ color: '#DC2626', fontWeight: '500' }}>Sin GPS</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@nit')}
+                                                        style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#4338CA', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                    >
+                                                        📄 @nit <span style={{ color: '#4F46E5', fontWeight: '500' }}>Filtro NIT</span>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <style>{`
-                                        @keyframes fadeInDown {
-                                            from { opacity: 0; transform: translateY(-10px); }
-                                            to { opacity: 1; transform: translateY(0); }
-                                        }
-                                        @keyframes popIn {
-                                            from { opacity: 0; transform: scale(0.6); }
-                                            to { opacity: 1; transform: scale(1); }
-                                        }
-                                    `}</style>
-                                </div>
+                                </>
                             )}
                         </div>
                     </div>
@@ -1537,7 +1684,7 @@ export default function ClientsModule() {
                                                 onUpdatePricingModel={handleUpdatePricingModel}
                                                 onViewDetails={() => handleViewDetails(client)}
                                                 onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                agreementStatus={getAgreementStatus(client.id)}
+                                                agreementStatus={getAgreementStatus(client.id, client.parent_id)}
                                             />
                                         ))}
                                     </div>
@@ -1549,8 +1696,8 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>COMERCIAL</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -1562,7 +1709,8 @@ export default function ClientsModule() {
                                                         pricingModels={pricingModels}
                                                         onViewDetails={() => handleViewDetails(client)}
                                                         onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                        agreementStatus={getAgreementStatus(client.id)}
+                                                        agreementStatus={getAgreementStatus(client.id, client.parent_id)}
+                                                        isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
                                                     />
                                                 ))}
                                             </tbody>
@@ -2315,7 +2463,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus }: { 
+function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
@@ -2325,7 +2473,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     onEdit?: () => void,
     onRegisterContact?: () => void,
     onScheduleTask?: (date: string) => void,
-    agreementStatus?: 'active' | 'warning' | 'none'
+    agreementStatus?: 'active' | 'warning' | 'none',
+    isInheritedAgreement?: boolean
 }) {
     const isB2B = type === 'b2b';
     const isB2C = type === 'b2c';
@@ -2397,35 +2546,94 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 </div>
 
                 {/* TRAFFIC LIGHT (Semáforo Comercial) */}
-                {isB2B && agreementStatus && (
+                {isB2B && agreementStatus && (() => {
+                    let bg = '#F8FAFC';
+                    let border = '#E2E8F0';
+                    let color = '#64748B';
+                    let dotColor = '#94A3B8';
+                    let text = 'Sin Acuerdo';
+
+                    if (agreementStatus === 'active') {
+                        if (isInheritedAgreement) {
+                            bg = '#F0F9FF';
+                            border = '#BAE6FD';
+                            color = '#0284C7';
+                            dotColor = '#0EA5E9';
+                            text = 'Acuerdo Heredado';
+                        } else {
+                            bg = '#ECFDF5';
+                            border = '#A7F3D0';
+                            color = '#047857';
+                            dotColor = '#10B981';
+                            text = 'Acuerdo Activo';
+                        }
+                    } else if (agreementStatus === 'warning') {
+                        bg = '#FFFBEB';
+                        border = '#FDE68A';
+                        color = '#B45309';
+                        dotColor = '#F59E0B';
+                        text = 'Por Vencer';
+                    }
+
+                    return (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: bg,
+                            padding: '4px 10px',
+                            borderRadius: '10px',
+                            border: `1px solid ${border}`,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                            whiteSpace: 'nowrap'
+                        }}>
+                            <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: dotColor,
+                                boxShadow: `0 0 6px ${dotColor}aa`
+                            }} />
+                            <span style={{ 
+                                fontSize: '0.6rem', 
+                                fontWeight: '900', 
+                                color: color,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.02rem'
+                            }}>
+                                {text}
+                            </span>
+                        </div>
+                    );
+                })()}
+
+                {/* INACTIVE / ARCHIVED BADGE */}
+                {(isB2B || isB2C) && profileData?.is_active === false && (
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        backgroundColor: 'rgba(248, 250, 252, 0.9)',
+                        backgroundColor: '#FEF2F2',
                         padding: '4px 10px',
                         borderRadius: '10px',
-                        border: '1px solid #E2E8F0',
+                        border: '1px solid #FCA5A5',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                     }}>
                         <div style={{
-                            width: '10px',
-                            height: '10px',
+                            width: '8px',
+                            height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: 
-                                agreementStatus === 'active' ? '#10B981' : 
-                                agreementStatus === 'warning' ? '#F59E0B' : '#94A3B8',
-                            boxShadow: agreementStatus !== 'none' ? `0 0 8px ${agreementStatus === 'active' ? '#10B98166' : '#F59E0B66'}` : 'none'
+                            backgroundColor: '#EF4444',
+                            boxShadow: '0 0 6px #EF444488'
                         }} />
                         <span style={{ 
                             fontSize: '0.6rem', 
-                            fontWeight: '800', 
-                            color: '#475569',
+                            fontWeight: '900', 
+                            color: '#DC2626',
                             textTransform: 'uppercase',
                             letterSpacing: '0.02rem'
                         }}>
-                            {agreementStatus === 'active' ? 'Acuerdo Activo' : 
-                             agreementStatus === 'warning' ? 'Por Vencer' : 'Sin Acuerdo'}
+                            INACTIVO / ARCHIVADO
                         </span>
                     </div>
                 )}
@@ -2802,12 +3010,13 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     );
 }
 
-function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, onRegisterContact }: { 
+function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, isInheritedAgreement, onRegisterContact }: { 
     client: Profile, 
     pricingModels?: PricingModel[], 
     onViewDetails: () => void, 
     onEdit?: () => void, 
     agreementStatus?: 'active' | 'warning' | 'none',
+    isInheritedAgreement?: boolean,
     onRegisterContact?: () => void
 }) {
     const isB2B = client.role === 'b2b_client';
@@ -2892,10 +3101,46 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{displayAddress || '---'}</div>
             </td>
             <td style={{ padding: '0.65rem 1.25rem' }}>
-                {isB2B ? (
+                {isB2B || client.role === 'b2c_client' ? (
                     <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: THEME.colors.primary }}>{selectedModel?.name || 'Varios'}</div>
-                        <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>Modelo de Precios</div>
+                        {client.is_active !== false ? (
+                            <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '3px 8px', 
+                                borderRadius: '6px', 
+                                fontWeight: '900', 
+                                backgroundColor: '#ECFDF5',
+                                color: '#059669',
+                                border: '1px solid #A7F3D0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+                                ACTIVO
+                            </span>
+                        ) : (
+                            <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '3px 8px', 
+                                borderRadius: '6px', 
+                                fontWeight: '900', 
+                                backgroundColor: '#FEF2F2',
+                                color: '#DC2626',
+                                border: '1px solid #FCA5A5',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
+                                INACTIVO
+                            </span>
+                        )}
+                        {selectedModel?.name && selectedModel?.name !== 'Varios' && (
+                            <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '4px', fontWeight: '600' }}>
+                                {selectedModel.name}
+                            </div>
+                        )}
                     </div>
                 ) : isLead ? (
                     <span style={{ 
@@ -2932,22 +3177,91 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         )}
                     </div>
                 ) : (
-                    <>
-                        {agreementStatus && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                <div style={{ 
-                                    width: '8px', height: '8px', borderRadius: '50%', 
-                                    backgroundColor: agreementStatus === 'active' ? '#10B981' : agreementStatus === 'warning' ? '#F59E0B' : '#CBD5E1' 
-                                }} />
-                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
-                            </div>
-                        )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start' }}>
+                        {agreementStatus && (() => {
+                            let bg = '#F8FAFC';
+                            let border = '#E2E8F0';
+                            let color = '#64748B';
+                            let dotColor = '#94A3B8';
+                            let text = 'SIN ACUERDO';
+
+                            if (agreementStatus === 'active') {
+                                if (isInheritedAgreement) {
+                                    bg = '#F0F9FF';
+                                    border = '#BAE6FD';
+                                    color = '#0284C7';
+                                    dotColor = '#0EA5E9';
+                                    text = '🏢 HEREDADO';
+                                } else {
+                                    bg = '#ECFDF5';
+                                    border = '#A7F3D0';
+                                    color = '#047857';
+                                    dotColor = '#10B981';
+                                    text = '⚡ AL DÍA';
+                                }
+                            } else if (agreementStatus === 'warning') {
+                                bg = '#FFFBEB';
+                                border = '#FDE68A';
+                                color = '#B45309';
+                                dotColor = '#F59E0B';
+                                text = '⚠️ POR VENCER';
+                            }
+
+                            return (
+                                <span style={{
+                                    fontSize: '0.68rem',
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    fontWeight: '900',
+                                    backgroundColor: bg,
+                                    color: color,
+                                    border: `1px solid ${border}`,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotColor, boxShadow: `0 0 4px ${dotColor}aa` }} />
+                                    {text}
+                                </span>
+                            );
+                        })()}
+
                         {(client.latitude && client.longitude) ? (
-                            <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '2px' }}><MapPin size={10} strokeWidth={1.5} /> GPS OK</div>
+                            <span style={{
+                                fontSize: '0.65rem',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                fontWeight: '800',
+                                backgroundColor: '#F0FDF4',
+                                color: '#15803D',
+                                border: '1px solid #BBF7D0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                <MapPin size={10} strokeWidth={2} style={{ color: '#16A34A' }} /> GPS OK
+                            </span>
                         ) : (
-                            <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '2px' }}><MapPin size={10} strokeWidth={1.5} /> NO GPS</div>
+                            <span style={{
+                                fontSize: '0.65rem',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                fontWeight: '800',
+                                backgroundColor: '#FEF2F2',
+                                color: '#B91C1C',
+                                border: '1px solid #FECACA',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                <MapPin size={10} strokeWidth={2} style={{ color: '#DC2626' }} /> SIN GPS
+                            </span>
                         )}
-                    </>
+                    </div>
                 )}
             </td>
             <td style={{ padding: '0.65rem 1.25rem' }}>
@@ -3180,6 +3494,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         payment_days: (editData as any)?.payment_days || 0,
         email_2: (editData as any)?.email_2 || '',
         email_3: (editData as any)?.email_3 || '',
+        is_active: editData?.is_active !== undefined ? editData.is_active : true,
         notify_email_1: (editData as any)?.notify_email_1 !== undefined ? (editData as any).notify_email_1 : true,
         notify_email_2: (editData as any)?.notify_email_2 || false,
         notify_email_3: (editData as any)?.notify_email_3 || false,
@@ -3566,6 +3881,42 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             {isLead ? `Detalles del lead capturado por el chatbot` : isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
                         </p>
                     </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginLeft: 'auto', marginRight: '1.5rem' }}>
+                        {!isLead && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: formData.is_active ? '#F0FDF4' : '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '16px', border: '1px solid', borderColor: formData.is_active ? '#BBF7D0' : '#FCA5A5' }}>
+                                <div style={{ textAlign: 'right' }}>
+                                    <span style={{ fontSize: '0.6rem', fontWeight: '900', color: formData.is_active ? '#166534' : '#991B1B', textTransform: 'uppercase', letterSpacing: '0.02rem', display: 'block' }}>
+                                        Estado de la Cuenta
+                                    </span>
+                                    <span style={{ fontSize: '0.7rem', color: formData.is_active ? '#15803D' : '#B91C1C', fontWeight: '600' }}>
+                                        {formData.is_active ? 'Ventas Habilitadas' : 'Ventas Bloqueadas'}
+                                    </span>
+                                </div>
+                                <select
+                                    value={formData.is_active ? 'active' : 'inactive'}
+                                    onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
+                                    disabled={isReadOnly}
+                                    style={{
+                                        padding: '0.45rem 0.9rem',
+                                        borderRadius: '12px',
+                                        border: '1px solid',
+                                        borderColor: formData.is_active ? '#16A34A' : '#DC2626',
+                                        fontWeight: '900',
+                                        fontSize: '0.82rem',
+                                        color: formData.is_active ? '#15803D' : '#B91C1C',
+                                        backgroundColor: 'white',
+                                        cursor: isReadOnly ? 'default' : 'pointer',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    <option value="active">🟢 ACTIVO</option>
+                                    <option value="inactive">🔴 INACTIVO / ARCHIVADO</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
                     <button 
                         onClick={onClose} 
                         style={{ 
@@ -3886,6 +4237,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
                                 <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
                             </div>
+
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 {isB2C ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>

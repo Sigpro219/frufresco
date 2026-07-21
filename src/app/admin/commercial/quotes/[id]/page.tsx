@@ -427,7 +427,11 @@ export default function QuoteDetailPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {items.map(item => (
+                            {[...items].sort((a, b) => {
+                                const skuA = (a.sku || a.products?.sku || a.product_name || a.products?.name || '').toString().toLowerCase();
+                                const skuB = (b.sku || b.products?.sku || b.product_name || b.products?.name || '').toString().toLowerCase();
+                                return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+                            }).map(item => (
                                 <tr key={item.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
                                     <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.product_name || item.products?.name || 'Producto'}</td>
                                     <td style={{ padding: '1rem' }}>{item.quantity} {item.unit || ''}</td>

@@ -375,13 +375,21 @@ function CreateQuotePageContent() {
                 });
             }
 
-            setItems(loadedItems);
+            setItems(sortItemsBySku(loadedItems));
         } catch (err: any) {
             console.error('Error loading template:', err);
             alert('Error al cargar plantilla: ' + (err.message || err));
         } finally {
             setLoadingTemplate(false);
         }
+    };
+
+    const sortItemsBySku = (itemsList: any[]) => {
+        return [...itemsList].sort((a, b) => {
+            const skuA = (a.sku || a.name || '').toString().toLowerCase();
+            const skuB = (b.sku || b.name || '').toString().toLowerCase();
+            return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+        });
     };
 
     const getMarginForProduct = (productId: string, modelId: string, loadedRules: any[]) => {
@@ -407,7 +415,7 @@ function CreateQuotePageContent() {
             const price = calculateFinalPrice(item.cost, margin);
             return { ...item, margin, price };
         });
-        setItems(updated);
+        setItems(sortItemsBySku(updated));
     };
 
     const calculateFinalPrice = (cost: number, marginPercent: number) => {
@@ -521,7 +529,7 @@ function CreateQuotePageContent() {
         const clientNickname = nicknames.find(n => n.product_id === product.id);
         const displayName = clientNickname ? clientNickname.nickname : (variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name);
 
-        setItems([...items, {
+        setItems(sortItemsBySku([...items, {
             product_id: product.id,
             variant_id: variant?.id || null,
             name: displayName,
@@ -533,7 +541,7 @@ function CreateQuotePageContent() {
             price: finalPrice,
             iva_rate: ivaRate,
             quantity: 1
-        }]);
+        }]));
         setSearchTerm('');
         setSearchResults([]);
     };
@@ -1170,23 +1178,30 @@ function CreateQuotePageContent() {
                             <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{clientName || 'Cliente General'}</div>
                             {selectedClientInfo ? (
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                    {selectedClientInfo.company_name && <div>{selectedClientInfo.company_name}</div>}
+                                    {selectedClientInfo.company_name && selectedClientInfo.company_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
+                                        <div>{selectedClientInfo.company_name}</div>
+                                    )}
                                     {selectedClientInfo.nit && <div>NIT: {selectedClientInfo.nit}</div>}
-                                    {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
+                                    {selectedClientInfo.contact_name && selectedClientInfo.contact_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
+                                        <div>Atención: {selectedClientInfo.contact_name}</div>
+                                    )}
                                     {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
                                     {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
                                 </div>
                             ) : selectedLeadInfo ? (
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                    {selectedLeadInfo.company_name && <div>{selectedLeadInfo.company_name}</div>}
+                                    {selectedLeadInfo.company_name && selectedLeadInfo.company_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
+                                        <div>{selectedLeadInfo.company_name}</div>
+                                    )}
                                     {selectedLeadInfo.nit && <div>NIT: {selectedLeadInfo.nit}</div>}
-                                    {selectedLeadInfo.contact_name && <div>Atención: {selectedLeadInfo.contact_name}</div>}
+                                    {selectedLeadInfo.contact_name && selectedLeadInfo.contact_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
+                                        <div>Atención: {selectedLeadInfo.contact_name}</div>
+                                    )}
                                     {selectedLeadInfo.phone && <div>Teléfono: {selectedLeadInfo.phone}</div>}
                                     {selectedLeadInfo.email && <div>Email: {selectedLeadInfo.email}</div>}
                                     {(selectedLeadInfo.address || selectedLeadInfo.municipality) && (
                                         <div>Dirección: {selectedLeadInfo.address || ''}{selectedLeadInfo.municipality ? ` - ${selectedLeadInfo.municipality}` : ''}</div>
                                     )}
-                                    {selectedLeadInfo.business_type && <div>Tipo de Negocio: {selectedLeadInfo.business_type}</div>}
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
