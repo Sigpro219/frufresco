@@ -63,6 +63,26 @@ export default function B2BDashboard() {
         return () => { isMounted.current = false; };
     }, []);
 
+    // Route Guard to protect B2B Dashboard
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                console.log('🔒 Acceso no autorizado: redirigiendo a login');
+                router.push('/login?redirect=/b2b/dashboard');
+                return;
+            }
+            if (profile && profile.role !== 'b2b_client') {
+                console.warn(`🔒 Acceso denegado: rol ${profile.role} no autorizado para el portal B2B`);
+                const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
+                if (staffRoles.includes(profile.role)) {
+                    router.push('/admin/dashboard');
+                } else {
+                    router.push('/');
+                }
+            }
+        }
+    }, [authLoading, user, profile, router]);
+
     // Handle Category Selection
     useEffect(() => {
         const controller = new AbortController();
@@ -361,8 +381,8 @@ export default function B2BDashboard() {
                     }));
                     setOrderItems(suggestedItems);
                 }
-                    if (isMounted.current) setLoading(false);
-                }
+            }
+            if (isMounted.current) setLoading(false);
             } catch (err) {
                 if (isAbortError(err)) return;
                 console.error("Error in fetchInitialOrder:", err);

@@ -71,6 +71,17 @@ export default function RouteRectificationDetailPage() {
             if (routeData) {
                 setVehiclePlate(routeData.vehicle_plate || 'NHP287');
                 setDriverName(routeData.driver_name || 'GARCIA HENRY');
+            } else if (typeof routeId === 'string') {
+                if (routeId.includes('pmw071')) {
+                    setVehiclePlate('PMW071');
+                    setDriverName('ALARCÓN JORGE');
+                } else if (routeId.includes('wfw369')) {
+                    setVehiclePlate('WFW369');
+                    setDriverName('TRUJILLO MANUEL');
+                } else {
+                    setVehiclePlate('NHP287');
+                    setDriverName('GARCIA HENRY');
+                }
             }
 
             // Mock Data LIFO ordered (Reverse stop numbers 25 to 1)

@@ -39,27 +39,72 @@ export default function RectificacionListPage() {
     const fetchRoutes = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            // 1. Obtener vehículos de la flota para mapear placa -> conductor
+            const { data: fleet } = await supabase
+                .from('fleet_vehicles')
+                .select('plate, collaborators:driver_id(contact_name)');
+            
+            const plateToDriver = new Map<string, string>();
+            (fleet || []).forEach((f: any) => {
+                if (f.plate && f.collaborators?.contact_name) {
+                    plateToDriver.set(f.plate.toUpperCase().trim(), f.collaborators.contact_name);
+                }
+            });
+
+            // 2. Obtener rutas con paradas y pedidos
+            const { data: routeData, error } = await supabase
                 .from('routes')
-                .select('*')
+                .select(`
+                    *,
+                    route_stops (
+                        orders (
+                            id,
+                            order_items (
+                                quantity,
+                                picked_quantity
+                            )
+                        )
+                    )
+                `)
                 .order('created_at', { ascending: false });
 
-            if (!error && data && data.length > 0) {
-                const formatted = data.map((r: any) => {
-                    const pickingPct = r.picking_pct !== undefined ? r.picking_pct : (r.status === 'ready_for_rectification' || r.status === 'rectified' ? 100 : 0);
+            if (!error && routeData && routeData.length > 0) {
+                const formatted = routeData.map((r: any) => {
+                    const plate = (r.vehicle_plate || '').toUpperCase().trim();
+                    const driverName = r.driver_name || plateToDriver.get(plate) || 'Conductor Asignado';
+                    
+                    // Calcular avance real de alistamiento (picking_pct)
+                    let totalQty = 0;
+                    let totalPicked = 0;
+                    let totalOrdersCount = 0;
+                    
+                    (r.route_stops || []).forEach((stop: any) => {
+                        if (stop.orders) {
+                            totalOrdersCount++;
+                            (stop.orders.order_items || []).forEach((item: any) => {
+                                totalQty += item.quantity || 0;
+                                totalPicked += Math.min(item.quantity || 0, item.picked_quantity || 0);
+                            });
+                        }
+                    });
+
+                    const pickingPct = totalQty > 0 ? Math.floor((totalPicked / totalQty) * 100) : (r.status === 'ready_for_rectification' || r.status === 'rectified' ? 100 : 0);
+                    
                     let computedStatus = r.status || 'in_picking';
                     if (pickingPct < 100 && computedStatus !== 'rectified' && computedStatus !== 'rectifying') {
                         computedStatus = 'in_picking';
+                    } else if (pickingPct >= 100 && computedStatus === 'in_picking') {
+                        computedStatus = 'ready_for_rectification';
                     }
 
                     return {
                         id: r.id,
-                        vehicle_plate: r.vehicle_plate || 'SIN PLACA',
-                        driver_name: r.driver_name || 'Conductor Asignado',
+                        vehicle_plate: plate || 'SIN PLACA',
+                        driver_name: driverName,
                         status: computedStatus,
-                        total_orders: r.total_orders || 12,
+                        total_orders: totalOrdersCount || r.total_orders || 12,
                         validated_orders: r.validated_orders || 0,
-                        total_kilos: r.total_kilos || 450,
+                        total_kilos: r.total_kilos || Math.round(totalQty) || 450,
                         created_at: r.created_at,
                         evidence_url: r.check_evidence_url,
                         picking_pct: pickingPct
@@ -67,25 +112,14 @@ export default function RectificacionListPage() {
                 });
                 setRoutes(formatted);
             } else {
-                // Mock Routes for Demo Mode
+                // Rutas Mock alineadas con la vista del tablero
                 setRoutes([
-                    {
-                        id: 'route-wfw369',
-                        vehicle_plate: 'WFW369',
-                        driver_name: 'GONZALEZ MARIO',
-                        status: 'in_picking',
-                        picking_pct: 0,
-                        total_orders: 11,
-                        validated_orders: 0,
-                        total_kilos: 1552,
-                        created_at: new Date().toISOString()
-                    },
                     {
                         id: 'route-nhp287',
                         vehicle_plate: 'NHP287',
                         driver_name: 'GARCIA HENRY',
-                        status: 'ready_for_rectification',
-                        picking_pct: 100,
+                        status: 'in_picking',
+                        picking_pct: 21,
                         total_orders: 25,
                         validated_orders: 0,
                         total_kilos: 3817,
@@ -96,11 +130,22 @@ export default function RectificacionListPage() {
                         vehicle_plate: 'PMW071',
                         driver_name: 'ALARCÓN JORGE',
                         status: 'in_picking',
-                        picking_pct: 21,
+                        picking_pct: 39,
                         total_orders: 5,
                         validated_orders: 0,
                         total_kilos: 1530,
                         created_at: new Date(Date.now() - 3600000).toISOString()
+                    },
+                    {
+                        id: 'route-wfw369',
+                        vehicle_plate: 'WFW369',
+                        driver_name: 'TRUJILLO MANUEL',
+                        status: 'in_picking',
+                        picking_pct: 12,
+                        total_orders: 11,
+                        validated_orders: 0,
+                        total_kilos: 1552,
+                        created_at: new Date(Date.now() - 7200000).toISOString()
                     }
                 ]);
             }
