@@ -393,6 +393,25 @@ export default function QuoteDetailPage() {
                     </div>
                 </div>
 
+                {lead && (
+                    <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '1rem 1.5rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#16A34A', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
+                            🔥 Prospecto Vinculado (CRM Lead #{lead.id})
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem', color: '#374151', marginTop: '6px' }}>
+                            <div><strong>Contacto:</strong> {lead.contact_name || lead.company_name}</div>
+                            {lead.nit && <div><strong>NIT:</strong> {lead.nit}</div>}
+                            {lead.phone && <div><strong>Teléfono:</strong> {lead.phone}</div>}
+                            {lead.email && <div><strong>Email:</strong> {lead.email}</div>}
+                            {(lead.address || lead.municipality) && (
+                                <div style={{ gridColumn: 'span 2' }}><strong>Dirección Declarada:</strong> {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
+                            )}
+                            {lead.business_type && <div><strong>Tipo Negocio:</strong> {lead.business_type}</div>}
+                            {lead.business_size && <div><strong>Tamaño:</strong> {lead.business_size}</div>}
+                        </div>
+                    </div>
+                )}
+
                 {/* ITEMS TABLE */}
                 <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>

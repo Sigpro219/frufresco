@@ -179,7 +179,7 @@ function CreateQuotePageContent() {
             if (cErr) console.warn('Error fetching profiles:', cErr);
             if (cData) setClients(cData || []);
 
-            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email, business_type, business_size').order('company_name');
+            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email, business_type, business_size, nit, address, municipality').order('company_name');
             if (lErr) console.warn('Error fetching leads:', lErr);
             if (lData) setLeads(lData || []);
 
@@ -949,9 +949,6 @@ function CreateQuotePageContent() {
                                         </div>
                                         {selectedLeadId ? (
                                             <>
-                                                <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>
-                                                    Lead ID: #{selectedLeadId} • Tel: {leads.find(l => l.id === selectedLeadId)?.phone || 'Sin teléfono'}
-                                                </div>
                                                 {(() => {
                                                     const lead = leads.find(l => l.id === selectedLeadId);
                                                     if (!lead) return null;
@@ -966,17 +963,26 @@ function CreateQuotePageContent() {
                                                         else if (bSize.includes('Pequeño') || bSize.includes('< 10M') || bSize.includes('Peq')) { sizeBg = '#FEE2E2'; sizeTextCol = '#B91C1C'; sizeDot = '🔴 '; }
                                                     }
                                                     return (
-                                                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-                                                            {bType && (
-                                                                <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                                                    {bType}
-                                                                </span>
+                                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', lineHeight: '1.4', marginTop: '4px' }}>
+                                                            <div>
+                                                                Lead ID: #{selectedLeadId} {lead.nit ? `• NIT: ${lead.nit}` : ''} • Tel: {lead.phone || 'Sin teléfono'}
+                                                            </div>
+                                                            {lead.email && <div>Email: {lead.email}</div>}
+                                                            {(lead.address || lead.municipality) && (
+                                                                <div>Dirección: {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
                                                             )}
-                                                            {bSize && (
-                                                                <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                                                    {sizeDot}{bSize}
-                                                                </span>
-                                                            )}
+                                                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                                {bType && (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                        {bType}
+                                                                    </span>
+                                                                )}
+                                                                {bSize && (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                        {sizeDot}{bSize}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })()}
@@ -1147,6 +1153,7 @@ function CreateQuotePageContent() {
                             {selectedClientInfo ? (
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                                     {selectedClientInfo.company_name && <div>{selectedClientInfo.company_name}</div>}
+                                    {selectedClientInfo.nit && <div>NIT: {selectedClientInfo.nit}</div>}
                                     {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
                                     {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
                                     {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
@@ -1154,9 +1161,14 @@ function CreateQuotePageContent() {
                             ) : selectedLeadInfo ? (
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                                     {selectedLeadInfo.company_name && <div>{selectedLeadInfo.company_name}</div>}
+                                    {selectedLeadInfo.nit && <div>NIT: {selectedLeadInfo.nit}</div>}
                                     {selectedLeadInfo.contact_name && <div>Atención: {selectedLeadInfo.contact_name}</div>}
                                     {selectedLeadInfo.phone && <div>Teléfono: {selectedLeadInfo.phone}</div>}
                                     {selectedLeadInfo.email && <div>Email: {selectedLeadInfo.email}</div>}
+                                    {(selectedLeadInfo.address || selectedLeadInfo.municipality) && (
+                                        <div>Dirección: {selectedLeadInfo.address || ''}{selectedLeadInfo.municipality ? ` - ${selectedLeadInfo.municipality}` : ''}</div>
+                                    )}
+                                    {selectedLeadInfo.business_type && <div>Tipo de Negocio: {selectedLeadInfo.business_type}</div>}
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>

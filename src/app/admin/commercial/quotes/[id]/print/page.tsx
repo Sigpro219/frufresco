@@ -245,6 +245,7 @@ export default function PrintQuotePage() {
                         {clientInfo ? (
                             <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                                 {clientInfo.company_name && <div>{clientInfo.company_name}</div>}
+                                {clientInfo.nit && <div>NIT: {clientInfo.nit}</div>}
                                 {clientInfo.contact_name && <div>Atención: {clientInfo.contact_name}</div>}
                                 {clientInfo.phone && <div>Teléfono: {clientInfo.phone}</div>}
                                 {clientInfo.address && <div>Dirección: {clientInfo.address}</div>}
@@ -252,9 +253,14 @@ export default function PrintQuotePage() {
                         ) : lead ? (
                             <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
                                 {lead.company_name && <div>{lead.company_name}</div>}
+                                {lead.nit && <div>NIT: {lead.nit}</div>}
                                 {lead.contact_name && <div>Atención: {lead.contact_name}</div>}
                                 {lead.phone && <div>Teléfono: {lead.phone}</div>}
                                 {lead.email && <div>Email: {lead.email}</div>}
+                                {(lead.address || lead.municipality) && (
+                                    <div>Dirección: {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
+                                )}
+                                {lead.business_type && <div>Tipo de Negocio: {lead.business_type}</div>}
                             </div>
                         ) : (
                             <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
