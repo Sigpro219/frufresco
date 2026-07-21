@@ -81,7 +81,7 @@ export async function GET(request: Request) {
 
         // Ordenar candidatos por fecha descendente
         candidateOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        lastOrder = candidateOrders[0] || null;
+        const lastOrder = candidateOrders[0] || null;
 
         if (!lastOrder) {
             return NextResponse.json({ error: 'No encontramos compras anteriores asociadas a tus datos.' }, { status: 404 });

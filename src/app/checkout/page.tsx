@@ -711,7 +711,7 @@ export default function CheckoutPage() {
                     }}>
                         <h1 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.8rem', 
+                            fontSize: '1.4rem', 
                             fontWeight: '900', 
                             color: 'var(--text-main)', 
                             margin: 0,
@@ -1055,7 +1055,7 @@ export default function CheckoutPage() {
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.25rem', 
+                            fontSize: '1.4rem', 
                             fontWeight: '900', 
                             marginBottom: '1.25rem', 
                             color: 'var(--text-main)', 
