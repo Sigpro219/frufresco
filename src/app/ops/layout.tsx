@@ -2,7 +2,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { 
@@ -213,7 +213,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 {hasPermission('ops.picking.terminal') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
                 {hasPermission('ops.picking.dashboard') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
                 {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />}
-                <NavItem href="/ops" icon={Home} label="INICIO" highlight />
+                <NavItem href="/ops" icon={Home} label="INICIO" />
             </nav>
             <style jsx global>{`
                 :root {
@@ -272,6 +272,17 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                     color: var(--ops-text);
                 }
                 
+                /* EFECO MACBOOK DOCK TRANSITIONS */
+                .ops-nav-item {
+                    transform-origin: bottom center;
+                }
+                .ops-nav-item:hover {
+                    transform: scale(1.28) translateY(-6px) !important;
+                }
+                .ops-nav-item:hover .icon-wrapper {
+                    color: var(--ops-primary) !important;
+                }
+                
                 @media (max-width: 480px) {
                     .desktop-text { display: none !important; }
                     .mobile-text { display: inline !important; }
@@ -286,22 +297,57 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     );
 }
 
-function NavItem({ href, icon: Icon, label, highlight = false }: { href: string, icon: any, label: string, highlight?: boolean }) {
+function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: string }) {
+    const pathname = usePathname();
+    const isActive = href === '/ops' ? pathname === '/ops' : pathname.startsWith(href);
+    
     return (
-        <Link href={href} style={{ 
+        <Link href={href} className="ops-nav-item" style={{ 
             textAlign: 'center', 
             textDecoration: 'none', 
-            color: highlight ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+            color: isActive ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '4px',
-            flex: 1
+            flex: 1,
+            position: 'relative',
+            transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s',
+            transformOrigin: 'bottom center',
+            paddingBottom: '2px'
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon size={20} strokeWidth={1.8} />
+            <div className="icon-wrapper" style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                transition: 'color 0.2s, transform 0.2s'
+            }}>
+                <Icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.2 : 1.8} style={{
+                    filter: isActive ? 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.35))' : 'none',
+                    transition: 'all 0.2s'
+                }} />
             </div>
-            <div style={{ fontSize: '0.55rem', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '2px' }}>{label}</div>
+            <div style={{ 
+                fontSize: '0.55rem', 
+                fontWeight: 'bold', 
+                letterSpacing: '0.05em', 
+                marginTop: '2px',
+                color: isActive ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+                transition: 'color 0.2s'
+            }}>{label}</div>
+            
+            {/* Indicador de MacBook Dock (Active Dot) */}
+            {isActive && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '-6px',
+                    width: '4px',
+                    height: '4px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--ops-primary)',
+                    boxShadow: '0 0 6px var(--ops-primary)'
+                }} />
+            )}
         </Link>
     );
 }
