@@ -1182,9 +1182,7 @@ function CreateQuotePageContent() {
                                         <div>{selectedClientInfo.company_name}</div>
                                     )}
                                     {selectedClientInfo.nit && <div>NIT: {selectedClientInfo.nit}</div>}
-                                    {selectedClientInfo.contact_name && selectedClientInfo.contact_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
-                                        <div>Atención: {selectedClientInfo.contact_name}</div>
-                                    )}
+                                    {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
                                     {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
                                     {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
                                 </div>
@@ -1194,9 +1192,7 @@ function CreateQuotePageContent() {
                                         <div>{selectedLeadInfo.company_name}</div>
                                     )}
                                     {selectedLeadInfo.nit && <div>NIT: {selectedLeadInfo.nit}</div>}
-                                    {selectedLeadInfo.contact_name && selectedLeadInfo.contact_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
-                                        <div>Atención: {selectedLeadInfo.contact_name}</div>
-                                    )}
+                                    {selectedLeadInfo.contact_name && <div>Atención: {selectedLeadInfo.contact_name}</div>}
                                     {selectedLeadInfo.phone && <div>Teléfono: {selectedLeadInfo.phone}</div>}
                                     {selectedLeadInfo.email && <div>Email: {selectedLeadInfo.email}</div>}
                                     {(selectedLeadInfo.address || selectedLeadInfo.municipality) && (

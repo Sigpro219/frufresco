@@ -248,9 +248,7 @@ export default function PrintQuotePage() {
                                     <div>{clientInfo.company_name}</div>
                                 )}
                                 {clientInfo.nit && <div>NIT: {clientInfo.nit}</div>}
-                                {clientInfo.contact_name && clientInfo.contact_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
-                                    <div>Atención: {clientInfo.contact_name}</div>
-                                )}
+                                {clientInfo.contact_name && <div>Atención: {clientInfo.contact_name}</div>}
                                 {clientInfo.phone && <div>Teléfono: {clientInfo.phone}</div>}
                                 {clientInfo.address && <div>Dirección: {clientInfo.address}</div>}
                             </div>
@@ -260,9 +258,7 @@ export default function PrintQuotePage() {
                                     <div>{lead.company_name}</div>
                                 )}
                                 {lead.nit && <div>NIT: {lead.nit}</div>}
-                                {lead.contact_name && lead.contact_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
-                                    <div>Atención: {lead.contact_name}</div>
-                                )}
+                                {lead.contact_name && <div>Atención: {lead.contact_name}</div>}
                                 {lead.phone && <div>Teléfono: {lead.phone}</div>}
                                 {lead.email && <div>Email: {lead.email}</div>}
                                 {(lead.address || lead.municipality) && (
