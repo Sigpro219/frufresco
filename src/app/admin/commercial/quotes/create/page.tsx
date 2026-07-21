@@ -384,11 +384,11 @@ function CreateQuotePageContent() {
         }
     };
 
-    const sortItemsBySku = (itemsList: any[]) => {
+    const sortItemsByAccountingId = (itemsList: any[]) => {
         return [...itemsList].sort((a, b) => {
-            const skuA = (a.sku || a.name || '').toString().toLowerCase();
-            const skuB = (b.sku || b.name || '').toString().toLowerCase();
-            return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+            const idA = (a.accounting_id || a.sku || a.name || '').toString().toLowerCase();
+            const idB = (b.accounting_id || b.sku || b.name || '').toString().toLowerCase();
+            return idA.localeCompare(idB, 'es', { numeric: true, sensitivity: 'base' });
         });
     };
 
@@ -415,7 +415,7 @@ function CreateQuotePageContent() {
             const price = calculateFinalPrice(item.cost, margin);
             return { ...item, margin, price };
         });
-        setItems(sortItemsBySku(updated));
+        setItems(sortItemsByAccountingId(updated));
     };
 
     const calculateFinalPrice = (cost: number, marginPercent: number) => {
@@ -502,11 +502,11 @@ function CreateQuotePageContent() {
         const { data } = await supabase
             .from('products')
             .select(`
-                id, name, unit_of_measure, iva_rate,
+                id, name, unit_of_measure, iva_rate, accounting_id,
                 product_variants (*)
             `)
             .eq('is_active', true)
-            .or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
+            .or(`name.ilike.%${term}%,accounting_id.ilike.%${term}%`)
             .limit(10);
             
         if (data) {
@@ -529,11 +529,11 @@ function CreateQuotePageContent() {
         const clientNickname = nicknames.find(n => n.product_id === product.id);
         const displayName = clientNickname ? clientNickname.nickname : (variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name);
 
-        setItems(sortItemsBySku([...items, {
+        setItems(sortItemsByAccountingId([...items, {
             product_id: product.id,
             variant_id: variant?.id || null,
             name: displayName,
-            sku: variant?.sku || product.sku,
+            accounting_id: product.accounting_id || product.id?.slice(0, 8),
             unit: product.unit_of_measure,
             cost: cost,
             margin: baseMargin,
@@ -1394,7 +1394,7 @@ function CreateQuotePageContent() {
                     <div className="no-print" style={{ marginTop: '2rem', padding: '2rem', backgroundColor: '#F9FAFB', borderRadius: '8px', border: '1px dashed #D1D5DB' }}>
                         <h3 style={{ marginTop: 0 }}>Agregar Producto</h3>
                         <div style={{ position: 'relative' }}>
-                            <input placeholder="Buscar SKU..." value={searchTerm} onChange={e => handleSearch(e.target.value)} disabled={!selectedModelId} style={{ width: '100%', padding: '1rem' }} />
+                            <input placeholder="Buscar producto por nombre o ID contable..." value={searchTerm} onChange={e => handleSearch(e.target.value)} disabled={!selectedModelId} style={{ width: '100%', padding: '1rem' }} />
                             {searchResults.length > 0 && (
                                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 10px 15px rgba(0,0,0,0.1)', borderRadius: '0 0 8px 8px', border: '1px solid #D1D5DB', maxHeight: '300px', overflowY: 'auto' }}>
                                     {searchResults.map(p => (

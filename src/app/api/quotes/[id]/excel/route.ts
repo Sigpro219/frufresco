@@ -56,14 +56,14 @@ export async function GET(
         // 3. Obtener los ítems de la cotización
         const { data: rawItems } = await supabaseAdmin
             .from('quote_items')
-            .select('*, products(name, sku, unit_of_measure)')
+            .select('*, products(name, accounting_id, unit_of_measure)')
             .eq('quote_id', id);
 
-        // Ordenar los ítems por SKU alfabéticamente
+        // Ordenar los ítems por ID Contable alfabéticamente/numéricamente
         const items = [...(rawItems || [])].sort((a, b) => {
-            const skuA = (a.products?.sku || a.sku || a.products?.name || a.product_name || '').toString().toLowerCase();
-            const skuB = (b.products?.sku || b.sku || b.products?.name || b.product_name || '').toString().toLowerCase();
-            return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+            const idA = (a.products?.accounting_id || a.products?.name || a.product_name || '').toString().toLowerCase();
+            const idB = (b.products?.accounting_id || b.products?.name || b.product_name || '').toString().toLowerCase();
+            return idA.localeCompare(idB, 'es', { numeric: true, sensitivity: 'base' });
         });
 
         const formattedQuoteNum = formatQuoteNumber(quote.quote_number, quote.created_at);
@@ -94,12 +94,12 @@ export async function GET(
 
         // Encabezados de la Tabla de Productos
         const headerRowIndex = rows.length + 1; // 10
-        rows.push(['#', 'SKU', 'DESCRIPCIÓN DEL PRODUCTO', 'CANTIDAD', 'UNIDAD', 'IVA %', 'VALOR UNITARIO ($)', 'TOTAL ($)']);
+        rows.push(['#', 'ID CONTABLE', 'DESCRIPCIÓN DEL PRODUCTO', 'CANTIDAD', 'UNIDAD', 'IVA %', 'VALOR UNITARIO ($)', 'TOTAL ($)']);
 
         const startItemRow = headerRowIndex + 1; // 11
         items.forEach((item, index) => {
             const rowNum = startItemRow + index;
-            const sku = item.products?.sku || item.sku || '-';
+            const itemCode = item.products?.accounting_id || item.product_id?.slice(0, 8) || '-';
             const name = item.products?.name || item.product_name || 'Producto';
             const qty = Number(item.quantity) || 0;
             const unit = item.unit || item.products?.unit_of_measure || 'Kg';
@@ -109,7 +109,7 @@ export async function GET(
             // Fila de datos con fórmula nativa de multiplicación para Total
             rows.push([
                 index + 1,
-                sku,
+                itemCode,
                 name,
                 qty,
                 unit,
