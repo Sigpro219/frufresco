@@ -210,11 +210,11 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             }}>
                 {hasPermission('ops.compras') && <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />}
                 {hasPermission('ops.recogida') && <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />}
-                {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />}
+                {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECEPCIÓN" />}
                 {hasPermission('ops.picking.terminal') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
                 {hasPermission('ops.picking.dashboard') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
                 <NavItem href="/ops/rectificacion" icon={ClipboardCheck} label="RECTIFICAR" />
-                {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />}
+                {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="TRANSPORTE" />}
                 <NavItem href="/ops" icon={Home} label="INICIO" />
             </nav>
             <style jsx global>{`

@@ -209,7 +209,7 @@ export default function RectificacionListPage() {
                         <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#F59E0B' }}>{stats.ready}</div>
                     </div>
                     <div style={{ padding: '0.6rem 1rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '14px', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#10B981', letterSpacing: '0.05em' }}>DESPACHADOS</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#10B981', letterSpacing: '0.05em' }}>EN TRANSPORTE</div>
                         <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#10B981' }}>{stats.completed}</div>
                     </div>
                 </div>
@@ -323,7 +323,7 @@ export default function RectificacionListPage() {
                         let badgeBorder = 'rgba(16, 185, 129, 0.3)';
 
                         if (isCompleted) {
-                            badgeLabel = 'DESPACHADO';
+                            badgeLabel = 'EN TRANSPORTE';
                             badgeBg = 'rgba(16, 185, 129, 0.15)';
                             badgeColor = '#10B981';
                             badgeBorder = 'rgba(16, 185, 129, 0.3)';

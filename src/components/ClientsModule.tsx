@@ -39,7 +39,10 @@ import {
     Plus,
     User,
     List,
-    Grid
+    Grid,
+    Lock,
+    CheckCircle2,
+    AlertCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -3598,6 +3601,43 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     }, [editData?.id]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
+    // B2B access credentials states
+    const [b2bAccess, setB2bAccess] = useState<{ hasAccess: boolean, email?: string, createdAt?: string } | null>(null);
+    const [loadingAccess, setLoadingAccess] = useState(false);
+    const [showCredentialModal, setShowCredentialModal] = useState(false);
+    const [tempPassword, setTempPassword] = useState('');
+    const [tempEmail, setTempEmail] = useState('');
+    const [generatingAccess, setGeneratingAccess] = useState(false);
+    const [generatedCreds, setGeneratedCreds] = useState<{ email: string, pass: string } | null>(null);
+
+    const checkB2bAccess = async () => {
+        if (!isEdit || !isB2B) return;
+        setLoadingAccess(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) return;
+
+            const res = await fetch(`/api/b2b/create-account?profileId=${editData.id}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setB2bAccess(data);
+            }
+        } catch (e) {
+            console.error('Error checking B2B access:', e);
+        } finally {
+            setLoadingAccess(false);
+        }
+    };
+
+    useEffect(() => {
+        checkB2bAccess();
+    }, [isEdit, isB2B, editData?.id]);
+
     const [branches, setBranches] = useState<Profile[]>([]);
 
     const fetchBranches = async () => {
@@ -4261,6 +4301,76 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </div>
                             )}
                         </section>
+
+                        {/* BLOQUE: SEGURIDAD Y ACCESO B2B */}
+                        {isB2B && isReadOnly && isEdit && (
+                            <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SEGURIDAD Y ACCESO AL PORTAL</h4>
+                                </div>
+
+                                {loadingAccess ? (
+                                    <div style={{ padding: '1rem', color: THEME.colors.textSecondary, fontStyle: 'italic', fontSize: '0.85rem' }}>
+                                        Comprobando estado de acceso...
+                                    </div>
+                                ) : b2bAccess?.hasAccess ? (
+                                    <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1.2rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#047857', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <CheckCircle2 size={16} /> ACCESO INSTITUCIONAL ACTIVO
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#065F46', fontWeight: '500' }}>
+                                            El cliente tiene una cuenta activa vinculada en el sistema.
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.4rem', borderTop: '1px dashed #A7F3D0', paddingTop: '0.6rem', fontSize: '0.8rem' }}>
+                                            <div>
+                                                <span style={{ color: '#065F46', fontWeight: '800', display: 'block', textTransform: 'uppercase', fontSize: '0.65rem' }}>Usuario (Email)</span>
+                                                <span style={{ color: '#064E3B', fontWeight: '700' }}>{b2bAccess.email}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#065F46', fontWeight: '800', display: 'block', textTransform: 'uppercase', fontSize: '0.65rem' }}>Creado el</span>
+                                                <span style={{ color: '#064E3B', fontWeight: '700' }}>{new Date(b2bAccess.createdAt || '').toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1.2rem', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748B', fontWeight: '900', fontSize: '0.85rem' }}>
+                                                <AlertCircle size={16} /> SIN ACCESO AL PORTAL B2B
+                                            </div>
+                                            <p style={{ margin: '0.3rem 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>
+                                                Este cliente no tiene una cuenta de usuario en Supabase Auth y no puede ingresar al Portal Institucional.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTempEmail(formData.email || formData.contact_email || '');
+                                                setTempPassword(Math.random().toString(36).substring(2, 10) + 'A1*');
+                                                setGeneratedCreds(null);
+                                                setShowCredentialModal(true);
+                                            }}
+                                            style={{
+                                                padding: '0.6rem 1.2rem',
+                                                backgroundColor: THEME.colors.primary,
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '12px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 10px rgba(13, 122, 87, 0.15)',
+                                                fontFamily: THEME.typography.fontFamilyMain,
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            Generar Acceso B2B
+                                        </button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
                         {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ) */}
                         {formData.is_corporate_parent && (

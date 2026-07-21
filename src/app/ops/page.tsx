@@ -189,7 +189,7 @@ export default function OpsHome() {
                         <div className="op-icon-wrapper" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--ops-primary)' }}>
                             <Truck size={24} strokeWidth={1.5} />
                         </div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DESPACHO</div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>TRANSPORTE</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--ops-primary)', fontWeight: 600 }}>Salida a Ruta de Conductores</div>
                     </div>
                 </Link>

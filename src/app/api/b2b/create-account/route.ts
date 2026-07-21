@@ -13,6 +13,65 @@ const supabase = isUrlValid ? createClient(supabaseUrl, supabaseKey, {
     }
 }) : null as any;
 
+export async function GET(request: Request) {
+    try {
+        if (!supabase) {
+            return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 500 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const profileId = searchParams.get('profileId');
+
+        if (!profileId) {
+            return NextResponse.json({ error: 'Falta profileId' }, { status: 400 });
+        }
+
+        // Validar Token de Autorización del Administrador
+        const authHeader = request.headers.get('Authorization');
+        const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+        if (!token) {
+            return NextResponse.json({ error: 'Acceso no autorizado' }, { status: 401 });
+        }
+
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        if (authError || !user) {
+            return NextResponse.json({ error: 'Sesión inválida o expirada' }, { status: 401 });
+        }
+
+        const { data: callerProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError || !callerProfile) {
+            return NextResponse.json({ error: 'Error al comprobar rol' }, { status: 403 });
+        }
+
+        const staffRoles = ['admin', 'sys_admin'];
+        if (!staffRoles.includes(callerProfile.role)) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+        }
+
+        // Consultar el usuario en Supabase Auth
+        const { data: { user: targetUser }, error: getError } = await supabase.auth.admin.getUserById(profileId);
+
+        if (getError || !targetUser) {
+            return NextResponse.json({ hasAccess: false });
+        }
+
+        return NextResponse.json({
+            hasAccess: true,
+            email: targetUser.email,
+            createdAt: targetUser.created_at
+        });
+
+    } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+}
+
 export async function POST(request: Request) {
     try {
         if (!supabase) {

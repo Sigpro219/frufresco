@@ -492,7 +492,7 @@ export default function RouteRectificationDetailPage() {
                                 boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'
                             }}
                         >
-                            <Truck size={16} /> LIBERAR A DESPACHO
+                            <Truck size={16} /> LIBERAR A TRANSPORTE
                         </button>
                     )}
                 </div>
