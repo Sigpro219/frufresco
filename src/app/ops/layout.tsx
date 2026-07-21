@@ -202,8 +202,8 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 borderTop: '1px solid var(--ops-border)',
                 display: 'flex',
                 justifyContent: 'space-around',
-                padding: '0.65rem 0',
-                paddingBottom: 'calc(0.65rem + env(safe-area-inset-bottom, 0px))',
+                padding: '0.4rem 0',
+                paddingBottom: 'calc(0.4rem + env(safe-area-inset-bottom, 0px))',
                 zIndex: 100,
                 boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
             }}>
@@ -314,7 +314,7 @@ function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: 
             position: 'relative',
             transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s',
             transformOrigin: 'bottom center',
-            paddingBottom: '4px'
+            paddingBottom: '0px'
         }}>
             <div className="icon-wrapper" style={{ 
                 display: 'flex', 
@@ -341,19 +341,6 @@ function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: 
                 transition: 'color 0.2s',
                 textShadow: isActive ? '0 0 8px rgba(16, 185, 129, 0.2)' : 'none'
             }}>{label}</div>
-            
-            {/* Indicador de MacBook Dock (Active Dot) */}
-            {isActive && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '-4px',
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--ops-primary)',
-                    boxShadow: '0 0 8px var(--ops-primary)'
-                }} />
-            )}
         </Link>
     );
 }
