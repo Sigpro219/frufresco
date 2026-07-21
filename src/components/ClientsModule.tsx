@@ -1389,7 +1389,9 @@ export default function ClientsModule() {
 
                         {/* BUSCADOR ESTÁNDAR FLEXIBLE (OCUPANDO TODO EL ESPACIO) */}
                         <div style={{ position: 'relative', flex: 1 }}>
-                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
+                            <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                <Search size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                            </span>
                             <input 
                                 type="text"
                                 placeholder={activeTab === 'b2b' ? "Buscar por NIT, nombre comercial, contacto, sucursal, ciudad, email o teléfono..." : activeTab === 'b2c' ? "Buscar cliente hogar por nombre, nit, contacto o teléfono..." : "Buscar prospecto por empresa, nombre, notas, tipo o contacto..."}
@@ -1520,7 +1522,7 @@ export default function ClientsModule() {
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
                                             <div>
                                                 <div style={{ fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
-                                                    <span style={{ fontSize: '1rem' }}>⚡</span> Comandos de Búsqueda (@)
+                                                    <Sparkles size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Comandos de Búsqueda (@)
                                                 </div>
                                                 <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500', marginTop: '2px' }}>
                                                     Haz clic en una opción o escribe cualquier ciudad (ej: <code style={{ backgroundColor: '#F1F5F9', color: '#059669', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>@villavicencio</code>)
@@ -1530,7 +1532,7 @@ export default function ClientsModule() {
                                                 onClick={() => setShowHelpTooltip(false)}
                                                 style={{ border: 'none', background: '#F1F5F9', color: '#64748B', width: '26px', height: '26px', borderRadius: '8px', cursor: 'pointer', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                             >
-                                                ✕
+                                                <X size={14} strokeWidth={2} />
                                             </button>
                                         </div>
 
@@ -1543,15 +1545,15 @@ export default function ClientsModule() {
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     <button
                                                         onClick={() => setSearchTerm('@activo')}
-                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        🟢 @activo <span style={{ color: '#059669', fontWeight: '500' }}>Activas</span>
+                                                        <Check size={13} strokeWidth={2.5} style={{ color: '#059669' }} /> @activo <span style={{ color: '#059669', fontWeight: '500' }}>Activas</span>
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@inactivo')}
-                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        🔴 @inactivo <span style={{ color: '#DC2626', fontWeight: '500' }}>Inactivas</span>
+                                                        <X size={13} strokeWidth={2.5} style={{ color: '#DC2626' }} /> @inactivo <span style={{ color: '#DC2626', fontWeight: '500' }}>Inactivas</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -1564,15 +1566,15 @@ export default function ClientsModule() {
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     <button
                                                         onClick={() => setSearchTerm('@matriz')}
-                                                        style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        🏢 @matriz <span style={{ color: '#0284C7', fontWeight: '500' }}>Casas Matriz</span>
+                                                        <Building2 size={13} strokeWidth={2} style={{ color: '#0284C7' }} /> @matriz <span style={{ color: '#0284C7', fontWeight: '500' }}>Casas Matriz</span>
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@sucursal')}
-                                                        style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', color: '#C2410C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', color: '#C2410C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        📍 @sucursal <span style={{ color: '#EA580C', fontWeight: '500' }}>Sucursales</span>
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#EA580C' }} /> @sucursal <span style={{ color: '#EA580C', fontWeight: '500' }}>Sucursales</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -1585,21 +1587,21 @@ export default function ClientsModule() {
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     <button
                                                         onClick={() => setSearchTerm('@acuerdo_activo')}
-                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        ⚡ @acuerdo_activo <span style={{ color: '#059669', fontWeight: '500' }}>Vigente</span>
+                                                        <Sparkles size={13} strokeWidth={2} style={{ color: '#059669' }} /> @acuerdo_activo <span style={{ color: '#059669', fontWeight: '500' }}>Vigente</span>
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@vencido')}
-                                                        style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        ⚠️ @vencido <span style={{ color: '#D97706', fontWeight: '500' }}>Por Vencer</span>
+                                                        <AlertTriangle size={13} strokeWidth={2} style={{ color: '#D97706' }} /> @vencido <span style={{ color: '#D97706', fontWeight: '500' }}>Por Vencer</span>
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@sin_acuerdo')}
-                                                        style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#64748B', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#64748B', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        ⚪ @sin_acuerdo <span style={{ color: '#475569', fontWeight: '500' }}>Sin Acuerdo</span>
+                                                        <FileText size={13} strokeWidth={2} style={{ color: '#64748B' }} /> @sin_acuerdo <span style={{ color: '#475569', fontWeight: '500' }}>Sin Acuerdo</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -1612,27 +1614,27 @@ export default function ClientsModule() {
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     <button
                                                         onClick={() => setSearchTerm('@villavicencio')}
-                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        🌆 @villavicencio
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#7E22CE' }} /> @villavicencio
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@bogota')}
-                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        🌆 @bogota
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#7E22CE' }} /> @bogota
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@nogps')}
-                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        🗺️ @nogps <span style={{ color: '#DC2626', fontWeight: '500' }}>Sin GPS</span>
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#DC2626' }} /> @nogps <span style={{ color: '#DC2626', fontWeight: '500' }}>Sin GPS</span>
                                                     </button>
                                                     <button
                                                         onClick={() => setSearchTerm('@nit')}
-                                                        style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#4338CA', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}
+                                                        style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#4338CA', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
                                                     >
-                                                        📄 @nit <span style={{ color: '#4F46E5', fontWeight: '500' }}>Filtro NIT</span>
+                                                        <FileText size={13} strokeWidth={2} style={{ color: '#4F46E5' }} /> @nit <span style={{ color: '#4F46E5', fontWeight: '500' }}>Filtro NIT</span>
                                                     </button>
                                                 </div>
                                             </div>
