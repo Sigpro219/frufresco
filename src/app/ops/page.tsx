@@ -14,7 +14,9 @@ import {
   Activity,
   ArrowRight,
   Server,
-  ShieldAlert
+  ShieldAlert,
+  Monitor,
+  ClipboardCheck
 } from 'lucide-react';
 
 interface OpsStats {
@@ -134,6 +136,7 @@ export default function OpsHome() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
+                {/* 1. COMPRAS */}
                 <Link href="/ops/compras" style={{ textDecoration: 'none' }}>
                     <div className="card-op">
                         <div className="op-icon-wrapper">
@@ -144,6 +147,7 @@ export default function OpsHome() {
                     </div>
                 </Link>
 
+                {/* 2. RECOGIDA */}
                 <Link href="/ops/recogida" style={{ textDecoration: 'none' }}>
                     <div className="card-op">
                         <div className="op-icon-wrapper">
@@ -154,6 +158,7 @@ export default function OpsHome() {
                     </div>
                 </Link>
 
+                {/* 3. RECEPCIÓN */}
                 <Link href="/ops/recepcion" style={{ textDecoration: 'none' }}>
                     <div className="card-op">
                         <div className="op-icon-wrapper">
@@ -164,6 +169,7 @@ export default function OpsHome() {
                     </div>
                 </Link>
 
+                {/* 4. SUPERVISOR */}
                 <Link href="/ops/recepcion/supervisor" style={{ textDecoration: 'none' }}>
                     <div className="card-op">
                         <div className="op-icon-wrapper">
@@ -174,6 +180,7 @@ export default function OpsHome() {
                     </div>
                 </Link>
 
+                {/* 5. ALISTAMIENTO */}
                 <Link href="/ops/picking" style={{ textDecoration: 'none' }}>
                     <div className="card-op">
                         <div className="op-icon-wrapper">
@@ -184,6 +191,29 @@ export default function OpsHome() {
                     </div>
                 </Link>
 
+                {/* 6. TABLERO */}
+                <Link href="/ops/picking/dashboard" style={{ textDecoration: 'none' }}>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <Monitor size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>TABLERO</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Monitoreo de Células en Vivo</div>
+                    </div>
+                </Link>
+
+                {/* 7. RECTIFICACIÓN */}
+                <Link href="/ops/rectificacion" style={{ textDecoration: 'none' }}>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <ClipboardCheck size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>RECTIFICACIÓN</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Checker y Validación LIFO</div>
+                    </div>
+                </Link>
+
+                {/* 8. TRANSPORTE */}
                 <Link href="/ops/driver" style={{ textDecoration: 'none' }}>
                     <div className="card-op card-op-highlight">
                         <div className="op-icon-wrapper" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--ops-primary)' }}>
@@ -194,6 +224,18 @@ export default function OpsHome() {
                     </div>
                 </Link>
 
+                {/* 9. DEVOLUCIONES */}
+                <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <RotateCcw size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DEVOLUCIONES</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Retornos e Inconsistencias de Ruta</div>
+                    </div>
+                </Link>
+
+                {/* 10. CIERRE DE INVENTARIO */}
                 <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
                     <div className={`card-op ${stats.pendingAudits > 0 ? 'card-op-warning' : ''}`}>
                         <div className="op-icon-wrapper" style={{ 
@@ -210,16 +252,6 @@ export default function OpsHome() {
                         }}>
                             {stats.pendingAudits > 0 ? `⚠️ ${stats.pendingAudits} CONTEO(S) SOLICITADO(S)` : 'Operaciones de Piso'}
                         </div>
-                    </div>
-                </Link>
-
-                <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
-                    <div className="card-op">
-                        <div className="op-icon-wrapper">
-                            <RotateCcw size={24} strokeWidth={1.5} />
-                        </div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DEVOLUCIONES</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Retornos e Inconsistencias de Ruta</div>
                     </div>
                 </Link>
             </div>

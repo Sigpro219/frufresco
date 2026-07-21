@@ -5122,6 +5122,133 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 </form>
                 )}
             </div>
+
+            {/* MODAL PARA GENERAR CREDENCIALES B2B */}
+            {showCredentialModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', width: '100%', maxWidth: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: '900', color: THEME.colors.textMain, margin: '0 0 1rem', fontFamily: THEME.typography.fontFamilyMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Lock size={20} color={THEME.colors.primary} /> Otorgar Acceso B2B
+                        </h3>
+                        
+                        {!generatedCreds ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0, lineHeight: '1.4' }}>
+                                    Esto creará un usuario de inicio de sesión en Supabase Auth y lo vinculará automáticamente al perfil comercial actual.
+                                </p>
+                                
+                                <FormField 
+                                    label="Confirmar Correo de Acceso" 
+                                    value={tempEmail} 
+                                    onChange={setTempEmail} 
+                                    required 
+                                />
+                                
+                                <FormField 
+                                    label="Contraseña Temporal" 
+                                    value={tempPassword} 
+                                    onChange={setTempPassword} 
+                                    required 
+                                />
+
+                                <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowCredentialModal(false)}
+                                        style={{ flex: 1, padding: '0.6rem', border: '1px solid #D1D5DB', borderRadius: '10px', background: 'white', color: '#475569', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        disabled={generatingAccess}
+                                        onClick={async () => {
+                                            if (!tempEmail || !tempPassword) return alert('Email y contraseña son obligatorios');
+                                            setGeneratingAccess(true);
+                                            try {
+                                                const { data: { session } } = await supabase.auth.getSession();
+                                                const token = session?.access_token;
+                                                if (!token) return alert('Sesión de administrador no válida');
+
+                                                const res = await fetch('/api/b2b/create-account', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        'Authorization': `Bearer ${token}`
+                                                    },
+                                                    body: JSON.stringify({
+                                                        profileId: editData.id,
+                                                        email: tempEmail,
+                                                        password: tempPassword
+                                                    })
+                                                });
+                                                const data = await res.json();
+                                                if (res.ok && data.success) {
+                                                    setGeneratedCreds({ email: tempEmail, pass: tempPassword });
+                                                    checkB2bAccess();
+                                                } else {
+                                                    alert(data.error || 'Error al generar credenciales');
+                                                }
+                                            } catch (err: any) {
+                                                alert('Error de red: ' + err.message);
+                                            } finally {
+                                                setGeneratingAccess(false);
+                                            }
+                                        }}
+                                        style={{ flex: 1, padding: '0.6rem', border: 'none', borderRadius: '10px', background: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        {generatingAccess ? 'Generando...' : 'Confirmar Acceso'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1rem', borderRadius: '16px', color: '#047857', fontSize: '0.8rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    ✓ ACCESO CREADO CON ÉXITO
+                                </div>
+                                <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.4' }}>
+                                    Por favor copia estas credenciales temporales y compártelas de forma segura con el cliente institucional. Se le solicitará cambiar la contraseña en su primer ingreso.
+                                </p>
+                                
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                    <div>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Usuario / Email</span>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B' }}>{generatedCreds.email}</span>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Contraseña Temporal</span>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B', fontFamily: 'monospace' }}>{generatedCreds.pass}</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
+                                    <button 
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(`Credenciales FruFresco B2B:\nUsuario: ${generatedCreds.email}\nContraseña: ${generatedCreds.pass}\nIngresar en: ${window.location.origin}/login`);
+                                                alert('¡Credenciales copiadas al portapapeles!');
+                                            } catch (e) {
+                                                alert('No se pudo copiar automáticamente. Por favor cópialas manualmente.');
+                                            }
+                                        }}
+                                        style={{ flex: 1, padding: '0.6rem', border: `1px solid ${THEME.colors.primary}`, borderRadius: '10px', background: 'white', color: THEME.colors.primary, fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        Copiar Datos
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowCredentialModal(false)}
+                                        style={{ flex: 1, padding: '0.6rem', border: 'none', borderRadius: '10px', background: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        Entendido
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
