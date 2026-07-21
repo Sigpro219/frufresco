@@ -1185,20 +1185,25 @@ export default function PickingDashboard() {
                                         padding: '0.5rem 0'
                                     }}>
                                         {complete ? (
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                                            <span 
+                                                onClick={() => router.push('/ops/rectificacion')}
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center', cursor: 'pointer' }}
+                                                title="Ir a Rectificación de Cargue LIFO"
+                                            >
                                                 <span>✓ {zone.name.toUpperCase()}</span>
                                                 <span style={{
-                                                    background: '#EF4444',
+                                                    background: '#10B981',
                                                     color: '#fff',
                                                     fontSize: '0.7rem',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
                                                     marginLeft: '8px',
                                                     animation: 'pulseAlert 1s infinite',
                                                     fontWeight: '900',
-                                                    letterSpacing: '0.5px'
+                                                    letterSpacing: '0.5px',
+                                                    boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)'
                                                 }}>
-                                                    DESPACHAR YA 🚚💨
+                                                    RECTIFICAR CARGUE 📋
                                                 </span>
                                             </span>
                                         ) : (
