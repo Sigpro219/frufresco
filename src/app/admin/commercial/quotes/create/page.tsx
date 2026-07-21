@@ -546,7 +546,12 @@ function CreateQuotePageContent() {
 
     const updateQuantity = (index: number, val: any) => {
         const newItems = [...items];
-        newItems[index].quantity = val;
+        if (val === '' || val === null || val === undefined) {
+            newItems[index].quantity = val;
+        } else {
+            const numVal = parseFloat(val);
+            newItems[index].quantity = isNaN(numVal) ? '' : Math.max(0, numVal);
+        }
         setItems(newItems);
     };
 
@@ -555,7 +560,8 @@ function CreateQuotePageContent() {
         newItems[index].margin = newMargin;
         const numMargin = parseFloat(newMargin);
         if (!isNaN(numMargin)) {
-            newItems[index].price = newItems[index].cost * (1 + (numMargin / 100));
+            const calcPrice = newItems[index].cost * (1 + (numMargin / 100));
+            newItems[index].price = Math.max(0, calcPrice);
         } else {
             newItems[index].price = 0;
         }
@@ -564,12 +570,18 @@ function CreateQuotePageContent() {
 
     const handlePriceChange = (index: number, newPrice: any) => {
         const newItems = [...items];
-        newItems[index].price = newPrice;
-        const numPrice = parseFloat(newPrice);
-        if (!isNaN(numPrice) && newItems[index].cost > 0) {
-            newItems[index].margin = ((numPrice / newItems[index].cost) - 1) * 100;
-        } else {
+        if (newPrice === '' || newPrice === null || newPrice === undefined) {
+            newItems[index].price = newPrice;
             newItems[index].margin = 0;
+        } else {
+            const numPrice = parseFloat(newPrice);
+            const validPrice = isNaN(numPrice) ? 0 : Math.max(0, numPrice);
+            newItems[index].price = validPrice;
+            if (newItems[index].cost > 0) {
+                newItems[index].margin = ((validPrice / newItems[index].cost) - 1) * 100;
+            } else {
+                newItems[index].margin = 0;
+            }
         }
         setItems(newItems);
     };
@@ -580,6 +592,12 @@ function CreateQuotePageContent() {
         if (!clientName) { alert('Ingresa el nombre del cliente'); return null; }
         if (!selectedModelId) { alert('Selecciona un Modelo de Precios'); return null; }
         if (items.length === 0) { alert('Agrega al menos un producto'); return null; }
+
+        const invalidQtyItem = items.find(i => (parseFloat(i.quantity) || 0) <= 0);
+        if (invalidQtyItem) { alert(`La cantidad para "${invalidQtyItem.name}" debe ser mayor a 0.`); return null; }
+
+        const invalidPriceItem = items.find(i => (parseFloat(i.price) || 0) < 0);
+        if (invalidPriceItem) { alert(`El precio unitario para "${invalidPriceItem.name}" no puede ser negativo.`); return null; }
 
         setSaving(true);
         try {
@@ -1236,6 +1254,8 @@ function CreateQuotePageContent() {
                                             <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                 <input 
                                                     type="number" 
+                                                    min="0.01"
+                                                    step="any"
                                                     value={item.quantity === undefined || item.quantity === null ? '' : item.quantity} 
                                                     onChange={e => {
                                                         const raw = e.target.value;
@@ -1285,6 +1305,8 @@ function CreateQuotePageContent() {
                                             <div className="no-print">
                                                 <input 
                                                     type="number" 
+                                                    min="0"
+                                                    step="any"
                                                     value={item.price === undefined || item.price === null ? '' : item.price} 
                                                     onChange={e => {
                                                         const raw = e.target.value;
