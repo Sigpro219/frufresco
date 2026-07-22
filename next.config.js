@@ -4,10 +4,6 @@ const nextConfig = {
     // !! URGENTE: Ignorar errores de tipos para desbloquear despliegue inicial !!
     ignoreBuildErrors: true,
   },
-  eslint: {
-    // Ignorar linting durante el build
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: [
       {
