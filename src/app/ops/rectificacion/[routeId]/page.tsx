@@ -518,48 +518,74 @@ export default function RouteRectificationDetailPage() {
                 ))}
             </div>
 
-            {/* Sticky Bottom Bar (Posicionada por encima del nav footer) */}
+            {/* Floating Action Capsule (Perfectamente centrada por encima del nav dock) */}
             <div style={{ 
                 position: 'fixed', 
-                bottom: 'calc(54px + env(safe-area-inset-bottom, 0px))', 
-                left: 0, 
-                right: 0, 
-                backgroundColor: isFullyValidated ? '#065F46' : '#111827',
-                borderTop: '1px solid var(--ops-border)',
-                borderBottom: '1px solid rgba(0,0,0,0.5)',
-                padding: '0.75rem 1rem',
-                textAlign: 'center',
+                bottom: 'calc(66px + env(safe-area-inset-bottom, 0px))', 
+                left: '50%',
+                transform: 'translateX(-50%)',
+                maxWidth: '780px',
+                width: 'calc(100% - 32px)',
+                backgroundColor: isFullyValidated ? '#065F46' : '#121d2d',
+                borderRadius: '16px',
+                border: `1px solid ${isFullyValidated ? '#10B981' : 'rgba(245, 158, 11, 0.4)'}`,
+                padding: '0.75rem 1.25rem',
                 zIndex: 95,
-                boxShadow: '0 -6px 25px rgba(0,0,0,0.35)',
-                transition: 'background-color 0.3s'
+                boxShadow: isFullyValidated ? '0 8px 30px rgba(16, 185, 129, 0.3)' : '0 8px 30px rgba(0, 0, 0, 0.4)',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: isFullyValidated ? 'space-between' : 'center',
+                gap: '1rem',
+                flexWrap: 'wrap'
             }}>
-                <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                    <div style={{ fontWeight: '900', fontSize: '0.9rem', color: 'white', letterSpacing: '0.04em' }}>
-                        {isFullyValidated ? '¡CARGUE 100% RECTIFICADO!' : `FALTAN ${remainingStops} PEDIDOS POR VALIDAR`}
-                    </div>
-
-                    {isFullyValidated && (
-                        <button
-                            onClick={proceedToCertificationDigital}
-                            style={{
-                                padding: '0.6rem 1.25rem',
-                                borderRadius: '12px',
-                                border: 'none',
-                                backgroundColor: '#10B981',
-                                color: 'white',
-                                fontWeight: '900',
-                                fontSize: '0.85rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'
-                            }}
-                        >
-                            <ShieldCheck size={16} /> PASAR A CERTIFICACIÓN Y TRANSPORTE
-                        </button>
+                <div style={{ 
+                    fontWeight: '800', 
+                    fontSize: '0.88rem', 
+                    color: isFullyValidated ? '#ECFDF5' : '#FBBF24', 
+                    letterSpacing: '0.03em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    width: isFullyValidated ? 'auto' : '100%',
+                    textAlign: 'center'
+                }}>
+                    {isFullyValidated ? (
+                        <>
+                            <CheckCircle2 size={20} color="#34D399" /> ¡CARGUE 100% RECTIFICADO!
+                        </>
+                    ) : (
+                        <>
+                            <AlertTriangle size={18} color="#FBBF24" /> FALTAN {remainingStops} {remainingStops === 1 ? 'PEDIDO' : 'PEDIDOS'} POR VALIDAR
+                        </>
                     )}
                 </div>
+
+                {isFullyValidated && (
+                    <button
+                        onClick={proceedToCertificationDigital}
+                        style={{
+                            padding: '0.6rem 1.25rem',
+                            borderRadius: '12px',
+                            border: 'none',
+                            backgroundColor: '#10B981',
+                            color: 'white',
+                            fontWeight: '900',
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap',
+                            margin: '0 auto'
+                        }}
+                    >
+                        <ShieldCheck size={18} /> PASAR A CERTIFICACIÓN Y TRANSPORTE
+                    </button>
+                )}
             </div>
 
             {/* MODAL 1: PLANILLA EN PAPEL CON FOTO */}
