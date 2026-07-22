@@ -249,7 +249,7 @@ export default function RouteRectificationDetailPage() {
             const now = new Date().toISOString();
             const mode = paperPhotoUrl ? 'paper' : 'digital';
 
-            // Actualizar tabla routes en Supabase con los campos de auditoría y certificación
+            // 1. Actualizar la ruta en Supabase con auditoría y nuevo estado de rectificación
             await supabase
                 .from('routes')
                 .update({ 
@@ -262,6 +262,22 @@ export default function RouteRectificationDetailPage() {
                     is_certified_complete: true
                 })
                 .eq('id', routeId);
+
+            // 2. Actualizar sistemáticamente los pedidos de la ruta a 'ready_for_dispatch' en la base de datos
+            const { data: routeStops } = await supabase
+                .from('route_stops')
+                .select('order_id')
+                .eq('route_id', routeId);
+
+            if (routeStops && routeStops.length > 0) {
+                const orderIds = routeStops.map((s: any) => s.order_id).filter(Boolean);
+                if (orderIds.length > 0) {
+                    await supabase
+                        .from('orders')
+                        .update({ status: 'ready_for_dispatch' })
+                        .in('id', orderIds);
+                }
+            }
 
             setShowCertificationModal(false);
             alert(`🛡️ ¡CERTIFICACIÓN EXITOSA!\n\nLa ruta ${vehiclePlate} ha sido validada por ${checkerName || 'el usuario'} y liberada a Transporte.`);
@@ -280,7 +296,7 @@ export default function RouteRectificationDetailPage() {
     const isFullyValidated = totalStops > 0 && validatedCount === totalStops;
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text)', paddingBottom: '90px' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text)', paddingBottom: '160px' }}>
             {/* Header Flotante */}
             <div style={{ 
                 position: 'sticky', 
@@ -502,18 +518,19 @@ export default function RouteRectificationDetailPage() {
                 ))}
             </div>
 
-            {/* Sticky Bottom Bar */}
+            {/* Sticky Bottom Bar (Posicionada por encima del nav footer) */}
             <div style={{ 
                 position: 'fixed', 
-                bottom: '48px', 
+                bottom: 'calc(54px + env(safe-area-inset-bottom, 0px))', 
                 left: 0, 
                 right: 0, 
                 backgroundColor: isFullyValidated ? '#065F46' : '#111827',
                 borderTop: '1px solid var(--ops-border)',
-                padding: '0.85rem 1rem',
+                borderBottom: '1px solid rgba(0,0,0,0.5)',
+                padding: '0.75rem 1rem',
                 textAlign: 'center',
                 zIndex: 95,
-                boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
+                boxShadow: '0 -6px 25px rgba(0,0,0,0.35)',
                 transition: 'background-color 0.3s'
             }}>
                 <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
