@@ -54,23 +54,28 @@ export async function GET(req: NextRequest) {
             console.log(`[Run SQL] SUCCESS! Connected to pooler host: ${host}`);
             activeHost = host;
             
-            console.log("[Run SQL] Running query to add missing columns to 'mail'...");
+            console.log("[Run SQL] Running query to add missing audit columns to 'routes'...");
             await client.query(`
-                ALTER TABLE mail ADD COLUMN IF NOT EXISTS payload JSONB;
-                ALTER TABLE mail ADD COLUMN IF NOT EXISTS sender_email TEXT;
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS check_evidence_url TEXT;
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS check_mode TEXT DEFAULT 'digital';
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS rectified_by_id UUID REFERENCES public.profiles(id);
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS rectified_by_name TEXT;
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS rectified_at TIMESTAMPTZ;
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS is_certified_complete BOOLEAN DEFAULT FALSE;
+                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS certification_notes TEXT;
             `);
             
             const res = await client.query(`
                 SELECT column_name, data_type 
                 FROM information_schema.columns 
-                WHERE table_name = 'mail';
+                WHERE table_name = 'routes';
             `);
             
             await client.end();
             
             return NextResponse.json({
                 success: true,
-                message: "Missing columns 'payload' and 'sender_email' added to 'mail' table successfully.",
+                message: "Audit columns added to 'routes' table successfully.",
                 host: activeHost,
                 columns: res.rows
             });

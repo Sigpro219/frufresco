@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
 import { 
   ArrowLeft, 
   Info, 
@@ -11,12 +12,14 @@ import {
   Circle, 
   Camera, 
   FileText, 
-  Upload, 
   X, 
   PackageCheck,
   Truck,
   Check,
-  UserCheck
+  UserCheck,
+  ShieldCheck,
+  Lock,
+  AlertTriangle
 } from 'lucide-react';
 
 interface MerchandiseItem {
@@ -41,6 +44,7 @@ interface OrderStop {
 export default function RouteRectificationDetailPage() {
     const { routeId } = useParams();
     const router = useRouter();
+    const { profile } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [vehiclePlate, setVehiclePlate] = useState('NHP287');
@@ -53,6 +57,21 @@ export default function RouteRectificationDetailPage() {
     const [paperPhotoUrl, setPaperPhotoUrl] = useState<string | null>(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Modal Certificación de Salida Completa
+    const [showCertificationModal, setShowCertificationModal] = useState(false);
+    const [certifiedAgreed, setCertifiedAgreed] = useState(false);
+    const [submittingCertification, setSubmittingCertification] = useState(false);
+
+    // Autocompletar nombre de usuario desde la sesión activa
+    useEffect(() => {
+        if (profile) {
+            const activeUserDisplayName = profile.contact_name || profile.company_name || profile.email || '';
+            if (activeUserDisplayName && (!checkerName || checkerName.trim() === '')) {
+                setCheckerName(activeUserDisplayName);
+            }
+        }
+    }, [profile]);
 
     useEffect(() => {
         fetchRouteDetail();
@@ -189,10 +208,14 @@ export default function RouteRectificationDetailPage() {
         reader.readAsDataURL(file);
     };
 
-    // Confirmar Chequeo Manual en Papel y anexar foto
-    const confirmPaperCheck = async () => {
+    // Paso 1: Confirmar Anexo de Foto en Papel -> Pasar a Pantalla de Certificación
+    const proceedToCertificationFromPaper = () => {
         if (!checkerName.trim()) {
-            alert('Por favor ingresa el nombre de la persona responsable del chequeo.');
+            alert('Por favor confirma el nombre de la persona responsable.');
+            return;
+        }
+        if (!paperPhotoUrl) {
+            alert('Por favor adjunta una foto de la planilla física de cargue.');
             return;
         }
 
@@ -204,26 +227,50 @@ export default function RouteRectificationDetailPage() {
         })));
 
         setShowPaperModal(false);
-        alert(`✅ Chequeo en planilla física anexado con éxito por ${checkerName}. ¡Ruta lista para despacho!`);
+        setCertifiedAgreed(false);
+        setShowCertificationModal(true);
     };
 
-    // Liberar ruta a Despacho
-    const finalizeRectification = async () => {
+    // Paso 1b: Iniciar Certificación desde el flujo digital (Checklist en pantalla)
+    const proceedToCertificationDigital = () => {
+        setCertifiedAgreed(false);
+        setShowCertificationModal(true);
+    };
+
+    // Paso 2: Finalizar Certificación en Base de Datos y Liberar a Transporte
+    const finalizeCertification = async () => {
+        if (!certifiedAgreed) {
+            alert('Debes marcar la casilla de certificación formal para liberar la ruta.');
+            return;
+        }
+
+        setSubmittingCertification(true);
         try {
+            const now = new Date().toISOString();
+            const mode = paperPhotoUrl ? 'paper' : 'digital';
+
+            // Actualizar tabla routes en Supabase con los campos de auditoría y certificación
             await supabase
                 .from('routes')
                 .update({ 
                     status: 'rectified',
-                    check_evidence_url: paperPhotoUrl || null
+                    check_evidence_url: paperPhotoUrl || null,
+                    check_mode: mode,
+                    rectified_by_id: profile?.id || null,
+                    rectified_by_name: checkerName || profile?.contact_name || 'Usuario Activo',
+                    rectified_at: now,
+                    is_certified_complete: true
                 })
                 .eq('id', routeId);
 
-            alert('🚚 ¡Cargue 100% Rectificado! La ruta ha sido liberada al módulo de Despacho.');
+            setShowCertificationModal(false);
+            alert(`🛡️ ¡CERTIFICACIÓN EXITOSA!\n\nLa ruta ${vehiclePlate} ha sido validada por ${checkerName || 'el usuario'} y liberada a Transporte.`);
             router.push('/ops/driver');
         } catch (e) {
-            console.error('Error finalizando rectificación:', e);
-            alert('Ruta rectificada y enviada a Despacho.');
+            console.error('Error finalizando certificación de ruta:', e);
             router.push('/ops/driver');
+        } finally {
+            setSubmittingCertification(false);
         }
     };
 
@@ -233,7 +280,7 @@ export default function RouteRectificationDetailPage() {
     const isFullyValidated = totalStops > 0 && validatedCount === totalStops;
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text)', paddingBottom: '80px' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text)', paddingBottom: '90px' }}>
             {/* Header Flotante */}
             <div style={{ 
                 position: 'sticky', 
@@ -476,7 +523,7 @@ export default function RouteRectificationDetailPage() {
 
                     {isFullyValidated && (
                         <button
-                            onClick={finalizeRectification}
+                            onClick={proceedToCertificationDigital}
                             style={{
                                 padding: '0.6rem 1.25rem',
                                 borderRadius: '12px',
@@ -492,13 +539,13 @@ export default function RouteRectificationDetailPage() {
                                 boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'
                             }}
                         >
-                            <Truck size={16} /> LIBERAR A TRANSPORTE
+                            <ShieldCheck size={16} /> PASAR A CERTIFICACIÓN Y TRANSPORTE
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* MODAL PLANILLA EN PAPEL CON FOTO */}
+            {/* MODAL 1: PLANILLA EN PAPEL CON FOTO */}
             {showPaperModal && (
                 <div style={{ 
                     position: 'fixed', 
@@ -542,27 +589,32 @@ export default function RouteRectificationDetailPage() {
                             Registra la persona responsable del conteo y sube una fotografía legible de la planilla física de cargue.
                         </p>
 
-                        {/* Nombre de Responsable */}
+                        {/* Nombre de Responsable (Autocompletado de Sesión) */}
                         <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-text-muted)', marginBottom: '4px' }}>
-                                Responsable del Chequeo *
-                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
+                                    Responsable del Chequeo *
+                                </label>
+                                <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--ops-primary)', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '6px' }}>
+                                    ✓ Sesión Activa
+                                </span>
+                            </div>
                             <div style={{ position: 'relative' }}>
-                                <UserCheck size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ops-text-muted)' }} />
+                                <UserCheck size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ops-primary)' }} />
                                 <input 
                                     type="text" 
-                                    placeholder="Nombre de quien ejecuta el conteo..."
+                                    placeholder="Cargando nombre del usuario..."
                                     value={checkerName}
                                     onChange={e => setCheckerName(e.target.value)}
                                     style={{
                                         width: '100%',
                                         padding: '0.65rem 0.75rem 0.65rem 2.4rem',
                                         borderRadius: '12px',
-                                        border: '1px solid var(--ops-border)',
+                                        border: '1px solid var(--ops-primary)',
                                         backgroundColor: 'var(--ops-bg)',
                                         color: 'var(--ops-text)',
                                         fontSize: '0.85rem',
-                                        fontWeight: '700',
+                                        fontWeight: '800',
                                         outline: 'none'
                                     }}
                                 />
@@ -620,9 +672,9 @@ export default function RouteRectificationDetailPage() {
                             )}
                         </div>
 
-                        {/* Botón de Confirmación */}
+                        {/* Botón de Paso a Certificación */}
                         <button
-                            onClick={confirmPaperCheck}
+                            onClick={proceedToCertificationFromPaper}
                             disabled={!checkerName.trim() || !paperPhotoUrl}
                             style={{
                                 width: '100%',
@@ -640,8 +692,154 @@ export default function RouteRectificationDetailPage() {
                                 gap: '8px'
                             }}
                         >
-                            <Check size={16} /> ANEXAR FOTO Y RECTIFICAR RUTA
+                            <ShieldCheck size={16} /> CONTINUAR A CERTIFICACIÓN DE RUTA
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL 2: CERTIFICACIÓN Y DECLARACIÓN DE SALIDA DE RUTA COMPLETA */}
+            {showCertificationModal && (
+                <div style={{ 
+                    position: 'fixed', 
+                    top: 0, 
+                    left: 0, 
+                    right: 0, 
+                    bottom: 0, 
+                    backgroundColor: 'rgba(0,0,0,0.82)', 
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    zIndex: 220,
+                    padding: '1rem'
+                }}>
+                    <div style={{ 
+                        backgroundColor: 'var(--ops-surface)', 
+                        borderRadius: '24px', 
+                        border: '1px solid #10B981', 
+                        padding: '1.75rem',
+                        maxWidth: '520px',
+                        width: '100%',
+                        boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+                        position: 'relative'
+                    }}>
+                        <button 
+                            onClick={() => setShowCertificationModal(false)}
+                            style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: 'var(--ops-text-muted)', cursor: 'pointer' }}
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10B981', fontWeight: '900', fontSize: '0.8rem', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>
+                            <ShieldCheck size={20} />
+                            SEGUNDA VERIFICACIÓN - DECLARACIÓN FORMAL
+                        </div>
+                        <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', fontWeight: '900', color: 'var(--ops-text)', letterSpacing: '-0.02em' }}>
+                            Certificación de Ruta Completa
+                        </h3>
+                        <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.85rem', color: 'var(--ops-text-muted)', lineHeight: '1.4' }}>
+                            Por favor revisa y confirma que la mercancía sale 100% verificada antes de liberar el camión al módulo de Transporte.
+                        </p>
+
+                        {/* Tarjeta Resumen de Auditoría */}
+                        <div style={{ 
+                            backgroundColor: 'var(--ops-bg)', 
+                            borderRadius: '16px', 
+                            border: '1px solid var(--ops-border)', 
+                            padding: '1rem',
+                            marginBottom: '1.25rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.65rem'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>👤 REVISADO Y CERTIFICADO POR:</span>
+                                <span style={{ color: 'var(--ops-primary)', fontWeight: '900' }}>{checkerName || 'Usuario en Sesión'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>🚚 VEHÍCULO Y CONDUCTOR:</span>
+                                <span style={{ color: 'var(--ops-text)', fontWeight: '900' }}>{vehiclePlate} ({driverName})</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>📷 EVIDENCIA ADJUNTA:</span>
+                                <span style={{ color: paperPhotoUrl ? '#F59E0B' : '#10B981', fontWeight: '900' }}>
+                                    {paperPhotoUrl ? 'Planilla Física (Foto Adjunta)' : 'Checklist Digital de Pantalla'}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>🕒 FECHA Y HORA DE REGISTRO:</span>
+                                <span style={{ color: 'var(--ops-text-muted)', fontWeight: '700' }}>{new Date().toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        {/* Declaración de Responsabilidad (Checkbox obligatorio) */}
+                        <label style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            padding: '0.85rem',
+                            borderRadius: '14px',
+                            cursor: 'pointer',
+                            marginBottom: '1.5rem'
+                        }}>
+                            <input 
+                                type="checkbox" 
+                                checked={certifiedAgreed} 
+                                onChange={e => setCertifiedAgreed(e.target.checked)}
+                                style={{ marginTop: '3px', cursor: 'pointer', accentColor: '#10B981', width: '18px', height: '18px' }}
+                            />
+                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--ops-text)', lineHeight: '1.35' }}>
+                                Certifico formalmente que he auditado el cargue del camión <strong style={{ color: 'var(--ops-primary)' }}>{vehiclePlate}</strong> y confirmo que la ruta sale completa según especificación.
+                            </span>
+                        </label>
+
+                        {/* Botones de Acción */}
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowCertificationModal(false)}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--ops-border)',
+                                    backgroundColor: 'transparent',
+                                    color: 'var(--ops-text-muted)',
+                                    fontWeight: '800',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Volver a Revisar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={finalizeCertification}
+                                disabled={!certifiedAgreed || submittingCertification}
+                                style={{
+                                    flex: 2,
+                                    padding: '0.75rem',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    backgroundColor: certifiedAgreed ? '#10B981' : 'var(--ops-border)',
+                                    color: certifiedAgreed ? 'white' : 'var(--ops-text-muted)',
+                                    fontWeight: '900',
+                                    fontSize: '0.85rem',
+                                    cursor: certifiedAgreed && !submittingCertification ? 'pointer' : 'not-allowed',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    boxShadow: certifiedAgreed ? '0 4px 14px rgba(16, 185, 129, 0.4)' : 'none'
+                                }}
+                            >
+                                <Truck size={16} /> {submittingCertification ? 'CERTIFICANDO...' : '✓ CONFIRMAR Y ENVIAR A TRANSPORTE'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
