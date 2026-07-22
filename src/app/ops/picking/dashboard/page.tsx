@@ -406,6 +406,10 @@ export default function PickingDashboard() {
                 console.log('⚡ Order Update (Debouncing...):', payload);
                 debouncedLoadData();
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_stocks' }, (payload) => {
+                console.log('⚡ Instant Stock Update Received:', payload);
+                loadData(undefined, true);
+            })
             .on('broadcast', { event: 'refresh' }, (payload) => {
                 console.log('🚀 INSTANT BROADCAST RECEIVED:', payload);
                 loadData(undefined, true);
@@ -1461,6 +1465,21 @@ export default function PickingDashboard() {
                                                         {prodComplete ? '✓ ' : ''}{product.name}
                                                         <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: prodComplete ? '#10B981' : '#555' }}>
                                                             {product.unit_of_measure}
+                                                        </span>
+                                                        <span style={{ 
+                                                            marginLeft: '6px', 
+                                                            fontSize: '0.68rem', 
+                                                            fontWeight: '900', 
+                                                            backgroundColor: (product.current_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)', 
+                                                            color: (product.current_stock || 0) === 0 ? '#EF4444' : '#10B981', 
+                                                            border: `1px solid ${(product.current_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`, 
+                                                            padding: '1px 6px', 
+                                                            borderRadius: '6px', 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '3px' 
+                                                        }}>
+                                                            📦 {product.current_stock || 0} {product.unit_of_measure || 'Kg'}
                                                         </span>
                                                         {isRedRow && (
                                                             <span style={{ 
