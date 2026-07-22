@@ -1479,7 +1479,7 @@ export default function PickingDashboard() {
                                                             alignItems: 'center', 
                                                             gap: '3px' 
                                                         }}>
-                                                            📦 {product.current_stock || 0} {product.unit_of_measure || 'Kg'}
+                                                            📦 {(product.current_stock || 0).toLocaleString('es-CO')} {product.unit_of_measure || 'Kg'}
                                                         </span>
                                                         {isRedRow && (
                                                             <span style={{ 
