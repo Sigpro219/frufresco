@@ -1352,26 +1352,62 @@ export default function CheckoutPage() {
                                     const isCustomerOutOfZone = outOfZone && !isB2B;
                                     return (
                                         <div style={{ 
+                                            marginTop: '0.6rem', 
+                                            padding: '0.75rem 1rem', 
+                                            backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
                                             display: 'flex', 
-                                            alignItems: 'center', 
+                                            alignItems: 'flex-start', 
                                             justifyContent: 'space-between',
-                                            gap: '8px', 
+                                            gap: '12px',
                                             borderRadius: '12px',
-                                            border: `1px solid ${isCustomerOutOfZone ? '#FEF08A' : '#DCFCE7'}`
+                                            border: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#DCFCE7'}`,
+                                            boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                {isCustomerOutOfZone ? (
-                                                    <Info size={16} color="#D97706" strokeWidth={2.5} />
-                                                ) : (
-                                                    <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
-                                                )}
-                                                <p style={{ fontSize: '0.8rem', color: isCustomerOutOfZone ? '#B45309' : '#166534', margin: 0, fontWeight: '700' }}>
-                                                    {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
-                                                </p>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                                                <div style={{
+                                                    width: '28px',
+                                                    height: '28px',
+                                                    borderRadius: '50%',
+                                                    backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0,
+                                                    marginTop: '1px'
+                                                }}>
+                                                    {isCustomerOutOfZone ? (
+                                                        <MapPin size={15} color="#D97706" strokeWidth={2} />
+                                                    ) : (
+                                                        <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+                                                    )}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <p style={{ 
+                                                        fontSize: '0.78rem', 
+                                                        color: isCustomerOutOfZone ? '#92400E' : '#166534', 
+                                                        margin: 0, 
+                                                        fontWeight: '600',
+                                                        lineHeight: '1.4',
+                                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                                    }}>
+                                                        {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
+                                                    </p>
+                                                </div>
                                             </div>
                                             <button 
                                                 onClick={() => { setLatitude(null); setLongitude(null); }}
-                                                style={{ background: 'none', border: 'none', color: isCustomerOutOfZone ? '#D97706' : '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
+                                                style={{ 
+                                                    background: 'none', 
+                                                    border: 'none', 
+                                                    color: isCustomerOutOfZone ? '#D97706' : '#166534', 
+                                                    cursor: 'pointer', 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '800', 
+                                                    textDecoration: 'underline',
+                                                    flexShrink: 0,
+                                                    whiteSpace: 'nowrap',
+                                                    paddingTop: '2px'
+                                                }}
                                             >
                                                 {t.change}
                                             </button>
