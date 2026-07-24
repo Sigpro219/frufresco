@@ -238,7 +238,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             const variantSku = `${formData.sku}.${attrValues}`;
 
             return {
-                id: `v-${Math.random().toString(36).substr(2, 9)}`,
+                id: `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
                 options: combination,
                 sku: variantSku
             };
@@ -891,7 +891,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                             </thead>
                                             <tbody>
                                                 {variants.map((v, i) => (
-                                                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                    <tr key={v.id ? `${v.id}-${i}` : `v-${i}`} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                                         <td style={{ padding: '4px 8px' }}>{Object.values(v.options).join('/')}</td>
                                                         <td style={{ padding: '4px 8px', fontWeight: '800', color: '#2563EB' }}>{v.sku}</td>
                                                     </tr>
