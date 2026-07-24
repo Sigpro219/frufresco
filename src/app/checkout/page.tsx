@@ -1347,31 +1347,38 @@ export default function CheckoutPage() {
                                     </div>
                                 )}
 
-                                {latitude && (
-                                    <div style={{ 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'space-between',
-                                        gap: '8px', 
-                                        backgroundColor: '#F0FDF4', 
-                                        padding: '0.6rem 1rem', 
-                                        borderRadius: '12px',
-                                        border: '1px solid #DCFCE7'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
-                                            <p style={{ fontSize: '0.8rem', color: '#166534', margin: 0, fontWeight: '700' }}>
-                                                {t.locationVerified}
-                                            </p>
+                                {latitude && (() => {
+                                    const isCustomerOutOfZone = outOfZone && !isB2B;
+                                    return (
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'space-between',
+                                            gap: '8px', 
+                                            backgroundColor: isCustomerOutOfZone ? '#FFF7ED' : '#F0FDF4', 
+                                            padding: '0.6rem 1rem', 
+                                            borderRadius: '12px',
+                                            border: `1px solid ${isCustomerOutOfZone ? '#FFEDD5' : '#DCFCE7'}`
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {isCustomerOutOfZone ? (
+                                                    <AlertCircle size={16} color="#9A3412" strokeWidth={2.5} />
+                                                ) : (
+                                                    <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
+                                                )}
+                                                <p style={{ fontSize: '0.8rem', color: isCustomerOutOfZone ? '#9A3412' : '#166534', margin: 0, fontWeight: '700' }}>
+                                                    {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
+                                                </p>
+                                            </div>
+                                            <button 
+                                                onClick={() => { setLatitude(null); setLongitude(null); }}
+                                                style={{ background: 'none', border: 'none', color: isCustomerOutOfZone ? '#9A3412' : '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
+                                            >
+                                                {t.change}
+                                            </button>
                                         </div>
-                                        <button 
-                                            onClick={() => { setLatitude(null); setLongitude(null); }}
-                                            style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
-                                        >
-                                            {t.change}
-                                        </button>
-                                    </div>
-                                )}
+                                    );
+                                })()}
                             </div>
 
                             <div>
@@ -1621,10 +1628,10 @@ export default function CheckoutPage() {
                                     fontSize: '1.1rem', 
                                     borderRadius: '16px', 
                                     fontWeight: '900', 
-                                    backgroundColor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.06)' : 'var(--primary)', 
-                                    color: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.3)' : 'white', 
+                                    backgroundColor: (loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)) ? 'rgba(0,0,0,0.06)' : 'var(--primary)', 
+                                    color: (loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)) ? 'rgba(0,0,0,0.3)' : 'white', 
                                     border: 'none', 
-                                    cursor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'not-allowed' : 'pointer',
+                                    cursor: (loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)) ? 'not-allowed' : 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
