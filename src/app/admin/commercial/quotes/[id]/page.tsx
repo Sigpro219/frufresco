@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME } from '@/lib/adminTheme';
 import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Edit3, Rocket, FileSpreadsheet, MessageCircle, Printer, CheckCircle, Handshake } from 'lucide-react';
 
 export default function QuoteDetailPage() {
     const formatPrice = (value: number) => {
@@ -272,9 +273,11 @@ export default function QuoteDetailPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-            <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
-                <div style={{ marginBottom: '1rem' }}>
-                    <Link href="/admin/commercial/quotes" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>
+            <div style={{ width: '96%', maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 1rem' }}>
+                <div style={{ marginBottom: '1.2rem' }}>
+                    <Link href="/admin/commercial/quotes" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem' }}>
+                        <ArrowLeft size={16} strokeWidth={2} /> Volver a Cotizaciones
+                    </Link>
                 </div>
 
                 {quote.status === 'agreement' && (() => {
@@ -284,19 +287,19 @@ export default function QuoteDetailPage() {
                             <div style={{ 
                                 backgroundColor: days < 0 ? '#FEF2F2' : '#FFFBEB', 
                                 border: `1px solid ${days < 0 ? '#FECACA' : '#FDE68A'}`, 
-                                padding: '1rem', 
-                                borderRadius: '12px', 
+                                padding: '1rem 1.25rem', 
+                                borderRadius: '14px', 
                                 marginBottom: '1.5rem', 
                                 display: 'flex', 
                                 alignItems: 'center', 
-                                gap: '10px' 
+                                gap: '12px' 
                             }}>
-                                <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                                 <div>
-                                    <div style={{ fontWeight: 'bold', color: days < 0 ? '#991B1B' : '#92400E' }}>
+                                    <div style={{ fontWeight: '800', color: days < 0 ? '#991B1B' : '#92400E', fontSize: '0.9rem' }}>
                                         {days < 0 ? 'Este Acuerdo Comercial ha expirado' : `Este Acuerdo Comercial expira en ${days} días`}
                                     </div>
-                                    <div style={{ fontSize: '0.85rem', color: days < 0 ? '#B91C1C' : '#B45309' }}>
+                                    <div style={{ fontSize: '0.8rem', color: days < 0 ? '#B91C1C' : '#B45309' }}>
                                         Fecha límite: {new Date(quote.valid_until).toLocaleDateString()}. Los precios congelados dejarán de aplicarse después de esta fecha.
                                     </div>
                                 </div>
@@ -307,91 +310,235 @@ export default function QuoteDetailPage() {
                 })()}
 
                 {/* HEADER CARD */}
-                <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ 
+                    backgroundColor: 'white', 
+                    padding: '1.75rem 2rem', 
+                    borderRadius: '16px', 
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.03)', 
+                    border: '1px solid #E5E7EB',
+                    marginBottom: '1.5rem', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1.5rem'
+                }}>
                     <div>
-                        <div style={{ textTransform: 'uppercase', fontSize: '0.8rem', color: '#6B7280', fontWeight: 'bold' }}>{quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'Cotización'}</div>
-                        <h1 style={{ fontSize: '2rem', margin: '0.5rem 0', fontWeight: '900' }}>{quote.client_name}</h1>
-                        <div style={{ display: 'flex', gap: '1rem', color: '#4B5563' }}>
-                            <span>Modelo: <strong>{quote.model_snapshot_name}</strong></span>
-                            <span>Fecha: {new Date(quote.created_at).toLocaleDateString()}</span>
+                        <div style={{ textTransform: 'uppercase', fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700', letterSpacing: '0.05em' }}>
+                            {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'Cotización'}
+                        </div>
+                        <h1 style={{ fontSize: '1.8rem', margin: '0.3rem 0 0.5rem 0', fontWeight: '800', color: THEME.colors.textMain }}>
+                            {quote.client_name}
+                        </h1>
+                        <div style={{ display: 'flex', gap: '1.2rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
+                            <span>Modelo: <strong style={{ color: THEME.colors.textMain }}>{quote.model_snapshot_name}</strong></span>
+                            <span>•</span>
+                            <span>Fecha: <strong style={{ color: THEME.colors.textMain }}>{new Date(quote.created_at).toLocaleDateString('es-CO')}</strong></span>
                         </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669' }}>${formatPrice(quote.total_amount || 0)}</div>
-                        <div style={{ marginBottom: '1rem' }}>Total Ofertado</div>
 
-                        {quote.status === 'converted' ? (
-                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1rem' }}>
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Ofertado</div>
+                            <div style={{ fontSize: '2.2rem', fontWeight: '800', color: THEME.colors.primary, lineHeight: 1.1 }}>${formatPrice(quote.total_amount || 0)}</div>
+                        </div>
+
+                        {/* ACCIONES COMERCIALES ESTILIZADAS FRUFRESCO */}
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {quote.status === 'converted' ? (
                                 <Link href={quote.order_id ? `/admin/orders/${quote.order_id}` : '/admin/orders'} style={{ textDecoration: 'none' }}>
-                                    <button style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        ✓ CONVERTIDA A PEDIDO
-                                        <span style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>Ver documento →</span>
+                                    <button style={{ 
+                                        backgroundColor: '#ECFDF5', 
+                                        color: '#047857', 
+                                        border: '1px solid #A7F3D0', 
+                                        padding: '0.6rem 1.1rem', 
+                                        borderRadius: '10px', 
+                                        fontWeight: '700', 
+                                        fontSize: '0.82rem', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.4rem' 
+                                    }}>
+                                        <CheckCircle size={15} strokeWidth={2} />
+                                        <span>CONVERTIDA A PEDIDO</span>
                                     </button>
                                 </Link>
-                                <button
-                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
-                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                                >
-                                    🖨️ Imprimir
+                            ) : quote.status === 'agreement' ? (
+                                <button disabled style={{ 
+                                    backgroundColor: '#F0F9FF', 
+                                    color: '#0284C7', 
+                                    border: '1px solid #BAE6FD', 
+                                    padding: '0.6rem 1.1rem', 
+                                    borderRadius: '10px', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.82rem', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem' 
+                                }}>
+                                    <Handshake size={15} strokeWidth={2} />
+                                    <span>ACUERDO VIGENTE</span>
                                 </button>
-                            </div>
-                        ) : quote.status === 'agreement' ? (
-                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                <button disabled style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    🤝 ACUERDO COMERCIAL
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>(Vigente)</span>
-                                </button>
-                                <button
-                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
-                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                                >
-                                    🖨️ Imprimir
-                                </button>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none' }}>
+                            ) : (
+                                <>
+                                    <Link href={`/admin/commercial/quotes/create?duplicate_from=${quote.id}`} style={{ textDecoration: 'none' }}>
+                                        <button
+                                            style={{ 
+                                                backgroundColor: 'white', 
+                                                color: THEME.colors.textMain, 
+                                                border: '1px solid #D1D5DB', 
+                                                padding: '0.6rem 1.1rem', 
+                                                borderRadius: '10px', 
+                                                fontWeight: '600', 
+                                                fontSize: '0.82rem', 
+                                                cursor: 'pointer', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '0.4rem',
+                                                transition: 'all 0.15s ease-in-out'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                        >
+                                            <Edit3 size={15} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                            <span>Ajustar Precios</span>
+                                        </button>
+                                    </Link>
                                     <button
+                                        onClick={handleConvertClick}
+                                        disabled={converting}
                                         style={{ 
-                                            backgroundColor: '#FFFBEB', 
-                                            color: '#D97706', 
-                                            border: '1px solid #F59E0B', 
-                                            padding: '0.8rem 1.5rem', 
-                                            borderRadius: '8px', 
-                                            fontWeight: 'bold', 
+                                            backgroundColor: THEME.colors.primary, 
+                                            color: 'white', 
+                                            border: 'none', 
+                                            padding: '0.6rem 1.1rem', 
+                                            borderRadius: '10px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.82rem', 
                                             cursor: 'pointer', 
                                             display: 'flex', 
                                             alignItems: 'center', 
-                                            gap: '0.5rem',
-                                            transition: 'all 0.2s'
+                                            gap: '0.4rem',
+                                            boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)',
+                                            transition: 'all 0.15s ease-in-out'
                                         }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#FEF3C7';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#FFFBEB';
-                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover || '#0A5F43'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary || '#0D7A57'}
                                     >
-                                        📝 Ajustar Precios
+                                        <Rocket size={15} strokeWidth={1.5} />
+                                        <span>{converting ? 'Procesando...' : 'Convertir a Pedido'}</span>
                                     </button>
-                                </Link>
+                                </>
+                            )}
+                            <a
+                                href={`/api/quotes/${quote.id}/excel`}
+                                download
+                                style={{ textDecoration: 'none' }}
+                            >
                                 <button
-                                    onClick={handleConvertClick}
-                                    disabled={converting}
-                                    style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}
+                                    style={{ 
+                                        backgroundColor: '#F0FDF4', 
+                                        color: '#15803D', 
+                                        border: '1px solid #BBF7D0', 
+                                        padding: '0.6rem 1.1rem', 
+                                        borderRadius: '10px', 
+                                        fontWeight: '700', 
+                                        fontSize: '0.82rem', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.4rem', 
+                                        transition: 'all 0.15s ease-in-out' 
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DCFCE7'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                    title="Descargar versión Excel (.xlsx) con fórmulas"
                                 >
-                                    {converting ? 'Procesando...' : '🚀 Convertir a Pedido'}
+                                    <FileSpreadsheet size={15} strokeWidth={1.5} style={{ color: '#16A34A' }} />
+                                    <span>Exportar Excel</span>
                                 </button>
-                                <button
-                                    onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
-                                    style={{ backgroundColor: 'white', color: '#1F2937', border: '1px solid #D1D5DB', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                                >
-                                    🖨️ Imprimir
-                                </button>
-                            </div>
-                        )}
+                            </a>
+                            <button
+                                onClick={() => {
+                                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                    const pdfUrl = `${origin}/admin/commercial/quotes/${quote.id}/print`;
+                                    const excelUrl = `${origin}/api/quotes/${quote.id}/excel`;
+                                    const text = encodeURIComponent(
+                                        `Hola *${quote.client_name || 'Cliente'}*, te compartimos tu propuesta comercial FruFresco:\n\n` +
+                                        `📄 *Documento PDF:* ${pdfUrl}\n` +
+                                        `📊 *Archivo Excel Editable:* ${excelUrl}\n\n` +
+                                        `Quedamos atentos a tus comentarios.`
+                                    );
+                                    const phone = (lead?.phone || selectedClient?.phone || '').replace(/\D/g, '');
+                                    const waUrl = phone ? `https://wa.me/57${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+                                    window.open(waUrl, '_blank');
+                                }}
+                                style={{ 
+                                    backgroundColor: '#ECFDF5', 
+                                    color: '#047857', 
+                                    border: '1px solid #A7F3D0', 
+                                    padding: '0.6rem 1.1rem', 
+                                    borderRadius: '10px', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.82rem', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem',
+                                    transition: 'all 0.15s ease-in-out'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                title="Compartir por WhatsApp con enlaces a PDF y Excel"
+                            >
+                                <MessageCircle size={15} strokeWidth={1.5} style={{ color: '#059669' }} />
+                                <span>WhatsApp</span>
+                            </button>
+                            <button
+                                onClick={() => window.open(`/admin/commercial/quotes/${quote.id}/print`, '_blank')}
+                                style={{ 
+                                    backgroundColor: 'white', 
+                                    color: THEME.colors.textMain, 
+                                    border: '1px solid #D1D5DB', 
+                                    padding: '0.6rem 1.1rem', 
+                                    borderRadius: '10px', 
+                                    fontWeight: '600', 
+                                    fontSize: '0.82rem', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem',
+                                    transition: 'all 0.15s ease-in-out'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                            >
+                                <Printer size={15} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                <span>Imprimir</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                {lead && (
+                    <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '1rem 1.5rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#16A34A', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
+                            🔥 Prospecto Vinculado (CRM Lead #{lead.id})
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem', color: '#374151', marginTop: '6px' }}>
+                            <div><strong>Contacto:</strong> {lead.contact_name || lead.company_name}</div>
+                            {lead.nit && <div><strong>NIT:</strong> {lead.nit}</div>}
+                            {lead.phone && <div><strong>Teléfono:</strong> {lead.phone}</div>}
+                            {lead.email && <div><strong>Email:</strong> {lead.email}</div>}
+                            {(lead.address || lead.municipality) && (
+                                <div style={{ gridColumn: 'span 2' }}><strong>Dirección Declarada:</strong> {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
+                            )}
+                            {lead.business_type && <div><strong>Tipo Negocio:</strong> {lead.business_type}</div>}
+                            {lead.business_size && <div><strong>Tamaño:</strong> {lead.business_size}</div>}
+                        </div>
+                    </div>
+                )}
 
                 {/* ITEMS TABLE */}
                 <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
@@ -408,7 +555,11 @@ export default function QuoteDetailPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {items.map(item => (
+                            {[...items].sort((a, b) => {
+                                const skuA = (a.sku || a.products?.sku || a.product_name || a.products?.name || '').toString().toLowerCase();
+                                const skuB = (b.sku || b.products?.sku || b.product_name || b.products?.name || '').toString().toLowerCase();
+                                return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+                            }).map(item => (
                                 <tr key={item.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
                                     <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.product_name || item.products?.name || 'Producto'}</td>
                                     <td style={{ padding: '1rem' }}>{item.quantity} {item.unit || ''}</td>

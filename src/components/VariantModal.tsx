@@ -24,7 +24,18 @@ interface VariantModalProps {
 
 export default function VariantModal({ product, onClose, onSave, onUploadImage, readOnly = false }: VariantModalProps) {
     const [options, setOptions] = useState<any[]>(product.options_config || []);
-    const [variants, setVariants] = useState<Variant[]>(product.variants || []);
+    const [variants, setVariants] = useState<Variant[]>(() => {
+        const raw = product.variants || [];
+        const seen = new Set<string>();
+        return raw.map((v: any, idx: number) => {
+            let id = v?.id;
+            if (!id || seen.has(id)) {
+                id = `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+            }
+            seen.add(id);
+            return { ...v, id };
+        });
+    });
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
@@ -176,19 +187,28 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
         });
 
         // Preservar imágenes si la combinación ya existe
-        const newVariants = results.map((combination) => {
+        const usedIds = new Set<string>();
+        const newVariants = results.map((combination, idx) => {
             const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
             const variantSku = `${product.sku}.${attrValues}`;
 
-            // Buscar si ya existe una variante con estas mismas opciones para mantener su imagen e ID
+            // Buscar si ya existe una variante con estas mismas opciones para mantener su imagen e ID sin repetir IDs
             const existing = variants.find(v => 
+                v.options &&
                 Object.keys(combination).every(k => v.options[k] === combination[k]) &&
-                Object.keys(v.options).length === Object.keys(combination).length
-            );
+                Object.keys(v.options).length === Object.keys(combination).length &&
+                !usedIds.has(v.id)
+            ) || variants.find(v => v.sku === variantSku && !usedIds.has(v.id));
+
+            let id = existing?.id;
+            if (!id || usedIds.has(id)) {
+                id = `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+            }
+            usedIds.add(id);
 
             const resolvedActive = existing?.is_active ?? existing?.show_on_web ?? true;
             return {
-                id: existing?.id || `v-${Math.random().toString(36).substr(2, 9)}`,
+                id,
                 options: combination,
                 sku: variantSku,
                 image_url: existing?.image_url || null,
@@ -454,7 +474,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                             </thead>
                             <tbody>
                                 {variants.map((v, idx) => (
-                                    <tr key={v.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                    <tr key={v.id ? `${v.id}-${idx}` : `v-${idx}`} style={{ borderBottom: '1px solid var(--border)' }}>
                                         <td style={{ padding: '1rem', width: '80px' }}>
                                             <div style={{ position: 'relative', width: '60px', height: '60px' }}>
                                                 <label

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
@@ -692,7 +692,7 @@ export default function InventoryAdminPage() {
                         <h1 style={styles.title}>Control de Inventarios</h1>
                         <p style={styles.subtitle}>Consolidación multi-estado, trazabilidad total y auditoría inteligente.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
                         <button 
                             onClick={() => {
                                 const controller = new AbortController();
@@ -700,33 +700,35 @@ export default function InventoryAdminPage() {
                             }}
                             disabled={loading || refreshing}
                             style={{ 
-                                padding: '0.55rem 1rem', 
-                                borderRadius: '8px', 
-                                border: `1.5px solid ${THEME.colors.border}`, 
-                                background: 'white', 
-                                color: THEME.colors.textMain, 
+                                padding: '0.55rem 1.1rem', 
+                                borderRadius: '10px', 
+                                border: '1px solid #E2E8F0', 
+                                background: '#FFFFFF', 
+                                color: '#334155', 
                                 fontWeight: '700', 
-                                fontSize: '0.8rem', 
+                                fontSize: '0.82rem', 
                                 cursor: 'pointer', 
-                                boxShadow: THEME.shadow.sm,
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '0.5rem',
-                                transition: 'all 0.2s ease-in-out'
+                                gap: '0.45rem',
+                                transition: 'all 0.15s ease-in-out'
                             }}
                             onMouseEnter={(e) => { 
-                                e.currentTarget.style.backgroundColor = '#F4F7F6'; 
-                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                e.currentTarget.style.backgroundColor = '#F8FAFC'; 
+                                e.currentTarget.style.borderColor = '#CBD5E1';
                             }}
                             onMouseLeave={(e) => { 
-                                e.currentTarget.style.backgroundColor = 'white'; 
-                                e.currentTarget.style.borderColor = THEME.colors.border; 
+                                e.currentTarget.style.backgroundColor = '#FFFFFF'; 
+                                e.currentTarget.style.borderColor = '#E2E8F0'; 
                             }}
                         >
                             <RefreshCw 
                                 size={14} 
+                                strokeWidth={2}
                                 style={{ 
-                                    animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' 
+                                    animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none',
+                                    color: '#059669'
                                 }} 
                             />
                             {loading || refreshing ? 'Sincronizando...' : 'Sincronizar'}
@@ -734,16 +736,19 @@ export default function InventoryAdminPage() {
                         <Link href="/admin/master/products" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    padding: '0.55rem 1.25rem', 
-                                    borderRadius: '8px', 
+                                    padding: '0.55rem 1.1rem', 
+                                    borderRadius: '10px', 
                                     border: 'none', 
                                     background: THEME.colors.primary, 
                                     color: 'white', 
                                     fontWeight: '700', 
-                                    fontSize: '0.8rem', 
+                                    fontSize: '0.82rem', 
                                     cursor: 'pointer', 
-                                    boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)',
-                                    transition: 'all 0.2s ease-in-out'
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    transition: 'all 0.15s ease-in-out'
                                 }}
                                 onMouseEnter={(e) => { 
                                     e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
@@ -756,59 +761,67 @@ export default function InventoryAdminPage() {
                                     e.currentTarget.style.boxShadow = '0 4px 10px rgba(13, 122, 87, 0.2)'; 
                                 }}
                             >
+                                <BookOpen size={14} strokeWidth={2} />
                                 Catálogo Maestro
                             </button>
                         </Link>
                         <Link href="/admin/commercial/inventory/tasks-trello" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    padding: '0.55rem 1.25rem', 
-                                    borderRadius: '8px', 
-                                    border: 'none', 
-                                    background: '#0079BF', 
-                                    color: 'white', 
+                                    padding: '0.55rem 1.1rem', 
+                                    borderRadius: '10px', 
+                                    border: '1px solid #BAE6FD', 
+                                    background: '#F0F9FF', 
+                                    color: '#0369A1', 
                                     fontWeight: '700', 
-                                    fontSize: '0.8rem', 
+                                    fontSize: '0.82rem', 
                                     cursor: 'pointer', 
-                                    boxShadow: THEME.shadow.sm,
-                                    transition: 'all 0.2s ease-in-out',
-                                    display: 'flex',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    transition: 'all 0.15s ease-in-out',
+                                    display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '6px'
+                                    gap: '0.45rem'
                                 }}
                                 onMouseEnter={(e) => { 
-                                    e.currentTarget.style.backgroundColor = '#026AA7'; 
+                                    e.currentTarget.style.backgroundColor = '#E0F2FE'; 
+                                    e.currentTarget.style.borderColor = '#7DD3FC';
                                 }}
                                 onMouseLeave={(e) => { 
-                                    e.currentTarget.style.backgroundColor = '#0079BF'; 
+                                    e.currentTarget.style.backgroundColor = '#F0F9FF'; 
+                                    e.currentTarget.style.borderColor = '#BAE6FD';
                                 }}
                             >
-                                📊 Tablero Trello (Temp)
+                                <Kanban size={14} strokeWidth={2} style={{ color: '#0284C7' }} />
+                                Tablero Trello (Temp)
                             </button>
                         </Link>
                         <Link href="/admin/commercial/inventory/tasks" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    padding: '0.55rem 1.25rem', 
-                                    borderRadius: '8px', 
-                                    border: `1.5px solid ${THEME.colors.border}`, 
-                                    background: 'white', 
-                                    color: THEME.colors.textMain, 
+                                    padding: '0.55rem 1.1rem', 
+                                    borderRadius: '10px', 
+                                    border: '1px solid #E2E8F0', 
+                                    background: '#FFFFFF', 
+                                    color: '#334155', 
                                     fontWeight: '700', 
-                                    fontSize: '0.8rem', 
+                                    fontSize: '0.82rem', 
                                     cursor: 'pointer', 
-                                    boxShadow: THEME.shadow.sm,
-                                    transition: 'all 0.2s ease-in-out'
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    transition: 'all 0.15s ease-in-out'
                                 }}
                                 onMouseEnter={(e) => { 
-                                    e.currentTarget.style.backgroundColor = '#F4F7F6'; 
-                                    e.currentTarget.style.borderColor = THEME.colors.primary;
+                                    e.currentTarget.style.backgroundColor = '#F8FAFC'; 
+                                    e.currentTarget.style.borderColor = '#CBD5E1';
                                 }}
                                 onMouseLeave={(e) => { 
-                                    e.currentTarget.style.backgroundColor = 'white'; 
-                                    e.currentTarget.style.borderColor = THEME.colors.border; 
+                                    e.currentTarget.style.backgroundColor = '#FFFFFF'; 
+                                    e.currentTarget.style.borderColor = '#E2E8F0'; 
                                 }}
                             >
+                                <ClipboardList size={14} strokeWidth={2} style={{ color: '#64748B' }} />
                                 Tareas Administrativas
                             </button>
                         </Link>

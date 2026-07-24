@@ -7,7 +7,7 @@ import {
     FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen,
     QrCode, Printer, RefreshCw
 } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 
@@ -70,10 +70,6 @@ const SPECIALTIES = [
 ];
 
 export default function HRManagement() {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    );
     const [users, setUsers] = useState<Profile[]>([]);
     const [profiles, setProfiles] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -113,19 +109,51 @@ export default function HRManagement() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            const { data: collabData, error: collabError } = await supabase
                 .from('collaborators')
+                .select('*')
+                .order('contact_name', { ascending: true });
+
+            if (collabError) {
+                console.warn('Advertencia al consultar tabla colaboradores:', collabError);
+            }
+
+            const { data: profilesData } = await supabase
+                .from('profiles')
                 .select('*');
 
-            if (error) throw error;
-            setUsers(data || []);
-
-            const { data: profilesData, error: profError } = await supabase
-                .from('profiles')
-                .select('id, collaborator_id');
-            if (!profError) {
-                setProfiles(profilesData || []);
+            if (profilesData) {
+                setProfiles(profilesData);
             }
+
+            let allUsers: Profile[] = collabData || [];
+
+            // Si hay perfiles registrados en profiles con rol de staff (no clientes), combinarlos para garantizar visibilidad
+            if (profilesData && profilesData.length > 0) {
+                const existingEmails = new Set(allUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
+                const existingIds = new Set(allUsers.map(u => u.id));
+
+                const staffProfiles: Profile[] = profilesData
+                    .filter(p => p.role && p.role !== 'b2b_client' && p.role !== 'b2c_client')
+                    .filter(p => !existingIds.has(p.id) && !existingEmails.has((p.email || '').toLowerCase()))
+                    .map(p => ({
+                        id: p.id,
+                        contact_name: p.contact_name || p.company_name || p.email || 'Sin Nombre',
+                        email: p.email,
+                        phone: p.phone || p.contact_phone,
+                        contact_phone: p.contact_phone || p.phone,
+                        role: p.role,
+                        specialty: p.specialty || 'Sede Administrativa',
+                        is_active: p.is_active !== false,
+                        is_temporary: false,
+                        document_id: p.id_zr || p.document_id || '',
+                        avatar_url: p.avatar_url
+                    }));
+
+                allUsers = [...allUsers, ...staffProfiles];
+            }
+
+            setUsers(allUsers);
         } catch (err) {
             console.error('Error fetching HR data:', err);
         } finally {

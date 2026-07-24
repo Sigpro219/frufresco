@@ -838,7 +838,7 @@ export default function CostMatrixPage() {
                 {!loading && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                         <StatCard 
-                            label="SKUS Analizados" 
+                            label="Productos Analizados" 
                             value={stats.totalSKU} 
                             color="#334155" 
                             icon={<Cpu size={20} />} 
@@ -893,7 +893,7 @@ export default function CostMatrixPage() {
                         <Search size={18} color="#94A3B8" />
                         <input 
                             type="text"
-                            placeholder="Buscar productos por nombre, SKU, keywords o tags (@tag)..."
+                            placeholder="Buscar productos por nombre, ID contable, keywords o tags (@tag)..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{ 
@@ -1236,16 +1236,8 @@ export default function CostMatrixPage() {
                                                             {harvestStatus === 'risk' && <div title="Alerta de Escasez: Históricamente los precios suben este mes" style={{ color: '#EF4444' }}><ShieldAlert size={16} /></div>}
                                                         </div>
                                                         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.3rem' }}>
-                                                            <span style={{ 
-                                                                fontSize: '0.7rem', 
-                                                                color: '#2563EB', 
-                                                                backgroundColor: '#EFF6FF', 
-                                                                padding: '2px 8px', 
-                                                                borderRadius: '6px', 
-                                                                fontWeight: '900',
-                                                                border: '1px solid #DBEAFE'
-                                                            }}>
-                                                                {p.sku || 'SIN SKU'}
+                                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '1px 5px', borderRadius: '4px' }}>
+                                                                {p.accounting_id ? `ID: ${p.accounting_id}` : `ID: ${p.id.slice(0, 8)}`}
                                                             </span>
                                                             <span style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: '600' }}>
                                                                 {p.unit_of_measure}

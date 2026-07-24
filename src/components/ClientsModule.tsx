@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
-import { THEME } from '@/lib/adminTheme';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import {
     AlertTriangle,
     Check,
@@ -35,7 +35,14 @@ import {
     HelpCircle,
     Info,
     UploadCloud,
-    Download
+    Download,
+    Plus,
+    User,
+    List,
+    Grid,
+    Lock,
+    CheckCircle2,
+    AlertCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -90,10 +97,19 @@ interface Profile {
     collection_responsible_name?: string;
     collection_responsible_email?: string;
     collection_responsible_phone?: string;
+    comm_ref_1_name?: string;
+    comm_ref_1_nit?: string;
+    comm_ref_1_phone?: string;
+    comm_ref_1_email?: string;
+    comm_ref_2_name?: string;
+    comm_ref_2_nit?: string;
+    comm_ref_2_phone?: string;
+    comm_ref_2_email?: string;
     remission_copies?: number;
     id_zr?: string;
     id_lp?: string;
     payment_days?: number;
+    is_active?: boolean;
     created_at: string;
 }
 
@@ -143,6 +159,7 @@ export default function ClientsModule() {
     };
 
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [hoveredTab, setHoveredTab] = useState<string | null>(null);
     const [clientsB2B, setClientsB2B] = useState<Profile[]>([]);
     const [clientsB2C, setClientsB2C] = useState<Profile[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -224,7 +241,8 @@ export default function ClientsModule() {
             
             const normalizeProfile = (p: any) => ({
                 ...p,
-                phone: p.phone || p.contact_phone || ''
+                phone: p.phone || p.contact_phone || '',
+                is_active: p.is_active !== false
             });
             setClientsB2B((b2bData || []).map(normalizeProfile));
             setLeads(leadData || []);
@@ -241,8 +259,11 @@ export default function ClientsModule() {
 
     const [allAgreements, setAllAgreements] = useState<any[]>([]);
 
-    const getAgreementStatus = (clientId: string) => {
-        const clientAgreements = allAgreements.filter(a => a.client_id === clientId);
+    const getAgreementStatus = (clientId: string, parentId?: string) => {
+        let clientAgreements = allAgreements.filter(a => a.client_id === clientId);
+        if (clientAgreements.length === 0 && parentId) {
+            clientAgreements = allAgreements.filter(a => a.client_id === parentId);
+        }
         if (clientAgreements.length === 0) return 'none';
         
         const now = new Date();
@@ -260,6 +281,11 @@ export default function ClientsModule() {
         if (hasWarning) return 'warning';
         
         return 'none';
+    };
+
+    const isAgreementInherited = (clientId: string, parentId?: string) => {
+        const hasOwn = allAgreements.some(a => a.client_id === clientId);
+        return !hasOwn && !!parentId && allAgreements.some(a => a.client_id === parentId);
     };
 
     const handleUpdateLeadStatus = async (id: string, newStatus: string) => {
@@ -625,19 +651,23 @@ export default function ClientsModule() {
         // Tab 1: Clientes Base
         const exportData = allClients.map(c => {
             const parent = allClients.find(p => p.id === c.parent_id);
+            const pModel = pricingModels.find(m => m.id === c.pricing_model_id);
+
             return {
+                Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
                 ID_INTERNO: c.id,
                 NIT_CEDULA: c.nit || '',
-                Nombre_Comercial: c.company_name || '',
-                Razon_Social: c.razon_social || '',
+                Nombre_Comercial: c.company_name || c.contact_name || '',
+                Razon_Social: c.razon_social || c.company_name || '',
                 Nombre_Contacto: c.contact_name || '',
-                Telefono: c.phone || '',
+                Telefono: c.phone || c.contact_phone || '',
                 Email: c.email || '',
                 Direccion: c.address || '',
                 Ciudad: c.city || 'Bogotá',
-                Municipio: c.municipality || 'Bogotá',
+                Municipio: c.municipality || c.city || 'Bogotá',
                 Departamento: c.department || 'Cundinamarca',
-                Tipo_Cliente: c.role === 'b2b_client' ? 'INSTITUCIONAL' : 'HOGAR',
+                Tipo_Cliente: c.role === 'b2c_client' ? 'HOGAR' : 'INSTITUCIONAL',
+                Modelo_Precios_Nombre: pModel?.name || '',
                 
                 // Jerarquía Comercial
                 Es_Matriz: c.is_corporate_parent ? 'SI' : 'NO',
@@ -661,6 +691,16 @@ export default function ClientsModule() {
                 Email_Cartera: c.collection_responsible_email || '',
                 Telefono_Cartera: c.collection_responsible_phone || '',
 
+                // Referencias Comerciales
+                Ref_Comercial_1_Nombre: c.comm_ref_1_name || '',
+                Ref_Comercial_1_NIT: c.comm_ref_1_nit || '',
+                Ref_Comercial_1_Telefono: c.comm_ref_1_phone || '',
+                Ref_Comercial_1_Email: c.comm_ref_1_email || '',
+                Ref_Comercial_2_Nombre: c.comm_ref_2_name || '',
+                Ref_Comercial_2_NIT: c.comm_ref_2_nit || '',
+                Ref_Comercial_2_Telefono: c.comm_ref_2_phone || '',
+                Ref_Comercial_2_Email: c.comm_ref_2_email || '',
+
                 // Operaciones y Logística (Sucursal / Hogar)
                 Requiere_Canastillas: c.needs_crates ? 'SI' : 'NO',
                 Tipo_Documento: c.document_type || 'invoice', // invoice | remission
@@ -668,6 +708,10 @@ export default function ClientsModule() {
                 Remision_Con_Precios: c.remission_with_prices ? 'SI' : 'NO',
                 Restricciones_Entrega: c.delivery_restrictions || '',
                 Copias_Remision: c.remission_copies || 2,
+                Latitud: c.latitude || '',
+                Longitud: c.longitude || '',
+                URL_RUT: c.rut_url || '',
+                URL_Camara_Comercio: c.mercantile_registry_url || '',
                 
                 // Códigos ERP de Integración
                 Codigo_ZR: c.id_zr || '',
@@ -679,43 +723,57 @@ export default function ClientsModule() {
         // Tab 2: Guía de Datos
         const guideHeaders = ["Campo Excel", "Requerido", "Aplica A", "Descripción y Valores Permitidos"];
         const guideRows = [
-            ["ID_INTERNO", "NO", "Todos", "Dejar intacto para actualizar el cliente existente. Borrar si desea crear uno nuevo."],
-            ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa (con DV separado o sin DV) o Cédula de Ciudadanía."],
-            ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del establecimiento."],
+            ["Estado", "NO", "Todos", "ACTIVO = Cuenta habilitada para ventas. INACTIVO = Cuenta archivada/deshabilitada."],
+            ["ID_INTERNO", "NO", "Todos", "ID único de Supabase. Dejar intacto para actualizar cliente existente. Dejar vacío si es nuevo."],
+            ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa o Cédula de Ciudadanía."],
+            ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del negocio."],
             ["Razon_Social", "SÍ (Institucionales)", "Institucional", "Razón social legal para facturación electrónica."],
-            ["Nombre_Contacto", "SÍ", "Todos", "Persona encargada de recibir el pedido o coordinar compras."],
-            ["Telefono", "SÍ", "Todos", "Teléfono celular de contacto principal."],
-            ["Email", "SÍ", "Todos", "Correo electrónico donde se enviarán avisos de pedido y facturación."],
-            ["Direccion", "SÍ", "Todos", "Dirección exacta del punto de entrega (sucursal o domicilio)."],
-            ["Ciudad", "SÍ", "Todos", "Ciudad principal (ej: Bogotá, Villavicencio)."],
-            ["Municipio", "SÍ", "Todos", "Municipio específico (ej: Bogotá, Restrepo, Acacías)."],
+            ["Nombre_Contacto", "SÍ", "Todos", "Persona encargada de recibir o coordinar."],
+            ["Telefono", "SÍ", "Todos", "Teléfono celular principal."],
+            ["Email", "SÍ", "Todos", "Correo electrónico de contacto y recepción."],
+            ["Direccion", "SÍ", "Todos", "Dirección de entrega."],
+            ["Ciudad", "SÍ", "Todos", "Ciudad (ej: Bogotá, Villavicencio)."],
+            ["Municipio", "SÍ", "Todos", "Municipio específico."],
             ["Departamento", "SÍ", "Todos", "Departamento político (ej: Cundinamarca, Meta)."],
-            ["Tipo_Cliente", "SÍ", "Todos", "Tipo de cuenta: INSTITUCIONAL o HOGAR."],
+            ["Tipo_Cliente", "SÍ", "Todos", "INSTITUCIONAL o HOGAR."],
+            ["Modelo_Precios_Nombre", "NO", "Institucional", "Nombre exacto del esquema de precios (ej: Lista Base, Lista VIP)."],
             ["Es_Matriz", "NO", "Institucional", "SI = Si centraliza la facturación y cartera. NO = Si es punto de entrega o independiente."],
-            ["NIT_Matriz_Padre", "NO", "Sucursal", "Escriba el NIT de la casa matriz si este cliente es una sucursal vinculada."],
-            ["Nombre_Matriz_Padre", "NO", "Sucursal", "Nombre de la matriz (como referencia)."],
-            ["Codigo_Sucursal", "NO", "Sucursal", "Identificador interno de la sucursal (ej: SUC-01, REST-CHIA)."],
-            ["Rol_Corporativo", "NO", "Sucursal", "Descripción del rol corporativo (ej: Bodega Central, Franquicia 2)."],
-            ["Cupo_Credito", "NO", "Matriz / Indep.", "Monto máximo en pesos aprobado para compras a crédito (ej: 5000000)."],
-            ["Condicion_Pago", "NO", "Matriz / Indep.", "Condición comercial de cartera: Contado, 8 Días, 15 Días, 30 Días."],
-            ["Responsable_IVA", "NO", "Matriz / Indep.", "SI / NO. Determina si aplica cobro de IVA en facturación."],
-            ["Gran_Contribuyente", "NO", "Matriz / Indep.", "SI / NO. Lógica fiscal colombiana."],
-            ["Autorretenedor", "NO", "Matriz / Indep.", "SI / NO. Lógica fiscal colombiana."],
-            ["Regimen_Simple", "NO", "Matriz / Indep.", "SI / NO. Régimen Simple de Tributación."],
+            ["NIT_Matriz_Padre", "NO", "Sucursal", "NIT de la casa matriz vinculada."],
+            ["Nombre_Matriz_Padre", "NO", "Sucursal", "Nombre de la matriz como referencia."],
+            ["Codigo_Sucursal", "NO", "Sucursal", "Código interno de sucursal (ej: SUC-01)."],
+            ["Rol_Corporativo", "NO", "Sucursal", "Descripción del rol (ej: Punto de Venta Mall)."],
+            ["Cupo_Credito", "NO", "Matriz / Indep.", "Monto máximo en pesos aprobado a crédito."],
+            ["Condicion_Pago", "NO", "Matriz / Indep.", "Condición de pago (ej: Contado, 8 Días, 15 Días, 30 Días)."],
+            ["Responsable_IVA", "NO", "Matriz / Indep.", "SI / NO."],
+            ["Gran_Contribuyente", "NO", "Matriz / Indep.", "SI / NO."],
+            ["Autorretenedor", "NO", "Matriz / Indep.", "SI / NO."],
+            ["Regimen_Simple", "NO", "Matriz / Indep.", "SI / NO."],
             ["Actividad_Economica", "NO", "Matriz / Indep.", "Código CIIU de actividad económica."],
-            ["Correos_Facturacion_Adicionales", "NO", "Matriz / Indep.", "Lista de correos separados por comas para copia de facturas."],
-            ["Responsable_Cartera", "NO", "Matriz / Indep.", "Nombre del contacto de contabilidad / pagos del cliente."],
-            ["Email_Cartera", "NO", "Matriz / Indep.", "Correo de contacto de pagos."],
-            ["Telefono_Cartera", "NO", "Matriz / Indep.", "Teléfono directo de tesorería/pagos."],
-            ["Requiere_Canastillas", "NO", "Todos", "SI / NO. Indica si el despacho requiere dejar canastillas plásticas."],
-            ["Tipo_Documento", "SÍ", "Todos", "invoice = Factura Electrónica. remission = Remisión (Orden de entrega)."],
-            ["Imprimir_Factura_Fisica", "NO", "Todos", "SI / NO. Indica si el transportador debe llevar copia impresa física."],
-            ["Remision_Con_Precios", "NO", "Todos", "SI / NO. Aplica si Tipo_Documento es remission (oculta o muestra precios al recibir)."],
-            ["Restricciones_Entrega", "NO", "Todos", "Horarios, parqueaderos, especificaciones logísticas de entrega."],
-            ["Copias_Remision", "NO", "Todos", "Número de copias físicas a imprimir (ej: 2)."],
-            ["Codigo_ZR", "NO", "Todos", "Código de zona de despacho para ruteo ERP."],
-            ["Codigo_LP", "NO", "Todos", "Código de lista de precios asignada en contabilidad."],
-            ["Dias_Pago", "NO", "Todos", "Plazo en días numéricos aprobado."]
+            ["Correos_Facturacion_Adicionales", "NO", "Matriz / Indep.", "Correos adicionales separados por comas."],
+            ["Responsable_Cartera", "NO", "Matriz / Indep.", "Nombre del contacto de contabilidad/pagos."],
+            ["Email_Cartera", "NO", "Matriz / Indep.", "Correo de pagos/cartera."],
+            ["Telefono_Cartera", "NO", "Matriz / Indep.", "Teléfono de pagos."],
+            ["Ref_Comercial_1_Nombre", "NO", "Matriz / Indep.", "Razón social proveedor de referencia 1."],
+            ["Ref_Comercial_1_NIT", "NO", "Matriz / Indep.", "NIT ref 1."],
+            ["Ref_Comercial_1_Telefono", "NO", "Matriz / Indep.", "Teléfono ref 1."],
+            ["Ref_Comercial_1_Email", "NO", "Matriz / Indep.", "Email ref 1."],
+            ["Ref_Comercial_2_Nombre", "NO", "Matriz / Indep.", "Razón social proveedor de referencia 2."],
+            ["Ref_Comercial_2_NIT", "NO", "Matriz / Indep.", "NIT ref 2."],
+            ["Ref_Comercial_2_Telefono", "NO", "Matriz / Indep.", "Teléfono ref 2."],
+            ["Ref_Comercial_2_Email", "NO", "Matriz / Indep.", "Email ref 2."],
+            ["Requiere_Canastillas", "NO", "Todos", "SI / NO."],
+            ["Tipo_Documento", "SÍ", "Todos", "invoice = Factura Electrónica. remission = Remisión."],
+            ["Imprimir_Factura_Fisica", "NO", "Todos", "SI / NO."],
+            ["Remision_Con_Precios", "NO", "Todos", "SI / NO."],
+            ["Restricciones_Entrega", "NO", "Todos", "Horarios y notas logísticas."],
+            ["Copias_Remision", "NO", "Todos", "Número de copias físicas."],
+            ["Latitud", "NO", "Todos", "Coordenada latitud (ej: 4.6097)."],
+            ["Longitud", "NO", "Todos", "Coordenada longitud (ej: -74.0817)."],
+            ["URL_RUT", "NO", "Matriz / Indep.", "Enlace al documento RUT."],
+            ["URL_Camara_Comercio", "NO", "Matriz / Indep.", "Enlace a Cámara de Comercio."],
+            ["Codigo_ZR", "NO", "Todos", "Código de zona ruteo ERP."],
+            ["Codigo_LP", "NO", "Todos", "Código lista de precios ERP."],
+            ["Dias_Pago", "NO", "Todos", "Días de plazo en número (ej: 15)."]
         ];
         const guideSheetData = [guideHeaders, ...guideRows];
 
@@ -725,62 +783,77 @@ export default function ClientsModule() {
 
         // Ajustar anchos
         wsClients['!cols'] = Object.keys(exportData[0] || {}).map(() => ({ wch: 20 }));
-        wsGuide['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 65 }];
+        wsGuide['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 65 }];
 
         XLSX.utils.book_append_sheet(workbook, wsClients, "Clientes_Master");
         XLSX.utils.book_append_sheet(workbook, wsGuide, "Guia_Campos");
 
         XLSX.writeFile(workbook, `CRM_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
-        window.showToast?.('Base de clientes exportada con éxito', 'success');
+        window.showToast?.('Base completa de clientes exportada con éxito', 'success');
     };
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
-            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", 
+            "Estado", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
             "Regimen_Simple", "Actividad_Economica", "Correos_Facturacion_Adicionales", "Responsable_Cartera", 
-            "Email_Cartera", "Telefono_Cartera", "Requiere_Canastillas", "Tipo_Documento", "Imprimir_Factura_Fisica", 
-            "Remision_Con_Precios", "Restricciones_Entrega", "Copias_Remision", "Codigo_ZR", "Codigo_LP", "Dias_Pago"
+            "Email_Cartera", "Telefono_Cartera", "Ref_Comercial_1_Nombre", "Ref_Comercial_1_NIT", 
+            "Ref_Comercial_1_Telefono", "Ref_Comercial_1_Email", "Ref_Comercial_2_Nombre", "Ref_Comercial_2_NIT", 
+            "Ref_Comercial_2_Telefono", "Ref_Comercial_2_Email", "Requiere_Canastillas", "Tipo_Documento", 
+            "Imprimir_Factura_Fisica", "Remision_Con_Precios", "Restricciones_Entrega", "Copias_Remision", 
+            "Latitud", "Longitud", "URL_RUT", "URL_Camara_Comercio", "Codigo_ZR", "Codigo_LP", "Dias_Pago"
         ];
+
         const sample1 = [
-            "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
-            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
+            "ACTIVO", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
-            2000000, "15 Días", "SI", "NO", "NO", 
+            5000000, "15 Días", "SI", "NO", "NO", 
             "NO", "5611", "contabilidad@elgourmet.com", "Luz Marina Pérez", 
-            "pagos@elgourmet.com", "3001112233", "SI", "invoice", "NO", 
-            "SI", "Entregar por bahía de carga antes de las 11 AM", 2, "ZR-Norte", "LP-01", 15
+            "pagos@elgourmet.com", "3001112233", "Distribuidora La 80", "800111222-3",
+            "3108889900", "ventas@la80.com", "Comercializadora del Valle", "890333444-5",
+            "3127776655", "contacto@delvalle.com", "SI", "invoice", 
+            "NO", "SI", "Entregar por bahía de carga antes de las 11 AM", 2,
+            4.6853, -74.0521, "", "", "ZR-Norte", "LP-01", 15
         ];
+
         const sample2 = [
-            "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
-            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
+            "ACTIVO", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
             "NO", "5611", "", "", 
-            "", "", "NO", "remission", "NO", 
-            "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2, "ZR-Norte", "LP-01", 0
+            "", "", "", "",
+            "", "", "", "",
+            "", "", "NO", "remission", 
+            "NO", "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2,
+            4.7022, -74.0411, "", "", "ZR-Norte", "LP-01", 0
         ];
+
         const sample3 = [
-            "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
-            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", 
+            "ACTIVO", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
             "NO", "", "", "", 
-            "", "", "NO", "remission", "NO", 
-            "NO", "Dejar en portería si no se encuentra", 1, "ZR-Hogar-Norte", "LP-B2C", 0
+            "", "", "", "",
+            "", "", "", "",
+            "", "", "NO", "remission", 
+            "NO", "NO", "Dejar en portería si no se encuentra", 1,
+            4.7255, -74.0289, "", "", "ZR-Hogar-Norte", "LP-B2C", 0
         ];
 
         const dataSheet = [headers, sample1, sample2, sample3];
 
         const workbook = XLSX.utils.book_new();
         const wsTemplate = XLSX.utils.aoa_to_sheet(dataSheet);
-        wsTemplate['!cols'] = headers.map(() => ({ wch: 18 }));
+        wsTemplate['!cols'] = headers.map(() => ({ wch: 20 }));
 
         XLSX.utils.book_append_sheet(workbook, wsTemplate, "Plantilla_Clientes");
         XLSX.writeFile(workbook, "plantilla_carga_masiva_clientes.xlsx");
-        window.showToast?.('Plantilla de clientes descargada', 'success');
+        window.showToast?.('Plantilla completa de clientes descargada', 'success');
     };
 
     const processClientsFile = async () => {
@@ -801,15 +874,21 @@ export default function ClientsModule() {
 
             setLoading(true);
             try {
-                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true;
+                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true || val === '1';
 
-                // Primero buscaremos todos los NIT de matriz/padre para poder vincular parent_id si es sucursal
-                // Mapearemos los clientes y crearemos o actualizaremos sus perfiles
+                // Mapearemos todos los clientes con sus 51 atributos
                 const clientsToInsert = rows.map(row => {
                     const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
+                    const estadoVal = (row.Estado || row.Activo || row['Estado (ACTIVO/INACTIVO)'] || '').toString().trim().toUpperCase();
+                    const is_active = estadoVal === 'INACTIVO' || estadoVal === 'NO' || estadoVal === 'FALSE' || estadoVal === '0' ? false : true;
+
+                    // Buscar id de modelo de precios si especificaron nombre
+                    const modelName = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toLowerCase();
+                    const matchedModel = pricingModels.find(m => m.name.toLowerCase() === modelName);
 
                     return {
                         id: row.ID_INTERNO || undefined,
+                        is_active: is_active,
                         nit: (row.NIT_CEDULA || '').toString().trim(),
                         company_name: (row.Nombre_Comercial || '').toString().trim(),
                         razon_social: (row.Razon_Social || row.Nombre_Comercial || '').toString().trim(),
@@ -822,6 +901,7 @@ export default function ClientsModule() {
                         municipality: (row.Municipio || row.Ciudad || 'Bogotá').toString().trim(),
                         department: (row.Departamento || 'Cundinamarca').toString().trim(),
                         role: type_client === 'HOGAR' ? 'b2c_client' : 'b2b_client',
+                        pricing_model_id: matchedModel ? matchedModel.id : (row.pricing_model_id || null),
                         
                         // Jerarquía
                         is_corporate_parent: cleanBool(row.Es_Matriz),
@@ -829,7 +909,7 @@ export default function ClientsModule() {
                         corporate_role: (row.Rol_Corporativo || '').toString().trim() || null,
                         
                         // Financiera
-                        credit_limit: parseFloat(row.Cupo_Credito || '0'),
+                        credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
                         payment_terms: (row.Condicion_Pago || 'Contado').toString().trim(),
                         iva_responsible: cleanBool(row.Responsable_IVA),
                         is_gran_contribuyente: cleanBool(row.Gran_Contribuyente),
@@ -843,18 +923,32 @@ export default function ClientsModule() {
                         collection_responsible_email: (row.Email_Cartera || '').toString().trim() || null,
                         collection_responsible_phone: (row.Telefono_Cartera || '').toString().trim() || null,
 
-                        // Logística
+                        // Referencias Comerciales
+                        comm_ref_1_name: (row.Ref_Comercial_1_Nombre || '').toString().trim() || null,
+                        comm_ref_1_nit: (row.Ref_Comercial_1_NIT || '').toString().trim() || null,
+                        comm_ref_1_phone: (row.Ref_Comercial_1_Telefono || '').toString().trim() || null,
+                        comm_ref_1_email: (row.Ref_Comercial_1_Email || '').toString().trim() || null,
+                        comm_ref_2_name: (row.Ref_Comercial_2_Nombre || '').toString().trim() || null,
+                        comm_ref_2_nit: (row.Ref_Comercial_2_NIT || '').toString().trim() || null,
+                        comm_ref_2_phone: (row.Ref_Comercial_2_Telefono || '').toString().trim() || null,
+                        comm_ref_2_email: (row.Ref_Comercial_2_Email || '').toString().trim() || null,
+
+                        // Operaciones y Logística
                         needs_crates: cleanBool(row.Requiere_Canastillas),
                         document_type: (row.Tipo_Documento || 'invoice').toString().trim().toLowerCase(),
                         print_invoice: cleanBool(row.Imprimir_Factura_Fisica),
                         remission_with_prices: cleanBool(row.Remision_Con_Precios),
                         delivery_restrictions: (row.Restricciones_Entrega || '').toString().trim() || null,
-                        remission_copies: parseInt(row.Copias_Remision || '2'),
+                        remission_copies: parseInt(row.Copias_Remision || '2') || 2,
+                        latitude: parseFloat(row.Latitud || '0') || null,
+                        longitude: parseFloat(row.Longitud || '0') || null,
+                        rut_url: (row.URL_RUT || '').toString().trim() || null,
+                        mercantile_registry_url: (row.URL_Camara_Comercio || '').toString().trim() || null,
 
                         // ERP
                         id_zr: (row.Codigo_ZR || '').toString().trim() || null,
                         id_lp: (row.Codigo_LP || '').toString().trim() || null,
-                        payment_days: parseInt(row.Dias_Pago || '0'),
+                        payment_days: parseInt(row.Dias_Pago || '0') || 0,
                         geocoding_status: 'manual'
                     };
                 });
@@ -866,13 +960,12 @@ export default function ClientsModule() {
                 for (let i = 0; i < clientsToInsert.length; i += chunkSize) {
                     const chunk = clientsToInsert.slice(i, i + chunkSize);
                     // Usamos upsert para actualizar por ID o insertar si es nuevo
-                    const { data, error } = await supabase.from('profiles').upsert(chunk).select('id', 'nit');
+                    const { data, error } = await supabase.from('profiles').upsert(chunk).select('id, nit');
                     if (error) throw error;
                     if (data) insertedClients.push(...data);
                 }
 
-                // Intentar hacer la vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
-                // Esto lo hacemos en una pasada secundaria
+                // Vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
                 const branches = rows.filter(r => (r.NIT_Matriz_Padre || '').toString().trim() !== '' && !cleanBool(r.Es_Matriz));
                 if (branches.length > 0) {
                     const { data: allParents } = await supabase.from('profiles').select('id, nit').eq('is_corporate_parent', true);
@@ -893,12 +986,12 @@ export default function ClientsModule() {
                     }
                 }
 
-                window.showToast?.(`Base de datos de clientes actualizada: ${clientsToInsert.length} registros procesados`, 'success');
+                window.showToast?.(`Base de datos de clientes actualizada: ${clientsToInsert.length} registros procesados exitosamente`, 'success');
                 setIsBulkModalOpen(false);
                 setSelectedFile(null);
                 fetchData();
             } catch (err: any) {
-                console.error('Error en carga de clientes:', err);
+                console.error('Error en carga masiva de clientes:', err);
                 window.showToast?.('Error al procesar el archivo: ' + err.message, 'error');
             } finally {
                 setLoading(false);
@@ -926,37 +1019,52 @@ export default function ClientsModule() {
             return searchTerms.every(term => {
                 // Special command handlers starting with @
                 if (term.startsWith('@')) {
-                    if (term === '@branch' || term === '@sucursal') {
+                    const cleanCmd = term.slice(1).trim().toLowerCase();
+                    if (!cleanCmd) return true;
+
+                    if (cleanCmd === 'branch' || cleanCmd === 'sucursal' || cleanCmd === 'sucursales') {
                         return !!record.parent_id;
                     }
-                    if (term === '@matrix' || term === '@matriz') {
+                    if (cleanCmd === 'matrix' || cleanCmd === 'matriz') {
                         return record.is_corporate_parent === true;
                     }
-                    if (term === '@activo') {
-                        return record.is_active === true || getAgreementStatus(String(record.id || '')) === 'active';
+                    if (cleanCmd === 'activo') {
+                        return record.is_active !== false;
                     }
-                    if (term === '@vencido' || term === '@inactivo') {
-                        return record.is_active === false || getAgreementStatus(String(record.id || '')) === 'warning';
+                    if (cleanCmd === 'inactivo' || cleanCmd === 'archivado') {
+                        return record.is_active === false;
                     }
-                    if (term === '@sin acuerdo' || term === '@sin_acuerdo' || term === '@sinacuerdo') {
-                        return getAgreementStatus(String(record.id || '')) === 'none';
+                    if (cleanCmd === 'acuerdo_activo' || cleanCmd === 'acuerdoactivo' || cleanCmd === 'acuerdo') {
+                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'active';
                     }
-                    if (term === '@nogps') {
+                    if (cleanCmd === 'vencido' || cleanCmd === 'por_vencer' || cleanCmd === 'expirado') {
+                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'warning';
+                    }
+                    if (cleanCmd === 'sin_acuerdo' || cleanCmd === 'sinacuerdo' || cleanCmd === 'sin acuerdo') {
+                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'none';
+                    }
+                    if (cleanCmd === 'nogps' || cleanCmd === 'singps') {
                         return !record.latitude || !record.longitude;
                     }
-                    if (term === '@bogota' || term === '@bogotá') {
-                        const cityVal = String(record.city || '').toLowerCase();
-                        const muniVal = String(record.municipality || '').toLowerCase();
-                        const deptVal = String(record.department || '').toLowerCase();
-                        return cityVal.includes('bogot') || muniVal.includes('bogot') || deptVal.includes('bogot');
+                    if (cleanCmd === 'gps' || cleanCmd === 'congps') {
+                        return !!record.latitude && !!record.longitude;
                     }
-                    if (term.startsWith('@nit')) {
-                        const valuePart = term.replace('@nit', '').replace(':', '').trim();
+                    if (cleanCmd.startsWith('nit')) {
+                        const valuePart = cleanCmd.replace('nit', '').replace(':', '').trim();
                         if (!valuePart) {
                             return !!record.nit;
                         }
                         return String(record.nit || '').toLowerCase().includes(valuePart);
                     }
+
+                    // Dinámico para cualquier ciudad / ubicación (ej: @villavicencio, @medellin, @cali, @bogota, @chia)
+                    const cityVal = String(record.city || '').toLowerCase();
+                    const muniVal = String(record.municipality || '').toLowerCase();
+                    const deptVal = String(record.department || '').toLowerCase();
+                    const addrVal = String(record.address || '').toLowerCase();
+                    const compVal = String(record.company_name || '').toLowerCase();
+
+                    return cityVal.includes(cleanCmd) || muniVal.includes(cleanCmd) || deptVal.includes(cleanCmd) || addrVal.includes(cleanCmd) || compVal.includes(cleanCmd);
                 }
 
                 // Default field searching
@@ -983,7 +1091,7 @@ export default function ClientsModule() {
     };
 
     return (
-        <div style={{ backgroundColor: '#F0F2F5', height: '100%' }}>
+        <div style={{ backgroundColor: THEME.colors.background, height: '100%' }}>
             <Toast />
 
 
@@ -1046,119 +1154,143 @@ export default function ClientsModule() {
                         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)',
                         border: '1px solid rgba(13, 122, 87, 0.08)'
                     }}>
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
-                                style={{
-                                    padding: '0.45rem 1.1rem',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    background: activeTab === tab.id ? THEME.colors.primary : 'transparent',
-                                    color: activeTab === tab.id ? 'white' : '#4E6157',
-                                    fontWeight: activeTab === tab.id ? '700' : '500',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.8rem',
-                                    boxShadow: activeTab === tab.id ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
-                                }}
-                            >
-                                <span style={{ 
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    color: activeTab === tab.id ? 'white' : '#4E6157',
-                                    opacity: activeTab === tab.id ? 1 : 0.8
-                                }}>{tab.icon}</span>
-                                {tab.label}
-                            </button>
-                        ))}
+                        {tabs.map(tab => {
+                            const isActive = activeTab === tab.id;
+                            const isHovered = hoveredTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+                                    onMouseEnter={() => setHoveredTab(tab.id)}
+                                    onMouseLeave={() => setHoveredTab(null)}
+                                    style={{
+                                        padding: '0.45rem 1.1rem',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: isActive 
+                                            ? THEME.colors.primary 
+                                            : (isHovered ? THEME.colors.primaryLight : 'transparent'),
+                                        color: isActive 
+                                            ? 'white' 
+                                            : (isHovered ? THEME.colors.textMain : '#4E6157'),
+                                        fontWeight: isActive ? '700' : '500',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.8rem',
+                                        boxShadow: isActive ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
+                                    }}
+                                >
+                                    <span style={{ 
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        color: isActive ? 'white' : (isHovered ? THEME.colors.textMain : '#4E6157'),
+                                        opacity: isActive ? 1 : 0.8
+                                    }}>{tab.icon}</span>
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 </header>
 
-                {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (COMPACTA) */}
+                {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (STICKY) */}
                 {activeTab !== 'dashboard' && activeTab !== 'agreements' && (
                     <div style={{ 
                         display: 'flex', 
                         gap: '0.8rem', 
                         alignItems: 'center', 
                         marginBottom: '1.2rem',
-                        backgroundColor: 'white',
-                        padding: '0.5rem 1rem',
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
-                        border: '1px solid #F1F5F9'
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(12px)',
+                        padding: '0.65rem 1.2rem',
+                        borderRadius: '20px',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                        border: '1px solid #E2E8F0',
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 90,
+                        transition: 'all 0.2s ease-in-out'
                     }}>
                         {/* BOTÓN DE CREACIÓN */}
                         {activeTab === 'b2b' && hasEditPermission() && (
                             <button 
                                 onClick={() => handleCreateClient('b2b_client')}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 style={{ 
-                                    backgroundColor: '#0891B2', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     whiteSpace: 'nowrap',
                                     height: '40px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.85rem',
+                                    transition: 'background-color 0.2s'
                                 }}
                             >
-                                <span>➕</span> Nuevo Institucional
+                                <Plus size={16} strokeWidth={1.5} /> Nuevo Institucional
                             </button>
                         )}
                         {activeTab === 'b2c' && hasEditPermission() && (
                             <button 
                                 onClick={() => handleCreateClient('b2c_client')}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 style={{ 
-                                    backgroundColor: '#10B981', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     whiteSpace: 'nowrap',
                                     height: '40px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.85rem',
+                                    transition: 'background-color 0.2s'
                                 }}
                             >
-                                <span>👤</span> Nuevo Cliente Hogar
+                                <User size={16} strokeWidth={1.5} /> Nuevo Cliente Hogar
                             </button>
                         )}
                         {activeTab === 'leads' && hasEditPermission() && (
                             <button 
                                 onClick={() => setIsLeadModalOpen(true)}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 style={{ 
-                                    backgroundColor: '#8B5CF6', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     whiteSpace: 'nowrap',
                                     height: '40px',
-                                    fontSize: '0.85rem'
+                                    fontSize: '0.85rem',
+                                    transition: 'background-color 0.2s'
                                 }}
                             >
-                                <span>📢</span> Nuevo Prospecto
+                                <Mail size={16} strokeWidth={1.5} /> Nuevo Prospecto
                             </button>
                         )}
 
@@ -1229,10 +1361,14 @@ export default function ClientsModule() {
                                     backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
                                     boxShadow: viewMode === 'list' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px'
                                 }}
                             >
-                                📋
+                                <List size={16} strokeWidth={1.5} style={{ color: viewMode === 'list' ? THEME.colors.primary : '#64748B' }} />
                             </button>
                             <button 
                                 onClick={() => setViewMode('grid')}
@@ -1243,16 +1379,22 @@ export default function ClientsModule() {
                                     backgroundColor: viewMode === 'grid' ? 'white' : 'transparent',
                                     boxShadow: viewMode === 'grid' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px'
                                 }}
                             >
-                                🔲
+                                <Grid size={16} strokeWidth={1.5} style={{ color: viewMode === 'grid' ? THEME.colors.primary : '#64748B' }} />
                             </button>
                         </div>
 
                         {/* BUSCADOR ESTÁNDAR FLEXIBLE (OCUPANDO TODO EL ESPACIO) */}
                         <div style={{ position: 'relative', flex: 1 }}>
-                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
+                            <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                <Search size={16} strokeWidth={1.5} style={{ color: '#94A3B8' }} />
+                            </span>
                             <input 
                                 type="text"
                                 placeholder={activeTab === 'b2b' ? "Buscar por NIT, nombre comercial, contacto, sucursal, ciudad, email o teléfono..." : activeTab === 'b2c' ? "Buscar cliente hogar por nombre, nit, contacto o teléfono..." : "Buscar prospecto por empresa, nombre, notas, tipo o contacto..."}
@@ -1299,97 +1441,209 @@ export default function ClientsModule() {
                         </div>
 
                         {/* Botón Informativo (i) */}
-                        <div 
-                            onMouseEnter={() => setShowHelpTooltip(true)}
-                            onMouseLeave={() => setShowHelpTooltip(false)}
-                            style={{ 
-                                position: 'relative',
-                                width: '40px', 
-                                height: '40px', 
-                                borderRadius: '10px', 
-                                backgroundColor: '#EFF6FF', 
-                                color: '#2563EB', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                cursor: 'help',
-                                border: '1px solid #DBEAFE',
-                                fontSize: '1rem',
-                                fontWeight: '900',
-                                flexShrink: 0,
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            i
-                            {getActiveFilteredCount() !== null && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '-6px',
-                                    right: '-6px',
-                                    backgroundColor: '#10B981', // Emerald green
-                                    color: 'white',
-                                    fontSize: '0.65rem',
-                                    fontWeight: '900',
-                                    borderRadius: '9999px',
-                                    height: '18px',
-                                    minWidth: '18px',
-                                    padding: '0 5px',
-                                    display: 'flex',
-                                    alignItems: 'center',
+                        <div style={{ position: 'relative' }}>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowHelpTooltip(!showHelpTooltip);
+                                }}
+                                style={{ 
+                                    width: '40px', 
+                                    height: '40px', 
+                                    borderRadius: '10px', 
+                                    backgroundColor: showHelpTooltip ? '#ECFDF5' : '#EFF6FF', 
+                                    color: showHelpTooltip ? '#059669' : '#2563EB', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
                                     justifyContent: 'center',
-                                    border: '2px solid white',
-                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                                    animation: 'popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                    pointerEvents: 'none'
-                                }}>
-                                    {getActiveFilteredCount()}
-                                </div>
-                            )}
+                                    cursor: 'pointer',
+                                    border: '1px solid',
+                                    borderColor: showHelpTooltip ? '#A7F3D0' : '#DBEAFE',
+                                    fontSize: '1rem',
+                                    fontWeight: '900',
+                                    flexShrink: 0,
+                                    transition: 'all 0.2s',
+                                    boxShadow: showHelpTooltip ? '0 0 0 3px rgba(16, 185, 129, 0.15)' : 'none'
+                                }}
+                                title="Ver comandos de búsqueda (@)"
+                            >
+                                i
+                                {getActiveFilteredCount() !== null && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-6px',
+                                        right: '-6px',
+                                        backgroundColor: '#10B981', // Emerald green
+                                        color: 'white',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '900',
+                                        borderRadius: '9999px',
+                                        height: '18px',
+                                        minWidth: '18px',
+                                        padding: '0 5px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        border: '2px solid white',
+                                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                        animation: 'popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {getActiveFilteredCount()}
+                                    </div>
+                                )}
+                            </button>
+
                             {showHelpTooltip && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '48px',
-                                    right: '0',
-                                    width: '310px',
-                                    backgroundColor: '#1E293B',
-                                    color: 'white',
-                                    padding: '1.2rem',
-                                    borderRadius: '16px',
-                                    boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-                                    zIndex: 1000,
-                                    fontSize: '0.75rem',
-                                    lineHeight: '1.5',
-                                    pointerEvents: 'none',
-                                    animation: 'fadeInDown 0.2s ease-out'
-                                }}>
-                                    <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                        🚀 COMANDOS CRM (@)
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '10px' }}>
-                                        <div>
-                                            <b style={{ color: '#FCD34D' }}>@bogota</b>: Por ciudad<br/>
-                                            <b style={{ color: '#FCD34D' }}>@nit</b>: Por NIT<br/>
-                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo<br/>
-                                            <b style={{ color: '#FCD34D' }}>@sin acuerdo</b>: Sin acuerdo
+                                <>
+                                    {/* Backdrop transparente para cerrar al hacer clic afuera */}
+                                    <div 
+                                        onClick={() => setShowHelpTooltip(false)} 
+                                        style={{ position: 'fixed', inset: 0, zIndex: 999, cursor: 'default' }} 
+                                    />
+
+                                    <div 
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '48px',
+                                            right: '0',
+                                            width: '390px',
+                                            backgroundColor: '#FFFFFF',
+                                            color: '#1E293B',
+                                            padding: '1.25rem',
+                                            borderRadius: '20px',
+                                            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                                            border: '1px solid #E2E8F0',
+                                            zIndex: 1000,
+                                            fontSize: '0.75rem',
+                                            lineHeight: '1.5',
+                                            animation: 'fadeInDown 0.2s ease-out'
+                                        }}
+                                    >
+                                        {/* Encabezado Estilo FruFresco */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
+                                            <div>
+                                                <div style={{ fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
+                                                    <Sparkles size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Comandos de Búsqueda (@)
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500', marginTop: '2px' }}>
+                                                    Haz clic en una opción o escribe cualquier ciudad (ej: <code style={{ backgroundColor: '#F1F5F9', color: '#059669', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>@villavicencio</code>)
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => setShowHelpTooltip(false)}
+                                                style={{ border: 'none', background: '#F1F5F9', color: '#64748B', width: '26px', height: '26px', borderRadius: '8px', cursor: 'pointer', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                <X size={14} strokeWidth={2} />
+                                            </button>
                                         </div>
-                                        <div>
-                                            <b style={{ color: '#FCD34D' }}>@activo</b>: Acuerdo ok<br/>
-                                            <b style={{ color: '#FCD34D' }}>@vencido</b>: Expirado<br/>
-                                            <b style={{ color: '#FCD34D' }}>@matrix</b>: Casa Matriz<br/>
-                                            <b style={{ color: '#FCD34D' }}>@branch</b>: Sucursales
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            {/* SECCIÓN: ESTADO DE LA CUENTA */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Estado de la Cuenta
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@activo')}
+                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <Check size={13} strokeWidth={2.5} style={{ color: '#059669' }} /> @activo <span style={{ color: '#059669', fontWeight: '500' }}>Activas</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@inactivo')}
+                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <X size={13} strokeWidth={2.5} style={{ color: '#DC2626' }} /> @inactivo <span style={{ color: '#DC2626', fontWeight: '500' }}>Inactivas</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* SECCIÓN: ESTRUCTURA CLIENTE */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Estructura Comercial
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@matriz')}
+                                                        style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <Building2 size={13} strokeWidth={2} style={{ color: '#0284C7' }} /> @matriz <span style={{ color: '#0284C7', fontWeight: '500' }}>Casas Matriz</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@sucursal')}
+                                                        style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', color: '#C2410C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#EA580C' }} /> @sucursal <span style={{ color: '#EA580C', fontWeight: '500' }}>Sucursales</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* SECCIÓN: ACUERDOS COMERCIALES */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Acuerdos Comerciales
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@acuerdo_activo')}
+                                                        style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#047857', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <Sparkles size={13} strokeWidth={2} style={{ color: '#059669' }} /> @acuerdo_activo <span style={{ color: '#059669', fontWeight: '500' }}>Vigente</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@vencido')}
+                                                        style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <AlertTriangle size={13} strokeWidth={2} style={{ color: '#D97706' }} /> @vencido <span style={{ color: '#D97706', fontWeight: '500' }}>Por Vencer</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@sin_acuerdo')}
+                                                        style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#64748B', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <FileText size={13} strokeWidth={2} style={{ color: '#64748B' }} /> @sin_acuerdo <span style={{ color: '#475569', fontWeight: '500' }}>Sin Acuerdo</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* SECCIÓN: UBICACIÓN Y CIUDADES (DINÁMICO) */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.75rem 0.9rem', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04rem', marginBottom: '6px' }}>
+                                                    Ciudades y Geolocalización
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@villavicencio')}
+                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#7E22CE' }} /> @villavicencio
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@bogota')}
+                                                        style={{ background: '#F3E8FF', border: '1px solid #E9D5FF', color: '#7E22CE', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#7E22CE' }} /> @bogota
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@nogps')}
+                                                        style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <MapPin size={13} strokeWidth={2} style={{ color: '#DC2626' }} /> @nogps <span style={{ color: '#DC2626', fontWeight: '500' }}>Sin GPS</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSearchTerm('@nit')}
+                                                        style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#4338CA', padding: '4px 10px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s' }}
+                                                    >
+                                                        <FileText size={13} strokeWidth={2} style={{ color: '#4F46E5' }} /> @nit <span style={{ color: '#4F46E5', fontWeight: '500' }}>Filtro NIT</span>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <style>{`
-                                        @keyframes fadeInDown {
-                                            from { opacity: 0; transform: translateY(-10px); }
-                                            to { opacity: 1; transform: translateY(0); }
-                                        }
-                                        @keyframes popIn {
-                                            from { opacity: 0; transform: scale(0.6); }
-                                            to { opacity: 1; transform: scale(1); }
-                                        }
-                                    `}</style>
-                                </div>
+                                </>
                             )}
                         </div>
                     </div>
@@ -1409,12 +1663,12 @@ export default function ClientsModule() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 {/* Top Row: Main KPIs */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
-                                    <KPICard title="CLIENTES B2B" value={clientsB2B.length} icon={<Building2 size={20} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Institucionales" />
-                                    <KPICard title="CLIENTES B2C" value={clientsB2C.length} icon={<Home size={20} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Consumidores" />
+                                    <KPICard title="CLIENTES B2B" value={clientsB2B.length} icon={<Building2 size={18} strokeWidth={1.5} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Institucionales" />
+                                    <KPICard title="CLIENTES B2C" value={clientsB2C.length} icon={<Home size={18} strokeWidth={1.5} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Consumidores" />
                                     <KPICard 
                                         title="TAREAS CRÍTICAS" 
                                         value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
-                                        icon={<AlertTriangle size={20} />} 
+                                        icon={<AlertTriangle size={18} strokeWidth={1.5} />} 
                                         color="#EAEFEA" 
                                         textColor="#0D7A57" 
                                         subtitle="Prioridad comercial" 
@@ -1424,29 +1678,29 @@ export default function ClientsModule() {
                                 {/* Middle Row: Funnel & Critical Tasks & Sales */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
                                     {/* Funnel Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                                             <div>
-                                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <BarChart3 size={18} style={{ color: '#0D7A57' }} /> Embudo Comercial
                                                 </h3>
-                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Trayectoria del prospecto</p>
+                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Trayectoria del prospecto</p>
                                             </div>
-                                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center', minWidth: '54px' }}>
-                                                <div style={{ fontSize: '0.55rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</div>
-                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', lineHeight: '1.2' }}>{leads.length}</div>
+                                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.35rem 0.75rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, textAlign: 'center', minWidth: '54px' }}>
+                                                <div style={{ fontSize: '0.55rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: THEME.colors.textMain, lineHeight: '1.2' }}>{leads.length}</div>
                                             </div>
                                         </div>
                                         <FunnelGraphic leads={leads} />
                                     </div>
 
                                     {/* Sales Distribution Pie Chart */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{ marginBottom: '1.2rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <BarChart3 size={18} style={{ color: '#0D7A57' }} /> Distribución de Ventas
                                             </h3>
-                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Balance B2B vs B2C</p>
+                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Balance B2B vs B2C</p>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '160px' }}>
                                             <SalesPieChart 
@@ -1457,9 +1711,9 @@ export default function ClientsModule() {
                                     </div>
 
                                     {/* Task Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <AlertTriangle size={18} style={{ color: '#0D7A57' }} /> Alertas de Seguimiento
                                             </h3>
                                             <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Tareas críticas pendientes</p>
@@ -1479,10 +1733,10 @@ export default function ClientsModule() {
                                                         />
                                                     ))
                                             ) : (
-                                                <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: '#F0FDF4', borderRadius: '32px', border: '2px dashed #DCFCE7' }}>
-                                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏆</div>
-                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#166534' }}>¡Gran trabajo comercial!</h4>
-                                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: '#15803D', fontWeight: '600' }}>No tienes tareas pendientes vencidas en este momento.</p>
+                                                <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.lg, border: '1px dashed #A7F3D0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <Check size={28} strokeWidth={1.5} style={{ color: THEME.colors.primary, marginBottom: '1rem' }} />
+                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>¡Gran trabajo comercial!</h4>
+                                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>No tienes tareas pendientes vencidas en este momento.</p>
                                                 </div>
                                             )}
                                         </div>
@@ -1505,21 +1759,21 @@ export default function ClientsModule() {
                                                 onUpdatePricingModel={handleUpdatePricingModel}
                                                 onViewDetails={() => handleViewDetails(client)}
                                                 onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                agreementStatus={getAgreementStatus(client.id)}
+                                                agreementStatus={getAgreementStatus(client.id, client.parent_id)}
                                             />
                                         ))}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>IDENTIFICACIÓN / CLIENTE</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>COMERCIAL</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1530,7 +1784,8 @@ export default function ClientsModule() {
                                                         pricingModels={pricingModels}
                                                         onViewDetails={() => handleViewDetails(client)}
                                                         onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                        agreementStatus={getAgreementStatus(client.id)}
+                                                        agreementStatus={getAgreementStatus(client.id, client.parent_id)}
+                                                        isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
                                                     />
                                                 ))}
                                             </tbody>
@@ -1557,15 +1812,15 @@ export default function ClientsModule() {
                                         {clientsB2C.length === 0 && <EmptyState text="No hay clientes hogar registrados aún." />}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CLIENTE / IDENTIFICACIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>DIRECCIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1603,16 +1858,16 @@ export default function ClientsModule() {
                                         {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>PROSPECTO / EMPRESA</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>SEGUIMIENTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2105,27 +2360,28 @@ function KPICard({ title, value, icon, color, textColor, subtitle }: { title: st
         <div style={{
             backgroundColor: 'white',
             padding: '1.5rem',
-            borderRadius: '16px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+            borderRadius: THEME.radius.lg,
+            boxShadow: THEME.shadow.sm,
             display: 'flex',
             alignItems: 'center',
             gap: '1.5rem',
-            border: '1px solid #E2E8F0',
-            transition: 'all 0.2s ease-in-out',
-            cursor: 'default'
+            border: `1px solid ${THEME.colors.border}`,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            cursor: 'default',
+            fontFamily: THEME.typography.fontFamilySecondary
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.05)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.02)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
         }}>
-            <div style={{ backgroundColor: color, width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textColor, flexShrink: 0 }}>
+            <div style={{ backgroundColor: color, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textColor, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{title}</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#1E293B', margin: '0.2rem 0', lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem', fontFamily: THEME.typography.fontFamilyMain }}>{title}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0.2rem 0', lineHeight: 1.1 }}>{value}</div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '500' }}>{subtitle}</div>
             </div>
         </div>
@@ -2160,24 +2416,24 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                     alignItems: 'center',
                     justifyContent: 'center'
                 }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</span>
-                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#1E293B', marginTop: '2px' }}>${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, marginTop: '2px' }}>{formatMoney(total)}</span>
                 </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#0D7A57', marginTop: '4px' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2B</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0D7A57', marginTop: '2px' }}>${totalB2B.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2B</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0D7A57', marginTop: '2px' }}>{formatMoney(totalB2B)}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94A3B8', marginTop: '1px' }}>{Math.round(b2bPercent)}% del total</div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', borderTop: '1px solid #F1F5F9', paddingTop: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '1rem' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#7E8F9F', marginTop: '4px' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2C</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E293B', marginTop: '2px' }}>${totalB2C.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2C</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain, marginTop: '2px' }}>{formatMoney(totalB2C)}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94A3B8', marginTop: '1px' }}>{Math.round(b2cPercent)}% del total</div>
                     </div>
                 </div>
@@ -2282,7 +2538,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus }: { 
+function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
@@ -2292,7 +2548,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     onEdit?: () => void,
     onRegisterContact?: () => void,
     onScheduleTask?: (date: string) => void,
-    agreementStatus?: 'active' | 'warning' | 'none'
+    agreementStatus?: 'active' | 'warning' | 'none',
+    isInheritedAgreement?: boolean
 }) {
     const isB2B = type === 'b2b';
     const isB2C = type === 'b2c';
@@ -2314,18 +2571,27 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     return (
         <div 
             onClick={onViewDetails}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = THEME.shadow.lg;
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = THEME.shadow.md;
+            }}
             style={{ 
                 backgroundColor: 'white', 
-                borderRadius: '24px', 
+                borderRadius: THEME.radius.lg, 
                 padding: '2rem', 
-                boxShadow: '0 8px 30px rgba(0,0,0,0.04)',
-                border: '1px solid #F0F2F5',
+                boxShadow: THEME.shadow.md,
+                border: `1px solid ${THEME.colors.border}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1.5rem',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
         >
             {/* Tag / Status Area */}
@@ -2355,35 +2621,94 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 </div>
 
                 {/* TRAFFIC LIGHT (Semáforo Comercial) */}
-                {isB2B && agreementStatus && (
+                {isB2B && agreementStatus && (() => {
+                    let bg = '#F8FAFC';
+                    let border = '#E2E8F0';
+                    let color = '#64748B';
+                    let dotColor = '#94A3B8';
+                    let text = 'Sin Acuerdo';
+
+                    if (agreementStatus === 'active') {
+                        if (isInheritedAgreement) {
+                            bg = '#F0F9FF';
+                            border = '#BAE6FD';
+                            color = '#0284C7';
+                            dotColor = '#0EA5E9';
+                            text = 'Acuerdo Heredado';
+                        } else {
+                            bg = '#ECFDF5';
+                            border = '#A7F3D0';
+                            color = '#047857';
+                            dotColor = '#10B981';
+                            text = 'Acuerdo Activo';
+                        }
+                    } else if (agreementStatus === 'warning') {
+                        bg = '#FFFBEB';
+                        border = '#FDE68A';
+                        color = '#B45309';
+                        dotColor = '#F59E0B';
+                        text = 'Por Vencer';
+                    }
+
+                    return (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: bg,
+                            padding: '4px 10px',
+                            borderRadius: '10px',
+                            border: `1px solid ${border}`,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                            whiteSpace: 'nowrap'
+                        }}>
+                            <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: dotColor,
+                                boxShadow: `0 0 6px ${dotColor}aa`
+                            }} />
+                            <span style={{ 
+                                fontSize: '0.6rem', 
+                                fontWeight: '900', 
+                                color: color,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.02rem'
+                            }}>
+                                {text}
+                            </span>
+                        </div>
+                    );
+                })()}
+
+                {/* INACTIVE / ARCHIVED BADGE */}
+                {(isB2B || isB2C) && profileData?.is_active === false && (
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        backgroundColor: 'rgba(248, 250, 252, 0.9)',
+                        backgroundColor: '#FEF2F2',
                         padding: '4px 10px',
                         borderRadius: '10px',
-                        border: '1px solid #E2E8F0',
+                        border: '1px solid #FCA5A5',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                     }}>
                         <div style={{
-                            width: '10px',
-                            height: '10px',
+                            width: '8px',
+                            height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: 
-                                agreementStatus === 'active' ? '#10B981' : 
-                                agreementStatus === 'warning' ? '#F59E0B' : '#94A3B8',
-                            boxShadow: agreementStatus !== 'none' ? `0 0 8px ${agreementStatus === 'active' ? '#10B98166' : '#F59E0B66'}` : 'none'
+                            backgroundColor: '#EF4444',
+                            boxShadow: '0 0 6px #EF444488'
                         }} />
                         <span style={{ 
                             fontSize: '0.6rem', 
-                            fontWeight: '800', 
-                            color: '#475569',
+                            fontWeight: '900', 
+                            color: '#DC2626',
                             textTransform: 'uppercase',
                             letterSpacing: '0.02rem'
                         }}>
-                            {agreementStatus === 'active' ? 'Acuerdo Activo' : 
-                             agreementStatus === 'warning' ? 'Por Vencer' : 'Sin Acuerdo'}
+                            INACTIVO / ARCHIVADO
                         </span>
                     </div>
                 )}
@@ -2433,7 +2758,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         borderColor: profileData.is_corporate_parent ? '#BAE6FD' : '#FFEDD5',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                     }}>
-                        <span style={{ fontSize: '0.8rem' }}>{profileData.is_corporate_parent ? '🏰' : '📍'}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                            {profileData.is_corporate_parent ? <Building2 size={12} strokeWidth={1.5} /> : <MapPin size={12} strokeWidth={1.5} />}
+                        </span>
                         <span style={{ 
                             fontSize: '0.6rem', 
                             fontWeight: '900', 
@@ -2449,47 +2776,47 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
             {/* Header Info */}
             <div style={{ marginTop: '0.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1A202C', paddingRight: '100px', lineHeight: '1.3' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: THEME.colors.textMain, paddingRight: '100px', lineHeight: '1.3' }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
-                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: '#718096', fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
-                {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
+                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
+                {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>{isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
             </div>
 
             {/* Content Fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
                 {(isB2B || isLead || isB2C) && (
-                    <InfoRow icon="📞" label="Contacto" value={data.phone} />
+                    <InfoRow icon="" label="Contacto" value={data.phone} />
                 )}
                 {(isB2B || isLead || isB2C) && (
-                    <InfoRow icon="📧" label="Email" value={data.email} />
+                    <InfoRow icon="" label="Email" value={data.email} />
                 )}
                 {((isB2B && profileData?.nit) || (isLead && leadData?.nit)) && (
-                    <InfoRow icon="🆔" label="NIT" value={isB2B ? profileData?.nit : leadData?.nit} />
+                    <InfoRow icon="" label="NIT" value={isB2B ? profileData?.nit : leadData?.nit} />
                 )}
                 {(isB2B || isB2C) && profileData && (
                     <InfoRow 
-                        icon="📍" 
+                        icon="" 
                         label="Ubicación" 
                         value={`${profileData.address || ''}${profileData.municipality || profileData.city ? `, ${profileData.municipality || profileData.city}` : ''}${profileData.department ? `, ${profileData.department}` : ''}`} 
                     />
                 )}
                 {isLead && leadData && (
                     <InfoRow 
-                        icon="📍" 
+                        icon="" 
                         label="Ubicación" 
                         value={`${leadData.address || ''}${leadData.municipality ? `, ${leadData.municipality}` : ''}`} 
                     />
                 )}
                 {((isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude) || (isLead && leadData && leadData.latitude && leadData.longitude) ? (
-                    <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '700', paddingLeft: '1.5rem' }}>
-                        🌐 {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
+                    <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700', paddingLeft: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={12} strokeWidth={1.5} /> {isLead ? leadData?.latitude?.toFixed(4) : profileData?.latitude?.toFixed(4)}, {isLead ? leadData?.longitude?.toFixed(4) : profileData?.longitude?.toFixed(4)} 
                         <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
                     </div>
                 ) : null}
                 {isB2B && profileData && (
-                    <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.6rem' }}>⚙️ MODELO DE COTIZACIÓN</label>
+                    <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>MODELO DE COTIZACIÓN</label>
                         <select 
                             value={profileData.pricing_model_id || ''} 
                             onChange={(e) => onUpdatePricingModel && onUpdatePricingModel(profileData.id, e.target.value)}
@@ -2528,11 +2855,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
                         {profileData.needs_crates && (
                             <div style={{ backgroundColor: '#F0F9FF', color: '#0369A1', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <span>🧺</span> CON CANASTAS
+                                <Package size={12} strokeWidth={1.5} /> CON CANASTAS
                             </div>
                         )}
                         <div style={{ backgroundColor: '#F8FAFC', color: '#475569', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>📄</span> {
+                            <FileText size={12} strokeWidth={1.5} /> {
                                 profileData.document_type === 'invoice' 
                                     ? (profileData.print_invoice ? 'FACTURA IMPRESA' : 'FACTURA DIGITAL')
                                     : (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)')
@@ -2543,7 +2870,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
                 {isB2B && profileData && profileData.delivery_restrictions && (
                     <div style={{ backgroundColor: '#FFFBEB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'block', marginBottom: '0.2rem' }}>⚠️ RESTRICCIONES</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.2rem' }}><AlertTriangle size={12} strokeWidth={1.5} /> RESTRICCIONES</span>
                         <span style={{ fontSize: '0.8rem', color: '#92400E', display: 'block', marginBottom: '0.4rem' }}>{profileData.delivery_restrictions}</span>
                         
                         {profileData.logistics_data && profileData.logistics_data.windows && profileData.logistics_data.windows.length > 0 && (
@@ -2557,7 +2884,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                 gap: '8px',
                                 marginTop: '0.5rem'
                             }}>
-                                <span style={{ fontSize: '1.2rem' }}>🤖</span>
+                                <Cpu size={12} strokeWidth={1.5} style={{ color: '#92400E' }} />
                                 <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#92400E', lineHeight: '1.2' }}>
                                     FRANJA ESTRUCTURADA: {formatTimeWindow(profileData.logistics_data)}
                                 </span>
@@ -2567,8 +2894,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 )}
                 {isB2C && profileData && profileData.total_orders !== undefined && (
                     <>
-                        <InfoRow icon="🛒" label="Actividad" value={`${profileData.total_orders || 0} Pedidos | $${(profileData.total_spent || 0).toLocaleString()} totales`} />
-                        {profileData.last_order && <InfoRow icon="📅" label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
+                        <InfoRow icon="" label="Actividad" value={`${formatNumber(profileData.total_orders || 0)} Pedidos | ${formatMoney(profileData.total_spent || 0)} totales`} />
+                        {profileData.last_order && <InfoRow icon="" label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
                     </>
                 )}
                 {isLead && leadData && (
@@ -2642,7 +2969,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         )}
 
                         <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.4rem' }}>ESTADO DE GESTIÓN</label>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>ESTADO DE GESTIÓN</label>
                             <select
                                 value={leadData.status}
                                 onChange={(e) => onUpdateStatus && onUpdateStatus(leadData.id, e.target.value)}
@@ -2650,30 +2977,30 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                     width: '100%', 
                                     padding: '0.8rem', 
                                     borderRadius: '12px', 
-                                    border: '1px solid #E2E8F0',
+                                    border: `1px solid ${THEME.colors.border}`,
                                     fontWeight: '700',
                                     backgroundColor: '#F8FAFC'
                                 }}
                             >
-                                <option value="new">🆕 Nuevo Contacto</option>
-                                <option value="contacted">📞 Contactado</option>
-                                <option value="converted">✅ Convertido a Cliente</option>
-                                <option value="rejected">❌ Descartado</option>
+                                <option value="new">Nuevo Contacto</option>
+                                <option value="contacted">Contactado</option>
+                                <option value="converted">Convertido a Cliente</option>
+                                <option value="rejected">Descartado</option>
                             </select>
                         </div>
 
                         {leadData.latitude && leadData.longitude ? (
-                            <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: '#F0FDF4', borderRadius: '12px', border: '1px solid #DCFCE7', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.1rem' }}>📍</span>
+                            <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: THEME.colors.primaryLight, borderRadius: '12px', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <MapPin size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                 <div>
-                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', display: 'block' }}>UBICACIÓN VERIFICADA</label>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#15803D' }}>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.primary, display: 'block' }}>UBICACIÓN VERIFICADA</label>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textMain }}>
                                         {leadData.latitude.toFixed(6)}, {leadData.longitude.toFixed(6)}
                                         <a 
                                             href={`https://www.google.com/maps?q=${leadData.latitude},${leadData.longitude}`} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            style={{ marginLeft: '10px', color: '#0891B2', textDecoration: 'none', fontSize: '0.75rem', fontWeight: '900' }}
+                                            style={{ marginLeft: '10px', color: THEME.colors.primary, textDecoration: 'none', fontSize: '0.75rem', fontWeight: '900' }}
                                         >
                                             Abrir Mapa ↗
                                         </a>
@@ -2682,7 +3009,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         ) : (
                             <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: '#FEF2F2', borderRadius: '12px', border: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                <AlertTriangle size={16} strokeWidth={1.5} style={{ color: '#EF4444' }} />
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#991B1B', display: 'block' }}>SIN UBICACIÓN GPS</label>
                                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#B91C1C' }}>
@@ -2692,9 +3019,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         )}
                         {leadData.notes && (
-                            <div style={{ backgroundColor: '#F0FDF4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #DCFCE7' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', display: 'block', marginBottom: '0.2rem' }}>📝 NOTA</span>
-                                <span style={{ fontSize: '0.8rem', color: '#166534' }}>{leadData.notes}</span>
+                            <div style={{ backgroundColor: THEME.colors.primaryLight, padding: '0.8rem', borderRadius: '12px', border: '1px solid #A7F3D0' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, display: 'block', marginBottom: '0.2rem' }}>NOTA</span>
+                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textMain }}>{leadData.notes}</span>
                             </div>
                         )}
                     </>
@@ -2704,12 +3031,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
             {/* Actions */}
             <div 
                 onClick={(e) => e.stopPropagation()}
-                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F0F2F5', display: 'flex', gap: '0.5rem' }}
+                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '0.5rem' }}
             >
                 {onViewDetails && (
                     <button 
                         onClick={onViewDetails}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s' }} 
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
@@ -2719,7 +3046,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {(isB2B || isB2C) && onEdit && (
                     <button 
                         onClick={onEdit}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
                         Editar
                     </button>
@@ -2727,9 +3056,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {isLead && onRegisterContact && (
                     <button 
                         onClick={onRegisterContact}
-                        style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        style={{ flex: 1.5, padding: '0.5rem 0.8rem', borderRadius: '8px', border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.75rem' }}
                     >
-                        <span>✅</span> Registrar Contacto
+                        <Check size={14} strokeWidth={1.5} /> Contacto
                     </button>
                 )}
                 {isLead && onScheduleTask && (
@@ -2738,28 +3067,31 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             const date = window.prompt('Fecha de siguiente contacto (AAAA-MM-DD):', new Date(Date.now() + 86400000).toISOString().split('T')[0]);
                             if (date) onScheduleTask(date);
                         }}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
-                        📅 Tarea
+                        <Sliders size={14} strokeWidth={1.5} /> Tarea
                     </button>
                 )}
                 <button 
                     onClick={handleWhatsApp}
-                    style={{ padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#25D366', color: 'white', fontWeight: '800', cursor: 'pointer' }}
+                    style={{ padding: '0.5rem 0.8rem', borderRadius: '8px', border: 'none', background: '#25D366', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.75rem' }}
                 >
-                    💬 WhatsApp
+                    <Phone size={14} strokeWidth={1.5} /> WhatsApp
                 </button>
             </div>
         </div>
     );
 }
 
-function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, onRegisterContact }: { 
+function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, isInheritedAgreement, onRegisterContact }: { 
     client: Profile, 
     pricingModels?: PricingModel[], 
     onViewDetails: () => void, 
     onEdit?: () => void, 
     agreementStatus?: 'active' | 'warning' | 'none',
+    isInheritedAgreement?: boolean,
     onRegisterContact?: () => void
 }) {
     const isB2B = client.role === 'b2b_client';
@@ -2791,18 +3123,18 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
 
     return (
         <tr 
-            style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s', cursor: 'pointer' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+            style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s', cursor: 'pointer' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAF9')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             onClick={onViewDetails}
         >
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
                 {isLead ? (
                     <>
-                        {client.nit && <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit}</div>}
+                        {client.nit && <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit}</div>}
                         <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                            {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
+                            {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
                             {(client as any).business_size && (() => {
                                 const size = (client as any).business_size;
                                 let bg = '#F3F4F6';
@@ -2812,7 +3144,6 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                                 else if (size.includes('Pequeño') || size.includes('< 10M') || size.includes('Peq')) { bg = '#FEE2E2'; textCol = '#B91C1C'; }
                                 return (
                                     <span style={{ fontSize: '0.65rem', backgroundColor: bg, color: textCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                                        {size.includes('Grande') || size.includes('30M') ? '🟢 ' : size.includes('Mediano') || size.includes('10M') ? '🟡 ' : '🔴 '}
                                         {size}
                                     </span>
                                 );
@@ -2821,34 +3152,70 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                     </>
                 ) : (
                     <>
-                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
-                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
                             {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
-                            {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0' }}>🧺 SI</span>}
-                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0' }}>
-                                📄 {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
+                            {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
+                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
                             </span>
                         </div>
                     </>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
-                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>📞 {client.phone}</div>
-                {client.email && <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '600', marginTop: '2px' }}>📧 {client.email}</div>}
+                <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>{client.phone}</div>
+                {client.email && <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', marginTop: '2px' }}>{client.email}</div>}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
                     {displayCity ? `${displayCity} / ` : ''}{displayMunicipality || '---'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{displayAddress || '---'}</div>
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
-                {isB2B ? (
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                {isB2B || client.role === 'b2c_client' ? (
                     <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0891B2' }}>{selectedModel?.name || 'Varios'}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios</div>
+                        {client.is_active !== false ? (
+                            <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '3px 8px', 
+                                borderRadius: '6px', 
+                                fontWeight: '900', 
+                                backgroundColor: '#ECFDF5',
+                                color: '#059669',
+                                border: '1px solid #A7F3D0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+                                ACTIVO
+                            </span>
+                        ) : (
+                            <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '3px 8px', 
+                                borderRadius: '6px', 
+                                fontWeight: '900', 
+                                backgroundColor: '#FEF2F2',
+                                color: '#DC2626',
+                                border: '1px solid #FCA5A5',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
+                                INACTIVO
+                            </span>
+                        )}
+                        {selectedModel?.name && selectedModel?.name !== 'Varios' && (
+                            <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '4px', fontWeight: '600' }}>
+                                {selectedModel.name}
+                            </div>
+                        )}
                     </div>
                 ) : isLead ? (
                     <span style={{ 
@@ -2860,13 +3227,17 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         backgroundColor: (client as any).status === 'new' ? '#EEF2FF' : '#FFFBEB',
                         color: (client as any).status === 'new' ? '#4F46E5' : '#D97706'
                     }}>
-                        {(client as any).status}
+                        {(client as any).status === 'new' ? 'NUEVO' : 
+                         (client as any).status === 'contacted' ? 'CONTACTADO' : 
+                         (client as any).status === 'converted' ? 'CONVERTIDO' : 
+                         (client as any).status === 'rejected' ? 'DESCARTADO' : 
+                         (client as any).status}
                     </span>
                 ) : (
                     <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Hogar</span>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 {isLead ? (
                     <div>
                         {(client as any).last_contact_date ? (
@@ -2881,44 +3252,119 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         )}
                     </div>
                 ) : (
-                    <>
-                        {agreementStatus && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                <div style={{ 
-                                    width: '8px', height: '8px', borderRadius: '50%', 
-                                    backgroundColor: agreementStatus === 'active' ? '#10B981' : agreementStatus === 'warning' ? '#F59E0B' : '#CBD5E1' 
-                                }} />
-                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
-                            </div>
-                        )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-start' }}>
+                        {agreementStatus && (() => {
+                            let bg = '#F8FAFC';
+                            let border = '#E2E8F0';
+                            let color = '#64748B';
+                            let dotColor = '#94A3B8';
+                            let text = 'SIN ACUERDO';
+
+                            if (agreementStatus === 'active') {
+                                if (isInheritedAgreement) {
+                                    bg = '#F0F9FF';
+                                    border = '#BAE6FD';
+                                    color = '#0284C7';
+                                    dotColor = '#0EA5E9';
+                                    text = '🏢 HEREDADO';
+                                } else {
+                                    bg = '#ECFDF5';
+                                    border = '#A7F3D0';
+                                    color = '#047857';
+                                    dotColor = '#10B981';
+                                    text = '⚡ AL DÍA';
+                                }
+                            } else if (agreementStatus === 'warning') {
+                                bg = '#FFFBEB';
+                                border = '#FDE68A';
+                                color = '#B45309';
+                                dotColor = '#F59E0B';
+                                text = '⚠️ POR VENCER';
+                            }
+
+                            return (
+                                <span style={{
+                                    fontSize: '0.68rem',
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    fontWeight: '900',
+                                    backgroundColor: bg,
+                                    color: color,
+                                    border: `1px solid ${border}`,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotColor, boxShadow: `0 0 4px ${dotColor}aa` }} />
+                                    {text}
+                                </span>
+                            );
+                        })()}
+
                         {(client.latitude && client.longitude) ? (
-                            <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900' }}>🗺️ GPS OK</div>
+                            <span style={{
+                                fontSize: '0.65rem',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                fontWeight: '800',
+                                backgroundColor: '#F0FDF4',
+                                color: '#15803D',
+                                border: '1px solid #BBF7D0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                <MapPin size={10} strokeWidth={2} style={{ color: '#16A34A' }} /> GPS OK
+                            </span>
                         ) : (
-                            <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>📍 NO GPS</div>
+                            <span style={{
+                                fontSize: '0.65rem',
+                                padding: '2px 7px',
+                                borderRadius: '6px',
+                                fontWeight: '800',
+                                backgroundColor: '#FEF2F2',
+                                color: '#B91C1C',
+                                border: '1px solid #FECACA',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                <MapPin size={10} strokeWidth={2} style={{ color: '#DC2626' }} /> SIN GPS
+                            </span>
                         )}
-                    </>
+                    </div>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                     {!isLead && onEdit && (
                         <button 
                             onClick={onEdit} 
-                            style={{ background: '#F1F5F9', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            style={{ background: '#F1F5F9', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Editar"
-                        >✏️</button>
+                        >
+                            <Edit2 size={14} strokeWidth={1.5} style={{ color: '#475569' }} />
+                        </button>
                     )}
                     <button 
                         onClick={handleWhatsApp} 
-                        style={{ background: '#DCFCE7', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                        style={{ background: '#DCFCE7', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="WhatsApp"
-                    >💬</button>
+                    >
+                        <Phone size={14} strokeWidth={1.5} style={{ color: '#166534' }} />
+                    </button>
                     {onRegisterContact && (
                         <button 
                             onClick={onRegisterContact} 
-                            style={{ background: '#F3E8FF', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            style={{ background: '#F3E8FF', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Registrar Contacto"
-                        >📞</button>
+                        >
+                            <Check size={14} strokeWidth={1.5} style={{ color: '#6B21A8' }} />
+                        </button>
                     )}
                 </div>
             </td>
@@ -2929,10 +3375,10 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
 function InfoRow({ icon, label, value }: { icon: string, label: string, value: string | number | undefined | null }) {
     return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem' }}>{icon}</span>
+            {icon && <span style={{ fontSize: '1rem' }}>{icon}</span>}
             <div style={{ fontSize: '0.78rem' }}>
-                <span style={{ color: '#718096', fontWeight: '600' }}>{label}: </span>
-                <span style={{ color: '#1A202C', fontWeight: '800' }}>{value || 'N/A'}</span>
+                <span style={{ color: THEME.colors.textSecondary, fontWeight: '600' }}>{label}: </span>
+                <span style={{ color: THEME.colors.textMain, fontWeight: '800' }}>{value || 'N/A'}</span>
             </div>
         </div>
     );
@@ -2940,9 +3386,9 @@ function InfoRow({ icon, label, value }: { icon: string, label: string, value: s
 
 function EmptyState({ text }: { text: string }) {
     return (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: '24px', border: '2px dashed #E2E8F0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔦</div>
-            <p style={{ color: '#718096', fontWeight: '700' }}>{text}</p>
+        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Search size={32} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }} />
+            <p style={{ color: THEME.colors.textSecondary, fontWeight: '700' }}>{text}</p>
         </div>
     );
 }
@@ -3123,6 +3569,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         payment_days: (editData as any)?.payment_days || 0,
         email_2: (editData as any)?.email_2 || '',
         email_3: (editData as any)?.email_3 || '',
+        is_active: editData?.is_active !== undefined ? editData.is_active : true,
         notify_email_1: (editData as any)?.notify_email_1 !== undefined ? (editData as any).notify_email_1 : true,
         notify_email_2: (editData as any)?.notify_email_2 || false,
         notify_email_3: (editData as any)?.notify_email_3 || false,
@@ -3153,6 +3600,43 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         fetchExceptionCount();
     }, [editData?.id]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
+
+    // B2B access credentials states
+    const [b2bAccess, setB2bAccess] = useState<{ hasAccess: boolean, email?: string, createdAt?: string } | null>(null);
+    const [loadingAccess, setLoadingAccess] = useState(false);
+    const [showCredentialModal, setShowCredentialModal] = useState(false);
+    const [tempPassword, setTempPassword] = useState('');
+    const [tempEmail, setTempEmail] = useState('');
+    const [generatingAccess, setGeneratingAccess] = useState(false);
+    const [generatedCreds, setGeneratedCreds] = useState<{ email: string, pass: string } | null>(null);
+
+    const checkB2bAccess = async () => {
+        if (!isEdit || !isB2B) return;
+        setLoadingAccess(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) return;
+
+            const res = await fetch(`/api/b2b/create-account?profileId=${editData.id}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setB2bAccess(data);
+            }
+        } catch (e) {
+            console.error('Error checking B2B access:', e);
+        } finally {
+            setLoadingAccess(false);
+        }
+    };
+
+    useEffect(() => {
+        checkB2bAccess();
+    }, [isEdit, isB2B, editData?.id]);
 
     const [branches, setBranches] = useState<Profile[]>([]);
 
@@ -3255,14 +3739,29 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
     // Initialización / Actualización del Mapa Interactivo
     useEffect(() => {
-        if (!mapRef.current || !window.google || isLead) return;
+        if (!mapRef.current || !window.google) return;
 
-        const latVal = parseFloat(String(formData.latitude));
-        const lngVal = parseFloat(String(formData.longitude));
-        
-        // Bogotá center generic coords if null
-        const lat = !isNaN(latVal) ? latVal : 4.6097;
-        const lng = !isNaN(lngVal) ? lngVal : -74.0817; 
+        let latVal = 4.6097;
+        let lngVal = -74.0817;
+        let draggable = !isReadOnly;
+
+        if (isLead) {
+            draggable = false;
+            if (editData?.latitude && editData?.longitude) {
+                latVal = parseFloat(String(editData.latitude));
+                lngVal = parseFloat(String(editData.longitude));
+            } else {
+                return;
+            }
+        } else {
+            const latF = parseFloat(String(formData.latitude));
+            const lngF = parseFloat(String(formData.longitude));
+            latVal = !isNaN(latF) ? latF : 4.6097;
+            lngVal = !isNaN(lngF) ? lngF : -74.0817;
+        }
+
+        const lat = latVal;
+        const lng = lngVal;
 
         if (!mapInstance.current) {
             mapInstance.current = new window.google.maps.Map(mapRef.current, {
@@ -3276,45 +3775,42 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             markerInstance.current = new window.google.maps.Marker({
                 position: { lat, lng },
                 map: mapInstance.current,
-                draggable: !isReadOnly,
+                draggable: draggable,
                 animation: window.google.maps.Animation.DROP
             });
 
-            // Sincronizar el arrastre del marcador con el formulario
-            markerInstance.current.addListener('dragend', () => {
-                if (!markerInstance.current) return;
-                const pos = markerInstance.current.getPosition();
-                if (!pos) return;
-                setFormData(prev => ({
-                    ...prev,
-                    latitude: pos.lat().toFixed(7),
-                    longitude: pos.lng().toFixed(7),
-                    geocoding_status: 'manual'
-                }));
-            });
+            if (!isLead) {
+                markerInstance.current.addListener('dragend', () => {
+                    if (!markerInstance.current) return;
+                    const pos = markerInstance.current.getPosition();
+                    if (!pos) return;
+                    setFormData(prev => ({
+                        ...prev,
+                        latitude: pos.lat().toFixed(7),
+                        longitude: pos.lng().toFixed(7),
+                        geocoding_status: 'manual'
+                    }));
+                });
 
-            // Click en mapa para mover marcador
-            mapInstance.current.addListener('click', (e: google.maps.MapMouseEvent) => {
-                if (isReadOnly) return;
-                const pos = e.latLng;
-                if (!pos || !markerInstance.current) return;
-                markerInstance.current.setPosition(pos);
-                setFormData(prev => ({
-                    ...prev,
-                    latitude: pos.lat().toFixed(7),
-                    longitude: pos.lng().toFixed(7),
-                    geocoding_status: 'manual'
-                }));
-            });
-        } else {
-            // Solo actualizamos posición si no estamos en modo "Manual" (para no romper la interacción del usuario)
-            if (formData.geocoding_status === 'verified') {
-                const newPos = { lat, lng };
-                mapInstance.current?.setCenter(newPos);
-                markerInstance.current?.setPosition(newPos);
+                mapInstance.current.addListener('click', (e: google.maps.MapMouseEvent) => {
+                    if (isReadOnly) return;
+                    const pos = e.latLng;
+                    if (!pos || !markerInstance.current) return;
+                    markerInstance.current.setPosition(pos);
+                    setFormData(prev => ({
+                        ...prev,
+                        latitude: pos.lat().toFixed(7),
+                        longitude: pos.lng().toFixed(7),
+                        geocoding_status: 'manual'
+                    }));
+                });
             }
+        } else {
+            const newPos = { lat, lng };
+            mapInstance.current.setCenter(newPos);
+            markerInstance.current?.setPosition(newPos);
         }
-    }, [formData.latitude, formData.longitude, formData.geocoding_status, isReadOnly, isLead]);
+    }, [formData.latitude, formData.longitude, formData.geocoding_status, editData?.latitude, editData?.longitude, isReadOnly, isLead]);
 
     const handleGeocode = async () => {
         if (!formData.address) {
@@ -3497,6 +3993,42 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             {isLead ? `Detalles del lead capturado por el chatbot` : isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
                         </p>
                     </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginLeft: 'auto', marginRight: '1.5rem' }}>
+                        {!isLead && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: formData.is_active ? '#F0FDF4' : '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '16px', border: '1px solid', borderColor: formData.is_active ? '#BBF7D0' : '#FCA5A5' }}>
+                                <div style={{ textAlign: 'right' }}>
+                                    <span style={{ fontSize: '0.6rem', fontWeight: '900', color: formData.is_active ? '#166534' : '#991B1B', textTransform: 'uppercase', letterSpacing: '0.02rem', display: 'block' }}>
+                                        Estado de la Cuenta
+                                    </span>
+                                    <span style={{ fontSize: '0.7rem', color: formData.is_active ? '#15803D' : '#B91C1C', fontWeight: '600' }}>
+                                        {formData.is_active ? 'Ventas Habilitadas' : 'Ventas Bloqueadas'}
+                                    </span>
+                                </div>
+                                <select
+                                    value={formData.is_active ? 'active' : 'inactive'}
+                                    onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
+                                    disabled={isReadOnly}
+                                    style={{
+                                        padding: '0.45rem 0.9rem',
+                                        borderRadius: '12px',
+                                        border: '1px solid',
+                                        borderColor: formData.is_active ? '#16A34A' : '#DC2626',
+                                        fontWeight: '900',
+                                        fontSize: '0.82rem',
+                                        color: formData.is_active ? '#15803D' : '#B91C1C',
+                                        backgroundColor: 'white',
+                                        cursor: isReadOnly ? 'default' : 'pointer',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    <option value="active">🟢 ACTIVO</option>
+                                    <option value="inactive">🔴 INACTIVO / ARCHIVADO</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
                     <button 
                         onClick={onClose} 
                         style={{ 
@@ -3543,6 +4075,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <div>
                                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tamaño de Negocio</span>
                                             <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#334155', marginTop: '0.2rem' }}>{(editData as any)?.business_size || 'No especificado'}</div>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>NIT</span>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#334155', marginTop: '0.2rem' }}>{editData?.nit || 'No registrado'}</div>
                                         </div>
                                     </div>
                                 </section>
@@ -3766,6 +4302,76 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             )}
                         </section>
 
+                        {/* BLOQUE: SEGURIDAD Y ACCESO B2B */}
+                        {isB2B && isReadOnly && isEdit && (
+                            <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SEGURIDAD Y ACCESO AL PORTAL</h4>
+                                </div>
+
+                                {loadingAccess ? (
+                                    <div style={{ padding: '1rem', color: THEME.colors.textSecondary, fontStyle: 'italic', fontSize: '0.85rem' }}>
+                                        Comprobando estado de acceso...
+                                    </div>
+                                ) : b2bAccess?.hasAccess ? (
+                                    <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1.2rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#047857', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <CheckCircle2 size={16} /> ACCESO INSTITUCIONAL ACTIVO
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#065F46', fontWeight: '500' }}>
+                                            El cliente tiene una cuenta activa vinculada en el sistema.
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.4rem', borderTop: '1px dashed #A7F3D0', paddingTop: '0.6rem', fontSize: '0.8rem' }}>
+                                            <div>
+                                                <span style={{ color: '#065F46', fontWeight: '800', display: 'block', textTransform: 'uppercase', fontSize: '0.65rem' }}>Usuario (Email)</span>
+                                                <span style={{ color: '#064E3B', fontWeight: '700' }}>{b2bAccess.email}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#065F46', fontWeight: '800', display: 'block', textTransform: 'uppercase', fontSize: '0.65rem' }}>Creado el</span>
+                                                <span style={{ color: '#064E3B', fontWeight: '700' }}>{new Date(b2bAccess.createdAt || '').toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1.2rem', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748B', fontWeight: '900', fontSize: '0.85rem' }}>
+                                                <AlertCircle size={16} /> SIN ACCESO AL PORTAL B2B
+                                            </div>
+                                            <p style={{ margin: '0.3rem 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>
+                                                Este cliente no tiene una cuenta de usuario en Supabase Auth y no puede ingresar al Portal Institucional.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTempEmail(formData.email || formData.contact_email || '');
+                                                setTempPassword(Math.random().toString(36).substring(2, 10) + 'A1*');
+                                                setGeneratedCreds(null);
+                                                setShowCredentialModal(true);
+                                            }}
+                                            style={{
+                                                padding: '0.6rem 1.2rem',
+                                                backgroundColor: THEME.colors.primary,
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '12px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 10px rgba(13, 122, 87, 0.15)',
+                                                fontFamily: THEME.typography.fontFamilyMain,
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            Generar Acceso B2B
+                                        </button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
+
                         {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ) */}
                         {formData.is_corporate_parent && (
                             <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '24px', border: '1px solid #BAE6FD' }}>
@@ -3813,6 +4419,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
                                 <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
                             </div>
+
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 {isB2C ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
@@ -4515,6 +5122,133 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 </form>
                 )}
             </div>
+
+            {/* MODAL PARA GENERAR CREDENCIALES B2B */}
+            {showCredentialModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', width: '100%', maxWidth: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: '900', color: THEME.colors.textMain, margin: '0 0 1rem', fontFamily: THEME.typography.fontFamilyMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Lock size={20} color={THEME.colors.primary} /> Otorgar Acceso B2B
+                        </h3>
+                        
+                        {!generatedCreds ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0, lineHeight: '1.4' }}>
+                                    Esto creará un usuario de inicio de sesión en Supabase Auth y lo vinculará automáticamente al perfil comercial actual.
+                                </p>
+                                
+                                <FormField 
+                                    label="Confirmar Correo de Acceso" 
+                                    value={tempEmail} 
+                                    onChange={setTempEmail} 
+                                    required 
+                                />
+                                
+                                <FormField 
+                                    label="Contraseña Temporal" 
+                                    value={tempPassword} 
+                                    onChange={setTempPassword} 
+                                    required 
+                                />
+
+                                <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowCredentialModal(false)}
+                                        style={{ flex: 1, padding: '0.6rem', border: '1px solid #D1D5DB', borderRadius: '10px', background: 'white', color: '#475569', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        disabled={generatingAccess}
+                                        onClick={async () => {
+                                            if (!tempEmail || !tempPassword) return alert('Email y contraseña son obligatorios');
+                                            setGeneratingAccess(true);
+                                            try {
+                                                const { data: { session } } = await supabase.auth.getSession();
+                                                const token = session?.access_token;
+                                                if (!token) return alert('Sesión de administrador no válida');
+
+                                                const res = await fetch('/api/b2b/create-account', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        'Authorization': `Bearer ${token}`
+                                                    },
+                                                    body: JSON.stringify({
+                                                        profileId: editData.id,
+                                                        email: tempEmail,
+                                                        password: tempPassword
+                                                    })
+                                                });
+                                                const data = await res.json();
+                                                if (res.ok && data.success) {
+                                                    setGeneratedCreds({ email: tempEmail, pass: tempPassword });
+                                                    checkB2bAccess();
+                                                } else {
+                                                    alert(data.error || 'Error al generar credenciales');
+                                                }
+                                            } catch (err: any) {
+                                                alert('Error de red: ' + err.message);
+                                            } finally {
+                                                setGeneratingAccess(false);
+                                            }
+                                        }}
+                                        style={{ flex: 1, padding: '0.6rem', border: 'none', borderRadius: '10px', background: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        {generatingAccess ? 'Generando...' : 'Confirmar Acceso'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '1rem', borderRadius: '16px', color: '#047857', fontSize: '0.8rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    ✓ ACCESO CREADO CON ÉXITO
+                                </div>
+                                <p style={{ fontSize: '0.8rem', color: '#475569', margin: 0, lineHeight: '1.4' }}>
+                                    Por favor copia estas credenciales temporales y compártelas de forma segura con el cliente institucional. Se le solicitará cambiar la contraseña en su primer ingreso.
+                                </p>
+                                
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                    <div>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Usuario / Email</span>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B' }}>{generatedCreds.email}</span>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Contraseña Temporal</span>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B', fontFamily: 'monospace' }}>{generatedCreds.pass}</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
+                                    <button 
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(`Credenciales FruFresco B2B:\nUsuario: ${generatedCreds.email}\nContraseña: ${generatedCreds.pass}\nIngresar en: ${window.location.origin}/login`);
+                                                alert('¡Credenciales copiadas al portapapeles!');
+                                            } catch (e) {
+                                                alert('No se pudo copiar automáticamente. Por favor cópialas manualmente.');
+                                            }
+                                        }}
+                                        style={{ flex: 1, padding: '0.6rem', border: `1px solid ${THEME.colors.primary}`, borderRadius: '10px', background: 'white', color: THEME.colors.primary, fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        Copiar Datos
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowCredentialModal(false)}
+                                        style={{ flex: 1, padding: '0.6rem', border: 'none', borderRadius: '10px', background: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                    >
+                                        Entendido
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -4856,6 +5590,190 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         if (!error) fetchData();
     };
 
+    const handleExportExcel = () => {
+        try {
+            // 1. Prepare data for sheet 1: Excepciones y Notas
+            const sheet1Data = products.map(p => {
+                const exc = exceptions.find(e => e.product_id === p.id);
+                const subProduct = exc?.substitution_product_id ? products.find(prod => prod.id === exc.substitution_product_id) : null;
+                
+                let varString = '';
+                if (exc?.preferred_options && Object.keys(exc.preferred_options).length > 0) {
+                    varString = Object.entries(exc.preferred_options)
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join(' | ');
+                }
+
+                return {
+                    'CODIGO_CONTABLE': p.accounting_id || '',
+                    'PRODUCTO': p.name || '',
+                    'NOMBRE_FACTURA': exc?.nickname || '',
+                    'VARIACION_REQUERIDA': varString,
+                    'NOTA_PICKING': exc?.picking_note || '',
+                    'SUSTITUTO_CODIGO_CONTABLE': subProduct?.accounting_id || '',
+                    'NOTA_ENTREGA': exc?.delivery_note || ''
+                };
+            });
+
+            // 2. Prepare data for sheet 2: Variantes Estandarizadas
+            const sheet2Data: any[] = [];
+            products.forEach(p => {
+                if (p.options_config && p.options_config.length > 0) {
+                    p.options_config.forEach((opt: any) => {
+                        sheet2Data.push({
+                            'CODIGO_CONTABLE': p.accounting_id || '',
+                            'PRODUCTO': p.name || '',
+                            'ATRIBUTO': opt.name || '',
+                            'VALORES_PERMITIDOS': opt.values ? opt.values.join(', ') : ''
+                        });
+                    });
+                } else {
+                    sheet2Data.push({
+                        'CODIGO_CONTABLE': p.accounting_id || '',
+                        'PRODUCTO': p.name || '',
+                        'ATRIBUTO': 'Sin atributos',
+                        'VALORES_PERMITIDOS': 'Producto base'
+                    });
+                }
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws1 = XLSX.utils.json_to_sheet(sheet1Data);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Excepciones y Notas');
+            
+            const ws2 = XLSX.utils.json_to_sheet(sheet2Data);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Variantes Estandarizadas');
+
+            XLSX.writeFile(wb, `Excepciones_Logisticas_B2B_${clientId.slice(0,8)}.xlsx`);
+            window.showToast?.('Planilla descargada con éxito', 'success');
+        } catch (err: any) {
+            console.error('Error exporting Excel:', err);
+            window.showToast?.('Error al descargar planilla: ' + err.message, 'error');
+        }
+    };
+
+    const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        setLoading(true);
+        try {
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const bstr = evt.target?.result;
+                    const wb = XLSX.read(bstr, { type: 'binary' });
+                    
+                    const wsname = wb.SheetNames[0];
+                    const ws = wb.Sheets[wsname];
+                    const rawData: any[] = XLSX.utils.sheet_to_json(ws);
+                    
+                    if (rawData.length === 0) {
+                        throw new Error('La planilla está vacía.');
+                    }
+
+                    const upsertRows: any[] = [];
+                    
+                    for (let i = 0; i < rawData.length; i++) {
+                        const row = rawData[i];
+                        const rowNum = i + 2;
+                        
+                        const accId = row.CODIGO_CONTABLE;
+                        if (accId === undefined || accId === '') continue;
+
+                        const product = products.find(p => String(p.accounting_id) === String(accId));
+                        if (!product) {
+                            throw new Error(`Fila ${rowNum}: El Código Contable "${accId}" no corresponde a ningún producto activo.`);
+                        }
+
+                        const varReq = row.VARIACION_REQUERIDA || '';
+                        const parsedPrefOptions: Record<string, string> = {};
+                        
+                        if (varReq.trim()) {
+                            const parts = String(varReq).split('|');
+                            for (const part of parts) {
+                                const kv = part.split(':');
+                                if (kv.length !== 2) {
+                                    throw new Error(`Fila ${rowNum}: Formato de variación inválido en "${part}". Debe ser "Atributo: Valor" y estar separado por barra vertical (|).`);
+                                }
+                                const attrName = kv[0].trim();
+                                const attrVal = kv[1].trim();
+                                
+                                const configOpt = product.options_config?.find((opt: any) => opt.name.toLowerCase() === attrName.toLowerCase());
+                                if (!configOpt) {
+                                    throw new Error(`Fila ${rowNum}: El atributo "${attrName}" no está configurado para el producto "${product.name}".`);
+                                }
+                                
+                                const valAllowed = configOpt.values?.find((v: string) => v.toLowerCase() === attrVal.toLowerCase());
+                                if (!valAllowed) {
+                                    throw new Error(`Fila ${rowNum}: El valor "${attrVal}" no es válido para el atributo "${configOpt.name}". Opciones válidas: ${configOpt.values?.join(', ')}.`);
+                                }
+
+                                parsedPrefOptions[configOpt.name] = valAllowed;
+                            }
+                        }
+
+                        let substitutionProductId = null;
+                        const subAccId = row.SUSTITUTO_CODIGO_CONTABLE;
+                        if (subAccId !== undefined && subAccId !== '') {
+                            const subProduct = products.find(p => String(p.accounting_id) === String(subAccId));
+                            if (!subProduct) {
+                                throw new Error(`Fila ${rowNum}: El Código Contable del Sustituto "${subAccId}" no corresponde a ningún producto activo.`);
+                            }
+                            if (subProduct.id === product.id) {
+                                throw new Error(`Fila ${rowNum}: El producto sustituto no puede ser el mismo producto original.`);
+                            }
+                            substitutionProductId = subProduct.id;
+                        }
+
+                        const nickname = String(row.NOMBRE_FACTURA || '').trim();
+                        const pickingNote = String(row.NOTA_PICKING || '').trim();
+                        const deliveryNote = String(row.NOTA_ENTREGA || '').trim();
+
+                        const existingExc = exceptions.find(e => e.product_id === product.id);
+
+                        if (nickname || pickingNote || deliveryNote || Object.keys(parsedPrefOptions).length > 0 || substitutionProductId) {
+                            upsertRows.push({
+                                id: existingExc?.id || undefined,
+                                customer_id: clientId,
+                                product_id: product.id,
+                                nickname: nickname || null,
+                                picking_note: pickingNote || null,
+                                substitution_product_id: substitutionProductId,
+                                delivery_note: deliveryNote || null,
+                                preferred_options: parsedPrefOptions
+                            });
+                        } else if (existingExc) {
+                            await supabase.from('product_nicknames').delete().eq('id', existingExc.id);
+                        }
+                    }
+
+                    if (upsertRows.length > 0) {
+                        const { error: upsertErr } = await supabase
+                            .from('product_nicknames')
+                            .upsert(upsertRows);
+                        
+                        if (upsertErr) throw upsertErr;
+                    }
+
+                    window.showToast?.('Planilla cargada y excepciones sincronizadas con éxito', 'success');
+                    fetchData();
+                } catch (err: any) {
+                    console.error('Error parsing sheet:', err);
+                    window.showToast?.(err.message || 'Error al procesar planilla', 'error');
+                } finally {
+                    setLoading(false);
+                    e.target.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        } catch (err: any) {
+            console.error('Error reading file:', err);
+            window.showToast?.('Error al leer el archivo', 'error');
+            setLoading(false);
+        }
+    };
+
     // Find original product helper
     const getProductDetails = (id: string) => {
         return products.find(p => p.id === id);
@@ -4898,30 +5816,88 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                 </header>
 
                 <div ref={scrollableRef} style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
-                    {/* INSTRUCTIVO DE USO */}
+                    {/* INSTRUCTIVO DE USO E IMPORTACIÓN/EXPORTACIÓN */}
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <button
-                            onClick={() => setShowGuide(!showGuide)}
-                            style={{
-                                background: '#EFF6FF',
-                                border: '1px solid #BFDBFE',
-                                color: '#1D4ED8',
-                                padding: '8px 16px',
-                                borderRadius: '8px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s',
-                                fontFamily: THEME.typography.fontFamilySecondary
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                        >
-                            📖 {showGuide ? 'Ocultar Instructivo de Uso' : 'Ver Instructivo de Uso (Guía Operativa)'}
-                        </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: showGuide ? '1rem' : '0' }}>
+                            <button
+                                onClick={() => setShowGuide(!showGuide)}
+                                style={{
+                                    background: '#EFF6FF',
+                                    border: '1px solid #BFDBFE',
+                                    color: '#1D4ED8',
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.2s',
+                                    fontFamily: THEME.typography.fontFamilySecondary
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                            >
+                                📖 {showGuide ? 'Ocultar Instructivo de Uso' : 'Ver Instructivo (Guía Operativa)'}
+                            </button>
+
+                            {!readOnly && (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={handleExportExcel}
+                                        type="button"
+                                        style={{
+                                            background: '#ECFDF5',
+                                            border: '1px solid #A7F3D0',
+                                            color: '#047857',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            transition: 'all 0.2s',
+                                            fontFamily: THEME.typography.fontFamilySecondary
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                                    >
+                                        📥 Descargar Planilla
+                                    </button>
+
+                                    <label
+                                        style={{
+                                            background: '#EEF2FF',
+                                            border: '1px solid #C7D2FE',
+                                            color: '#4F46E5',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            transition: 'all 0.2s',
+                                            fontFamily: THEME.typography.fontFamilySecondary
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0E7FF'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EEF2FF'}
+                                    >
+                                        📤 Cargar Planilla
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx, .xls" 
+                                            onChange={handleImportExcel} 
+                                            style={{ display: 'none' }} 
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
 
                         {showGuide && (
                             <div style={{
@@ -5240,6 +6216,56 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     </div>
                                 </div>
 
+                                {/* B. VARIACIONES ESTANDARIZADAS */}
+                                {selectedOriginalProd && selectedOriginalProd.options_config && selectedOriginalProd.options_config.length > 0 && (
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', display: 'block', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            Variación Estandarizada Requerida
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                                            {selectedOriginalProd.options_config.map((option: any) => {
+                                                const selectedValue = newException.preferred_options?.[option.name] || '';
+                                                return (
+                                                    <div key={option.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                        <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748B', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            {option.name}
+                                                        </label>
+                                                        <select
+                                                            value={selectedValue}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const updatedOptions = { ...newException.preferred_options };
+                                                                if (val) {
+                                                                    updatedOptions[option.name] = val;
+                                                                } else {
+                                                                    delete updatedOptions[option.name];
+                                                                }
+                                                                setNewException({ ...newException, preferred_options: updatedOptions });
+                                                            }}
+                                                            style={{
+                                                                height: '38px',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #E2E8F0',
+                                                                padding: '0 0.5rem',
+                                                                fontSize: '0.8rem',
+                                                                backgroundColor: 'white',
+                                                                fontFamily: THEME.typography.fontFamilySecondary,
+                                                                color: THEME.colors.textMain,
+                                                                outline: 'none'
+                                                            }}
+                                                        >
+                                                            <option value="">-- Sin especificar --</option>
+                                                            {option.values?.map((val: string) => (
+                                                                <option key={val} value={val}>{val}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* D. NOTAS Y ALIAS */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                     <FormField 
@@ -5299,6 +6325,20 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     <div>
                                                         <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
                                                         <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Preferred options (Standardized variants) */}
+                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Variante: </span>
+                                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                            {Object.entries(exc.preferred_options).map(([key, val]) => (
+                                                                <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                    {key}: {val as string}
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
 
