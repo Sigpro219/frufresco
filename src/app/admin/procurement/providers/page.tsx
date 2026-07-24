@@ -48,7 +48,8 @@ import {
     FileSpreadsheet,
     FileUp,
     Check,
-    AlertTriangle
+    AlertTriangle,
+    XCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -114,6 +115,7 @@ export default function ProvidersPage() {
                 'NIT / Identificación': p.tax_id || '',
                 'Tipo Documento': p.document_type || 'NIT',
                 'Nombre / Razón Social': p.name || '',
+                'Estado Operativo': p.is_active !== false ? 'Activo' : 'Inactivo',
                 'Categoría': p.category || (p.product ? 'PRODUCTOS' : 'GENERAL'),
                 'Productos / Insumos Principales': p.product || '',
                 'Tipo de Pago': p.type === 'credito' ? 'Crédito' : 'Contado',
@@ -160,6 +162,7 @@ export default function ProvidersPage() {
                     'NIT / Identificación': '901234567-1',
                     'Tipo Documento': 'NIT',
                     'Nombre / Razón Social': 'AGROPECUARIA SAN JOSÉ S.A.S',
+                    'Estado Operativo': 'Activo',
                     'Categoría': 'PRODUCTOS',
                     'Productos / Insumos Principales': 'CEBOLLA LARGA, PAPA PASTUSA',
                     'Tipo de Pago': 'Contado',
@@ -183,6 +186,7 @@ export default function ProvidersPage() {
                     'NIT / Identificación': '800987654-2',
                     'Tipo Documento': 'NIT',
                     'Nombre / Razón Social': 'DISTRIBUIDORA FRUTAS DEL VALLE',
+                    'Estado Operativo': 'Activo',
                     'Categoría': 'PRODUCTOS',
                     'Productos / Insumos Principales': 'TOMATE LARGA VIDA, AHUYAMA',
                     'Tipo de Pago': 'Crédito',
@@ -207,6 +211,7 @@ export default function ProvidersPage() {
                     'NIT / Identificación': '900555444-3',
                     'Tipo Documento': 'NIT',
                     'Nombre / Razón Social': 'EMPAQUES & PLÁSTICOS INDUSTRIALES S.A.S',
+                    'Estado Operativo': 'Activo',
                     'Categoría': 'GENERAL',
                     'Productos / Insumos Principales': 'Bolsas plásticas, Canastillas, Cinta',
                     'Tipo de Pago': 'Crédito',
@@ -274,6 +279,9 @@ export default function ProvidersPage() {
 
                 const tax_id = getVal('NIT / Identificación', 'NIT', 'tax_id', 'Identificación (NIT/CC)', 'Identificacion', 'NIT/CC');
                 const name = getVal('Nombre / Razón Social', 'Nombre', 'Razón Social', 'name', 'Razon Social');
+                const rawStatus = getVal('Estado Operativo', 'Estado (Activo / Inactivo)', 'Estado', 'is_active').toLowerCase();
+                const is_active = !(rawStatus.includes('inact') || rawStatus.includes('fals') || rawStatus === '0' || rawStatus.includes('deshab'));
+
                 const category = getVal('Categoría', 'Categoria', 'category').toUpperCase() || (getVal('Productos / Insumos Principales', 'product') ? 'PRODUCTOS' : 'GENERAL');
                 const product = getVal('Productos / Insumos Principales', 'Productos', 'Insumos', 'product').toUpperCase();
                 const rawType = getVal('Tipo de Pago', 'Tipo Pago', 'type').toLowerCase();
@@ -322,7 +330,7 @@ export default function ProvidersPage() {
                         bank_account_number,
                         world_office_id,
                         observations,
-                        is_active: true,
+                        is_active,
                         is_archived: false
                     }
                 };
@@ -461,7 +469,8 @@ export default function ProvidersPage() {
                 total: allProviders.filter(p => !p.is_archived).length,
                 credit: allProviders.filter(p => !p.is_archived && p.type === 'credito').length,
                 cash: allProviders.filter(p => !p.is_archived && p.type !== 'credito').length,
-                active: allProviders.filter(p => !p.is_archived && p.is_active).length
+                active: allProviders.filter(p => !p.is_archived && p.is_active !== false).length,
+                inactive: allProviders.filter(p => !p.is_archived && p.is_active === false).length
             });
 
             const mappedProviders = allProviders.map((p: any) => ({
@@ -633,13 +642,14 @@ export default function ProvidersPage() {
     }, [fetchProviders]);
 
     const filteredProviders = useMemo(() => {
-        return providers.filter(p => {
+        const filtered = providers.filter(p => {
             if (showArchived && !p.is_archived) return false;
             if (!showArchived && p.is_archived) return false;
 
             const hasProduct = p.product && p.product.trim() !== '';
             if (activeCategoryFilter === 'products' && !hasProduct) return false;
             if (activeCategoryFilter === 'general' && hasProduct) return false;
+            if (activeCategoryFilter === 'inactive' && p.is_active !== false) return false;
 
             if (!searchTerm) return true;
             const query = searchTerm.toLowerCase().trim();
@@ -653,7 +663,7 @@ export default function ProvidersPage() {
                 if (matchCont && p.type === 'contado') matches = true;
                 const matchAct = 'activo'.startsWith(cmd) || 'active'.startsWith(cmd);
                 const matchIna = 'inactivo'.startsWith(cmd) || 'inactive'.startsWith(cmd);
-                if (matchAct && p.is_active === true) matches = true;
+                if (matchAct && p.is_active !== false) matches = true;
                 if (matchIna && p.is_active === false) matches = true;
                 const matchSop = 'soporte'.startsWith(cmd);
                 const matchEle = 'electronica'.startsWith(cmd) || 'electronic'.startsWith(cmd);
@@ -671,6 +681,14 @@ export default function ProvidersPage() {
                 p.city?.toLowerCase().includes(query) ||
                 p.world_office_id?.toLowerCase().includes(query)
             );
+        });
+
+        // Always sort Active providers first, Inactive providers at the bottom
+        return filtered.sort((a, b) => {
+            const aActive = a.is_active !== false ? 1 : 0;
+            const bActive = b.is_active !== false ? 1 : 0;
+            if (aActive !== bActive) return bActive - aActive;
+            return (a.name || '').localeCompare(b.name || '');
         });
     }, [providers, searchTerm, showArchived, activeCategoryFilter]);
 
@@ -785,10 +803,10 @@ export default function ProvidersPage() {
                     marginBottom: '1rem'
                 }}>
                     <KPICard title="Total Proveedores" value={formatNumber(stats.total)} icon={<Building2 size={18} strokeWidth={1.5} />} color={THEME.colors.primary} subtitle="Proveedores registrados" />
-                    <KPICard title="Proveedores Crédito" value={formatNumber(stats.credit)} icon={<CreditCard size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Facturación a plazo" />
+                    <KPICard title="Habilitados (Activos)" value={formatNumber(stats.active)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#0D7A57" subtitle="Activos para compra" />
+                    <KPICard title="Proveedores Inactivos" value={formatNumber(stats.inactive || 0)} icon={<XCircle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Deshabilitados" />
+                    <KPICard title="Proveedores Crédito" value={formatNumber(stats.credit)} icon={<CreditCard size={18} strokeWidth={1.5} />} color="#3B82F6" subtitle="Facturación a plazo" />
                     <KPICard title="Proveedores Contado" value={formatNumber(stats.cash)} icon={<Coins size={18} strokeWidth={1.5} />} color="#F59E0B" subtitle="Pago inmediato" />
-                    <KPICard title="Habilitados" value={formatNumber(stats.active)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#0D7A57" subtitle="Activos para compra" />
-                    <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertCircle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Sin RUT o Teléfono" />
                 </div>
 
                 {/* UNIFIED CONTROL BAR */}
@@ -1048,7 +1066,8 @@ export default function ProvidersPage() {
                     {[
                         { id: 'all', label: 'Todos' },
                         { id: 'products', label: 'Proveedores de Productos' },
-                        { id: 'general', label: 'Proveedores Generales / Servicios' }
+                        { id: 'general', label: 'Proveedores Generales / Servicios' },
+                        { id: 'inactive', label: `Proveedores Inactivos (${stats.inactive || 0})` }
                     ].map((tab) => {
                         const isActive = activeCategoryFilter === tab.id;
                         return (
@@ -1084,6 +1103,7 @@ export default function ProvidersPage() {
                             <thead>
                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Nombre del Proveedor</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Estado</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Identificación</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Contacto</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Categoría</th>
@@ -1096,13 +1116,30 @@ export default function ProvidersPage() {
                                     <tr 
                                         key={p.id} 
                                         onClick={() => setSelectedProvider(p)}
-                                        style={{ borderBottom: '1px solid #F1F5F9', cursor: 'pointer', transition: 'all 0.1s' }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAF9')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                        style={{ borderBottom: '1px solid #F1F5F9', cursor: 'pointer', transition: 'all 0.1s', opacity: p.is_active === false ? 0.75 : 1, backgroundColor: p.is_active === false ? '#FFF5F5' : 'transparent' }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = p.is_active === false ? '#FEE2E2' : '#F8FAF9')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = p.is_active === false ? '#FFF5F5' : 'transparent')}
                                     >
                                         <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.name}</div>
                                             <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', marginTop: '0.15rem' }}>{p.product || 'Sin producto'}</div>
+                                        </td>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                            <span style={{ 
+                                                fontSize: '0.65rem', 
+                                                fontWeight: '800', 
+                                                color: p.is_active !== false ? '#059669' : '#DC2626', 
+                                                backgroundColor: p.is_active !== false ? '#ECFDF5' : '#FEF2F2', 
+                                                border: `1px solid ${p.is_active !== false ? '#A7F3D0' : '#FECACA'}`,
+                                                padding: '0.15rem 0.45rem', 
+                                                borderRadius: '6px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}>
+                                                {p.is_active !== false ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                                                {p.is_active !== false ? 'ACTIVO' : 'INACTIVO'}
+                                            </span>
                                         </td>
                                         <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1179,26 +1216,27 @@ export default function ProvidersPage() {
                                     key={p.id}
                                     onClick={() => setSelectedProvider(p)}
                                     style={{ 
-                                        backgroundColor: 'white', 
+                                        backgroundColor: p.is_active === false ? '#FFF5F5' : 'white', 
                                         borderRadius: THEME.radius.md, 
-                                        border: `1px solid ${THEME.colors.border}`, 
+                                        border: `1px solid ${p.is_active === false ? '#FECACA' : THEME.colors.border}`, 
                                         padding: '1rem', 
                                         cursor: 'pointer', 
                                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
                                         display: 'flex', 
                                         flexDirection: 'column', 
                                         gap: '0.85rem',
-                                        boxShadow: THEME.shadow.sm
+                                        boxShadow: THEME.shadow.sm,
+                                        opacity: p.is_active === false ? 0.8 : 1
                                     }}
                                     onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'translateY(-1px)';
                                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
-                                        e.currentTarget.style.borderColor = THEME.colors.primary;
+                                        e.currentTarget.style.borderColor = p.is_active === false ? '#EF4444' : THEME.colors.primary;
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateY(0px)';
                                         e.currentTarget.style.boxShadow = THEME.shadow.sm;
-                                        e.currentTarget.style.borderColor = THEME.colors.border;
+                                        e.currentTarget.style.borderColor = p.is_active === false ? '#FECACA' : THEME.colors.border;
                                     }}
                                 >
                                     {/* Card Top */}
@@ -1207,7 +1245,7 @@ export default function ProvidersPage() {
                                             width: '38px', 
                                             height: '38px', 
                                             borderRadius: '10px', 
-                                            background: THEME.colors.primary, 
+                                            background: p.is_active === false ? '#94A3B8' : THEME.colors.primary, 
                                             color: 'white', 
                                             display: 'flex', 
                                             alignItems: 'center', 
@@ -1217,7 +1255,22 @@ export default function ProvidersPage() {
                                         }}>
                                             {initials}
                                         </div>
-                                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                            <span style={{ 
+                                                fontSize: '0.65rem', 
+                                                fontWeight: '800', 
+                                                color: p.is_active !== false ? '#059669' : '#DC2626', 
+                                                backgroundColor: p.is_active !== false ? '#ECFDF5' : '#FEF2F2', 
+                                                border: `1px solid ${p.is_active !== false ? '#A7F3D0' : '#FECACA'}`,
+                                                padding: '0.15rem 0.45rem', 
+                                                borderRadius: '6px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}>
+                                                {p.is_active !== false ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                                                {p.is_active !== false ? 'ACTIVO' : 'INACTIVO'}
+                                            </span>
                                             <span style={{ 
                                                 fontSize: '0.65rem', 
                                                 fontWeight: '600', 
@@ -1361,7 +1414,29 @@ export default function ProvidersPage() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Estado Operativo</label>
+                                            <select 
+                                                style={{ 
+                                                    padding: '0.6rem 0.8rem', 
+                                                    borderRadius: '10px', 
+                                                    border: '1px solid #E2E8F0', 
+                                                    outline: 'none', 
+                                                    fontWeight: '700', 
+                                                    fontSize: '0.82rem', 
+                                                    width: '100%', 
+                                                    boxSizing: 'border-box',
+                                                    backgroundColor: newProvider.is_active ? '#ECFDF5' : '#FEF2F2',
+                                                    color: newProvider.is_active ? '#059669' : '#DC2626'
+                                                }} 
+                                                value={newProvider.is_active ? 'activo' : 'inactivo'} 
+                                                onChange={(e) => setNewProvider({...newProvider, is_active: e.target.value === 'activo'})}
+                                            >
+                                                <option value="activo">ACTIVO</option>
+                                                <option value="inactivo">INACTIVO</option>
+                                            </select>
+                                        </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Categoría</label>
                                             <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.category} onChange={(e) => setNewProvider({...newProvider, category: e.target.value})}>
@@ -1372,8 +1447,8 @@ export default function ProvidersPage() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Tipo Pago</label>
                                             <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.type} onChange={(e) => setNewProvider({...newProvider, type: e.target.value})}>
-                                                <option value="contado">Contado (Inmediato)</option>
-                                                <option value="credito">Crédito (Facturación)</option>
+                                                <option value="contado">Contado</option>
+                                                <option value="credito">Crédito</option>
                                             </select>
                                         </div>
                                     </div>
@@ -1590,9 +1665,26 @@ export default function ProvidersPage() {
                                     </div>
                                     {/* Tipo badge & Edit */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end', flexShrink: 0 }}>
-                                        <div style={{ backgroundColor: selectedProvider.type === 'credito' ? '#ECFDF5' : THEME.colors.primaryLight, color: selectedProvider.type === 'credito' ? '#059669' : THEME.colors.primary, padding: '0.3rem 0.6rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                            {selectedProvider.type === 'credito' ? <CreditCard size={12} /> : <Coins size={12} />}
-                                            <span>{selectedProvider.type === 'credito' ? 'CRÉDITO' : 'CONTADO'}</span>
+                                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                            <span style={{ 
+                                                fontSize: '0.7rem', 
+                                                fontWeight: '800', 
+                                                color: selectedProvider.is_active !== false ? '#059669' : '#DC2626', 
+                                                backgroundColor: selectedProvider.is_active !== false ? '#ECFDF5' : '#FEF2F2', 
+                                                border: `1px solid ${selectedProvider.is_active !== false ? '#A7F3D0' : '#FECACA'}`,
+                                                padding: '0.25rem 0.55rem', 
+                                                borderRadius: '8px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                {selectedProvider.is_active !== false ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                                                {selectedProvider.is_active !== false ? 'ACTIVO' : 'INACTIVO'}
+                                            </span>
+                                            <div style={{ backgroundColor: selectedProvider.type === 'credito' ? '#ECFDF5' : THEME.colors.primaryLight, color: selectedProvider.type === 'credito' ? '#059669' : THEME.colors.primary, padding: '0.3rem 0.6rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                {selectedProvider.type === 'credito' ? <CreditCard size={12} /> : <Coins size={12} />}
+                                                <span>{selectedProvider.type === 'credito' ? 'CRÉDITO' : 'CONTADO'}</span>
+                                            </div>
                                         </div>
                                         {canEdit && (
                                             <button 
