@@ -250,7 +250,7 @@ export default function OpsInventoryPage() {
                                         <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'var(--ops-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: 'var(--ops-primary)' }}>{idx + 1}</div>
                                         <div>
                                             <div style={{ fontWeight: '900', fontSize: '1.1rem' }}>{item.products.name}</div>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--ops-text-muted)' }}>{item.products.sku}</div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--ops-text-muted)' }}>ID: {item.products.accounting_id || item.product_id?.slice(0, 8)}</div>
                                         </div>
                                     </div>
                                     <div style={{ position: 'relative' }}>

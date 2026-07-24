@@ -29,7 +29,9 @@ import {
     ShieldCheck,
     Truck,
     Lock as LockIcon,
-    Pencil
+    Pencil,
+    RotateCcw,
+    ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import dynamic from 'next/dynamic';
@@ -37,8 +39,9 @@ import dynamic from 'next/dynamic';
 const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), { ssr: false });
 
 export default function CheckoutPage() {
-    const { items, totalPrice, removeItem, clearCart, updateItemQuantity } = useCart();
+    const { items, totalPrice, removeItem, clearCart, updateItemQuantity, addItem } = useCart();
     const [isMounted, setIsMounted] = useState(false);
+    const [loadingLastOrder, setLoadingLastOrder] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'wompi' | 'contra_entrega'>('wompi');
     const [name, setName] = useState('');
     const [identification, setIdentification] = useState('');
@@ -629,6 +632,63 @@ export default function CheckoutPage() {
         }
     };
 
+    const handleLoadLastOrder = async () => {
+        try {
+            setLoadingLastOrder(true);
+
+            const cleanPhone = (phone || '').replace(/\D/g, '');
+            const cleanEmail = (email || '').trim();
+            const cleanId = (identification || '').trim();
+            const targetProfileId = profile?.id || matchedProfileId || '';
+
+            if (!targetProfileId && !cleanEmail && !cleanPhone && !cleanId) {
+                alert(locale === 'es' 
+                    ? 'Por favor ingresa tu correo, teléfono o cédula en el formulario para buscar tu última compra.' 
+                    : 'Please enter your email, phone, or ID in the form to search for your last order.');
+                return;
+            }
+
+            const queryParams = new URLSearchParams();
+            if (targetProfileId) queryParams.set('profile_id', targetProfileId);
+            if (cleanEmail) queryParams.set('email', cleanEmail);
+            if (cleanPhone) queryParams.set('phone', cleanPhone);
+            if (cleanId) queryParams.set('identification', cleanId);
+
+            const res = await fetch(`/api/orders/last-purchase?${queryParams.toString()}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+                alert(data.error || (locale === 'es' ? 'No se pudo cargar la última compra.' : 'Could not load last order.'));
+                return;
+            }
+
+            if (!data.items || data.items.length === 0) {
+                alert(locale === 'es' 
+                    ? 'Los productos de tu última compra no están disponibles en el catálogo de hoy.' 
+                    : 'Products from your last purchase are not available in today\'s catalog.');
+                return;
+            }
+
+            let importedCount = 0;
+            for (const item of data.items) {
+                addItem(item);
+                importedCount++;
+            }
+
+            if (importedCount > 0) {
+                alert(locale === 'es' 
+                    ? `✅ ¡Se agregaron ${importedCount} producto(s) de tu última compra al carrito con el precio de HOY!` 
+                    : `✅ Added ${importedCount} product(s) from your last purchase to cart at TODAY'S price!`);
+            }
+
+        } catch (err: any) {
+            console.error('Error loading last order:', err);
+            alert(locale === 'es' ? 'Error al traer la última compra.' : 'Error loading last order.');
+        } finally {
+            setLoadingLastOrder(false);
+        }
+    };
+
     if (!isMounted) return null;
 
     return (
@@ -651,7 +711,7 @@ export default function CheckoutPage() {
                     }}>
                         <h1 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.8rem', 
+                            fontSize: '1.4rem', 
                             fontWeight: '900', 
                             color: 'var(--text-main)', 
                             margin: 0,
@@ -660,28 +720,71 @@ export default function CheckoutPage() {
                             gap: '12px',
                             letterSpacing: '-0.04em'
                         }}>
-                            <ShoppingCart size={24} strokeWidth={2.5} color="var(--primary)" /> {t.checkoutTitle}
+                            <ShoppingCart size={24} strokeWidth={2} color="var(--primary)" /> {t.checkoutTitle}
                         </h1>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                            <Link
-                                href="/"
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <button
+                                onClick={handleLoadLastOrder}
+                                disabled={loadingLastOrder}
                                 style={{
-                                    padding: '0.5rem 1rem',
+                                    padding: '0.55rem 1rem',
                                     borderRadius: '12px',
                                     fontSize: '0.8rem',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.5rem',
-                                    color: 'var(--primary)',
+                                    gap: '0.45rem',
+                                    color: '#047857',
                                     backgroundColor: '#ECFDF5',
                                     border: '1px solid #A7F3D0',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    transition: 'all 0.15s ease-in-out'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#D1FAE5';
+                                    e.currentTarget.style.borderColor = '#6EE7B7';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#ECFDF5';
+                                    e.currentTarget.style.borderColor = '#A7F3D0';
+                                }}
+                                title="Importar los productos de tu última compra usando los precios vigentes de hoy"
+                            >
+                                <RotateCcw size={14} strokeWidth={2.2} style={{ animation: loadingLastOrder ? 'spin 1s linear infinite' : 'none' }} />
+                                {loadingLastOrder 
+                                    ? (locale === 'es' ? 'Buscando...' : 'Loading...') 
+                                    : (locale === 'es' ? 'Repetir última compra' : 'Repeat last order')}
+                            </button>
+                            <Link
+                                href="/"
+                                style={{
+                                    padding: '0.55rem 1rem',
+                                    borderRadius: '12px',
+                                    fontSize: '0.8rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    color: '#475569',
+                                    backgroundColor: '#FFFFFF',
+                                    border: '1px solid #E2E8F0',
                                     fontWeight: '700',
                                     cursor: 'pointer',
                                     textDecoration: 'none',
-                                    transition: 'all 0.2s'
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    transition: 'all 0.15s ease-in-out'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                    e.currentTarget.style.borderColor = '#CBD5E1';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                    e.currentTarget.style.borderColor = '#E2E8F0';
                                 }}
                             >
-                                🛒 {locale === 'es' ? 'Seguir comprando' : 'Continue shopping'}
+                                <ArrowLeft size={14} strokeWidth={2} />
+                                {locale === 'es' ? 'Seguir comprando' : 'Continue shopping'}
                             </Link>
                             {items.length > 0 && (
                                 <button
@@ -690,18 +793,19 @@ export default function CheckoutPage() {
                                         router.push('/');
                                     }}
                                     style={{
-                                        padding: '0.5rem 1rem',
+                                        padding: '0.55rem 1rem',
                                         borderRadius: '12px',
                                         fontSize: '0.8rem',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '0.5rem',
+                                        gap: '0.45rem',
                                         color: '#EF4444',
                                         backgroundColor: '#FEF2F2',
                                         border: '1px solid #FEE2E2',
                                         fontWeight: '700',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s'
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        transition: 'all 0.15s ease-in-out'
                                     }}
                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
@@ -715,13 +819,72 @@ export default function CheckoutPage() {
                     {items.length === 0 ? (
                         <div style={{ 
                             textAlign: 'center', 
-                            padding: '4rem 2rem', 
+                            padding: '3.5rem 2rem', 
                             backgroundColor: 'white', 
                             borderRadius: '32px',
-                            border: '1px dashed var(--border)'
+                            border: '1px dashed var(--border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center'
                         }}>
-                            <ShoppingCart size={64} color="var(--border)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: '500' }}>{t.emptyCart}</p>
+                            <ShoppingCart size={56} color="var(--border)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: '500', margin: 0 }}>{t.emptyCart}</p>
+                            
+                            {/* CAJA PROMINENTE PARA CARGAR ÚLTIMO PEDIDO CON PRECIO DE HOY */}
+                            <div style={{ 
+                                marginTop: '1.5rem', 
+                                padding: '1.25rem', 
+                                backgroundColor: '#ECFDF5', 
+                                borderRadius: '20px', 
+                                border: '1px solid #A7F3D0', 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                alignItems: 'center', 
+                                gap: '0.65rem', 
+                                maxWidth: '420px', 
+                                width: '100%',
+                                fontFamily: 'var(--font-outfit), sans-serif'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#047857', fontWeight: '800', fontSize: '0.9rem' }}>
+                                    <RotateCcw size={16} strokeWidth={2.2} />
+                                    {locale === 'es' ? '¿Quieres repetir tu última compra?' : 'Want to repeat your last purchase?'}
+                                </div>
+                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#065F46', textAlign: 'center', lineHeight: '1.4', fontWeight: '500' }}>
+                                    {locale === 'es' 
+                                        ? 'Importa automáticamente los productos de tu pedido anterior con los precios vigentes de hoy.' 
+                                        : 'Automatically load items from your previous order at today\'s current prices.'}
+                                </p>
+                                <button
+                                    onClick={handleLoadLastOrder}
+                                    disabled={loadingLastOrder}
+                                    style={{
+                                        padding: '0.65rem 1.4rem',
+                                        borderRadius: '12px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '800',
+                                        backgroundColor: 'var(--primary)',
+                                        color: 'white',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'var(--primary)';
+                                    }}
+                                >
+                                    <RotateCcw size={15} strokeWidth={2.2} style={{ animation: loadingLastOrder ? 'spin 1s linear infinite' : 'none' }} />
+                                    {loadingLastOrder ? (locale === 'es' ? 'Buscando...' : 'Loading...') : (locale === 'es' ? 'Cargar mi última compra' : 'Load my last order')}
+                                </button>
+                            </div>
+
                             <Link href="/" className="btn-premium" style={{ display: 'inline-flex', marginTop: '1.5rem', padding: '0.8rem 2rem' }}>
                                 {t.exploreProducts}
                             </Link>
@@ -730,10 +893,11 @@ export default function CheckoutPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {items.map((item) => (
                                 <div key={`${item.id}-${item.name}`} style={{
-                                    backgroundColor: 'white',
+                                    backgroundColor: item.is_from_last_order ? '#FAFDFB' : 'white',
                                     padding: '0.75rem 1rem',
                                     borderRadius: '16px',
-                                    border: '1px solid var(--border)',
+                                    border: item.is_from_last_order ? '1px solid #A7F3D0' : '1px solid var(--border)',
+                                    borderLeft: item.is_from_last_order ? '4px solid #10B981' : '1px solid var(--border)',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
@@ -758,14 +922,33 @@ export default function CheckoutPage() {
                                             />
                                         </div>
                                         <div>
-                                            <h4 style={{ 
-                                                fontFamily: 'var(--font-outfit), sans-serif',
-                                                fontSize: '1rem',
-                                                fontWeight: '800', 
-                                                margin: '0 0 0.1rem 0',
-                                                color: 'var(--text-main)',
-                                                letterSpacing: '-0.02em'
-                                            }}>{item.name}</h4>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                <h4 style={{ 
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    fontSize: '1rem',
+                                                    fontWeight: '800', 
+                                                    margin: 0,
+                                                    color: 'var(--text-main)',
+                                                    letterSpacing: '-0.02em'
+                                                }}>{item.name}</h4>
+                                                {item.is_from_last_order && (
+                                                    <span style={{ 
+                                                        fontSize: '0.65rem', 
+                                                        fontWeight: '800', 
+                                                        backgroundColor: '#ECFDF5', 
+                                                        color: '#047857', 
+                                                        border: '1px solid #A7F3D0', 
+                                                        padding: '2px 7px', 
+                                                        borderRadius: '6px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <RotateCcw size={10} strokeWidth={2.5} />
+                                                        {locale === 'es' ? 'De tu última compra (Precio de hoy)' : 'From last order (Today\'s price)'}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <span style={{ 
                                                     color: 'var(--primary)', 
@@ -872,7 +1055,7 @@ export default function CheckoutPage() {
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.25rem', 
+                            fontSize: '1.4rem', 
                             fontWeight: '900', 
                             marginBottom: '1.25rem', 
                             color: 'var(--text-main)', 
@@ -886,10 +1069,10 @@ export default function CheckoutPage() {
                             <CreditCard size={20} color="var(--primary)" strokeWidth={2.5} /> {t.deliveryDetail}
                         </h3>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                             {/* 1. Email */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     {t.email}
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -903,15 +1086,16 @@ export default function CheckoutPage() {
                                         onChange={(e) => handleEmailChange(e.target.value)}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
                                             borderRadius: '12px', 
-                                            border: '1px solid #E5E7EB', 
+                                            border: '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
                                             backgroundColor: 'white', 
-                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                             outline: 'none',
-                                            transition: 'all 0.2s ease-in-out'
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            transition: 'all 0.15s ease-in-out'
                                         }}
                                         className="checkout-input-modern"
                                     />
@@ -920,7 +1104,7 @@ export default function CheckoutPage() {
 
                             {/* 2. Identificación */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     Identificación (Cédula/NIT)
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -934,15 +1118,16 @@ export default function CheckoutPage() {
                                         onChange={(e) => handleIdChange(e.target.value)}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
                                             borderRadius: '12px', 
-                                            border: '1px solid #E5E7EB', 
+                                            border: '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
                                             backgroundColor: 'white', 
-                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                             outline: 'none', 
-                                            transition: 'all 0.2s ease-in-out' 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            transition: 'all 0.15s ease-in-out' 
                                         }}
                                         className="checkout-input-modern"
                                     />
@@ -951,7 +1136,7 @@ export default function CheckoutPage() {
 
                             {/* 3. WhatsApp */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     {t.whatsapp}
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -965,15 +1150,16 @@ export default function CheckoutPage() {
                                         onChange={(e) => handlePhoneChange(e.target.value)}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
                                             borderRadius: '12px', 
-                                            border: '1px solid #E5E7EB', 
+                                            border: '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
                                             backgroundColor: 'white', 
-                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                             outline: 'none',
-                                            transition: 'all 0.2s ease-in-out'
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            transition: 'all 0.15s ease-in-out'
                                         }}
                                         className="checkout-input-modern"
                                     />
@@ -987,7 +1173,8 @@ export default function CheckoutPage() {
                                         marginTop: '0.4rem',
                                         display: 'flex',
                                         alignItems: 'flex-start',
-                                        gap: '6px'
+                                        gap: '6px',
+                                        fontFamily: 'var(--font-outfit), sans-serif'
                                     }}>
                                         <AlertCircle size={14} color={lookupError ? '#EF4444' : '#2563EB'} style={{ marginTop: '1px', flexShrink: 0 }} />
                                         <div>
@@ -1004,7 +1191,7 @@ export default function CheckoutPage() {
 
                             {/* 4. Nombre Completo */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     {t.fullName}
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -1029,16 +1216,17 @@ export default function CheckoutPage() {
                                         readOnly={isProfileMatched}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
                                             borderRadius: '12px', 
-                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E5E7EB', 
+                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
                                             backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
                                             color: isProfileMatched ? '#6B7280' : '#111827',
-                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                             outline: 'none', 
-                                            transition: 'all 0.2s ease-in-out' 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            transition: 'all 0.15s ease-in-out' 
                                         }}
                                         className="checkout-input-modern"
                                     />
@@ -1047,7 +1235,7 @@ export default function CheckoutPage() {
 
                             {/* 5. Dirección de Entrega */}
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.15rem', fontWeight: '800', fontSize: '0.65rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     Dirección de Entrega
                                 </label>
                                 <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
@@ -1072,14 +1260,15 @@ export default function CheckoutPage() {
                                         readOnly={isProfileMatched}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.45rem 1rem 0.45rem 2.5rem', 
+                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
                                             borderRadius: '12px', 
-                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E5E7EB', 
+                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
                                             backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
                                             color: isProfileMatched ? '#6B7280' : '#111827',
-                                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                            fontFamily: 'var(--font-outfit), sans-serif',
                                             outline: 'none' 
                                         }}
                                         className="checkout-input-modern"
@@ -1186,7 +1375,7 @@ export default function CheckoutPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     {t.deliveryDate}
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -1200,14 +1389,15 @@ export default function CheckoutPage() {
                                         min={minDeliveryDate}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.5rem 1rem 0.5rem 2.5rem', 
-                                            borderRadius: '10px', 
-                                            border: '1px solid #E5E7EB', 
+                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
-                                            backgroundColor: '#F9FAFB', 
+                                            backgroundColor: 'white', 
                                             outline: 'none', 
                                             cursor: 'pointer',
+                                            fontFamily: 'var(--font-outfit), sans-serif',
                                             WebkitAppearance: 'none'
                                         }}
                                         className="checkout-input-modern custom-date-input"
@@ -1216,11 +1406,11 @@ export default function CheckoutPage() {
                             </div>
 
                             <div style={{ marginTop: '0.4rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                    <label style={{ display: 'block', margin: 0, fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                    <label style={{ display: 'block', margin: 0, fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                         {t.specialNotes}
                                     </label>
-                                    <span style={{ fontSize: '0.65rem', color: specialNotes.length > 130 ? '#EF4444' : '#9CA3AF', fontWeight: '800' }}>
+                                    <span style={{ fontSize: '0.65rem', color: specialNotes.length > 130 ? '#EF4444' : '#9CA3AF', fontWeight: '800', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                         {specialNotes.length}/150
                                     </span>
                                 </div>
@@ -1230,16 +1420,16 @@ export default function CheckoutPage() {
                                     onChange={(e) => handleNotesChange(e.target.value.slice(0, 150))}
                                     style={{ 
                                         width: '100%', 
-                                        padding: '0.5rem 0.75rem', 
-                                        borderRadius: '10px', 
-                                        border: '1px solid #E5E7EB', 
+                                        padding: '0.55rem 0.75rem', 
+                                        borderRadius: '12px', 
+                                        border: '1px solid #E2E8F0', 
                                         fontSize: '0.85rem', 
                                         fontWeight: '500', 
-                                        backgroundColor: '#F9FAFB', 
+                                        backgroundColor: 'white', 
                                         outline: 'none', 
                                         minHeight: '50px', 
                                         resize: 'none',
-                                        fontFamily: 'inherit',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
                                         transition: 'all 0.3s'
                                     }}
                                     className="checkout-input-modern"

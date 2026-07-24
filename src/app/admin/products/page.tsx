@@ -839,7 +839,7 @@ export default function AdminProductsPage() {
                             </div>
                             <input
                                 type="text"
-                                placeholder="Buscar por nombre, SKU o etiqueta estratégica..."
+                                placeholder="Buscar por nombre, ID contable o etiqueta estratégica..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 style={{
@@ -1060,7 +1060,7 @@ export default function AdminProductsPage() {
                                                     {product.name}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>{product.sku}</span>
+                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>ID: {product.accounting_id || product.id?.slice(0, 8)}</span>
                                                     {product.iva_rate !== undefined && (
                                                         <span style={{ 
                                                             fontSize: '0.65rem', 

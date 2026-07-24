@@ -20,7 +20,10 @@ import {
     XCircle,
     Target,
     Package,
-    Filter
+    Filter,
+    ChevronUp,
+    ChevronDown,
+    Users
 } from 'lucide-react';
 
 // Types
@@ -125,6 +128,7 @@ export default function PickingDashboard() {
     const [currentTime, setCurrentTime] = useState('');
     const [isConnected, setIsConnected] = useState(false);
     const [showBannerModal, setShowBannerModal] = useState(false);
+    const [isClientsCollapsed, setIsClientsCollapsed] = useState(false);
 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -405,6 +409,10 @@ export default function PickingDashboard() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
                 console.log('⚡ Order Update (Debouncing...):', payload);
                 debouncedLoadData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_stocks' }, (payload) => {
+                console.log('⚡ Instant Stock Update Received:', payload);
+                loadData(undefined, true);
             })
             .on('broadcast', { event: 'refresh' }, (payload) => {
                 console.log('🚀 INSTANT BROADCAST RECEIVED:', payload);
@@ -1077,6 +1085,34 @@ export default function PickingDashboard() {
                                 {density === 'fids' && <span style={{ fontSize: '0.65rem', fontWeight: 'bold' }}>FIDS</span>}
                             </button>
                         </div>
+
+                        {/* TOGGLE CLIENT NAMES BUTTON */}
+                        <button 
+                            onClick={() => setIsClientsCollapsed(!isClientsCollapsed)}
+                            style={{
+                                padding: '5px 10px',
+                                borderRadius: '8px',
+                                background: isClientsCollapsed ? '#1E293B' : '#0A111C',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                color: isClientsCollapsed ? '#F59E0B' : '#34D399',
+                                fontSize: density === 'tv' ? '0.7rem' : '0.8rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginLeft: '10px',
+                                transition: 'all 0.2s',
+                                height: '32px'
+                            }}
+                            title={isClientsCollapsed ? "Mostrar nombres de clientes" : "Colapsar nombres de clientes"}
+                        >
+                            <Users size={14} />
+                            <span style={{ whiteSpace: 'nowrap' }}>
+                                {isClientsCollapsed ? 'Clientes: Ocultos' : 'Clientes: Visibles'}
+                            </span>
+                            {isClientsCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                        </button>
                     </div>
                 </div>
             </header>
@@ -1185,20 +1221,25 @@ export default function PickingDashboard() {
                                         padding: '0.5rem 0'
                                     }}>
                                         {complete ? (
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                                            <span 
+                                                onClick={() => router.push('/ops/rectificacion')}
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center', cursor: 'pointer' }}
+                                                title="Ir a Rectificación de Cargue LIFO"
+                                            >
                                                 <span>✓ {zone.name.toUpperCase()}</span>
                                                 <span style={{
-                                                    background: '#EF4444',
+                                                    background: '#10B981',
                                                     color: '#fff',
                                                     fontSize: '0.7rem',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
                                                     marginLeft: '8px',
                                                     animation: 'pulseAlert 1s infinite',
                                                     fontWeight: '900',
-                                                    letterSpacing: '0.5px'
+                                                    letterSpacing: '0.5px',
+                                                    boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)'
                                                 }}>
-                                                    DESPACHAR YA 🚚💨
+                                                    RECTIFICAR CARGUE 📋
                                                 </span>
                                             </span>
                                         ) : (
@@ -1231,9 +1272,10 @@ export default function PickingDashboard() {
                                 position: 'sticky', top: '44px', left: 0, zIndex: 40,
                                 background: '#080D12',
                                 borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)',
-                                height: cfg.clientHeaderHeight,
-                                padding: '12px 16px',
-                                boxSizing: 'border-box'
+                                height: isClientsCollapsed ? '32px' : cfg.clientHeaderHeight,
+                                padding: '6px 12px',
+                                boxSizing: 'border-box',
+                                transition: 'height 0.3s'
                             }}>
                                 <div style={{
                                     display: 'flex',
@@ -1244,19 +1286,31 @@ export default function PickingDashboard() {
                                     fontWeight: '800',
                                     letterSpacing: '1px'
                                 }}>
-                                    <div style={{ 
-                                        textAlign: 'right', 
-                                        color: '#94A3B8',
-                                        opacity: 0.8 
-                                    }}>
-                                        RUTAS / CLIENTES ➔
+                                    <div 
+                                        onClick={() => setIsClientsCollapsed(!isClientsCollapsed)}
+                                        style={{ 
+                                            textAlign: 'right', 
+                                            color: '#34D399',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'flex-end',
+                                            gap: '4px',
+                                            userSelect: 'none'
+                                        }}
+                                        title={isClientsCollapsed ? "Desplegar nombres de clientes" : "Colapsar nombres de clientes"}
+                                    >
+                                        <span>CLIENTES {isClientsCollapsed ? '▲' : '▼'}</span>
+                                        {isClientsCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                                     </div>
-                                    <div style={{ 
-                                        textAlign: 'left', 
-                                        color: '#34D399'
-                                    }}>
-                                        ▼ PRODUCTOS
-                                    </div>
+                                    {!isClientsCollapsed && (
+                                        <div style={{ 
+                                            textAlign: 'left', 
+                                            color: '#34D399'
+                                        }}>
+                                            ▼ PRODUCTOS
+                                        </div>
+                                    )}
                                 </div>
                             </th>
 
@@ -1268,18 +1322,19 @@ export default function PickingDashboard() {
                                         background: complete ? 'rgba(16, 185, 129, 0.15)' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#0B1319'),
                                         borderBottom: '1px solid rgba(255,255,255,0.05)',
                                         borderRight: '1px solid rgba(255,255,255,0.04)',
-                                        height: cfg.clientHeaderHeight,
+                                        height: isClientsCollapsed ? '32px' : cfg.clientHeaderHeight,
                                         verticalAlign: 'top',
                                         padding: '0',
                                         minWidth: cfg.cellWidth,
                                         maxWidth: cfg.cellWidth,
                                         overflow: 'hidden',
+                                        transition: 'height 0.3s',
                                         animation: clientsWithAlerts.has(client.id) ? 'pulseAlert 1.5s infinite' : 'none'
                                     }}>
                                         <div style={{
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            height: cfg.clientHeaderHeight,
+                                            height: isClientsCollapsed ? '32px' : cfg.clientHeaderHeight,
                                             alignItems: 'center',
                                             justifyContent: 'flex-start',
                                             overflow: 'hidden'
@@ -1290,7 +1345,7 @@ export default function PickingDashboard() {
                                                 fontWeight: '800',
                                                 color: complete ? '#34D399' : '#fff',
                                                 marginBottom: '2px',
-                                                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                                borderBottom: isClientsCollapsed ? 'none' : '1px solid rgba(255,255,255,0.08)',
                                                 width: '100%',
                                                 textAlign: 'center',
                                                 paddingTop: '4px',
@@ -1303,33 +1358,35 @@ export default function PickingDashboard() {
                                                     : '-'}
                                             </div>
 
-                                            {/* Vertical Name */}
-                                            <div style={{
-                                                writingMode: 'vertical-rl',
-                                                transform: 'rotate(180deg)',
-                                                whiteSpace: 'nowrap',
-                                                fontSize: cfg.clientFontSize, 
-                                                fontWeight: '800',
-                                                letterSpacing: '0.5px',
-                                                color: complete ? '#34D399' : '#fff',
-                                                textAlign: 'left',
-                                                width: '100%',
-                                                flex: 1,
-                                                overflow: 'hidden',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'flex-start'
-                                            }}>
-                                                <div style={{ 
-                                                    animation: 'slideClientName 15s linear infinite', 
+                                            {/* Vertical Name (Colapsable) */}
+                                            {!isClientsCollapsed && (
+                                                <div style={{
+                                                    writingMode: 'vertical-rl',
+                                                    transform: 'rotate(180deg)',
                                                     whiteSpace: 'nowrap',
-                                                    color: complete ? '#34D399' : '#fff'
+                                                    fontSize: cfg.clientFontSize, 
+                                                    fontWeight: '800',
+                                                    letterSpacing: '0.5px',
+                                                    color: complete ? '#34D399' : '#fff',
+                                                    textAlign: 'left',
+                                                    width: '100%',
+                                                    flex: 1,
+                                                    overflow: 'hidden',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'flex-start'
                                                 }}>
-                                                    {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
-                                                    <span style={{ opacity: 0 }}>------</span>
-                                                    {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
+                                                    <div style={{ 
+                                                        animation: 'slideClientName 16.5s linear infinite', 
+                                                        whiteSpace: 'nowrap',
+                                                        color: complete ? '#34D399' : '#fff'
+                                                    }}>
+                                                        {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
+                                                        <span style={{ opacity: 0 }}>------</span>
+                                                        {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     </th>
                                 )
@@ -1456,6 +1513,21 @@ export default function PickingDashboard() {
                                                         {prodComplete ? '✓ ' : ''}{product.name}
                                                         <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: prodComplete ? '#10B981' : '#555' }}>
                                                             {product.unit_of_measure}
+                                                        </span>
+                                                        <span style={{ 
+                                                            marginLeft: '6px', 
+                                                            fontSize: '0.68rem', 
+                                                            fontWeight: '900', 
+                                                            backgroundColor: (product.current_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)', 
+                                                            color: (product.current_stock || 0) === 0 ? '#EF4444' : '#10B981', 
+                                                            border: `1px solid ${(product.current_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`, 
+                                                            padding: '1px 6px', 
+                                                            borderRadius: '6px', 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '3px' 
+                                                        }}>
+                                                            📦 {(product.current_stock || 0).toLocaleString('es-CO')} {product.unit_of_measure || 'Kg'}
                                                         </span>
                                                         {isRedRow && (
                                                             <span style={{ 
@@ -1594,7 +1666,7 @@ export default function PickingDashboard() {
                 <div style={{ 
                     display: 'flex', 
                     width: 'max-content',
-                    animation: `marqueeContinuous ${Math.max(85, Math.min(240, bannerText.length * 1.3))}s linear infinite`
+                    animation: `marqueeContinuous ${Math.max(94, Math.min(264, bannerText.length * 1.43))}s linear infinite`
                 }}>
                     {Array(6).fill(null).map((_, i) => (
                         <span key={i} style={{ paddingRight: '18rem', display: 'inline-block' }}>

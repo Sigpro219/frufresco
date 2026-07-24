@@ -238,7 +238,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             const variantSku = `${formData.sku}.${attrValues}`;
 
             return {
-                id: `v-${Math.random().toString(36).substr(2, 9)}`,
+                id: `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
                 options: combination,
                 sku: variantSku
             };
@@ -570,13 +570,13 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
 
                             {/* VINCULACIÓN A PADRE (NUEVO) */}
                             <div style={{ position: 'relative' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Vincular a SKU Padre (Opcional)</label>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Vincular a Producto Padre (Opcional)</label>
                                 <input
                                     type="text"
-                                    placeholder="Buscar padre por nombre o SKU..."
+                                    placeholder="Buscar padre por nombre o ID contable..."
                                     value={parentSearch || (formData.parent_id ? (() => {
                                         const p = allProducts.find(i => i.id === formData.parent_id);
-                                        return p ? `${p.sku} - ${p.name}` : '';
+                                        return p ? `${p.accounting_id || p.sku} - ${p.name}` : '';
                                     })() : '')}
                                     onChange={(e) => {
                                         setParentSearch(e.target.value);
@@ -598,20 +598,20 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                             ❌ Ninguno (Producto Independiente)
                                         </div>
                                         {allProducts
-                                            .filter(p => p.name.toLowerCase().includes(parentSearch.toLowerCase()) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
+                                            .filter(p => p.name.toLowerCase().includes(parentSearch.toLowerCase()) || (p.accounting_id && p.accounting_id.toString().includes(parentSearch)) || (p.sku && p.sku.toLowerCase().includes(parentSearch.toLowerCase())))
                                             .slice(0, 10)
                                             .map(p => (
                                                 <div 
                                                     key={p.id}
                                                     onClick={() => {
                                                         setFormData({ ...formData, parent_id: p.id });
-                                                        setParentSearch(p.sku);
+                                                        setParentSearch(p.accounting_id ? p.accounting_id.toString() : p.name);
                                                         setShowParentResults(false);
                                                     }}
                                                     style={{ padding: '0.6rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
                                                 >
-                                                    <div style={{ fontWeight: '800', color: '#2563EB', fontSize: '0.85rem' }}>{p.sku}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>{p.name}</div>
+                                                    <div style={{ fontWeight: '800', color: '#2563EB', fontSize: '0.85rem' }}>{p.name}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>ID Contable: {p.accounting_id || 'N/A'}</div>
                                                 </div>
                                             ))
                                         }
@@ -891,7 +891,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                             </thead>
                                             <tbody>
                                                 {variants.map((v, i) => (
-                                                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                    <tr key={v.id ? `${v.id}-${i}` : `v-${i}`} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                                         <td style={{ padding: '4px 8px' }}>{Object.values(v.options).join('/')}</td>
                                                         <td style={{ padding: '4px 8px', fontWeight: '800', color: '#2563EB' }}>{v.sku}</td>
                                                     </tr>

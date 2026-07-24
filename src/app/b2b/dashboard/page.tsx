@@ -63,6 +63,17 @@ export default function B2BDashboard() {
         return () => { isMounted.current = false; };
     }, []);
 
+    // Route Guard to protect B2B Dashboard
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                console.log('🔒 Acceso no autorizado: redirigiendo a login');
+                router.push('/login?redirect=/b2b/dashboard');
+                return;
+            }
+        }
+    }, [authLoading, user, router]);
+
     // Handle Category Selection
     useEffect(() => {
         const controller = new AbortController();
@@ -361,8 +372,8 @@ export default function B2BDashboard() {
                     }));
                     setOrderItems(suggestedItems);
                 }
-                    if (isMounted.current) setLoading(false);
-                }
+            }
+            if (isMounted.current) setLoading(false);
             } catch (err) {
                 if (isAbortError(err)) return;
                 console.error("Error in fetchInitialOrder:", err);

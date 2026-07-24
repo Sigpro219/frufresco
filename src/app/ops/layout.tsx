@@ -2,7 +2,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { 
@@ -14,7 +14,8 @@ import {
   Truck, 
   Home,
   Sun,
-  Moon
+  Moon,
+  ClipboardCheck
 } from 'lucide-react';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
@@ -202,18 +203,19 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 borderTop: '1px solid var(--ops-border)',
                 display: 'flex',
                 justifyContent: 'space-around',
-                padding: '0.65rem 0',
-                paddingBottom: 'calc(0.65rem + env(safe-area-inset-bottom, 0px))',
+                padding: '0.4rem 0',
+                paddingBottom: 'calc(0.4rem + env(safe-area-inset-bottom, 0px))',
                 zIndex: 100,
                 boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
             }}>
                 {hasPermission('ops.compras') && <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />}
                 {hasPermission('ops.recogida') && <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />}
-                {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />}
+                {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECEPCIÓN" />}
                 {hasPermission('ops.picking.terminal') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
                 {hasPermission('ops.picking.dashboard') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
-                {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />}
-                <NavItem href="/ops" icon={Home} label="INICIO" highlight />
+                <NavItem href="/ops/rectificacion" icon={ClipboardCheck} label="RECTIFICAR" />
+                {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="TRANSPORTE" />}
+                <NavItem href="/ops" icon={Home} label="INICIO" />
             </nav>
             <style jsx global>{`
                 :root {
@@ -272,6 +274,17 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                     color: var(--ops-text);
                 }
                 
+                /* EFECO MACBOOK DOCK TRANSITIONS */
+                .ops-nav-item {
+                    transform-origin: bottom center;
+                }
+                .ops-nav-item:hover {
+                    transform: scale(1.28) translateY(-6px) !important;
+                }
+                .ops-nav-item:hover .icon-wrapper {
+                    color: var(--ops-primary) !important;
+                }
+                
                 @media (max-width: 480px) {
                     .desktop-text { display: none !important; }
                     .mobile-text { display: inline !important; }
@@ -286,22 +299,50 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     );
 }
 
-function NavItem({ href, icon: Icon, label, highlight = false }: { href: string, icon: any, label: string, highlight?: boolean }) {
+function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: string }) {
+    const pathname = usePathname();
+    const isActive = href === '/ops' ? pathname === '/ops' : pathname.startsWith(href);
+    
     return (
-        <Link href={href} style={{ 
+        <Link href={href} className="ops-nav-item" style={{ 
             textAlign: 'center', 
             textDecoration: 'none', 
-            color: highlight ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+            color: isActive ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '4px',
-            flex: 1
+            flex: 1,
+            position: 'relative',
+            transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s',
+            transformOrigin: 'bottom center',
+            paddingBottom: '0px'
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon size={20} strokeWidth={1.8} />
+            <div className="icon-wrapper" style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                transition: 'all 0.25s ease-in-out',
+                backgroundColor: isActive ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                padding: isActive ? '6px 16px' : '6px 12px',
+                borderRadius: '12px',
+                boxShadow: isActive ? '0 2px 10px rgba(16, 185, 129, 0.15), inset 0 0 0 1px rgba(16, 185, 129, 0.25)' : 'none'
+            }}>
+                <Icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.2 : 1.8} style={{
+                    filter: isActive ? 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.45))' : 'none',
+                    transition: 'all 0.2s',
+                    color: isActive ? 'var(--ops-primary)' : 'inherit'
+                }} />
             </div>
-            <div style={{ fontSize: '0.55rem', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '2px' }}>{label}</div>
+            <div style={{ 
+                fontSize: '0.55rem', 
+                fontWeight: isActive ? '900' : '700', 
+                letterSpacing: '0.06em', 
+                marginTop: '1px',
+                color: isActive ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+                transition: 'color 0.2s',
+                textShadow: isActive ? '0 0 8px rgba(16, 185, 129, 0.2)' : 'none'
+            }}>{label}</div>
         </Link>
     );
 }

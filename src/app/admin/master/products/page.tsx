@@ -1068,8 +1068,8 @@ export default function MasterProductsPage() {
                             <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <ArrowLeft size={14} strokeWidth={1.5} /> Volver al Dashboard
                             </Link>
-                            <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.4rem 0 0 0', letterSpacing: '-0.02em' }}>Maestro SKU (Datos Técnicos)</h1>
-                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>Gestión centralizada de estándares, códigos y definiciones técnicas.</p>
+                            <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.4rem 0 0 0', letterSpacing: '-0.02em' }}>Maestro de Productos (Datos Técnicos)</h1>
+                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>Gestión centralizada de estándares, códigos contables y definiciones técnicas.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <button
@@ -1092,7 +1092,7 @@ export default function MasterProductsPage() {
                                 }}
                                 onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
                                 onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
-                                title="Generar SKUs y descripciones faltantes"
+                                title="Generar descripciones y sanetizar datos de productos"
                             >
                                 <Wand2 size={14} strokeWidth={1.5} /> Sanetizar
                             </button>
@@ -1142,7 +1142,7 @@ export default function MasterProductsPage() {
                                 onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
                                 onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
-                                <Plus size={16} strokeWidth={1.5} /> Nuevo SKU
+                                <Plus size={16} strokeWidth={1.5} /> Nuevo Producto
                             </button>
                             <button
                                 onClick={downloadFullMaster}
@@ -1280,7 +1280,7 @@ export default function MasterProductsPage() {
                         </div>
                         <input
                             type="text"
-                            placeholder="Buscar por SKU, Nombre o Categoría... (Usa @ para filtros rápidos)"
+                            placeholder="Buscar por ID Contable, Nombre o Categoría... (Usa @ para filtros rápidos)"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{
@@ -1413,7 +1413,7 @@ export default function MasterProductsPage() {
                                         { tag: '@web', desc: 'En Tienda' },
                                         { tag: '@oculto', desc: 'No Web' },
                                         { tag: '@sindatos', desc: 'Faltan datos' },
-                                        { tag: '@padre', desc: 'SKU Base' },
+                                        { tag: '@padre', desc: 'Producto Base' },
                                         { tag: '@19', desc: 'IVA 19%' },
                                         { tag: '@0', desc: 'Exentos' },
                                         { tag: '@activo', desc: 'Habilitados' },
@@ -1444,7 +1444,7 @@ export default function MasterProductsPage() {
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>SKU Código</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>ID Contable</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Categoría</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>

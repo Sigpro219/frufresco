@@ -127,8 +127,8 @@ export default function AdminClientsPage() {
         return checkUserPermission(profile, permission, roles);
     };
 
-    const canView = hasPermission('admin.clients.view');
-    const canEdit = hasPermission('admin.clients.edit');
+    const canView = hasPermission('admin.clients.view') || hasPermission('admin.commercial.clients') || hasPermission('admin.clients');
+    const canEdit = hasPermission('admin.clients.edit') || hasPermission('admin.commercial.clients') || hasPermission('admin.commercial.clients.edit');
 
     useEffect(() => {
         fetchData();

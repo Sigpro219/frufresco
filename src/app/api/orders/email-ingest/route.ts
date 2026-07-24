@@ -78,17 +78,7 @@ export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-// Raise body size limit to 20 MB so emails with large PDF/Excel attachments
-// are not rejected by the Next.js body parser (default is 1 MB).
-// Without this Cloudmailin receives a 413 / "exceeded max size" error and
-// bounces the email back to the original sender.
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '20mb',
-    },
-  },
-};
+
 
 export async function POST(req: Request) {
   const supabaseAdmin = getSupabaseAdmin();

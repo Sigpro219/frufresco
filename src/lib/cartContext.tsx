@@ -14,6 +14,7 @@ export interface CartItem {
     variant_label?: string;
     selected_options?: Record<string, string>;
     weight_kg?: number;
+    is_from_last_order?: boolean;
 }
 
 interface CartContextType {
@@ -76,7 +77,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             if (existing) {
                 return prev.map((i) =>
                     (i.id === newItem.id && i.name === newItem.name)
-                        ? { ...i, quantity: i.quantity + newItem.quantity }
+                        ? { ...i, quantity: i.quantity + newItem.quantity, is_from_last_order: newItem.is_from_last_order ?? i.is_from_last_order }
                         : i
                 );
             }
