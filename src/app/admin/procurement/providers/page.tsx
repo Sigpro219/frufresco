@@ -55,8 +55,8 @@ export default function ProvidersPage() {
         return checkUserPermission(profile, permission, roles);
     };
 
-    const canView = hasPermission('admin.procurement.providers.view');
-    const canEdit = hasPermission('admin.procurement.providers.edit');
+    const canView = hasPermission('admin.procurement.providers.view') || hasPermission('admin.procurement.providers') || hasPermission('admin.procurement');
+    const canEdit = hasPermission('admin.procurement.providers.edit') || hasPermission('admin.procurement.providers') || hasPermission('admin.procurement');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [showArchived, setShowArchived] = useState(false);
