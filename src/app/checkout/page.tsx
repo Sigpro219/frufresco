@@ -1512,7 +1512,7 @@ export default function CheckoutPage() {
                                         <MapPin size={16} color="#D97706" /> {locale === 'es' ? '¡Pronto estaremos más cerca de ti!' : 'We hope to reach your area soon!'}
                                     </p>
                                     <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', fontWeight: '500', lineHeight: '1.45', color: '#92400E' }}>
-                                        {locale === 'es' ? 'Por ahora nuestras entregas para Hogar (B2C) están habilitadas en la Zona Norte. Si tienes un negocio o restaurante, ¡nuestra red institucional (B2B) sí puede atenderte!' : 'Our Home Delivery (B2C) route is currently focused on the North Zone. If you have a business or restaurant, our Business Hub (B2B) can deliver to you!'} 
+                                        {locale === 'es' ? 'Por ahora nuestras entregas para hogares están habilitadas en la Zona Norte. Si buscas suministros para un restaurante o negocio en esta ubicación, ¡nuestro canal comercial para empresas sí puede atenderte!' : 'Our home delivery route is currently available in the North Zone. If you are buying for a restaurant or business in this area, our commercial team can serve you!'} 
                                     </p>
                                     <Link href="/b2b/register" style={{ 
                                         color: 'white', 
@@ -1526,7 +1526,7 @@ export default function CheckoutPage() {
                                         boxShadow: '0 2px 6px rgba(217, 119, 6, 0.2)',
                                         transition: 'all 0.2s'
                                     }}>
-                                        {locale === 'es' ? '¿Tienes un Negocio? Registrar mi Negocio (B2B)' : 'Business Client? Register my Business (B2B)'}
+                                        {locale === 'es' ? '¿Tienes un Restaurante o Negocio? Registrar mi Empresa' : 'Are you a Business? Register your Company'}
                                     </Link>
                                 </div>
                             )}
