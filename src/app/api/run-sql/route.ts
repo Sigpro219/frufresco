@@ -54,30 +54,61 @@ export async function GET(req: NextRequest) {
             console.log(`[Run SQL] SUCCESS! Connected to pooler host: ${host}`);
             activeHost = host;
             
-            console.log("[Run SQL] Running query to add missing audit columns to 'routes'...");
+            console.log("[Run SQL] Running query to update profiles RLS policies for commercial staff...");
             await client.query(`
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS check_evidence_url TEXT;
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS check_mode TEXT DEFAULT 'digital';
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS rectified_by_id UUID REFERENCES public.profiles(id);
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS rectified_by_name TEXT;
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS rectified_at TIMESTAMPTZ;
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS is_certified_complete BOOLEAN DEFAULT FALSE;
-                ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS certification_notes TEXT;
+                CREATE OR REPLACE FUNCTION public.is_staff(user_id UUID)
+                RETURNS BOOLEAN AS $$
+                DECLARE
+                    user_role TEXT;
+                BEGIN
+                    SELECT role INTO user_role FROM public.profiles WHERE id = user_id;
+                    IF user_role IS NULL THEN
+                        RETURN FALSE;
+                    END IF;
+                    RETURN user_role NOT IN ('b2b_client', 'b2c_client');
+                END;
+                $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+                DROP POLICY IF EXISTS "Allow staff to select all profiles" ON public.profiles;
+                DROP POLICY IF EXISTS "Allow staff to manage profiles" ON public.profiles;
+
+                CREATE POLICY "Allow staff to select all profiles" 
+                ON public.profiles FOR SELECT 
+                TO authenticated, anon
+                USING (
+                  public.is_staff(auth.uid()) OR
+                  public.get_my_profile_role(auth.uid()) NOT IN ('b2b_client', 'b2c_client') OR
+                  auth.uid() = id
+                );
+
+                CREATE POLICY "Allow staff to manage profiles" 
+                ON public.profiles FOR ALL 
+                TO authenticated
+                USING (
+                  public.is_staff(auth.uid()) OR
+                  public.get_my_profile_role(auth.uid()) NOT IN ('b2b_client', 'b2c_client') OR
+                  auth.uid() = id
+                )
+                WITH CHECK (
+                  public.is_staff(auth.uid()) OR
+                  public.get_my_profile_role(auth.uid()) NOT IN ('b2b_client', 'b2c_client') OR
+                  auth.uid() = id
+                );
             `);
             
             const res = await client.query(`
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = 'routes';
+                SELECT policyname 
+                FROM pg_policies 
+                WHERE tablename = 'profiles';
             `);
             
             await client.end();
             
             return NextResponse.json({
                 success: true,
-                message: "Audit columns added to 'routes' table successfully.",
+                message: "Profiles RLS policies updated successfully for staff and commercial team.",
                 host: activeHost,
-                columns: res.rows
+                policies: res.rows
             });
         } catch (err: any) {
             console.log(`[Run SQL] Failed for ${host}:`, err.message);
