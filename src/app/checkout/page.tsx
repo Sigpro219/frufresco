@@ -25,6 +25,7 @@ import {
     Mail,
     Calendar,
     AlertCircle,
+    Info,
     X,
     ShieldCheck,
     Truck,
