@@ -43,7 +43,12 @@ import {
     Target,
     Zap,
     StickyNote,
-    Store
+    Store,
+    Download,
+    FileSpreadsheet,
+    FileUp,
+    Check,
+    AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -73,6 +78,300 @@ export default function ProvidersPage() {
     const [uploading, setUploading] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | 'products' | 'general'>('all');
+
+    // Excel & Bulk Upload States
+    const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [parsedRows, setParsedRows] = useState<Array<{ rowIndex: number; isValid: boolean; item: any }>>([]);
+    const [bulkLoading, setBulkLoading] = useState(false);
+    const [bulkError, setBulkError] = useState<string | null>(null);
+    const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
+    const [dragOver, setDragOver] = useState(false);
+
+    // EXCEL EXPORT FUNCTION
+    const handleExportExcel = async (exportCategory: 'PRODUCTOS' | 'GENERAL' | 'ALL') => {
+        try {
+            setShowExportMenu(false);
+            const XLSX = await import('xlsx');
+            
+            let listToExport = providers;
+            let filenameSuffix = 'Todos';
+
+            if (exportCategory === 'PRODUCTOS') {
+                listToExport = providers.filter(p => p.category === 'PRODUCTOS' || (p.product && p.product.trim() !== ''));
+                filenameSuffix = 'Productos';
+            } else if (exportCategory === 'GENERAL') {
+                listToExport = providers.filter(p => p.category !== 'PRODUCTOS' && (!p.product || p.product.trim() === ''));
+                filenameSuffix = 'Generales_Servicios';
+            }
+
+            if (listToExport.length === 0) {
+                alert(`No hay proveedores registrados en la categoría ${filenameSuffix} para exportar.`);
+                return;
+            }
+
+            const formattedRows = listToExport.map(p => ({
+                'NIT / Identificación': p.tax_id || '',
+                'Tipo Documento': p.document_type || 'NIT',
+                'Nombre / Razón Social': p.name || '',
+                'Categoría': p.category || (p.product ? 'PRODUCTOS' : 'GENERAL'),
+                'Productos / Insumos Principales': p.product || '',
+                'Tipo de Pago': p.type === 'credito' ? 'Crédito' : 'Contado',
+                'Plazo de Pago (Días)': p.payment_terms_days || 0,
+                'Condición de Pago': p.payment_condition || '',
+                'Facturación': p.billing_type === 'electronica' ? 'Factura Electrónica' : 'Documento Soporte',
+                'Persona de Contacto': p.contact_name || '',
+                'Teléfono': p.phone || '',
+                'Correo Electrónico': p.email || '',
+                'Dirección / Oficina Fiscal': p.address || '',
+                'Ciudad / Origen': p.city || '',
+                'Bodega (Plaza)': p.warehouse_location !== undefined && p.warehouse_location !== null ? p.warehouse_location : '',
+                'Puesto (Plaza)': p.puesto || '',
+                'Banco': p.bank_name || '',
+                'Tipo Cuenta': p.bank_account_type || '',
+                'Número de Cuenta': p.bank_account_number || '',
+                'Código ERP (World Office)': p.world_office_id || '',
+                'Observaciones': p.observations || ''
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+            const columnWidths = Object.keys(formattedRows[0] || {}).map(key => ({
+                wch: Math.max(key.length + 4, 16)
+            }));
+            worksheet['!cols'] = columnWidths;
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, `Proveedores_${filenameSuffix}`);
+            
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(workbook, `FruFresco_Proveedores_${filenameSuffix}_${dateStr}.xlsx`);
+        } catch (err: any) {
+            console.error('Error al exportar Excel:', err);
+            alert('Error al generar el archivo Excel: ' + (err.message || 'Ocurrió un error inesperado'));
+        }
+    };
+
+    // DOWNLOAD TEMPLATE FUNCTION
+    const handleDownloadTemplate = async (templateCategory: 'PRODUCTOS' | 'GENERAL') => {
+        try {
+            const XLSX = await import('xlsx');
+            const sampleRows = templateCategory === 'PRODUCTOS' ? [
+                {
+                    'NIT / Identificación': '901234567-1',
+                    'Tipo Documento': 'NIT',
+                    'Nombre / Razón Social': 'AGROPECUARIA SAN JOSÉ S.A.S',
+                    'Categoría': 'PRODUCTOS',
+                    'Productos / Insumos Principales': 'CEBOLLA LARGA, PAPA PASTUSA',
+                    'Tipo de Pago': 'Contado',
+                    'Plazo de Pago (Días)': 0,
+                    'Condición de Pago': 'Pago contra entrega',
+                    'Facturación': 'Documento Soporte',
+                    'Persona de Contacto': 'JUAN CARLOS PÉREZ',
+                    'Teléfono': '3101234567',
+                    'Correo Electrónico': 'contacto@agrojose.com',
+                    'Dirección / Oficina Fiscal': 'CARRERA 50 # 12-34',
+                    'Ciudad / Origen': 'Bogotá D.C.',
+                    'Bodega (Plaza)': 12,
+                    'Puesto (Plaza)': 'P-45',
+                    'Banco': 'BANCOLOMBIA',
+                    'Tipo Cuenta': 'Ahorros',
+                    'Número de Cuenta': '12345678901',
+                    'Código ERP (World Office)': 'PRV-0101',
+                    'Observaciones': 'Despacha Lunes y Jueves antes de 6am'
+                },
+                {
+                    'NIT / Identificación': '800987654-2',
+                    'Tipo Documento': 'NIT',
+                    'Nombre / Razón Social': 'DISTRIBUIDORA FRUTAS DEL VALLE',
+                    'Categoría': 'PRODUCTOS',
+                    'Productos / Insumos Principales': 'TOMATE LARGA VIDA, AHUYAMA',
+                    'Tipo de Pago': 'Crédito',
+                    'Plazo de Pago (Días)': 15,
+                    'Condición de Pago': 'Crédito 15 días',
+                    'Facturación': 'Factura Electrónica',
+                    'Persona de Contacto': 'MARÍA RODRÍGUEZ',
+                    'Teléfono': '3209876543',
+                    'Correo Electrónico': 'ventas@frutasdelvalle.co',
+                    'Dirección / Oficina Fiscal': 'CORABASTOS BODEGA 8 PUESTO 14',
+                    'Ciudad / Origen': 'Faca / Cundinamarca',
+                    'Bodega (Plaza)': 8,
+                    'Puesto (Plaza)': 'P-14',
+                    'Banco': 'DAVIVIENDA',
+                    'Tipo Cuenta': 'Corriente',
+                    'Número de Cuenta': '98765432109',
+                    'Código ERP (World Office)': 'PRV-0102',
+                    'Observaciones': 'Certificación Invima al día'
+                }
+            ] : [
+                {
+                    'NIT / Identificación': '900555444-3',
+                    'Tipo Documento': 'NIT',
+                    'Nombre / Razón Social': 'EMPAQUES & PLÁSTICOS INDUSTRIALES S.A.S',
+                    'Categoría': 'GENERAL',
+                    'Productos / Insumos Principales': 'Bolsas plásticas, Canastillas, Cinta',
+                    'Tipo de Pago': 'Crédito',
+                    'Plazo de Pago (Días)': 30,
+                    'Condición de Pago': 'Crédito 30 días tras factura',
+                    'Facturación': 'Factura Electrónica',
+                    'Persona de Contacto': 'ANDRÉS GÓMEZ',
+                    'Teléfono': '3157778899',
+                    'Correo Electrónico': 'servicio@empaquesind.com',
+                    'Dirección / Oficina Fiscal': 'CALLE 80 # 65-10 BOGOTÁ',
+                    'Ciudad / Origen': 'Bogotá D.C.',
+                    'Bodega (Plaza)': '',
+                    'Puesto (Plaza)': '',
+                    'Banco': 'BANCO DE BOGOTÁ',
+                    'Tipo Cuenta': 'Corriente',
+                    'Número de Cuenta': '4567891230',
+                    'Código ERP (World Office)': 'PRV-0201',
+                    'Observaciones': 'Insumo de embalaje para picking'
+                }
+            ];
+
+            const worksheet = XLSX.utils.json_to_sheet(sampleRows);
+            const columnWidths = Object.keys(sampleRows[0] || {}).map(key => ({
+                wch: Math.max(key.length + 4, 18)
+            }));
+            worksheet['!cols'] = columnWidths;
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, `Plantilla_${templateCategory}`);
+            XLSX.writeFile(workbook, `Plantilla_Carga_Proveedores_${templateCategory}.xlsx`);
+        } catch (err: any) {
+            console.error('Error al descargar plantilla Excel:', err);
+            alert('Error al descargar la plantilla: ' + err.message);
+        }
+    };
+
+    // PARSE BULK FILE
+    const handleParseBulkFile = async (file: File) => {
+        try {
+            setBulkLoading(true);
+            setBulkError(null);
+            setBulkSuccess(null);
+            const XLSX = await import('xlsx');
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+            if (!rawJson || rawJson.length === 0) {
+                setBulkError('El archivo Excel está vacío o no contiene registros válidos.');
+                setBulkLoading(false);
+                return;
+            }
+
+            const parsedItems = rawJson.map((row, index) => {
+                const getVal = (...keys: string[]) => {
+                    for (const k of keys) {
+                        if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
+                            return String(row[k]).trim();
+                        }
+                    }
+                    return '';
+                };
+
+                const tax_id = getVal('NIT / Identificación', 'NIT', 'tax_id', 'Identificación (NIT/CC)', 'Identificacion', 'NIT/CC');
+                const name = getVal('Nombre / Razón Social', 'Nombre', 'Razón Social', 'name', 'Razon Social');
+                const category = getVal('Categoría', 'Categoria', 'category').toUpperCase() || (getVal('Productos / Insumos Principales', 'product') ? 'PRODUCTOS' : 'GENERAL');
+                const product = getVal('Productos / Insumos Principales', 'Productos', 'Insumos', 'product').toUpperCase();
+                const rawType = getVal('Tipo de Pago', 'Tipo Pago', 'type').toLowerCase();
+                const type = rawType.includes('cred') || rawType.includes('créd') ? 'credito' : 'contado';
+                const payment_terms_days = parseInt(getVal('Plazo de Pago (Días)', 'Plazo', 'payment_terms_days') || '0', 10) || 0;
+                const payment_condition = getVal('Condición de Pago', 'Condicion de Pago', 'payment_condition');
+                const rawBilling = getVal('Facturación', 'Facturacion', 'billing_type', 'Régimen Facturación').toLowerCase();
+                const billing_type = rawBilling.includes('elect') ? 'electronica' : 'soporte';
+                const contact_name = getVal('Persona de Contacto', 'Contacto', 'contact_name').toUpperCase();
+                const phone = getVal('Teléfono', 'Telefono', 'phone');
+                const email = getVal('Correo Electrónico', 'Correo', 'Email', 'email');
+                const address = getVal('Dirección / Oficina Fiscal', 'Dirección', 'Direccion', 'address').toUpperCase();
+                const city = getVal('Ciudad / Origen', 'Ciudad', 'city');
+                const warehouse_location = getVal('Bodega (Plaza)', 'Bodega', 'warehouse_location');
+                const puesto = getVal('Puesto (Plaza)', 'Puesto', 'puesto').toUpperCase();
+                const bank_name = getVal('Banco', 'bank_name').toUpperCase();
+                const bank_account_type = getVal('Tipo Cuenta', 'bank_account_type') || 'Ahorros';
+                const bank_account_number = getVal('Número de Cuenta', 'Numero de Cuenta', 'bank_account_number');
+                const world_office_id = getVal('Código ERP (World Office)', 'Código ERP', 'Codigo ERP', 'world_office_id').toUpperCase();
+                const observations = getVal('Observaciones', 'observations');
+
+                const isValid = Boolean(tax_id && name);
+
+                return {
+                    rowIndex: index + 2,
+                    isValid,
+                    item: {
+                        tax_id,
+                        document_type: tax_id.length < 10 && !tax_id.includes('-') ? 'CC' : 'NIT',
+                        name,
+                        category,
+                        product,
+                        type,
+                        payment_terms_days,
+                        payment_condition,
+                        billing_type,
+                        contact_name,
+                        phone,
+                        email,
+                        address,
+                        city,
+                        warehouse_location,
+                        puesto,
+                        bank_name,
+                        bank_account_type,
+                        bank_account_number,
+                        world_office_id,
+                        observations,
+                        is_active: true,
+                        is_archived: false
+                    }
+                };
+            });
+
+            setParsedRows(parsedItems);
+            setBulkLoading(false);
+        } catch (err: any) {
+            console.error('Error parseando archivo Excel:', err);
+            setBulkError('Error al leer el archivo Excel: ' + err.message);
+            setBulkLoading(false);
+        }
+    };
+
+    // EXECUTE BULK IMPORT
+    const handleExecuteBulkImport = async () => {
+        try {
+            setBulkLoading(true);
+            setBulkError(null);
+            setBulkSuccess(null);
+            const validItems = parsedRows.filter(r => r.isValid).map(r => r.item);
+
+            if (validItems.length === 0) {
+                setBulkError('No hay registros válidos para importar.');
+                setBulkLoading(false);
+                return;
+            }
+
+            const res = await fetch('/api/providers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'bulk-upsert',
+                    items: validItems
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al procesar la carga masiva');
+
+            setBulkSuccess(`✓ Carga masiva ejecutada con éxito. Total registros procesados: ${data.total}. (Insertados/Actualizados: ${data.created || validItems.length})`);
+            setBulkLoading(false);
+            fetchProviders();
+        } catch (err: any) {
+            console.error('Error durante la importación:', err);
+            setBulkError(err.message || 'Error inesperado durante la carga');
+            setBulkLoading(false);
+        }
+    };
     
     // New Provider Form State
     const [newProvider, setNewProvider] = useState({
@@ -659,12 +958,162 @@ export default function ProvidersPage() {
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {/* View Switcher */}
                         <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F3F4F6', padding: '2px', borderRadius: '8px' }}>
                             <button onClick={() => setViewMode('list')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'list' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'list' ? THEME.colors.textMain : '#9CA3AF', display: 'flex', alignItems: 'center' }}><List size={14} strokeWidth={1.5} /></button>
                             <button onClick={() => setViewMode('grid')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'grid' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'grid' ? THEME.colors.textMain : '#9CA3AF', display: 'flex', alignItems: 'center' }}><LayoutGrid size={14} strokeWidth={1.5} /></button>
                         </div>
+
+                        {/* EXPORT EXCEL DROPDOWN */}
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setShowExportMenu(!showExportMenu)}
+                                style={{
+                                    backgroundColor: '#F8FAFC',
+                                    color: THEME.colors.textMain,
+                                    padding: '0.5rem 0.85rem',
+                                    borderRadius: THEME.radius.sm,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontWeight: '600',
+                                    fontSize: '0.8rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseOver={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                onMouseOut={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                            >
+                                <Download size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                <span>Exportar Excel</span>
+                            </button>
+
+                            {showExportMenu && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '110%',
+                                    right: 0,
+                                    width: '260px',
+                                    backgroundColor: 'white',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    zIndex: 100,
+                                    overflow: 'hidden',
+                                    padding: '6px'
+                                }}>
+                                    <button
+                                        onClick={() => handleExportExcel('PRODUCTOS')}
+                                        style={{
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            padding: '0.6rem 0.8rem',
+                                            border: 'none',
+                                            backgroundColor: 'transparent',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.78rem',
+                                            fontWeight: '600',
+                                            color: THEME.colors.textMain,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <Package size={15} style={{ color: THEME.colors.primary }} />
+                                        <span>Proveedores de Productos (.xlsx)</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleExportExcel('GENERAL')}
+                                        style={{
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            padding: '0.6rem 0.8rem',
+                                            border: 'none',
+                                            backgroundColor: 'transparent',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.78rem',
+                                            fontWeight: '600',
+                                            color: THEME.colors.textMain,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <Building2 size={15} style={{ color: '#64748B' }} />
+                                        <span>Proveedores Generales / Servicios (.xlsx)</span>
+                                    </button>
+
+                                    <div style={{ height: '1px', backgroundColor: '#F1F5F9', margin: '4px 0' }} />
+
+                                    <button
+                                        onClick={() => handleExportExcel('ALL')}
+                                        style={{
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            padding: '0.6rem 0.8rem',
+                                            border: 'none',
+                                            backgroundColor: 'transparent',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.78rem',
+                                            fontWeight: '700',
+                                            color: THEME.colors.primary,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <FileSpreadsheet size={15} />
+                                        <span>Todo el Maestro de Proveedores (.xlsx)</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* CARGA MASIVA EXCEL BUTTON */}
+                        <button
+                            onClick={() => {
+                                setParsedRows([]);
+                                setBulkError(null);
+                                setBulkSuccess(null);
+                                setShowBulkModal(true);
+                            }}
+                            disabled={!canEdit}
+                            style={{
+                                backgroundColor: '#ECFDF5',
+                                color: THEME.colors.primary,
+                                padding: '0.5rem 0.85rem',
+                                borderRadius: THEME.radius.sm,
+                                border: `1px solid ${THEME.colors.primary}30`,
+                                fontWeight: '700',
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                cursor: canEdit ? 'pointer' : 'not-allowed',
+                                opacity: canEdit ? 1 : 0.6,
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseOver={e => {
+                                if (canEdit) e.currentTarget.style.backgroundColor = '#D1FAE5';
+                            }}
+                            onMouseOut={e => {
+                                if (canEdit) e.currentTarget.style.backgroundColor = '#ECFDF5';
+                            }}
+                        >
+                            <FileUp size={14} strokeWidth={1.5} /> Carga Masiva (Excel)
+                        </button>
 
                         {/* Nuevo Proveedor Button */}
                         <button 
@@ -1512,6 +1961,271 @@ export default function ProvidersPage() {
                                 </section>
 
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL: Protocolo de Carga Masiva Excel */}
+                {showBulkModal && (
+                    <div 
+                        style={{ 
+                            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+                            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+                            padding: '1rem'
+                        }}
+                        onClick={() => setShowBulkModal(false)}
+                    >
+                        <div 
+                            style={{ 
+                                backgroundColor: 'white', borderRadius: '24px', width: '96vw', maxWidth: '940px',
+                                maxHeight: '90vh', overflowY: 'auto', position: 'relative',
+                                boxShadow: THEME.shadow.lg, padding: '1.5rem 2rem', boxSizing: 'border-box'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button 
+                                onClick={() => setShowBulkModal(false)}
+                                style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', border: 'none', backgroundColor: '#F1F5F9', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
+                            >
+                                <X size={18} />
+                            </button>
+
+                            <h2 style={{ fontSize: '1.35rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0 0 0.5rem', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                <FileSpreadsheet size={24} style={{ color: THEME.colors.primary }} />
+                                <span>Carga Masiva de Proveedores <span style={{ color: THEME.colors.primary }}>(Excel / CSV)</span></span>
+                            </h2>
+                            <p style={{ fontSize: '0.82rem', color: THEME.colors.textSecondary, margin: '0 0 1.25rem' }}>
+                                Sigue el protocolo en 2 pasos: descarga la plantilla según el tipo de proveedor (Productos o Generales), completa los datos e impórtala para actualizar la base de datos automáticamente.
+                            </p>
+
+                            {/* PASO 1: Descargar Plantillas */}
+                            <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.1rem 1.25rem', marginBottom: '1.25rem' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: THEME.colors.primary, color: 'white', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>1</span>
+                                    <span>Descargar Plantillas Oficiales en Excel:</span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                                    <button
+                                        onClick={() => handleDownloadTemplate('PRODUCTOS')}
+                                        style={{
+                                            padding: '0.7rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: `1px solid ${THEME.colors.primary}40`,
+                                            backgroundColor: THEME.colors.primaryLight,
+                                            color: THEME.colors.primary,
+                                            fontWeight: '700',
+                                            fontSize: '0.78rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.backgroundColor = '#D1E5DE'}
+                                        onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                                    >
+                                        <Download size={16} />
+                                        <span>Plantilla Proveedores de Productos (.xlsx)</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleDownloadTemplate('GENERAL')}
+                                        style={{
+                                            padding: '0.7rem 0.9rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: 'white',
+                                            color: THEME.colors.textMain,
+                                            fontWeight: '700',
+                                            fontSize: '0.78rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
+                                    >
+                                        <Download size={16} />
+                                        <span>Plantilla Proveedores Generales / Servicios (.xlsx)</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* PASO 2: Cargar Archivo Excel */}
+                            <div style={{ marginBottom: '1.25rem' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ backgroundColor: THEME.colors.primary, color: 'white', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>2</span>
+                                    <span>Seleccionar o Arrastrar Archivo Excel (.xlsx / .csv):</span>
+                                </div>
+
+                                <div 
+                                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                                    onDragLeave={() => setDragOver(false)}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        setDragOver(false);
+                                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                            handleParseBulkFile(e.dataTransfer.files[0]);
+                                        }
+                                    }}
+                                    style={{
+                                        border: `2px dashed ${dragOver ? THEME.colors.primary : '#CBD5E1'}`,
+                                        borderRadius: '16px',
+                                        padding: '2rem 1.5rem',
+                                        textAlign: 'center',
+                                        backgroundColor: dragOver ? THEME.colors.primaryLight : '#FAFAFA',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <input 
+                                        type="file" 
+                                        accept=".xlsx, .xls, .csv" 
+                                        id="bulk-file-input" 
+                                        hidden 
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                handleParseBulkFile(e.target.files[0]);
+                                            }
+                                        }} 
+                                    />
+                                    <label htmlFor="bulk-file-input" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+                                        {bulkLoading ? (
+                                            <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                                        ) : (
+                                            <FileUp size={36} style={{ color: THEME.colors.primary }} />
+                                        )}
+                                        <span style={{ fontSize: '0.9rem', fontWeight: '700', color: THEME.colors.textMain }}>
+                                            {bulkLoading ? 'Analizando archivo Excel...' : 'Haz clic aquí para seleccionar el archivo Excel o arrástralo'}
+                                        </span>
+                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                            Soporta formatos .XLSX, .XLS o .CSV
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* FEEDBACK ALERTS */}
+                            {bulkError && (
+                                <div style={{ padding: '0.8rem 1rem', borderRadius: '10px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: '0.82rem', fontWeight: '600', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <AlertTriangle size={18} />
+                                    <span>{bulkError}</span>
+                                </div>
+                            )}
+
+                            {bulkSuccess && (
+                                <div style={{ padding: '0.8rem 1rem', borderRadius: '10px', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7', color: '#065F46', fontSize: '0.82rem', fontWeight: '700', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <CheckCircle2 size={18} />
+                                    <span>{bulkSuccess}</span>
+                                </div>
+                            )}
+
+                            {/* PREVIEW TABLE */}
+                            {parsedRows.length > 0 && (
+                                <div style={{ marginBottom: '1.25rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                                        <span style={{ fontSize: '0.82rem', fontWeight: '800', color: THEME.colors.textMain }}>
+                                            Vista Previa de Filas Analizadas ({parsedRows.length} encontradas):
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#059669', backgroundColor: '#ECFDF5', padding: '2px 8px', borderRadius: '6px' }}>
+                                                {parsedRows.filter(r => r.isValid).length} Válidas
+                                            </span>
+                                            {parsedRows.filter(r => !r.isValid).length > 0 && (
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEF2F2', padding: '2px 8px', borderRadius: '6px' }}>
+                                                    {parsedRows.filter(r => !r.isValid).length} Incompletas
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden', maxHeight: '220px', overflowY: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                            <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: 0 }}>
+                                                <tr>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: '800', color: '#64748B' }}>Fila</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: '800', color: '#64748B' }}>NIT / CC</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: '800', color: '#64748B' }}>Nombre / Razón Social</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: '800', color: '#64748B' }}>Categoría</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: '800', color: '#64748B' }}>Tipo Pago</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '800', color: '#64748B' }}>Estado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {parsedRows.slice(0, 50).map((r, idx) => (
+                                                    <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: r.isValid ? 'white' : '#FFF5F5' }}>
+                                                        <td style={{ padding: '0.45rem 0.75rem', fontWeight: '700', color: '#64748B' }}>#{r.rowIndex}</td>
+                                                        <td style={{ padding: '0.45rem 0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>{r.item.tax_id || <span style={{ color: '#DC2626' }}>Sin NIT</span>}</td>
+                                                        <td style={{ padding: '0.45rem 0.75rem', fontWeight: '600' }}>{r.item.name || <span style={{ color: '#DC2626' }}>Sin Nombre</span>}</td>
+                                                        <td style={{ padding: '0.45rem 0.75rem' }}>{r.item.category}</td>
+                                                        <td style={{ padding: '0.45rem 0.75rem', textTransform: 'capitalize' }}>{r.item.type}</td>
+                                                        <td style={{ padding: '0.45rem 0.75rem', textAlign: 'center' }}>
+                                                            {r.isValid ? (
+                                                                <span style={{ color: '#059669', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <Check size={14} /> Listo
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#DC2626', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <AlertTriangle size={14} /> Incompleto
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {parsedRows.length > 50 && (
+                                        <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, marginTop: '4px', textAlign: 'right' }}>
+                                            * Mostrando las primeras 50 filas de {parsedRows.length} detectadas.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* BOTÓN EJECUTAR IMPORTACIÓN */}
+                            {parsedRows.length > 0 && (
+                                <button
+                                    onClick={handleExecuteBulkImport}
+                                    disabled={bulkLoading || parsedRows.filter(r => r.isValid).length === 0}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.85rem',
+                                        borderRadius: THEME.radius.sm,
+                                        backgroundColor: THEME.colors.primary,
+                                        color: 'white',
+                                        fontWeight: '800',
+                                        fontSize: '0.9rem',
+                                        border: 'none',
+                                        cursor: bulkLoading || parsedRows.filter(r => r.isValid).length === 0 ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        opacity: bulkLoading || parsedRows.filter(r => r.isValid).length === 0 ? 0.6 : 1,
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                >
+                                    {bulkLoading ? (
+                                        <>
+                                            <Loader2 size={18} className="animate-spin" />
+                                            <span>Procesando e Importando Proveedores...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileSpreadsheet size={18} />
+                                            <span>Importar {parsedRows.filter(r => r.isValid).length} Proveedores Válidos a la Base de Datos</span>
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
