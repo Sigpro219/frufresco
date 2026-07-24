@@ -1355,24 +1355,22 @@ export default function CheckoutPage() {
                                             alignItems: 'center', 
                                             justifyContent: 'space-between',
                                             gap: '8px', 
-                                            backgroundColor: isCustomerOutOfZone ? '#FFF7ED' : '#F0FDF4', 
-                                            padding: '0.6rem 1rem', 
                                             borderRadius: '12px',
-                                            border: `1px solid ${isCustomerOutOfZone ? '#FFEDD5' : '#DCFCE7'}`
+                                            border: `1px solid ${isCustomerOutOfZone ? '#FEF08A' : '#DCFCE7'}`
                                         }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 {isCustomerOutOfZone ? (
-                                                    <AlertCircle size={16} color="#9A3412" strokeWidth={2.5} />
+                                                    <Info size={16} color="#D97706" strokeWidth={2.5} />
                                                 ) : (
                                                     <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
                                                 )}
-                                                <p style={{ fontSize: '0.8rem', color: isCustomerOutOfZone ? '#9A3412' : '#166534', margin: 0, fontWeight: '700' }}>
+                                                <p style={{ fontSize: '0.8rem', color: isCustomerOutOfZone ? '#B45309' : '#166534', margin: 0, fontWeight: '700' }}>
                                                     {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
                                                 </p>
                                             </div>
                                             <button 
                                                 onClick={() => { setLatitude(null); setLongitude(null); }}
-                                                style={{ background: 'none', border: 'none', color: isCustomerOutOfZone ? '#9A3412' : '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
+                                                style={{ background: 'none', border: 'none', color: isCustomerOutOfZone ? '#D97706' : '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
                                             >
                                                 {t.change}
                                             </button>
@@ -1489,41 +1487,45 @@ export default function CheckoutPage() {
 
                             {outOfZone && latitude && !isB2B && (
                                 <div style={{
-                                    backgroundColor: '#FFF7ED',
-                                    color: '#9A3412',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
+                                    backgroundColor: '#FEFCE8',
+                                    color: '#B45309',
+                                    padding: '1.1rem',
+                                    borderRadius: '14px',
                                     fontSize: '0.8rem',
                                     marginBottom: '1rem',
-                                    border: '1px solid #FFEDD5',
-                                    textAlign: 'center'
+                                    border: '1px solid #FEF08A',
+                                    textAlign: 'center',
+                                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.06)'
                                 }}>
                                     <p style={{ 
                                         fontFamily: 'var(--font-outfit), sans-serif',
                                         fontWeight: '900', 
-                                        margin: '0 0 4px 0',
-                                        fontSize: '1rem',
+                                        margin: '0 0 6px 0',
+                                        fontSize: '0.95rem',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: '6px'
+                                        gap: '6px',
+                                        color: '#B45309'
                                     }}>
-                                        <MapPin size={16} /> {locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}
+                                        <MapPin size={16} color="#D97706" /> {locale === 'es' ? '¡Pronto estaremos más cerca de ti!' : 'We hope to reach your area soon!'}
                                     </p>
-                                    <p style={{ margin: '0 0 10px 0', fontSize: '0.75rem', fontWeight: '600', opacity: 0.8 }}>
-                                        {locale === 'es' ? 'B2C solo disponible en Zona Norte.' : 'B2C only available in North Zone.'} 
+                                    <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', fontWeight: '500', lineHeight: '1.45', color: '#92400E' }}>
+                                        {locale === 'es' ? 'Por ahora nuestras entregas para Hogar (B2C) están habilitadas en la Zona Norte. Si tienes un negocio o restaurante, ¡nuestra red institucional (B2B) sí puede atenderte!' : 'Our Home Delivery (B2C) route is currently focused on the North Zone. If you have a business or restaurant, our Business Hub (B2B) can deliver to you!'} 
                                     </p>
                                     <Link href="/b2b/register" style={{ 
                                         color: 'white', 
-                                        backgroundColor: '#9A3412',
-                                        padding: '0.5rem 1rem',
+                                        backgroundColor: '#D97706',
+                                        padding: '0.55rem 1.1rem',
                                         borderRadius: '10px',
                                         fontWeight: '800', 
                                         textDecoration: 'none',
                                         display: 'inline-block',
-                                        fontSize: '0.75rem'
+                                        fontSize: '0.78rem',
+                                        boxShadow: '0 2px 6px rgba(217, 119, 6, 0.2)',
+                                        transition: 'all 0.2s'
                                     }}>
-                                        {locale === 'es' ? 'Registrar mi Negocio (B2B)' : 'Register my Business (B2B)'}
+                                        {locale === 'es' ? '¿Tienes un Negocio? Registrar mi Negocio (B2B)' : 'Business Client? Register my Business (B2B)'}
                                     </Link>
                                 </div>
                             )}
