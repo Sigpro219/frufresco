@@ -159,6 +159,8 @@ async function checkUserPermissionBackend(user: any, requiredPermission: string)
       if (cleanRule === '*' || cleanRule === target) return true;
       if (cleanRule.endsWith('*') && target.startsWith(cleanRule.slice(0, -1))) return true;
       if (target.startsWith(cleanRule + '.') || target.startsWith(cleanRule + ':')) return true;
+      if ((cleanRule === 'admin.commercial.clients' || cleanRule.startsWith('admin.commercial.clients.')) && target.startsWith('admin.clients')) return true;
+      if ((cleanRule === 'admin.clients' || cleanRule.startsWith('admin.clients.')) && target.startsWith('admin.commercial.clients')) return true;
       return false;
     };
 

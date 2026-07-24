@@ -733,6 +733,7 @@ function CreateOrderContent() {
                 .from('profiles')
                 .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id')
                 .eq('role', 'b2b_client')
+                .eq('is_active', true)
                 .order('company_name', { ascending: true });
 
             const fetchB2C = supabase

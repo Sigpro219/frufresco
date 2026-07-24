@@ -29,7 +29,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(product.image_url);
     const [options, setOptions] = useState<any[]>(product.options_config || []);
-    const [variants, setVariants] = useState<any[]>(product.variants || []);
+    const [variants, setVariants] = useState<any[]>(() => {
+        const raw = product.variants || [];
+        const seen = new Set<string>();
+        return raw.map((v: any, idx: number) => {
+            let id = v?.id;
+            if (!id || seen.has(id)) {
+                id = `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+            }
+            seen.add(id);
+            return { ...v, id };
+        });
+    });
     const [variantUploading, setVariantUploading] = useState<string | null>(null);
     const [conversionFactorInput, setConversionFactorInput] = useState(product.web_conversion_factor?.toString().replace('.', ',') || '1,0');
     const [generatingAI, setGeneratingAI] = useState(false);
@@ -168,18 +179,31 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             results = temp;
         });
 
-        const newVariants = results.map((combination) => {
+        const usedIds = new Set<string>();
+        const newVariants = results.map((combination, idx) => {
             const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
             const variantSku = `${formData.sku}.${attrValues}`;
 
-            // Intentar preservar datos si el SKU ya existía
-            const existing = variants.find(v => v.sku === variantSku);
+            // Intentar preservar datos si el SKU o combinacion ya existia sin repetir ID
+            const existing = variants.find(v => 
+                v.sku === variantSku && !usedIds.has(v.id)
+            ) || variants.find(v => 
+                v.options && 
+                Object.keys(combination).every(k => v.options[k] === combination[k]) &&
+                !usedIds.has(v.id)
+            );
+
+            let id = existing?.id;
+            if (!id || usedIds.has(id)) {
+                id = `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+            }
+            usedIds.add(id);
 
             return {
-                id: existing?.id || `v-${Math.random().toString(36).substr(2, 9)}`,
+                id,
                 options: combination,
                 sku: variantSku,
-                price_adj_pct: existing?.price_adj_pct || 0,
+                price_adj_pct: existing?.price_adj_pct || existing?.price_adjustment_percent || 0,
                 image_url: existing?.image_url || null,
                 show_on_web: existing?.show_on_web !== false // Default to true if new or previously true
             };
@@ -1224,7 +1248,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 </thead>
                                                 <tbody>
                                                     {variants.map((v: any, i: number) => (
-                                                        <tr key={v.id} style={{ borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}>
+                                                        <tr key={v.id ? `${v.id}-${i}` : `v-${i}`} style={{ borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}>
                                                             <td style={{ padding: '8px' }}>
                                                                 <div 
                                                                     onClick={() => document.getElementById(`file-${v.id}`)?.click()}

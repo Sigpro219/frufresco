@@ -32,3 +32,8 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 
 ## 3. Reglas de Git y Despliegue
 * **Push a Remoto:** Queda estrictamente prohibido realizar `git push` a cualquier rama remota a menos que el usuario lo solicite expresamente. Las tareas deben completarse únicamente con commits locales.
+
+---
+
+## 4. Gestión de Excepciones y Planillas de Importación/Exportación
+* **Campos SKU en Excel:** Queda estrictamente prohibido incluir, generar o procesar el campo `SKU` o `SKU_MAESTRO` en las planillas de Excel (.xlsx) utilizadas para importación o exportación de datos (ej. excepciones de clientes, catálogo, etc.). En su lugar, se debe utilizar únicamente el identificador lógico **`CODIGO_CONTABLE`** (accounting_id) para asociar los registros de productos de manera inequívoca.

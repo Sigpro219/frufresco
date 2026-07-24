@@ -1061,7 +1061,7 @@ export default function PickingExecutionPage() {
                                                                 alignItems: 'center',
                                                                 gap: '3px'
                                                             }}>
-                                                                Stock: {item.available_stock || 0} {item.unit}
+                                                                Stock: {(item.available_stock || 0).toLocaleString('es-CO')} {item.unit}
                                                                 {(item.available_stock || 0) === 0 && <AlertCircle size={10} />}
                                                             </span>
                                                         )}
@@ -1157,7 +1157,7 @@ export default function PickingExecutionPage() {
                                             fontWeight: 'bold',
                                             border: '1px solid rgba(255,255,255,0.1)'
                                         }}>
-                                            Stock: {group.available_stock || 0} {group.unit}
+                                            Stock: {(group.available_stock || 0).toLocaleString('es-CO')} {group.unit}
                                         </span>
                                         {selectedCategory === 'TODAS' && group.category && (
                                             <span style={{ fontSize: '0.7rem', color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '4px 10px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>

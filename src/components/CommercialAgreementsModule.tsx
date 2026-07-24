@@ -124,7 +124,7 @@ export default function CommercialAgreementsModule() {
             // Fetch quotes where status is 'agreement' and join profiles
             const { data, error } = await supabase
                 .from('quotes')
-                .select('*, profiles:client_id (company_name, contact_name, nit, phone, address)')
+                .select('*, profiles:client_id (company_name, contact_name, nit, phone, address), items:quote_items(margin_percent)')
                 .eq('status', 'agreement')
                 .order('created_at', { ascending: false });
 
@@ -788,55 +788,38 @@ export default function CommercialAgreementsModule() {
     const warningCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'warning').length;
     const expiredCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'expired').length;
 
+    const totalMargin = agreementItems.reduce((sum, item) => sum + (item.margin_percent || 0), 0);
+    const averageMargin = agreementItems.length > 0 ? totalMargin / agreementItems.length : 0;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', fontFamily: THEME.typography.fontFamilySecondary }}>
             
             {/* STAT CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-                <div style={{ 
-                    backgroundColor: THEME.colors.surface, 
-                    borderRadius: THEME.colors.primary ? THEME.radius.lg : '12px', 
-                    padding: '1.5rem', 
-                    boxShadow: THEME.shadow.sm, 
-                    border: `1px solid ${THEME.colors.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.5rem'
-                }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acuerdos Vigentes</span>
-                    <span style={{ fontSize: '2rem', fontWeight: '900', color: THEME.colors.primary }}>{activeCount}</span>
-                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Contratos con precios congelados</span>
-                </div>
-                
-                <div style={{ 
-                    backgroundColor: THEME.colors.surface, 
-                    borderRadius: THEME.colors.primary ? THEME.radius.lg : '12px', 
-                    padding: '1.5rem', 
-                    boxShadow: THEME.shadow.sm, 
-                    border: `1px solid ${THEME.colors.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.5rem'
-                }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Próximos a Vencer</span>
-                    <span style={{ fontSize: '2rem', fontWeight: '900', color: '#D97706' }}>{warningCount}</span>
-                    <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 'bold' }}>Expira en menos de 15 días</span>
-                </div>
-
-                <div style={{ 
-                    backgroundColor: THEME.colors.surface, 
-                    borderRadius: THEME.colors.primary ? THEME.radius.lg : '12px', 
-                    padding: '1.5rem', 
-                    boxShadow: THEME.shadow.sm, 
-                    border: `1px solid ${THEME.colors.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.5rem'
-                }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acuerdos Vencidos</span>
-                    <span style={{ fontSize: '2rem', fontWeight: '900', color: '#EF4444' }}>{expiredCount}</span>
-                    <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold' }}>Precios inactivos</span>
-                </div>
+                <LocalKPICard 
+                    title="Acuerdos Vigentes" 
+                    value={activeCount} 
+                    icon={<FileText size={18} strokeWidth={1.5} />} 
+                    color="#EAEFEA" 
+                    textColor="#0D7A57" 
+                    subtitle="Contratos con precios congelados" 
+                />
+                <LocalKPICard 
+                    title="Próximos a Vencer" 
+                    value={warningCount} 
+                    icon={<Clock size={18} strokeWidth={1.5} />} 
+                    color="#FFF9E6" 
+                    textColor="#D97706" 
+                    subtitle="Expira en menos de 15 días" 
+                />
+                <LocalKPICard 
+                    title="Acuerdos Vencidos" 
+                    value={expiredCount} 
+                    icon={<AlertCircle size={18} strokeWidth={1.5} />} 
+                    color="#FEE2E2" 
+                    textColor="#EF4444" 
+                    subtitle="Precios inactivos" 
+                />
             </div>
 
             {/* CONTROLS */}
@@ -872,36 +855,54 @@ export default function CommercialAgreementsModule() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {(['all', 'active', 'warning', 'expired'] as const).map(f => (
-                        <button
-                            key={f}
-                            onClick={() => setStatusFilter(f)}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: THEME.radius.md,
-                                fontSize: '0.8rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                backgroundColor: statusFilter === f ? THEME.colors.primaryLight : '#F3F4F6',
-                                color: statusFilter === f ? THEME.colors.primary : '#4B5563',
-                                border: statusFilter === f ? `1px solid ${THEME.colors.primary}20` : '1px solid transparent'
-                            }}
-                        >
-                            {f === 'all' && 'Todos'}
-                            {f === 'active' && '🟢 Vigentes'}
-                            {f === 'warning' && '🟡 Por Vencer'}
-                            {f === 'expired' && '🔴 Vencidos'}
-                        </button>
-                    ))}
+                    {(['all', 'active', 'warning', 'expired'] as const).map(f => {
+                        const isActive = statusFilter === f;
+                        return (
+                            <button
+                                key={f}
+                                onClick={() => setStatusFilter(f)}
+                                style={{
+                                    padding: '0.45rem 1.1rem',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: isActive ? THEME.colors.primary : 'transparent',
+                                    color: isActive ? 'white' : '#4E6157',
+                                    fontWeight: isActive ? '700' : '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    fontSize: '0.8rem',
+                                    boxShadow: isActive ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isActive) {
+                                        e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                        e.currentTarget.style.color = THEME.colors.textMain;
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isActive) {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                        e.currentTarget.style.color = '#4E6157';
+                                    }
+                                }}
+                            >
+                                {f === 'all' && 'Todos'}
+                                {f === 'active' && 'Vigentes'}
+                                {f === 'warning' && 'Por Vencer'}
+                                {f === 'expired' && 'Vencidos'}
+                            </button>
+                        );
+                    })}
                     <button
                         onClick={handleOpenCreateModal}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            padding: '0.5rem 1rem',
-                            borderRadius: THEME.radius.md,
+                            padding: '0.45rem 1.1rem',
+                            borderRadius: '8px',
                             backgroundColor: THEME.colors.primary,
                             color: 'white',
                             border: 'none',
@@ -910,7 +911,7 @@ export default function CommercialAgreementsModule() {
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                             marginLeft: '8px',
-                            boxShadow: '0 2px 4px rgba(13,122,87,0.15)'
+                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)'
                         }}
                     >
                         <Plus size={14} /> Nuevo Acuerdo
@@ -942,13 +943,14 @@ export default function CommercialAgreementsModule() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Código</th>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Cliente B2B</th>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Modelo de Precios</th>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Vigencia</th>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Duración</th>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader }}>Estado</th>
-                                <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Acciones</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Código</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Cliente B2B</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Modelo de Precios</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Vigencia</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Duración</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Estado</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen Promedio</th>
+                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -958,10 +960,10 @@ export default function CommercialAgreementsModule() {
                                     <tr 
                                         key={agreement.id} 
                                         style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        <td style={{ padding: '1rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <span style={{ 
                                                 fontFamily: 'monospace', 
                                                 fontSize: '0.75rem', 
@@ -975,7 +977,7 @@ export default function CommercialAgreementsModule() {
                                                 {formatAgreementNumber(agreement.quote_number, agreement.created_at)}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1rem 1.25rem' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <Building2 size={16} color="#94A3B8" />
                                                 <div>
@@ -990,10 +992,10 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem 1.25rem', color: THEME.colors.textSecondary }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textSecondary }}>
                                             {agreement.model_snapshot_name || 'Personalizado'}
                                         </td>
-                                        <td style={{ padding: '1rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                 <div style={{ fontSize: '0.8rem', color: THEME.colors.textMain }}>
                                                     <span style={{ color: '#94A3B8', fontSize: '0.7rem', marginRight: '4px' }}>INICIA:</span>
@@ -1005,7 +1007,7 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <span style={{ 
                                                 fontSize: '0.75rem', 
                                                 backgroundColor: '#F3F4F6', 
@@ -1014,10 +1016,10 @@ export default function CommercialAgreementsModule() {
                                                 color: '#374151',
                                                 fontWeight: '500'
                                             }}>
-                                                ⏳ {getDurationText(agreement.start_date, agreement.valid_until)}
+                                                {getDurationText(agreement.start_date, agreement.valid_until)}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1rem 1.25rem' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <span style={{ 
                                                 backgroundColor: status.bgColor, 
                                                 color: status.color, 
@@ -1030,63 +1032,84 @@ export default function CommercialAgreementsModule() {
                                                 {status.label}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
+                                            {(() => {
+                                                const rowItems = (agreement as any).items || (agreement as any).quote_items || [];
+                                                const totalRowMargin = rowItems.reduce((sum: number, item: any) => sum + (item.margin_percent || 0), 0);
+                                                const rowAvgMargin = rowItems.length > 0 ? totalRowMargin / rowItems.length : 0;
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <span style={{ 
+                                                            color: rowAvgMargin >= 50 ? '#059669' : rowAvgMargin >= 20 ? '#D97706' : '#DC2626', 
+                                                            fontWeight: 'bold',
+                                                            fontSize: '0.85rem'
+                                                        }}>
+                                                            {(Math.round(rowAvgMargin * 10) / 10).toFixed(1)}%
+                                                        </span>
+                                                        <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
+                                                            ({rowItems.length} prod / {!(agreement as any).items ? (!(agreement as any).quote_items ? 'BOTH NULL' : 'Q_ITEMS OK') : 'ITEMS OK'})
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </td>
+                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
                                             <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
                                                 <button
                                                     onClick={() => handleViewPrices(agreement)}
                                                     style={{
-                                                        padding: '0.25rem 0.6rem',
-                                                        border: `1px solid ${THEME.colors.borderActive}`,
+                                                        padding: '0.35rem 0.75rem',
+                                                        border: '1px solid #D1D5DB',
                                                         borderRadius: THEME.radius.sm,
                                                         background: 'white',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 'bold',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '4px',
-                                                        color: THEME.colors.textSecondary
+                                                        color: '#64748B'
                                                     }}
                                                 >
-                                                    <Eye size={12} /> Precios
+                                                    <Eye size={12} strokeWidth={1.5} /> Precios
                                                 </button>
                                                 
                                                 <button
                                                     onClick={() => handleOpenEdit(agreement)}
                                                     style={{
-                                                        padding: '0.25rem 0.6rem',
-                                                        border: 'none',
+                                                        padding: '0.35rem 0.75rem',
+                                                        border: '1px solid #D1D5DB',
                                                         borderRadius: THEME.radius.sm,
-                                                        background: '#EFF6FF',
-                                                        color: '#1D4ED8',
+                                                        background: 'white',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 'bold',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '4px'
+                                                        gap: '4px',
+                                                        color: '#64748B'
                                                     }}
                                                 >
-                                                    <Edit3 size={12} /> Modificar
+                                                    <Edit3 size={12} strokeWidth={1.5} /> Modificar
                                                 </button>
                                                 
                                                 <button
                                                     onClick={() => handleOpenRenew(agreement)}
                                                     style={{
-                                                        padding: '0.25rem 0.6rem',
-                                                        border: 'none',
+                                                        padding: '0.35rem 0.75rem',
+                                                        border: '1px solid #D1D5DB',
                                                         borderRadius: THEME.radius.sm,
-                                                        background: status.type === 'expired' ? '#FEE2E2' : '#FFFBEB',
-                                                        color: status.type === 'expired' ? '#EF4444' : '#D97706',
+                                                        background: 'white',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 'bold',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '4px'
+                                                        gap: '4px',
+                                                        color: '#64748B'
                                                     }}
                                                 >
-                                                    <Clock size={12} /> Renovar
+                                                    <Clock size={12} strokeWidth={1.5} /> Renovar
                                                 </button>
                                             </div>
                                         </td>
@@ -1156,6 +1179,15 @@ export default function CommercialAgreementsModule() {
                                     {loadingItems ? 'Cargando...' : `${agreementItems.length} ítems`}
                                 </strong>
                             </div>
+                            <div>
+                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block' }}>MARGEN PROMEDIO:</span>
+                                <strong style={{ 
+                                    fontSize: '0.85rem', 
+                                    color: averageMargin >= 50 ? '#059669' : averageMargin >= 20 ? '#D97706' : '#DC2626' 
+                                }}>
+                                    {loadingItems ? 'Cargando...' : `${(Math.round(averageMargin * 10) / 10).toFixed(1)}%`}
+                                </strong>
+                            </div>
                         </div>
 
                         {/* Drawer List Content */}
@@ -1198,7 +1230,7 @@ export default function CommercialAgreementsModule() {
                                                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
                                                     {item.iva_rate}%
                                                 </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#2563EB', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
                                                     {Math.round(item.margin_percent * 10) / 10}%
                                                 </td>
                                             </tr>
@@ -2193,6 +2225,39 @@ export default function CommercialAgreementsModule() {
                     to { transform: translateY(0); opacity: 1; }
                 }
             `}} />
+        </div>
+    );
+}
+
+function LocalKPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: React.ReactNode, color: string, textColor: string, subtitle: string }) {
+    return (
+        <div style={{
+            backgroundColor: 'white',
+            padding: '1.5rem',
+            borderRadius: THEME.radius.lg,
+            boxShadow: THEME.shadow.sm,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1.5rem',
+            border: `1px solid ${THEME.colors.border}`,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            cursor: 'default',
+            fontFamily: THEME.typography.fontFamilySecondary
+        }} onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
+        }} onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+        }}>
+            <div style={{ backgroundColor: color, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textColor, flexShrink: 0 }}>
+                {icon}
+            </div>
+            <div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem', fontFamily: THEME.typography.fontFamilyMain }}>{title}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0.2rem 0', lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '500' }}>{subtitle}</div>
+            </div>
         </div>
     );
 }
