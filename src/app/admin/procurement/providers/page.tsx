@@ -965,123 +965,7 @@ export default function ProvidersPage() {
                             <button onClick={() => setViewMode('grid')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'grid' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'grid' ? THEME.colors.textMain : '#9CA3AF', display: 'flex', alignItems: 'center' }}><LayoutGrid size={14} strokeWidth={1.5} /></button>
                         </div>
 
-                        {/* EXPORT EXCEL DROPDOWN */}
-                        <div style={{ position: 'relative' }}>
-                            <button
-                                onClick={() => setShowExportMenu(!showExportMenu)}
-                                style={{
-                                    backgroundColor: '#F8FAFC',
-                                    color: THEME.colors.textMain,
-                                    padding: '0.5rem 0.85rem',
-                                    borderRadius: THEME.radius.sm,
-                                    border: `1px solid ${THEME.colors.border}`,
-                                    fontWeight: '600',
-                                    fontSize: '0.8rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseOver={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                onMouseOut={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                            >
-                                <Download size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                <span>Exportar Excel</span>
-                            </button>
-
-                            {showExportMenu && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '110%',
-                                    right: 0,
-                                    width: '260px',
-                                    backgroundColor: 'white',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
-                                    border: `1px solid ${THEME.colors.border}`,
-                                    zIndex: 100,
-                                    overflow: 'hidden',
-                                    padding: '6px'
-                                }}>
-                                    <button
-                                        onClick={() => handleExportExcel('PRODUCTOS')}
-                                        style={{
-                                            width: '100%',
-                                            textAlign: 'left',
-                                            padding: '0.6rem 0.8rem',
-                                            border: 'none',
-                                            backgroundColor: 'transparent',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            fontSize: '0.78rem',
-                                            fontWeight: '600',
-                                            color: THEME.colors.textMain,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
-                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        <Package size={15} style={{ color: THEME.colors.primary }} />
-                                        <span>Proveedores de Productos (.xlsx)</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleExportExcel('GENERAL')}
-                                        style={{
-                                            width: '100%',
-                                            textAlign: 'left',
-                                            padding: '0.6rem 0.8rem',
-                                            border: 'none',
-                                            backgroundColor: 'transparent',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            fontSize: '0.78rem',
-                                            fontWeight: '600',
-                                            color: THEME.colors.textMain,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
-                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        <Building2 size={15} style={{ color: '#64748B' }} />
-                                        <span>Proveedores Generales / Servicios (.xlsx)</span>
-                                    </button>
-
-                                    <div style={{ height: '1px', backgroundColor: '#F1F5F9', margin: '4px 0' }} />
-
-                                    <button
-                                        onClick={() => handleExportExcel('ALL')}
-                                        style={{
-                                            width: '100%',
-                                            textAlign: 'left',
-                                            padding: '0.6rem 0.8rem',
-                                            border: 'none',
-                                            backgroundColor: 'transparent',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            fontSize: '0.78rem',
-                                            fontWeight: '700',
-                                            color: THEME.colors.primary,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
-                                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        <FileSpreadsheet size={15} />
-                                        <span>Todo el Maestro de Proveedores (.xlsx)</span>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* CARGA MASIVA EXCEL BUTTON */}
+                        {/* CARGA MASIVA & EXPORTACIÓN EXCEL UNIFICADO */}
                         <button
                             onClick={() => {
                                 setParsedRows([]);
@@ -1112,7 +996,7 @@ export default function ProvidersPage() {
                                 if (canEdit) e.currentTarget.style.backgroundColor = '#ECFDF5';
                             }}
                         >
-                            <FileUp size={14} strokeWidth={1.5} /> Carga Masiva (Excel)
+                            <FileSpreadsheet size={14} strokeWidth={1.5} /> Carga &amp; Exportación Masiva (Excel)
                         </button>
 
                         {/* Nuevo Proveedor Button */}
@@ -1999,59 +1883,83 @@ export default function ProvidersPage() {
                                 Sigue el protocolo en 2 pasos: descarga la plantilla según el tipo de proveedor (Productos o Generales), completa los datos e impórtala para actualizar la base de datos automáticamente.
                             </p>
 
-                            {/* PASO 1: Descargar Plantillas */}
+                            {/* PASO 1: Descargar Plantillas & Exportar Datos Actuales */}
                             <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1.1rem 1.25rem', marginBottom: '1.25rem' }}>
                                 <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ backgroundColor: THEME.colors.primary, color: 'white', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>1</span>
-                                    <span>Descargar Plantillas Oficiales en Excel:</span>
+                                    <span>Descargar Plantillas o Exportar Base de Datos Actual:</span>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '0.75rem' }}>
                                     <button
                                         onClick={() => handleDownloadTemplate('PRODUCTOS')}
                                         style={{
-                                            padding: '0.7rem 0.9rem',
+                                            padding: '0.65rem 0.8rem',
                                             borderRadius: '10px',
                                             border: `1px solid ${THEME.colors.primary}40`,
                                             backgroundColor: THEME.colors.primaryLight,
                                             color: THEME.colors.primary,
                                             fontWeight: '700',
-                                            fontSize: '0.78rem',
+                                            fontSize: '0.75rem',
                                             cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            gap: '8px',
+                                            gap: '6px',
                                             transition: 'all 0.2s'
                                         }}
                                         onMouseOver={e => e.currentTarget.style.backgroundColor = '#D1E5DE'}
                                         onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
                                     >
-                                        <Download size={16} />
-                                        <span>Plantilla Proveedores de Productos (.xlsx)</span>
+                                        <Download size={14} />
+                                        <span>Plantilla Productos (.xlsx)</span>
                                     </button>
 
                                     <button
                                         onClick={() => handleDownloadTemplate('GENERAL')}
                                         style={{
-                                            padding: '0.7rem 0.9rem',
+                                            padding: '0.65rem 0.8rem',
                                             borderRadius: '10px',
                                             border: '1px solid #CBD5E1',
                                             backgroundColor: 'white',
                                             color: THEME.colors.textMain,
                                             fontWeight: '700',
-                                            fontSize: '0.78rem',
+                                            fontSize: '0.75rem',
                                             cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            gap: '8px',
+                                            gap: '6px',
                                             transition: 'all 0.2s'
                                         }}
                                         onMouseOver={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
                                         onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
                                     >
-                                        <Download size={16} />
-                                        <span>Plantilla Proveedores Generales / Servicios (.xlsx)</span>
+                                        <Download size={14} />
+                                        <span>Plantilla Generales (.xlsx)</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleExportExcel('ALL')}
+                                        style={{
+                                            padding: '0.65rem 0.8rem',
+                                            borderRadius: '10px',
+                                            border: `1px solid ${THEME.colors.primary}`,
+                                            backgroundColor: THEME.colors.primary,
+                                            color: 'white',
+                                            fontWeight: '700',
+                                            fontSize: '0.75rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                        onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                    >
+                                        <FileSpreadsheet size={14} />
+                                        <span>Exportar Maestro Actual (2.603 BD)</span>
                                     </button>
                                 </div>
                             </div>
