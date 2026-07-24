@@ -71,17 +71,8 @@ export default function B2BDashboard() {
                 router.push('/login?redirect=/b2b/dashboard');
                 return;
             }
-            if (profile && profile.role !== 'b2b_client') {
-                console.warn(`🔒 Acceso denegado: rol ${profile.role} no autorizado para el portal B2B`);
-                const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
-                if (staffRoles.includes(profile.role)) {
-                    router.push('/admin/dashboard');
-                } else {
-                    router.push('/');
-                }
-            }
         }
-    }, [authLoading, user, profile, router]);
+    }, [authLoading, user, router]);
 
     // Handle Category Selection
     useEffect(() => {
