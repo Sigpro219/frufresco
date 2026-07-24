@@ -119,34 +119,48 @@ export default function ProvidersPage() {
                 }
             }
 
-            setStats({
-                total: totalRes.count || 0,
-                credit: creditRes.count || 0,
-                cash: (totalRes.count || 0) - (creditRes.count || 0),
-                active: activeRes.count || 0
-            });
-
             let allProviders: any[] = [];
-            let from = 0;
-            const limit = 1000;
-            let hasMore = true;
 
-            while (hasMore) {
-                const { data, error } = await supabase
-                    .from('providers')
-                    .select('*')
-                    .order('name', { ascending: true })
-                    .range(from, from + limit - 1);
-                
-                if (error) throw error;
-                if (data && data.length > 0) {
-                    allProviders = [...allProviders, ...data];
-                    from += limit;
-                    if (data.length < limit) hasMore = false;
-                } else {
-                    hasMore = false;
+            try {
+                const apiRes = await fetch('/api/providers');
+                if (apiRes.ok) {
+                    const json = await apiRes.json();
+                    allProviders = json.providers || [];
+                }
+            } catch (apiErr) {
+                console.warn('API /api/providers failed, falling back to direct supabase:', apiErr);
+            }
+
+            if (allProviders.length === 0) {
+                let from = 0;
+                const limit = 1000;
+                let hasMore = true;
+
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('providers')
+                        .select('*')
+                        .order('name', { ascending: true })
+                        .range(from, from + limit - 1);
+                    
+                    if (error) break;
+                    if (data && data.length > 0) {
+                        allProviders = [...allProviders, ...data];
+                        from += limit;
+                        if (data.length < limit) hasMore = false;
+                    } else {
+                        hasMore = false;
+                    }
                 }
             }
+
+            setStats({
+                total: allProviders.filter(p => !p.is_archived).length,
+                credit: allProviders.filter(p => !p.is_archived && p.type === 'credito').length,
+                cash: allProviders.filter(p => !p.is_archived && p.type !== 'credito').length,
+                active: allProviders.filter(p => !p.is_archived && p.is_active).length
+            });
+
             const mappedProviders = allProviders.map((p: any) => ({
                 ...p,
                 category: (p.product && p.product.trim() !== '') ? 'PRODUCTOS' : 'GENERAL'
@@ -222,21 +236,38 @@ export default function ProvidersPage() {
                 ].filter(Boolean).join(', ') || null
             };
             
-            let error;
-            if (editingId) {
-                const { error: err } = await supabase
-                    .from('providers')
-                    .update(providerData)
-                    .eq('id', editingId);
-                error = err;
-            } else {
-                const { error: err } = await supabase
-                    .from('providers')
-                    .insert([providerData]);
-                error = err;
+            let saved = false;
+            try {
+                const apiRes = await fetch('/api/providers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: editingId ? 'update' : 'create',
+                        providerId: editingId,
+                        providerData
+                    })
+                });
+                if (apiRes.ok) saved = true;
+            } catch (e) {
+                console.warn('API save provider failed, falling back to direct supabase:', e);
             }
-            
-            if (error) throw error;
+
+            if (!saved) {
+                let error;
+                if (editingId) {
+                    const { error: err } = await supabase
+                        .from('providers')
+                        .update(providerData)
+                        .eq('id', editingId);
+                    error = err;
+                } else {
+                    const { error: err } = await supabase
+                        .from('providers')
+                        .insert([providerData]);
+                    error = err;
+                }
+                if (error) throw error;
+            }
             
             setShowCreateModal(false);
             setEditingId(null);
@@ -266,11 +297,29 @@ export default function ProvidersPage() {
         const action = currentStatus ? 'restaurar' : 'archivar';
         if (!confirm(`¿Seguro que deseas ${action} este proveedor?`)) return;
         try {
-            const { error } = await supabase
-                .from('providers')
-                .update({ is_archived: !currentStatus, is_active: currentStatus ? true : false })
-                .eq('id', id);
-            if (error) throw error;
+            let saved = false;
+            try {
+                const apiRes = await fetch('/api/providers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'toggle-archive',
+                        providerId: id,
+                        is_archived: !currentStatus
+                    })
+                });
+                if (apiRes.ok) saved = true;
+            } catch (e) {
+                console.warn('API toggle archive failed:', e);
+            }
+
+            if (!saved) {
+                const { error } = await supabase
+                    .from('providers')
+                    .update({ is_archived: !currentStatus, is_active: currentStatus ? true : false })
+                    .eq('id', id);
+                if (error) throw error;
+            }
             fetchProviders();
         } catch (err) {
             console.error('Error updating status:', err);
