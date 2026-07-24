@@ -179,7 +179,7 @@ function CreateQuotePageContent() {
             if (cErr) console.warn('Error fetching profiles:', cErr);
             if (cData) setClients(cData || []);
 
-            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email').order('company_name');
+            const { data: lData, error: lErr } = await supabase.from('leads').select('id, company_name, contact_name, phone, email, business_type, business_size, nit, address, municipality').order('company_name');
             if (lErr) console.warn('Error fetching leads:', lErr);
             if (lData) setLeads(lData || []);
 
@@ -302,7 +302,7 @@ function CreateQuotePageContent() {
             // 2. Fetch products details
             const { data: products, error: prodErr } = await supabase
                 .from('products')
-                .select('id, name, unit_of_measure, iva_rate, sku')
+                .select('id, name, unit_of_measure, iva_rate, sku, accounting_id')
                 .in('id', productIds)
                 .eq('is_active', true);
 
@@ -365,6 +365,7 @@ function CreateQuotePageContent() {
                     variant_id: null,
                     name: p.name,
                     sku: p.sku,
+                    accounting_id: p.accounting_id || p.sku || p.id?.slice(0, 8),
                     unit: p.unit_of_measure,
                     cost: cost,
                     margin: baseMargin,
@@ -375,7 +376,7 @@ function CreateQuotePageContent() {
                 });
             }
 
-            setItems(loadedItems);
+            setItems(sortItemsByAccountingId(loadedItems));
         } catch (err: any) {
             console.error('Error loading template:', err);
             alert('Error al cargar plantilla: ' + (err.message || err));
@@ -383,6 +384,16 @@ function CreateQuotePageContent() {
             setLoadingTemplate(false);
         }
     };
+
+    const sortItemsByAccountingId = (itemsList: any[]) => {
+        return [...itemsList].sort((a, b) => {
+            const idA = (a.accounting_id || a.sku || a.name || '').toString().toLowerCase();
+            const idB = (b.accounting_id || b.sku || b.name || '').toString().toLowerCase();
+            return idA.localeCompare(idB, 'es', { numeric: true, sensitivity: 'base' });
+        });
+    };
+
+    const sortItemsBySku = sortItemsByAccountingId;
 
     const getMarginForProduct = (productId: string, modelId: string, loadedRules: any[]) => {
         const model = models.find(m => m.id === modelId);
@@ -407,7 +418,7 @@ function CreateQuotePageContent() {
             const price = calculateFinalPrice(item.cost, margin);
             return { ...item, margin, price };
         });
-        setItems(updated);
+        setItems(sortItemsByAccountingId(updated));
     };
 
     const calculateFinalPrice = (cost: number, marginPercent: number) => {
@@ -494,11 +505,11 @@ function CreateQuotePageContent() {
         const { data } = await supabase
             .from('products')
             .select(`
-                id, name, unit_of_measure, iva_rate,
+                id, name, unit_of_measure, iva_rate, accounting_id,
                 product_variants (*)
             `)
             .eq('is_active', true)
-            .or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
+            .or(`name.ilike.%${term}%,accounting_id.ilike.%${term}%`)
             .limit(10);
             
         if (data) {
@@ -521,11 +532,11 @@ function CreateQuotePageContent() {
         const clientNickname = nicknames.find(n => n.product_id === product.id);
         const displayName = clientNickname ? clientNickname.nickname : (variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name);
 
-        setItems([...items, {
+        setItems(sortItemsByAccountingId([...items, {
             product_id: product.id,
             variant_id: variant?.id || null,
             name: displayName,
-            sku: variant?.sku || product.sku,
+            accounting_id: product.accounting_id || product.id?.slice(0, 8),
             unit: product.unit_of_measure,
             cost: cost,
             margin: baseMargin,
@@ -533,7 +544,7 @@ function CreateQuotePageContent() {
             price: finalPrice,
             iva_rate: ivaRate,
             quantity: 1
-        }]);
+        }]));
         setSearchTerm('');
         setSearchResults([]);
     };
@@ -546,7 +557,12 @@ function CreateQuotePageContent() {
 
     const updateQuantity = (index: number, val: any) => {
         const newItems = [...items];
-        newItems[index].quantity = val;
+        if (val === '' || val === null || val === undefined) {
+            newItems[index].quantity = val;
+        } else {
+            const numVal = parseFloat(val);
+            newItems[index].quantity = isNaN(numVal) ? '' : Math.max(0, numVal);
+        }
         setItems(newItems);
     };
 
@@ -555,7 +571,8 @@ function CreateQuotePageContent() {
         newItems[index].margin = newMargin;
         const numMargin = parseFloat(newMargin);
         if (!isNaN(numMargin)) {
-            newItems[index].price = newItems[index].cost * (1 + (numMargin / 100));
+            const calcPrice = newItems[index].cost * (1 + (numMargin / 100));
+            newItems[index].price = Math.max(0, calcPrice);
         } else {
             newItems[index].price = 0;
         }
@@ -564,12 +581,18 @@ function CreateQuotePageContent() {
 
     const handlePriceChange = (index: number, newPrice: any) => {
         const newItems = [...items];
-        newItems[index].price = newPrice;
-        const numPrice = parseFloat(newPrice);
-        if (!isNaN(numPrice) && newItems[index].cost > 0) {
-            newItems[index].margin = ((numPrice / newItems[index].cost) - 1) * 100;
-        } else {
+        if (newPrice === '' || newPrice === null || newPrice === undefined) {
+            newItems[index].price = newPrice;
             newItems[index].margin = 0;
+        } else {
+            const numPrice = parseFloat(newPrice);
+            const validPrice = isNaN(numPrice) ? 0 : Math.max(0, numPrice);
+            newItems[index].price = validPrice;
+            if (newItems[index].cost > 0) {
+                newItems[index].margin = ((validPrice / newItems[index].cost) - 1) * 100;
+            } else {
+                newItems[index].margin = 0;
+            }
         }
         setItems(newItems);
     };
@@ -580,6 +603,12 @@ function CreateQuotePageContent() {
         if (!clientName) { alert('Ingresa el nombre del cliente'); return null; }
         if (!selectedModelId) { alert('Selecciona un Modelo de Precios'); return null; }
         if (items.length === 0) { alert('Agrega al menos un producto'); return null; }
+
+        const invalidQtyItem = items.find(i => (parseFloat(i.quantity) || 0) <= 0);
+        if (invalidQtyItem) { alert(`La cantidad para "${invalidQtyItem.name}" debe ser mayor a 0.`); return null; }
+
+        const invalidPriceItem = items.find(i => (parseFloat(i.price) || 0) < 0);
+        if (invalidPriceItem) { alert(`El precio unitario para "${invalidPriceItem.name}" no puede ser negativo.`); return null; }
 
         setSaving(true);
         try {
@@ -701,7 +730,8 @@ function CreateQuotePageContent() {
     const filteredLeads = leads.filter(l => 
         (l.company_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
         (l.contact_name?.toLowerCase().includes(clientSearch.toLowerCase())) ||
-        (l.phone?.toLowerCase().includes(clientSearch.toLowerCase()))
+        (l.phone?.toLowerCase().includes(clientSearch.toLowerCase())) ||
+        (l.nit && String(l.nit).toLowerCase().includes(clientSearch.toLowerCase()))
     );
 
     const dropdownItems = [
@@ -856,7 +886,7 @@ function CreateQuotePageContent() {
                                                                 <span style={{ color: '#16A34A', marginRight: '4px' }}>[Prospecto]</span> {l.company_name || l.contact_name}
                                                             </div>
                                                             <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                                                Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
+                                                                {l.nit ? `NIT: ${l.nit} • ` : ''}Tel: {l.phone || 'Sin teléfono'} • Contacto: {l.contact_name}
                                                             </div>
                                                         </div>
                                                     );
@@ -943,13 +973,60 @@ function CreateQuotePageContent() {
                                         <div style={{ fontSize: '0.7rem', color: selectedLeadId ? '#16A34A' : appSettings.primary_color, fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>
                                             {selectedLeadId ? 'Prospecto Seleccionado (CRM)' : 'Cliente Seleccionado'}
                                         </div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>{clientName}</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>
+                                            {clientName}
+                                        </div>
                                         {selectedLeadId ? (
-                                            <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>
-                                                Lead ID: #{selectedLeadId} • Tel: {leads.find(l => l.id === selectedLeadId)?.phone || 'Sin teléfono'}
-                                            </div>
+                                            <>
+                                                {(() => {
+                                                    const lead = leads.find(l => l.id === selectedLeadId);
+                                                    if (!lead) return null;
+                                                    const bType = lead.business_type;
+                                                    const bSize = lead.business_size;
+                                                    let sizeBg = '#F3F4F6';
+                                                    let sizeTextCol = '#374151';
+                                                    let sizeDot = '🔴 ';
+                                                    if (bSize) {
+                                                        if (bSize.includes('Grande') || bSize.includes('30M')) { sizeBg = '#DCFCE7'; sizeTextCol = '#15803D'; sizeDot = '🟢 '; }
+                                                        else if (bSize.includes('Mediano') || bSize.includes('10M')) { sizeBg = '#FEF3C7'; sizeTextCol = '#B45309'; sizeDot = '🟡 '; }
+                                                        else if (bSize.includes('Pequeño') || bSize.includes('< 10M') || bSize.includes('Peq')) { sizeBg = '#FEE2E2'; sizeTextCol = '#B91C1C'; sizeDot = '🔴 '; }
+                                                    }
+                                                    return (
+                                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', lineHeight: '1.4', marginTop: '4px' }}>
+                                                            <div>
+                                                                Lead ID: #{selectedLeadId} {lead.nit ? `• NIT: ${lead.nit}` : ''} • Tel: {lead.phone || 'Sin teléfono'}
+                                                            </div>
+                                                            {lead.email && <div>Email: {lead.email}</div>}
+                                                            {(lead.address || lead.municipality) && (
+                                                                <div>Dirección: {lead.address || ''}{lead.municipality ? ` - ${lead.municipality}` : ''}</div>
+                                                            )}
+                                                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                                {bType && (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                        {bType}
+                                                                    </span>
+                                                                )}
+                                                                {bSize && (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: sizeBg, color: sizeTextCol, padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                        {sizeDot}{bSize}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </>
                                         ) : (
-                                            selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563' }}>NIT: {selectedClientInfo.nit}</div>
+                                            <>
+                                                {selectedClientInfo && (
+                                                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.65rem', backgroundColor: selectedClientInfo.role === 'b2c_client' ? '#ECFDF5' : '#EFF6FF', color: selectedClientInfo.role === 'b2c_client' ? '#047857' : '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                                                            {selectedClientInfo.role === 'b2c_client' ? 'Cliente Hogar' : 'Cliente Institucional'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {selectedClientInfo?.nit && <div style={{ fontSize: '0.85rem', color: '#4B5563', marginTop: '4px' }}>NIT: {selectedClientInfo.nit}</div>}
+                                            </>
                                         )}
                                     </div>
                                     <button 
@@ -1104,17 +1181,26 @@ function CreateQuotePageContent() {
                             <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{clientName || 'Cliente General'}</div>
                             {selectedClientInfo ? (
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                    {selectedClientInfo.company_name && <div>{selectedClientInfo.company_name}</div>}
+                                    {selectedClientInfo.company_name && selectedClientInfo.company_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
+                                        <div>{selectedClientInfo.company_name}</div>
+                                    )}
+                                    {selectedClientInfo.nit && <div>NIT: {selectedClientInfo.nit}</div>}
                                     {selectedClientInfo.contact_name && <div>Atención: {selectedClientInfo.contact_name}</div>}
                                     {selectedClientInfo.phone && <div>Teléfono: {selectedClientInfo.phone}</div>}
                                     {selectedClientInfo.address && <div>Dirección: {selectedClientInfo.address}</div>}
                                 </div>
                             ) : selectedLeadInfo ? (
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                                    {selectedLeadInfo.company_name && <div>{selectedLeadInfo.company_name}</div>}
+                                    {selectedLeadInfo.company_name && selectedLeadInfo.company_name.trim().toLowerCase() !== (clientName || '').trim().toLowerCase() && (
+                                        <div>{selectedLeadInfo.company_name}</div>
+                                    )}
+                                    {selectedLeadInfo.nit && <div>NIT: {selectedLeadInfo.nit}</div>}
                                     {selectedLeadInfo.contact_name && <div>Atención: {selectedLeadInfo.contact_name}</div>}
                                     {selectedLeadInfo.phone && <div>Teléfono: {selectedLeadInfo.phone}</div>}
                                     {selectedLeadInfo.email && <div>Email: {selectedLeadInfo.email}</div>}
+                                    {(selectedLeadInfo.address || selectedLeadInfo.municipality) && (
+                                        <div>Dirección: {selectedLeadInfo.address || ''}{selectedLeadInfo.municipality ? ` - ${selectedLeadInfo.municipality}` : ''}</div>
+                                    )}
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
@@ -1182,6 +1268,8 @@ function CreateQuotePageContent() {
                                             <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                 <input 
                                                     type="number" 
+                                                    min="0.01"
+                                                    step="any"
                                                     value={item.quantity === undefined || item.quantity === null ? '' : item.quantity} 
                                                     onChange={e => {
                                                         const raw = e.target.value;
@@ -1231,6 +1319,8 @@ function CreateQuotePageContent() {
                                             <div className="no-print">
                                                 <input 
                                                     type="number" 
+                                                    min="0"
+                                                    step="any"
                                                     value={item.price === undefined || item.price === null ? '' : item.price} 
                                                     onChange={e => {
                                                         const raw = e.target.value;
@@ -1307,7 +1397,7 @@ function CreateQuotePageContent() {
                     <div className="no-print" style={{ marginTop: '2rem', padding: '2rem', backgroundColor: '#F9FAFB', borderRadius: '8px', border: '1px dashed #D1D5DB' }}>
                         <h3 style={{ marginTop: 0 }}>Agregar Producto</h3>
                         <div style={{ position: 'relative' }}>
-                            <input placeholder="Buscar SKU..." value={searchTerm} onChange={e => handleSearch(e.target.value)} disabled={!selectedModelId} style={{ width: '100%', padding: '1rem' }} />
+                            <input placeholder="Buscar producto por nombre o ID contable..." value={searchTerm} onChange={e => handleSearch(e.target.value)} disabled={!selectedModelId} style={{ width: '100%', padding: '1rem' }} />
                             {searchResults.length > 0 && (
                                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 10px 15px rgba(0,0,0,0.1)', borderRadius: '0 0 8px 8px', border: '1px solid #D1D5DB', maxHeight: '300px', overflowY: 'auto' }}>
                                     {searchResults.map(p => (

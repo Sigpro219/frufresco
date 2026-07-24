@@ -504,7 +504,7 @@ export default function CommercialDashboard() {
                     <CommercialInboxModule />
                 </div>
             ) : (
-                <div style={{ height: 'calc(100vh - 140px)' }}>
+                <div style={{ minHeight: 'calc(100vh - 140px)' }}>
                     <ClientsModule />
                 </div>
             )}
