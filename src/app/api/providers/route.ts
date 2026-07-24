@@ -114,6 +114,61 @@ export async function POST(request: Request) {
             }
 
             return NextResponse.json({ provider: data }, { status: 200 });
+        } else if (action === 'bulk-upsert') {
+            const { items } = body;
+            if (!Array.isArray(items) || items.length === 0) {
+                return NextResponse.json({ error: 'La lista de proveedores a importar está vacía' }, { status: 400 });
+            }
+
+            let createdCount = 0;
+            let updatedCount = 0;
+            const errors: any[] = [];
+
+            // Process in chunks of 50
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+                const chunk = items.slice(i, i + CHUNK_SIZE);
+                
+                const { data, error } = await adminSupabase
+                    .from('providers')
+                    .upsert(chunk, { onConflict: 'tax_id', ignoreDuplicates: false })
+                    .select('id, tax_id');
+
+                if (error) {
+                    console.warn('Bulk upsert chunk warning, processing item by item:', error.message);
+                    for (const item of chunk) {
+                        try {
+                            const { data: existing } = await adminSupabase
+                                .from('providers')
+                                .select('id')
+                                .eq('tax_id', item.tax_id)
+                                .maybeSingle();
+
+                            if (existing) {
+                                const { error: uErr } = await adminSupabase.from('providers').update(item).eq('id', existing.id);
+                                if (uErr) throw uErr;
+                                updatedCount++;
+                            } else {
+                                const { error: iErr } = await adminSupabase.from('providers').insert([item]);
+                                if (iErr) throw iErr;
+                                createdCount++;
+                            }
+                        } catch (singleErr: any) {
+                            errors.push({ tax_id: item.tax_id, name: item.name, error: singleErr.message });
+                        }
+                    }
+                } else {
+                    createdCount += (data?.length || chunk.length);
+                }
+            }
+
+            return NextResponse.json({
+                success: true,
+                created: createdCount,
+                updated: updatedCount,
+                total: items.length,
+                errors
+            }, { status: 200 });
         }
 
         return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
