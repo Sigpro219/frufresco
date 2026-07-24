@@ -993,72 +993,72 @@ export default function ProvidersPage() {
                 {/* MODAL COMPACTO: Nuevo / Editar Proveedor */}
                 {showCreateModal && (
                     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1rem' }} onClick={() => setShowCreateModal(false)}>
-                        <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '840px', maxHeight: '90vh', overflowY: 'auto', padding: '1.5rem 1.75rem', position: 'relative', boxShadow: THEME.shadow.lg }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '96vw', maxWidth: '980px', maxHeight: '92vh', overflowY: 'auto', overflowX: 'hidden', padding: '1.5rem 2rem', position: 'relative', boxShadow: THEME.shadow.lg, boxSizing: 'border-box' }} onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => setShowCreateModal(false)} style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', border: 'none', backgroundColor: '#F1F5F9', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}><X size={18} /></button>
                             
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '1rem', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h2 style={{ fontSize: '1.3rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '1.25rem', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <Building2 size={20} style={{ color: THEME.colors.primary }} />
                                 <span>{editingId ? 'Editar Ficha de' : 'Crear Nuevo'}</span>
                                 <span style={{ color: THEME.colors.primary }}>Proveedor</span>
                             </h2>
                             
-                            <form onSubmit={handleSaveProvider} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                            <form onSubmit={handleSaveProvider} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '1.5rem', width: '100%', boxSizing: 'border-box' }}>
                                 {/* Basic Info Column */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', minWidth: 0 }}>
                                     <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem', fontWeight: '700', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <Building size={14} /> Identidad Comercial
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                         <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Nombre / Razón Social *</label>
-                                        <input required style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.name} onChange={(e) => setNewProvider({...newProvider, name: e.target.value.toUpperCase()})} />
+                                        <input required style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.name} onChange={(e) => setNewProvider({...newProvider, name: e.target.value.toUpperCase()})} />
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Tipo Doc.</label>
-                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.document_type} onChange={(e) => setNewProvider({...newProvider, document_type: e.target.value})}>
+                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.document_type} onChange={(e) => setNewProvider({...newProvider, document_type: e.target.value})}>
                                                 <option value="NIT">NIT</option>
                                                 <option value="CC">Cédula</option>
                                             </select>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Identificación (NIT/CC) *</label>
-                                            <input required style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.tax_id} onChange={(e) => setNewProvider({...newProvider, tax_id: e.target.value})} />
+                                            <input required style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.tax_id} onChange={(e) => setNewProvider({...newProvider, tax_id: e.target.value})} />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Categoría</label>
-                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.category} onChange={(e) => setNewProvider({...newProvider, category: e.target.value})}>
+                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.category} onChange={(e) => setNewProvider({...newProvider, category: e.target.value})}>
                                                 <option value="GENERAL">GENERAL</option>
                                                 <option value="PRODUCTOS">PRODUCTOS</option>
                                             </select>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Tipo Pago</label>
-                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.type} onChange={(e) => setNewProvider({...newProvider, type: e.target.value})}>
+                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.type} onChange={(e) => setNewProvider({...newProvider, type: e.target.value})}>
                                                 <option value="contado">Contado (Inmediato)</option>
                                                 <option value="credito">Crédito (Facturación)</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>N° Bodega (Plaza)</label>
-                                            <input type="number" placeholder="Ej: 12" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.warehouse_location} onChange={(e) => setNewProvider({...newProvider, warehouse_location: e.target.value})} />
+                                            <input type="number" placeholder="Ej: 12" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.warehouse_location} onChange={(e) => setNewProvider({...newProvider, warehouse_location: e.target.value})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Puesto (Plaza)</label>
-                                            <input placeholder="Ej: P-34" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.puesto} onChange={(e) => setNewProvider({...newProvider, puesto: e.target.value.toUpperCase()})} />
+                                            <input placeholder="Ej: P-34" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.puesto} onChange={(e) => setNewProvider({...newProvider, puesto: e.target.value.toUpperCase()})} />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                         <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Productos / Insumos Principales</label>
-                                        <input placeholder="Ej: Cebolla Larga, Papa Pastusa" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.product} onChange={(e) => {
+                                        <input placeholder="Ej: Cebolla Larga, Papa Pastusa" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.product} onChange={(e) => {
                                             const val = e.target.value;
                                             setNewProvider({
                                                 ...newProvider,
@@ -1072,115 +1072,115 @@ export default function ProvidersPage() {
                                         <User size={14} /> Contacto &amp; Ubicación
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                         <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Nombre de Contacto</label>
-                                        <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
+                                        <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Teléfono</label>
-                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.phone} onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})} />
+                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.phone} onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Correo Electrónico</label>
-                                            <input type="email" placeholder="ejemplo@correo.com" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.email} onChange={(e) => setNewProvider({...newProvider, email: e.target.value})} />
+                                            <input type="email" placeholder="ejemplo@correo.com" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.email} onChange={(e) => setNewProvider({...newProvider, email: e.target.value})} />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Dirección / Oficina Fiscal</label>
-                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.address} onChange={(e) => setNewProvider({...newProvider, address: e.target.value.toUpperCase()})} />
+                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.address} onChange={(e) => setNewProvider({...newProvider, address: e.target.value.toUpperCase()})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Ciudad / Origen</label>
-                                            <input placeholder="Ej: Bogotá D.C." style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.city} onChange={(e) => setNewProvider({...newProvider, city: e.target.value})} />
+                                            <input placeholder="Ej: Bogotá D.C." style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.city} onChange={(e) => setNewProvider({...newProvider, city: e.target.value})} />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Financial Info Column */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', minWidth: 0 }}>
                                     <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem', fontWeight: '700', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <Wallet size={14} /> Información Financiera &amp; ERP
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Banco</label>
-                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.bank_name} onChange={(e) => setNewProvider({...newProvider, bank_name: e.target.value.toUpperCase()})} />
+                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.bank_name} onChange={(e) => setNewProvider({...newProvider, bank_name: e.target.value.toUpperCase()})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Tipo Cuenta</label>
-                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.bank_account_type} onChange={(e) => setNewProvider({...newProvider, bank_account_type: e.target.value})}>
+                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.bank_account_type} onChange={(e) => setNewProvider({...newProvider, bank_account_type: e.target.value})}>
                                                 <option value="Ahorros">Ahorros</option>
                                                 <option value="Corriente">Corriente</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Número de Cuenta</label>
-                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.bank_account_number} onChange={(e) => setNewProvider({...newProvider, bank_account_number: e.target.value})} />
+                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.bank_account_number} onChange={(e) => setNewProvider({...newProvider, bank_account_number: e.target.value})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Código ERP (World Office)</label>
-                                            <input placeholder="Ej: PRV-0492" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.world_office_id} onChange={(e) => setNewProvider({...newProvider, world_office_id: e.target.value.toUpperCase()})} />
+                                            <input placeholder="Ej: PRV-0492" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.world_office_id} onChange={(e) => setNewProvider({...newProvider, world_office_id: e.target.value.toUpperCase()})} />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Régimen Facturación</label>
-                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.billing_type} onChange={(e) => setNewProvider({...newProvider, billing_type: e.target.value})}>
+                                            <select style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.billing_type} onChange={(e) => setNewProvider({...newProvider, billing_type: e.target.value})}>
                                                 <option value="soporte">Documento Soporte</option>
                                                 <option value="electronica">Factura Electrónica</option>
                                             </select>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Plazo de Pago (Días)</label>
-                                            <input type="number" min="0" placeholder="Ej: 15" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.payment_terms_days} onChange={(e) => setNewProvider({...newProvider, payment_terms_days: parseInt(e.target.value, 10) || 0})} />
+                                            <input type="number" min="0" placeholder="Ej: 15" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.payment_terms_days} onChange={(e) => setNewProvider({...newProvider, payment_terms_days: parseInt(e.target.value, 10) || 0})} />
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                         <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Condición de Pago (Texto)</label>
-                                        <input placeholder="Ej: Crédito 15 días tras entrega" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.payment_condition} onChange={(e) => setNewProvider({...newProvider, payment_condition: e.target.value})} />
+                                        <input placeholder="Ej: Crédito 15 días tras entrega" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.payment_condition} onChange={(e) => setNewProvider({...newProvider, payment_condition: e.target.value})} />
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                         <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Observaciones Técnicas / Notas</label>
-                                        <textarea rows={2} style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '500', fontSize: '0.85rem', resize: 'none' }} value={newProvider.observations} onChange={(e) => setNewProvider({...newProvider, observations: e.target.value})} />
+                                        <textarea rows={2} style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '500', fontSize: '0.85rem', resize: 'none', width: '100%', boxSizing: 'border-box' }} value={newProvider.observations} onChange={(e) => setNewProvider({...newProvider, observations: e.target.value})} />
                                     </div>
 
                                     {/* FILES SECTION */}
                                     <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem', marginTop: '0.2rem', fontWeight: '700', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <FileText size={14} /> Bóveda de Documentos (PDF)
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
                                         {/* RUT UPLOAD */}
-                                        <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'relative', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Registro RUT</label>
                                             <input type="file" accept=".pdf" id="rut-upload" hidden onChange={(e) => handleFileUpload(e, 'rut_url')} />
-                                            <label htmlFor="rut-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.rut_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.rut_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.75rem' }}>
+                                            <label htmlFor="rut-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.rut_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.rut_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.75rem', width: '100%', boxSizing: 'border-box' }}>
                                                 {uploading === 'rut_url' ? <Loader2 size={14} className="animate-spin" /> : newProvider.rut_url ? <CheckCircle2 size={14} /> : <Upload size={14} />}
                                                 {newProvider.rut_url ? 'RUT Cargado' : 'Subir RUT'}
                                             </label>
                                         </div>
                                         {/* OTHER DOCS UPLOAD */}
-                                        <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'relative', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Cert. Bancaria / Anexos</label>
                                             <input type="file" accept=".pdf" id="docs-upload" hidden onChange={(e) => handleFileUpload(e, 'additional_docs_url')} />
-                                            <label htmlFor="docs-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.additional_docs_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.additional_docs_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.75rem' }}>
+                                            <label htmlFor="docs-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.additional_docs_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.additional_docs_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.75rem', width: '100%', boxSizing: 'border-box' }}>
                                                 {uploading === 'additional_docs_url' ? <Loader2 size={14} className="animate-spin" /> : newProvider.additional_docs_url ? <CheckCircle2 size={14} /> : <Upload size={14} />}
                                                 {newProvider.additional_docs_url ? 'Doc Cargado' : 'Subir Anexos'}
                                             </label>
                                         </div>
                                     </div>
                                     
-                                    <button type="submit" style={{ marginTop: '0.5rem', padding: '0.75rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', transition: 'background-color 0.2s' }}
+                                    <button type="submit" style={{ marginTop: '0.5rem', padding: '0.75rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', transition: 'background-color 0.2s', width: '100%', boxSizing: 'border-box' }}
                                     onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
                                     onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                     >
