@@ -47,9 +47,12 @@ import {
     Download,
     FileSpreadsheet,
     FileUp,
-    Check,
     AlertTriangle,
-    XCircle
+    XCircle,
+    Landmark,
+    Award,
+    Paperclip,
+    Truck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -118,13 +121,16 @@ export default function ProvidersPage() {
                 'Estado Operativo': p.is_active !== false ? 'Activo' : 'Inactivo',
                 'Categoría': p.category || (p.product ? 'PRODUCTOS' : 'GENERAL'),
                 'Productos / Insumos Principales': p.product || '',
+                'Tiempos de Entrega': p.delivery_time || '',
                 'Tipo de Pago': p.type === 'credito' ? 'Crédito' : 'Contado',
                 'Plazo de Pago (Días)': p.payment_terms_days || 0,
                 'Condición de Pago': p.payment_condition || '',
                 'Facturación': p.billing_type === 'electronica' ? 'Factura Electrónica' : 'Documento Soporte',
                 'Persona de Contacto': p.contact_name || '',
+                'Cargo del Contacto': p.contact_position || '',
                 'Teléfono': p.phone || '',
                 'Correo Electrónico': p.email || '',
+                'Página Web': p.website || '',
                 'Dirección / Oficina Fiscal': p.address || '',
                 'Ciudad / Origen': p.city || '',
                 'Bodega (Plaza)': p.warehouse_location !== undefined && p.warehouse_location !== null ? p.warehouse_location : '',
@@ -165,13 +171,16 @@ export default function ProvidersPage() {
                     'Estado Operativo': 'Activo',
                     'Categoría': 'PRODUCTOS',
                     'Productos / Insumos Principales': 'CEBOLLA LARGA, PAPA PASTUSA',
+                    'Tiempos de Entrega': '24 horas',
                     'Tipo de Pago': 'Contado',
                     'Plazo de Pago (Días)': 0,
                     'Condición de Pago': 'Pago contra entrega',
                     'Facturación': 'Documento Soporte',
                     'Persona de Contacto': 'JUAN CARLOS PÉREZ',
+                    'Cargo del Contacto': 'Director de Operaciones',
                     'Teléfono': '3101234567',
                     'Correo Electrónico': 'contacto@agrojose.com',
+                    'Página Web': 'www.agrojose.com',
                     'Dirección / Oficina Fiscal': 'CARRERA 50 # 12-34',
                     'Ciudad / Origen': 'Bogotá D.C.',
                     'Bodega (Plaza)': 12,
@@ -189,13 +198,16 @@ export default function ProvidersPage() {
                     'Estado Operativo': 'Activo',
                     'Categoría': 'PRODUCTOS',
                     'Productos / Insumos Principales': 'TOMATE LARGA VIDA, AHUYAMA',
+                    'Tiempos de Entrega': 'Mismo día',
                     'Tipo de Pago': 'Crédito',
                     'Plazo de Pago (Días)': 15,
                     'Condición de Pago': 'Crédito 15 días',
                     'Facturación': 'Factura Electrónica',
                     'Persona de Contacto': 'MARÍA RODRÍGUEZ',
+                    'Cargo del Contacto': 'Gerente Comercial',
                     'Teléfono': '3209876543',
                     'Correo Electrónico': 'ventas@frutasdelvalle.co',
+                    'Página Web': 'www.frutasdelvalle.co',
                     'Dirección / Oficina Fiscal': 'CORABASTOS BODEGA 8 PUESTO 14',
                     'Ciudad / Origen': 'Faca / Cundinamarca',
                     'Bodega (Plaza)': 8,
@@ -214,13 +226,16 @@ export default function ProvidersPage() {
                     'Estado Operativo': 'Activo',
                     'Categoría': 'GENERAL',
                     'Productos / Insumos Principales': 'Bolsas plásticas, Canastillas, Cinta',
+                    'Tiempos de Entrega': '48 horas',
                     'Tipo de Pago': 'Crédito',
                     'Plazo de Pago (Días)': 30,
                     'Condición de Pago': 'Crédito 30 días tras factura',
                     'Facturación': 'Factura Electrónica',
                     'Persona de Contacto': 'ANDRÉS GÓMEZ',
+                    'Cargo del Contacto': 'Ejecutivo de Cuenta',
                     'Teléfono': '3157778899',
                     'Correo Electrónico': 'servicio@empaquesind.com',
+                    'Página Web': 'www.empaquesind.com',
                     'Dirección / Oficina Fiscal': 'CALLE 80 # 65-10 BOGOTÁ',
                     'Ciudad / Origen': 'Bogotá D.C.',
                     'Bodega (Plaza)': '',
@@ -284,6 +299,7 @@ export default function ProvidersPage() {
 
                 const category = getVal('Categoría', 'Categoria', 'category').toUpperCase() || (getVal('Productos / Insumos Principales', 'product') ? 'PRODUCTOS' : 'GENERAL');
                 const product = getVal('Productos / Insumos Principales', 'Productos', 'Insumos', 'product').toUpperCase();
+                const delivery_time = getVal('Tiempos de Entrega', 'Tiempo de Entrega', 'delivery_time');
                 const rawType = getVal('Tipo de Pago', 'Tipo Pago', 'type').toLowerCase();
                 const type = rawType.includes('cred') || rawType.includes('créd') ? 'credito' : 'contado';
                 const payment_terms_days = parseInt(getVal('Plazo de Pago (Días)', 'Plazo', 'payment_terms_days') || '0', 10) || 0;
@@ -291,8 +307,10 @@ export default function ProvidersPage() {
                 const rawBilling = getVal('Facturación', 'Facturacion', 'billing_type', 'Régimen Facturación').toLowerCase();
                 const billing_type = rawBilling.includes('elect') ? 'electronica' : 'soporte';
                 const contact_name = getVal('Persona de Contacto', 'Contacto', 'contact_name').toUpperCase();
+                const contact_position = getVal('Cargo del Contacto', 'Cargo Contacto', 'Cargo', 'contact_position');
                 const phone = getVal('Teléfono', 'Telefono', 'phone');
                 const email = getVal('Correo Electrónico', 'Correo', 'Email', 'email');
+                const website = getVal('Página Web', 'Pagina Web', 'Sitio Web', 'website');
                 const address = getVal('Dirección / Oficina Fiscal', 'Dirección', 'Direccion', 'address').toUpperCase();
                 const city = getVal('Ciudad / Origen', 'Ciudad', 'city');
                 const warehouse_location = getVal('Bodega (Plaza)', 'Bodega', 'warehouse_location');
@@ -314,13 +332,16 @@ export default function ProvidersPage() {
                         name,
                         category,
                         product,
+                        delivery_time,
                         type,
                         payment_terms_days,
                         payment_condition,
                         billing_type,
                         contact_name,
+                        contact_position,
                         phone,
                         email,
+                        website,
                         address,
                         city,
                         warehouse_location,
@@ -389,9 +410,12 @@ export default function ProvidersPage() {
         category: 'GENERAL',
         type: 'contado',
         product: '',
+        delivery_time: '',
         contact_name: '',
+        contact_position: '',
         phone: '',
         email: '',
+        website: '',
         city: '',
         world_office_id: '',
         payment_terms_days: 0,
@@ -404,6 +428,8 @@ export default function ProvidersPage() {
         observations: '',
         rut_url: '',
         additional_docs_url: '',
+        quality_certifications_url: '',
+        bank_certificate_url: '',
         warehouse_location: '',
         puesto: '',
         is_active: true,
@@ -414,7 +440,8 @@ export default function ProvidersPage() {
         total: 0,
         credit: 0,
         cash: 0,
-        active: 0
+        active: 0,
+        inactive: 0
     });
 
     const fetchProviders = useCallback(async () => {
@@ -485,7 +512,7 @@ export default function ProvidersPage() {
         }
     }, []);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'rut_url' | 'additional_docs_url') => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'rut_url' | 'additional_docs_url' | 'quality_certifications_url' | 'bank_certificate_url') => {
         if (!canEdit) {
             alert('No tienes permisos de edición en este módulo.');
             return;
@@ -583,12 +610,13 @@ export default function ProvidersPage() {
             setEditingId(null);
             setNewProvider({
                 name: '', tax_id: '', document_type: 'NIT', category: 'GENERAL',
-                type: 'contado', product: '', contact_name: '', phone: '',
-                email: '', city: '', world_office_id: '', payment_terms_days: 0,
+                type: 'contado', product: '', delivery_time: '', contact_name: '', contact_position: '', phone: '',
+                email: '', website: '', city: '', world_office_id: '', payment_terms_days: 0,
                 address: '', bank_name: '', bank_account_number: '',
                 bank_account_type: 'Ahorros', billing_type: 'soporte',
                 payment_condition: '', observations: '', rut_url: '',
-                additional_docs_url: '', warehouse_location: '', puesto: '',
+                additional_docs_url: '', quality_certifications_url: '', bank_certificate_url: '',
+                warehouse_location: '', puesto: '',
                 is_active: true, is_archived: false
             });
             fetchProviders();
@@ -1464,28 +1492,40 @@ export default function ProvidersPage() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Productos / Insumos Principales</label>
-                                        <input placeholder="Ej: Cebolla Larga, Papa Pastusa" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.product} onChange={(e) => {
-                                            const val = e.target.value;
-                                            setNewProvider({
-                                                ...newProvider,
-                                                product: val.toUpperCase(),
-                                                category: val.trim() !== '' ? 'PRODUCTOS' : 'GENERAL'
-                                            });
-                                        }} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Productos / Insumos Principales</label>
+                                            <input placeholder="Ej: Cebolla Larga, Papa Pastusa" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.product} onChange={(e) => {
+                                                const val = e.target.value;
+                                                setNewProvider({
+                                                    ...newProvider,
+                                                    product: val.toUpperCase(),
+                                                    category: val.trim() !== '' ? 'PRODUCTOS' : 'GENERAL'
+                                                });
+                                            }} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Tiempos de Entrega</label>
+                                            <input placeholder="Ej: 24 horas, Mismo día" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.delivery_time} onChange={(e) => setNewProvider({...newProvider, delivery_time: e.target.value})} />
+                                        </div>
                                     </div>
 
                                     <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem', marginTop: '0.5rem', fontWeight: '700', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                         <User size={14} /> Contacto &amp; Ubicación
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Nombre de Contacto</label>
-                                        <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Nombre de Contacto</label>
+                                            <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Cargo del Contacto</label>
+                                            <input placeholder="Ej: Gerente Comercial" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.contact_position} onChange={(e) => setNewProvider({...newProvider, contact_position: e.target.value})} />
+                                        </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: '0.6rem', width: '100%' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Teléfono</label>
                                             <input style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.phone} onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})} />
@@ -1493,6 +1533,10 @@ export default function ProvidersPage() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Correo Electrónico</label>
                                             <input type="email" placeholder="ejemplo@correo.com" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.email} onChange={(e) => setNewProvider({...newProvider, email: e.target.value})} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>Página Web</label>
+                                            <input placeholder="www.proveedor.com" style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #E2E8F0', outline: 'none', fontWeight: '600', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }} value={newProvider.website} onChange={(e) => setNewProvider({...newProvider, website: e.target.value})} />
                                         </div>
                                     </div>
 
@@ -1565,25 +1609,46 @@ export default function ProvidersPage() {
 
                                     {/* FILES SECTION */}
                                     <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.35rem', marginTop: '0.2rem', fontWeight: '700', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <FileText size={14} /> Bóveda de Documentos (PDF)
+                                        <FileText size={14} /> Bóveda de Documentos &amp; Certificaciones (PDF)
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
                                         {/* RUT UPLOAD */}
                                         <div style={{ position: 'relative', minWidth: 0 }}>
                                             <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Registro RUT</label>
                                             <input type="file" accept=".pdf" id="rut-upload" hidden onChange={(e) => handleFileUpload(e, 'rut_url')} />
-                                            <label htmlFor="rut-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.rut_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.rut_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.75rem', width: '100%', boxSizing: 'border-box' }}>
+                                            <label htmlFor="rut-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.55rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.rut_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.rut_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.73rem', width: '100%', boxSizing: 'border-box' }}>
                                                 {uploading === 'rut_url' ? <Loader2 size={14} className="animate-spin" /> : newProvider.rut_url ? <CheckCircle2 size={14} /> : <Upload size={14} />}
                                                 {newProvider.rut_url ? 'RUT Cargado' : 'Subir RUT'}
                                             </label>
                                         </div>
+                                        {/* CERTIFICADO BANCARIO UPLOAD */}
+                                        <div style={{ position: 'relative', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Certificado Bancario</label>
+                                            <input type="file" accept=".pdf" id="bank-upload" hidden onChange={(e) => handleFileUpload(e, 'bank_certificate_url')} />
+                                            <label htmlFor="bank-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.55rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.bank_certificate_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.bank_certificate_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.73rem', width: '100%', boxSizing: 'border-box' }}>
+                                                {uploading === 'bank_certificate_url' ? <Loader2 size={14} className="animate-spin" /> : newProvider.bank_certificate_url ? <CheckCircle2 size={14} /> : <Upload size={14} />}
+                                                {newProvider.bank_certificate_url ? 'Cert. Bancario Cargado' : 'Subir Cert. Bancario'}
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem', width: '100%' }}>
+                                        {/* CERTIFICACIONES DE CALIDAD UPLOAD */}
+                                        <div style={{ position: 'relative', minWidth: 0 }}>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Certificaciones Calidad (ISO)</label>
+                                            <input type="file" accept=".pdf" id="quality-upload" hidden onChange={(e) => handleFileUpload(e, 'quality_certifications_url')} />
+                                            <label htmlFor="quality-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.55rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.quality_certifications_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.quality_certifications_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.73rem', width: '100%', boxSizing: 'border-box' }}>
+                                                {uploading === 'quality_certifications_url' ? <Loader2 size={14} className="animate-spin" /> : newProvider.quality_certifications_url ? <CheckCircle2 size={14} /> : <Upload size={14} />}
+                                                {newProvider.quality_certifications_url ? 'Cert. Calidad Cargado' : 'Subir Cert. Calidad'}
+                                            </label>
+                                        </div>
                                         {/* OTHER DOCS UPLOAD */}
                                         <div style={{ position: 'relative', minWidth: 0 }}>
-                                            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Cert. Bancaria / Anexos</label>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.2rem' }}>Otros Anexos / Documentos</label>
                                             <input type="file" accept=".pdf" id="docs-upload" hidden onChange={(e) => handleFileUpload(e, 'additional_docs_url')} />
-                                            <label htmlFor="docs-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.additional_docs_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.additional_docs_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.75rem', width: '100%', boxSizing: 'border-box' }}>
+                                            <label htmlFor="docs-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.55rem', borderRadius: '10px', border: '1px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.additional_docs_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.additional_docs_url ? '#10B981' : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.73rem', width: '100%', boxSizing: 'border-box' }}>
                                                 {uploading === 'additional_docs_url' ? <Loader2 size={14} className="animate-spin" /> : newProvider.additional_docs_url ? <CheckCircle2 size={14} /> : <Upload size={14} />}
-                                                {newProvider.additional_docs_url ? 'Doc Cargado' : 'Subir Anexos'}
+                                                {newProvider.additional_docs_url ? 'Anexo Cargado' : 'Subir Anexos'}
                                             </label>
                                         </div>
                                     </div>
@@ -1738,15 +1803,20 @@ export default function ProvidersPage() {
                                         <User size={12} style={{ color: THEME.colors.primary }} /> Contacto
                                         <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
                                         {/* Nombre Contacto */}
                                         <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '0.65rem 0.85rem', border: '1px solid #E2E8F0' }}>
                                             <div style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <User size={10} /> Persona de Contacto
+                                                <User size={10} /> Contacto &amp; Cargo
                                             </div>
                                             <div style={{ fontSize: '0.85rem', fontWeight: '700', color: selectedProvider.contact_name ? THEME.colors.textMain : '#CBD5E1' }}>
                                                 {selectedProvider.contact_name || '—'}
                                             </div>
+                                            {selectedProvider.contact_position && (
+                                                <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.15rem' }}>
+                                                    💼 {selectedProvider.contact_position}
+                                                </div>
+                                            )}
                                         </div>
                                         {/* Teléfono */}
                                         <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '0.65rem 0.85rem', border: '1px solid #E2E8F0' }}>
@@ -1769,6 +1839,19 @@ export default function ProvidersPage() {
                                             {selectedProvider.email ? (
                                                 <a href={`mailto:${selectedProvider.email}`} style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.primary, textDecoration: 'none', wordBreak: 'break-all' }}>
                                                     {selectedProvider.email}
+                                                </a>
+                                            ) : (
+                                                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#CBD5E1' }}>—</div>
+                                            )}
+                                        </div>
+                                        {/* Website */}
+                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '0.65rem 0.85rem', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                🌐 Página Web
+                                            </div>
+                                            {selectedProvider.website ? (
+                                                <a href={selectedProvider.website.startsWith('http') ? selectedProvider.website : `https://${selectedProvider.website}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.primary, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                                                    {selectedProvider.website}
                                                 </a>
                                             ) : (
                                                 <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#CBD5E1' }}>—</div>
@@ -1829,13 +1912,22 @@ export default function ProvidersPage() {
                                     </div>
                                 </section>
 
-                                {/* SECCIÓN 3: COMERCIALL & BANCARIO */}
+                                {/* SECCIÓN 3: COMERCIAL, LOGÍSTICA & BANCARIO */}
                                 <section>
                                     <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <Wallet size={12} style={{ color: THEME.colors.primary }} /> Comercial &amp; Bancario
+                                        <Wallet size={12} style={{ color: THEME.colors.primary }} /> Comercial, Logística &amp; Bancario
                                         <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
+                                        {/* Tiempos de Entrega */}
+                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '0.65rem 0.85rem', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <Truck size={10} /> Tiempos de Entrega
+                                            </div>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: '700', color: selectedProvider.delivery_time ? THEME.colors.textMain : '#CBD5E1' }}>
+                                                {selectedProvider.delivery_time || '—'}
+                                            </div>
+                                        </div>
                                         {/* Banco */}
                                         <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '0.65rem 0.85rem', border: '1px solid #E2E8F0' }}>
                                             <div style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -1901,23 +1993,37 @@ export default function ProvidersPage() {
                                 {/* SECCIÓN 5: DOCUMENTOS Y NOTAS */}
                                 <section>
                                     <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <FileText size={12} style={{ color: THEME.colors.primary }} /> Documentos &amp; Notas
+                                        <FileText size={12} style={{ color: THEME.colors.primary }} /> Bóveda de Documentos (PDF) &amp; Certificaciones
                                         <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
                                     </div>
-                                    <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.8rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem', marginBottom: '0.8rem' }}>
                                         <button 
                                             onClick={() => selectedProvider.rut_url && window.open(selectedProvider.rut_url, '_blank')} 
-                                            style={{ flex: 1, backgroundColor: selectedProvider.rut_url ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${selectedProvider.rut_url ? '#BFDBFE' : '#E2E8F0'}`, padding: '0.65rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '800', color: selectedProvider.rut_url ? '#1D4ED8' : THEME.colors.textSecondary, cursor: selectedProvider.rut_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                                            style={{ backgroundColor: selectedProvider.rut_url ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${selectedProvider.rut_url ? '#BFDBFE' : '#E2E8F0'}`, padding: '0.6rem', borderRadius: '10px', fontSize: '0.73rem', fontWeight: '800', color: selectedProvider.rut_url ? '#1D4ED8' : THEME.colors.textSecondary, cursor: selectedProvider.rut_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
                                         >
                                             <FileText size={14} /> RUT
-                                            {selectedProvider.rut_url ? ' (Ver PDF)' : ' (Sin archivo)'}
+                                            {selectedProvider.rut_url ? ' (PDF)' : ' (—)'}
+                                        </button>
+                                        <button 
+                                            onClick={() => (selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url) && window.open(selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url, '_blank')} 
+                                            style={{ backgroundColor: (selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url) ? '#ECFDF5' : '#F8FAFC', border: `1px solid ${(selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url) ? '#A7F3D0' : '#E2E8F0'}`, padding: '0.6rem', borderRadius: '10px', fontSize: '0.73rem', fontWeight: '800', color: (selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url) ? '#047857' : THEME.colors.textSecondary, cursor: (selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url) ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                                        >
+                                            <Landmark size={14} /> Cert. Bancario
+                                            {(selectedProvider.bank_certificate_url || selectedProvider.additional_docs_url) ? ' (PDF)' : ' (—)'}
+                                        </button>
+                                        <button 
+                                            onClick={() => selectedProvider.quality_certifications_url && window.open(selectedProvider.quality_certifications_url, '_blank')} 
+                                            style={{ backgroundColor: selectedProvider.quality_certifications_url ? '#FEF3C7' : '#F8FAFC', border: `1px solid ${selectedProvider.quality_certifications_url ? '#FDE68A' : '#E2E8F0'}`, padding: '0.6rem', borderRadius: '10px', fontSize: '0.73rem', fontWeight: '800', color: selectedProvider.quality_certifications_url ? '#B45309' : THEME.colors.textSecondary, cursor: selectedProvider.quality_certifications_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                                        >
+                                            <Award size={14} /> Cert. Calidad
+                                            {selectedProvider.quality_certifications_url ? ' (PDF)' : ' (—)'}
                                         </button>
                                         <button 
                                             onClick={() => selectedProvider.additional_docs_url && window.open(selectedProvider.additional_docs_url, '_blank')} 
-                                            style={{ flex: 1, backgroundColor: selectedProvider.additional_docs_url ? '#F0FDF4' : '#F8FAFC', border: `1px solid ${selectedProvider.additional_docs_url ? '#BBF7D0' : '#E2E8F0'}`, padding: '0.65rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '800', color: selectedProvider.additional_docs_url ? '#166534' : THEME.colors.textSecondary, cursor: selectedProvider.additional_docs_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                                            style={{ backgroundColor: selectedProvider.additional_docs_url ? '#F3E8FF' : '#F8FAFC', border: `1px solid ${selectedProvider.additional_docs_url ? '#E9D5FF' : '#E2E8F0'}`, padding: '0.6rem', borderRadius: '10px', fontSize: '0.73rem', fontWeight: '800', color: selectedProvider.additional_docs_url ? '#7E22CE' : THEME.colors.textSecondary, cursor: selectedProvider.additional_docs_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
                                         >
-                                            <ExternalLink size={14} /> Anexos / Cert. Bancaria
-                                            {selectedProvider.additional_docs_url ? ' (Ver PDF)' : ' (Sin archivo)'}
+                                            <Paperclip size={14} /> Anexos
+                                            {selectedProvider.additional_docs_url ? ' (PDF)' : ' (—)'}
                                         </button>
                                     </div>
                                     {(selectedProvider.observations || selectedProvider.notes) ? (
