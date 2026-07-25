@@ -771,57 +771,63 @@ export default function B2BDashboard() {
 
             <div className="container" style={{ padding: '2rem 1.5rem 18rem', maxWidth: '1400px', margin: '0 auto' }}>
 
-                {/* HEADER & TAB NAVIGATION ROW (Compact in Y) */}
+                {/* UNIFIED ULTRA-COMPACT HEADER & TOOLBAR */}
                 <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
                     flexWrap: 'wrap',
-                    gap: '1.5rem',
-                    marginBottom: '1.5rem' 
+                    gap: '0.75rem',
+                    marginBottom: '1rem',
+                    backgroundColor: 'white',
+                    padding: '0.65rem 1.25rem',
+                    borderRadius: THEME.radius.lg,
+                    border: `1px solid ${THEME.colors.border}`,
+                    boxShadow: THEME.shadow.sm
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                    {/* Left: Company Title & Client Simulator Dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <div>
                             <h1 style={{ 
                                 fontFamily: THEME.typography.fontFamilyMain,
-                                fontSize: '1.75rem', 
-                                fontWeight: '600', 
+                                fontSize: '1.2rem', 
+                                fontWeight: '800', 
                                 color: THEME.colors.textMain, 
-                                marginBottom: '0',
-                                letterSpacing: '-0.02em'
+                                margin: 0,
+                                letterSpacing: '-0.02em',
+                                lineHeight: 1.2
                             }}>
                                 {activeProfile?.company_name || profile?.company_name || t.b2b.dashboard.title}
                             </h1>
-                            <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
                         </div>
 
                         {/* SELECTOR SIMULADOR B2B DE PRUEBAS */}
                         <div style={{ 
                             display: 'flex', 
                             alignItems: 'center', 
-                            gap: '0.5rem', 
+                            gap: '0.35rem', 
                             backgroundColor: '#EFF6FF', 
-                            padding: '0.4rem 0.75rem', 
+                            padding: '0.25rem 0.6rem', 
                             borderRadius: THEME.radius.md,
                             border: '1px solid #BFDBFE' 
                         }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
-                                🔍 Probar como Cliente:
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
+                                🔍 Cliente:
                             </span>
                             <select
                                 value={simulatedClientId || activeProfile?.id || ''}
                                 onChange={(e) => setSimulatedClientId(e.target.value)}
                                 style={{
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600,
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
                                     color: '#1E293B',
                                     backgroundColor: 'white',
                                     border: '1px solid #93C5FD',
                                     borderRadius: '6px',
-                                    padding: '4px 8px',
+                                    padding: '2px 6px',
                                     cursor: 'pointer',
                                     outline: 'none',
-                                    maxWidth: '280px'
+                                    maxWidth: '240px'
                                 }}
                             >
                                 <option value="">(Mi Cuenta Autenticada)</option>
@@ -834,144 +840,127 @@ export default function B2BDashboard() {
                         </div>
                     </div>
 
-                    {/* TAB NAVIGATION — segmented control aligned right */}
-                    <div className="b2b-tab-navigation" style={{
-                        display: 'flex',
-                        backgroundColor: THEME.colors.background,
-                        borderRadius: THEME.radius.lg,
-                        padding: '4px',
-                        border: `1px solid ${THEME.colors.border}`,
-                        gap: '2px',
-                        flex: '1 1 auto'
-                    }}>
-                        {[
-                            { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
-                            { key: 'invoices', icon: <FileText size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabInvoices },
-                            { key: 'consumption', icon: <BarChart3 size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabConsumption },
-                            { key: 'agreements', icon: <Rocket size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabAgreements },
-                        ].map(tab => (
-                            <button
-                                key={tab.key}
-                                onClick={() => setActiveTab(tab.key as any)}
-                                className="b2b-tab-button"
-                                style={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    padding: '0.6rem 0.5rem',
-                                    borderRadius: THEME.radius.md,
-                                    border: 'none',
-                                    backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
-                                    color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
-                                    fontWeight: activeTab === tab.key ? '600' : '500',
-                                    fontSize: '0.8rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    whiteSpace: 'nowrap',
-                                    fontFamily: THEME.typography.fontFamilySecondary,
-                                    boxShadow: activeTab === tab.key ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
-                                }}
-                                onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
-                                onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
-                            >
-                                <span className="b2b-tab-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>{tab.icon}</span> <span className="tab-label">{tab.label}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                      {/* TAB CONTENT */}
-                {activeTab === 'order' && (
-                    <>
-                        {/* SELECTOR DE VISTA / ENFOQUE (Balanceado, Maximizar Catálogo, Maximizar Canasta) */}
-                        <div style={{
+                    {/* Right: Inline Tabs + Enfoque Segmented Control */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {/* Navigation Tabs */}
+                        <div className="b2b-tab-navigation" style={{
                             display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '1rem',
-                            backgroundColor: 'white',
-                            padding: '0.6rem 1rem',
-                            borderRadius: THEME.radius.lg,
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: THEME.radius.md,
+                            padding: '3px',
                             border: `1px solid ${THEME.colors.border}`,
-                            boxShadow: THEME.shadow.sm,
-                            flexWrap: 'wrap',
-                            gap: '0.5rem'
+                            gap: '2px'
                         }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Columns size={16} style={{ color: 'var(--primary)' }} /> Modo de Enfoque Visual:
-                            </span>
+                            {[
+                                { key: 'order', icon: <ShoppingCart size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabQuickOrder },
+                                { key: 'invoices', icon: <FileText size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabInvoices },
+                                { key: 'consumption', icon: <BarChart3 size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabConsumption },
+                                { key: 'agreements', icon: <Rocket size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabAgreements },
+                            ].map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setActiveTab(tab.key as any)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        padding: '0.35rem 0.65rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: 'none',
+                                        backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
+                                        color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
+                                        fontWeight: activeTab === tab.key ? '800' : '600',
+                                        fontSize: '0.76rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {tab.icon} <span>{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
 
-                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {/* Focus Mode Selector (Only on Quick Order tab) */}
+                        {activeTab === 'order' && (
+                            <div style={{
+                                display: 'flex',
+                                backgroundColor: '#F1F5F9',
+                                borderRadius: THEME.radius.md,
+                                padding: '3px',
+                                border: '1px solid #E2E8F0',
+                                gap: '2px'
+                            }}>
                                 <button
                                     onClick={() => setFocusMode('split')}
                                     style={{
-                                        padding: '0.4rem 0.85rem',
+                                        padding: '0.35rem 0.55rem',
                                         borderRadius: THEME.radius.md,
-                                        border: focusMode === 'split' ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                        backgroundColor: focusMode === 'split' ? '#F0FDF4' : 'white',
-                                        color: focusMode === 'split' ? 'var(--primary)' : '#475569',
+                                        border: 'none',
+                                        backgroundColor: focusMode === 'split' ? 'white' : 'transparent',
+                                        color: focusMode === 'split' ? 'var(--primary)' : '#64748B',
                                         fontWeight: focusMode === 'split' ? '900' : '600',
-                                        fontSize: '0.78rem',
+                                        fontSize: '0.72rem',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '6px',
-                                        transition: 'all 0.2s ease',
-                                        boxShadow: focusMode === 'split' ? '0 2px 4px rgba(13,122,87,0.15)' : 'none'
+                                        gap: '4px',
+                                        boxShadow: focusMode === 'split' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                     }}
                                     title="Vista dividida balanceada (60/40)"
                                 >
-                                    <Columns size={14} /> Balanceado (60 / 40)
+                                    <Columns size={13} /> 60/40
                                 </button>
 
                                 <button
                                     onClick={() => setFocusMode(focusMode === 'catalog' ? 'split' : 'catalog')}
                                     style={{
-                                        padding: '0.4rem 0.85rem',
+                                        padding: '0.35rem 0.55rem',
                                         borderRadius: THEME.radius.md,
-                                        border: focusMode === 'catalog' ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                        backgroundColor: focusMode === 'catalog' ? '#F0FDF4' : 'white',
-                                        color: focusMode === 'catalog' ? 'var(--primary)' : '#475569',
+                                        border: 'none',
+                                        backgroundColor: focusMode === 'catalog' ? 'white' : 'transparent',
+                                        color: focusMode === 'catalog' ? 'var(--primary)' : '#64748B',
                                         fontWeight: focusMode === 'catalog' ? '900' : '600',
-                                        fontSize: '0.78rem',
+                                        fontSize: '0.72rem',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '6px',
-                                        transition: 'all 0.2s ease',
-                                        boxShadow: focusMode === 'catalog' ? '0 2px 4px rgba(13,122,87,0.15)' : 'none'
+                                        gap: '4px',
+                                        boxShadow: focusMode === 'catalog' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                     }}
-                                    title="Ampliar vista del Catálogo"
+                                    title="Maximizar Catálogo"
                                 >
-                                    <Maximize2 size={14} /> {focusMode === 'catalog' ? 'Restablecer' : 'Maximizar Catálogo'}
+                                    <Maximize2 size={13} /> Catálogo
                                 </button>
 
                                 <button
                                     onClick={() => setFocusMode(focusMode === 'cart' ? 'split' : 'cart')}
                                     style={{
-                                        padding: '0.4rem 0.85rem',
+                                        padding: '0.35rem 0.55rem',
                                         borderRadius: THEME.radius.md,
-                                        border: focusMode === 'cart' ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                        backgroundColor: focusMode === 'cart' ? '#F0FDF4' : 'white',
-                                        color: focusMode === 'cart' ? 'var(--primary)' : '#475569',
+                                        border: 'none',
+                                        backgroundColor: focusMode === 'cart' ? 'white' : 'transparent',
+                                        color: focusMode === 'cart' ? 'var(--primary)' : '#64748B',
                                         fontWeight: focusMode === 'cart' ? '900' : '600',
-                                        fontSize: '0.78rem',
+                                        fontSize: '0.72rem',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '6px',
-                                        transition: 'all 0.2s ease',
-                                        boxShadow: focusMode === 'cart' ? '0 2px 4px rgba(13,122,87,0.15)' : 'none'
+                                        gap: '4px',
+                                        boxShadow: focusMode === 'cart' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                     }}
-                                    title="Ampliar vista de Pedido Sugerido / Canasta"
+                                    title="Maximizar Pedido Sugerido / Canasta"
                                 >
-                                    <Maximize2 size={14} /> {focusMode === 'cart' ? 'Restablecer' : 'Maximizar Pedido Sugerido'}
+                                    <Maximize2 size={13} /> Canasta
                                 </button>
                             </div>
-                        </div>
+                        )}
+                    </div>
+                </div>
 
+                {/* TAB CONTENT */}
+                {activeTab === 'order' && (
+                    <>
                         <div className="b2b-dashboard-grid" style={{
                             display: 'grid',
                             gridTemplateColumns: focusMode === 'catalog' ? '1fr 300px' : focusMode === 'cart' ? '320px 1fr' : '1.3fr 1fr',
