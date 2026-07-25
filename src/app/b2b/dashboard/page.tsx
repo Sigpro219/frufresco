@@ -115,7 +115,7 @@ export default function B2BDashboard() {
             try {
                 let query = supabase
                     .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config')
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price')
                     .eq('is_active', true);
 
                 if (selectedCategory) {
@@ -131,13 +131,18 @@ export default function B2BDashboard() {
                     throw error;
                 }
                 
-                // Priorizar con foto
+                // Priorizar productos con acuerdo comercial y luego por foto
                 const sorted = (data || []).sort((a, b) => {
+                    const isAgreeA = agreementPricesMap[a.id] !== undefined;
+                    const isAgreeB = agreementPricesMap[b.id] !== undefined;
+                    if (isAgreeA && !isAgreeB) return -1;
+                    if (!isAgreeA && isAgreeB) return 1;
+
                     const hasA = a.image_url && String(a.image_url).length > 5;
                     const hasB = b.image_url && String(b.image_url).length > 5;
                     if (hasA && !hasB) return -1;
                     if (!hasA && hasB) return 1;
-                    return 0;
+                    return a.name.localeCompare(b.name);
                 });
 
                 if (isMounted.current) setCategoryProducts(sorted);
@@ -1115,13 +1120,40 @@ export default function B2BDashboard() {
                                                 }}
                                             >
                                                 <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
-                                                <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                    <h5 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
-                                                        {locale === 'en' ? (p.name_en || p.name) : p.name}
-                                                    </h5>
-                                                    <p style={{ margin: 'auto 0 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                                                        {p.unit_of_measure}
-                                                    </p>
+                                                <div style={{ padding: '0.85rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                    <div>
+                                                        <h5 style={{ margin: '0 0 0.35rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                            {locale === 'en' ? (p.name_en || p.name) : p.name}
+                                                        </h5>
+                                                    </div>
+
+                                                    <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
+                                                        {agreementPricesMap[p.id] !== undefined ? (
+                                                            <div>
+                                                                <span style={{ display: 'block', fontSize: '0.95rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                                                    ${Number(agreementPricesMap[p.id]).toLocaleString()} / {p.unit_of_measure}
+                                                                </span>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    fontSize: '0.65rem',
+                                                                    fontWeight: '800',
+                                                                    color: '#065F46',
+                                                                    backgroundColor: '#D1FAE5',
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    marginTop: '2px'
+                                                                }}>
+                                                                    🏷️ Precio de Acuerdo
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div>
+                                                                <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>
+                                                                    {p.base_price ? `$${Number(p.base_price).toLocaleString()} / ${p.unit_of_measure}` : p.unit_of_measure}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
