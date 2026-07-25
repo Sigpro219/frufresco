@@ -22,6 +22,11 @@ interface OrderItem {
 }
 
 export default function B2BDashboard() {
+    const formatPrice = (val: number | string | null | undefined): string => {
+        const num = Math.round(Number(val) || 0);
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    };
+
     const { user, profile, loading: authLoading } = useAuth();
     const router = useRouter();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -1131,7 +1136,7 @@ export default function B2BDashboard() {
                                                         {agreementPricesMap[p.id] !== undefined ? (
                                                             <div>
                                                                 <span style={{ display: 'block', fontSize: '0.95rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                                    ${Number(agreementPricesMap[p.id]).toLocaleString()} / {p.unit_of_measure}
+                                                                    ${formatPrice(agreementPricesMap[p.id])} / {p.unit_of_measure}
                                                                 </span>
                                                                 <span style={{
                                                                     display: 'inline-flex',
@@ -1151,7 +1156,7 @@ export default function B2BDashboard() {
                                                         ) : (
                                                             <div>
                                                                 <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: '800', color: '#475569' }}>
-                                                                    {p.base_price ? `$${Number(p.base_price).toLocaleString()} / ${p.unit_of_measure}` : p.unit_of_measure}
+                                                                    ${formatPrice(p.base_price || 0)} / {p.unit_of_measure}
                                                                 </span>
                                                                 <span style={{
                                                                     display: 'inline-flex',
@@ -1336,10 +1341,10 @@ export default function B2BDashboard() {
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', gap: '0.5rem' }}>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                                                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                                                                        ${uPrice.toLocaleString()} / {item.unit}
+                                                                        ${formatPrice(uPrice)} / {item.unit}
                                                                     </span>
                                                                     <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>
-                                                                        Total: ${itemSubtotal.toLocaleString()}
+                                                                        Total: ${formatPrice(itemSubtotal)}
                                                                     </span>
                                                                 </div>
 
@@ -1405,7 +1410,7 @@ export default function B2BDashboard() {
                                         }}>
                                             <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total Subtotal:</span>
                                             <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                ${orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || agreementPricesMap[i.product_id] || 0)), 0).toLocaleString()}
+                                                ${formatPrice(orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || agreementPricesMap[i.product_id] || 0)), 0))}
                                             </span>
                                         </div>
 
