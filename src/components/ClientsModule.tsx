@@ -4559,7 +4559,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                     <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
-                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>CONTACTO OPERATIVO</h4>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>CONTACTO OPERATIVO (ÁREA DE COMPRAS)</h4>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem' }}>
                                     <FormField label="Responsable Directo" value={formData.contact_name} onChange={(v) => setFormData({...formData, contact_name: v})} required readOnly={isReadOnly} />
