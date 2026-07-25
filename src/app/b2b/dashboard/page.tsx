@@ -171,7 +171,7 @@ export default function B2BDashboard() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config')
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price')
                     .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
                     .eq('is_active', true)
                     .limit(5)
@@ -1148,8 +1148,21 @@ export default function B2BDashboard() {
                                                             </div>
                                                         ) : (
                                                             <div>
-                                                                <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>
+                                                                <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: '800', color: '#475569' }}>
                                                                     {p.base_price ? `$${Number(p.base_price).toLocaleString()} / ${p.unit_of_measure}` : p.unit_of_measure}
+                                                                </span>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    fontSize: '0.64rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#475569',
+                                                                    backgroundColor: '#F1F5F9',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    marginTop: '2px'
+                                                                }}>
+                                                                    💡 Fuera de Convenio (General Institucional)
                                                                 </span>
                                                             </div>
                                                         )}
