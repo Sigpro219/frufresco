@@ -1277,6 +1277,7 @@ export default function B2BDashboard() {
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                         {/* Title + Lucide Help Info Icon */}
+                                        {/* Title */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <h3 style={{ 
                                                 fontFamily: THEME.typography.fontFamilyMain,
@@ -1290,35 +1291,27 @@ export default function B2BDashboard() {
                                             }}>
                                                 <ShoppingCart size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
                                             </h3>
-
-                                            <div 
-                                                title="Sugerencia basada en tus compras habituales con precios negociados. Haz clic en cualquiera de los 5 botones para cargar ese pedido dinámicamente."
-                                                style={{ cursor: 'help', display: 'flex', alignItems: 'center', color: '#64748B' }}
-                                            >
-                                                <Info size={15} strokeWidth={2} />
-                                            </div>
                                         </div>
 
+                                        {/* Icon-only Trash Button (No text to stay on 1 line when collapsed) */}
                                         {orderItems.length > 0 && (
                                             <button
                                                 onClick={handleClearOrder}
-                                                title="Borrar todo y empezar de cero"
+                                                title="Borrar todo el pedido y empezar de cero"
                                                 style={{
-                                                    padding: '0.3rem 0.65rem',
+                                                    padding: '0.35rem 0.45rem',
                                                     borderRadius: THEME.radius.md,
                                                     border: '1px solid #FCA5A5',
                                                     background: '#FEF2F2',
                                                     color: '#DC2626',
-                                                    fontWeight: '700',
-                                                    fontSize: '0.72rem',
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '4px',
+                                                    justifyContent: 'center',
                                                     transition: 'all 0.2s'
                                                 }}
                                             >
-                                                <Trash2 size={13} strokeWidth={2} /> {t.b2b.dashboard.btnClear}
+                                                <Trash2 size={15} strokeWidth={2} />
                                             </button>
                                         )}
                                     </div>
@@ -1452,9 +1445,9 @@ export default function B2BDashboard() {
                                                                         }}
                                                                     >−</button>
                                                                     
-                                                                    <div style={{ minWidth: '32px', textAlign: 'center' }}>
-                                                                        <span style={{ fontWeight: '900', fontSize: '0.9rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', display: 'block' }}>
-                                                                            {item.quantity}
+                                                                    <div style={{ minWidth: '44px', textAlign: 'center', padding: '0 4px' }}>
+                                                                        <span style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', whiteSpace: 'nowrap' }}>
+                                                                            {item.quantity} <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B' }}>{item.unit}</span>
                                                                         </span>
                                                                     </div>
 
