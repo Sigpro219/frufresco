@@ -52,6 +52,9 @@ export default function B2BDashboard() {
     const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
     const [simulatedClientId, setSimulatedClientId] = useState<string>('');
     const [simulatedProfiles, setSimulatedProfiles] = useState<any[]>([]);
+    const [historicalOrders, setHistoricalOrders] = useState<any[]>([]);
+    const [selectedHistoricalOrderId, setSelectedHistoricalOrderId] = useState<string>('');
+    const [agreementPricesMap, setAgreementPricesMap] = useState<Record<string, number>>({});
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
     const searchParams = useSearchParams();
@@ -327,96 +330,130 @@ export default function B2BDashboard() {
 
     const lastFetchedLocale = useRef<string | null>(null);
  
+    const applyHistoricalOrderToCart = (ord: any, pricesMap: Record<string, number> = agreementPricesMap) => {
+        if (!ord || !ord.order_items) return;
+        const items = ord.order_items.map((item: any) => {
+            const p = Array.isArray(item.products) ? item.products[0] : item.products;
+            const pId = item.product_id || p?.id;
+            const priceFromMap = pricesMap && pId ? pricesMap[pId] : undefined;
+            const unitPrice = priceFromMap !== undefined ? priceFromMap : (item.unit_price || p?.base_price || 0);
+
+            return {
+                id: item.id || Math.random().toString(36).substr(2, 9),
+                product_id: pId,
+                product_name: p?.name || item.nickname || 'Producto',
+                product_name_en: p?.name_en,
+                product_image: p?.image_url || '',
+                quantity: Number(item.quantity || 0),
+                unit_price: Number(unitPrice || 0),
+                unit: item.unit || p?.unit_of_measure || 'Kg'
+            };
+        }).sort((a: any, b: any) => a.product_name.localeCompare(b.product_name));
+
+        setOrderItems(items);
+    };
+
     useEffect(() => {
         const controller = new AbortController();
         const signal = controller.signal;
- 
-        const fetchInitialOrder = async () => {
+
+        const fetchInitialOrdersAndAgreement = async () => {
             if (!user) return;
- 
+
             try {
-                // 1. Try to fetch last order
-                const { data: lastOrder } = await supabase
+                const targetProfileId = activeProfile?.id || user.id;
+                const effectiveClientId = activeProfile?.parent_id || activeProfile?.id;
+
+                // 1. Fetch Active Commercial Agreement Prices
+                let pricesMap: Record<string, number> = {};
+                if (effectiveClientId) {
+                    const { data: agreementData } = await supabase
+                        .from('quotes')
+                        .select(`
+                            id,
+                            quote_items(product_id, unit_price)
+                        `)
+                        .eq('client_id', effectiveClientId)
+                        .eq('status', 'agreement')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (agreementData?.quote_items) {
+                        agreementData.quote_items.forEach((qi: any) => {
+                            if (qi.product_id && qi.unit_price) {
+                                pricesMap[qi.product_id] = Number(qi.unit_price);
+                            }
+                        });
+                    }
+                }
+                if (isMounted.current) {
+                    setAgreementPricesMap(pricesMap);
+                }
+
+                // 2. Fetch Last 5 Orders for active profile/user
+                const { data: recentOrders } = await supabase
                     .from('orders')
                     .select(`
                         id,
+                        sequence_id,
+                        created_at,
+                        delivery_date,
+                        subtotal,
+                        total,
                         order_items(
                             id,
                             product_id,
                             quantity,
-                            products(name, name_en, unit_of_measure, image_url)
+                            unit_price,
+                            unit,
+                            nickname,
+                            products(id, name, name_en, unit_of_measure, image_url, base_price)
                         )
                     `)
-                    .eq('user_id', user.id)
+                    .or(`profile_id.eq.${targetProfileId},user_id.eq.${targetProfileId}`)
                     .order('created_at', { ascending: false })
-                    .limit(1)
-                    .abortSignal(signal as any)
-                    .single();
+                    .limit(5);
 
-            if (lastOrder?.order_items && lastOrder.order_items.length > 0) {
-                // Return previous order items
-                const items = lastOrder.order_items.map((item: any) => {
-                    const p = Array.isArray(item.products) ? item.products[0] : item.products;
-                    return {
-                        id: item.id,
-                        product_id: item.product_id,
-                        product_name: p?.name || 'Producto',
-                        product_name_en: p?.name_en,
-                        product_image: p?.image_url || '',
-                        quantity: item.quantity,
-                        unit: p?.unit_of_measure || 'kg'
-                    };
-                }).sort((a: any, b: any) => {
-                    const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
-                    const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
-                    return nameA.localeCompare(nameB);
-                });
-                setOrderItems(items);
-            } else {
-                // 2. Fallback: New Client - Load Top 10 products
-                const { data: topProducts } = await supabase
-                    .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url')
-                    .eq('is_active', true)
-                    .limit(10);
+                if (recentOrders && recentOrders.length > 0 && isMounted.current) {
+                    setHistoricalOrders(recentOrders);
+                    const firstOrder = recentOrders[0];
+                    setSelectedHistoricalOrderId(firstOrder.id);
+                    applyHistoricalOrderToCart(firstOrder, pricesMap);
+                } else {
+                    // Fallback: top products
+                    const { data: topProducts } = await supabase
+                        .from('products')
+                        .select('id, name, name_en, unit_of_measure, image_url, base_price')
+                        .eq('is_active', true)
+                        .limit(10);
 
-                if (topProducts) {
-                    const prioritizedTop = [...topProducts].sort((a, b) => {
-                        const hasA = a.image_url && String(a.image_url).length > 5;
-                        const hasB = b.image_url && String(b.image_url).length > 5;
-                        if (hasA && !hasB) return -1;
-                        if (!hasA && hasB) return 1;
-                        return 0;
-                    });
-
-                    const suggestedItems = prioritizedTop.map(p => ({
-                        id: Math.random().toString(36).substr(2, 9),
-                        product_id: p.id,
-                        product_name: p.name,
-                        product_name_en: p.name_en,
-                        product_image: p.image_url || '',
-                        quantity: 0,
-                        unit: p.unit_of_measure || 'kg'
-                    }));
-                    setOrderItems(suggestedItems);
+                    if (topProducts && isMounted.current) {
+                        const suggestedItems = topProducts.map(p => ({
+                            id: Math.random().toString(36).substr(2, 9),
+                            product_id: p.id,
+                            product_name: p.name,
+                            product_name_en: p.name_en,
+                            product_image: p.image_url || '',
+                            quantity: 0,
+                            unit_price: pricesMap[p.id] ?? p.base_price ?? 0,
+                            unit: p.unit_of_measure || 'kg'
+                        }));
+                        setOrderItems(suggestedItems);
+                    }
                 }
-            }
-            if (isMounted.current) setLoading(false);
+
+                if (isMounted.current) setLoading(false);
             } catch (err) {
                 if (isAbortError(err)) return;
-                console.error("Error in fetchInitialOrder:", err);
+                console.error("Error fetching initial orders:", err);
                 if (isMounted.current) setLoading(false);
             }
         };
 
-        if (!authLoading && user && (!hasFetchedInitial.current || lastFetchedLocale.current !== locale)) {
-            hasFetchedInitial.current = true;
-            lastFetchedLocale.current = locale;
-            fetchInitialOrder();
-        }
- 
+        fetchInitialOrdersAndAgreement();
         return () => controller.abort();
-    }, [authLoading, user, locale]);
+    }, [user, activeProfile?.id]);
 
     const updateQuantity = (id: string, newQty: number) => {
         if (newQty < 0) return;
@@ -1113,7 +1150,7 @@ export default function B2BDashboard() {
                                     borderBottom: `1px solid ${THEME.colors.border}`,
                                     borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: historicalOrders.length > 0 ? '0.75rem' : '0' }}>
                                         <div>
                                             <h3 style={{ 
                                                 fontFamily: THEME.typography.fontFamilyMain,
@@ -1128,7 +1165,7 @@ export default function B2BDashboard() {
                                                 <ShoppingCart size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
                                             </h3>
                                             <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                                de acuerdo a tu última compra
+                                                de acuerdo a tu última compra (con precios de acuerdo comercial)
                                             </p>
                                         </div>
                                         {orderItems.length > 0 && (
@@ -1156,116 +1193,156 @@ export default function B2BDashboard() {
                                             </button>
                                         )}
                                     </div>
+
+                                    {/* Selector de Pedidos Históricos */}
+                                    {historicalOrders.length > 0 && (
+                                        <div style={{ marginTop: '0.5rem' }}>
+                                            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: 'var(--primary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                📋 Repetir o basarse en pedido histórico:
+                                            </label>
+                                            <select
+                                                value={selectedHistoricalOrderId}
+                                                onChange={(e) => {
+                                                    const ordId = e.target.value;
+                                                    setSelectedHistoricalOrderId(ordId);
+                                                    const found = historicalOrders.find(o => o.id === ordId);
+                                                    if (found) applyHistoricalOrderToCart(found);
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.45rem 0.65rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: '700',
+                                                    backgroundColor: 'white',
+                                                    color: 'var(--text-main)',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                            >
+                                                {historicalOrders.map((ord, idx) => (
+                                                    <option key={ord.id} value={ord.id}>
+                                                        Pedido #{ord.sequence_id || ord.id.substring(0, 6)} ({new Date(ord.created_at || ord.delivery_date).toLocaleDateString()}) — {ord.order_items?.length || 0} ítems
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Items List */}
                                 {orderItems.length > 0 ? (
                                     <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                         <div style={{ flex: 1, overflowY: 'auto' }}>
-                                            {orderItems.map((item) => (
-                                                <div key={item.id} className="cart-item-row" style={{
-                                                    display: 'flex',
-                                                    gap: '0.75rem',
-                                                    padding: '1rem 1.25rem',
-                                                    borderBottom: '1px solid #F3F4F6',
-                                                    alignItems: 'flex-start'
-                                                }}>
-                                                    <div style={{ width: '52px', height: '52px', backgroundColor: '#f0f0f0', borderRadius: '12px', overflow: 'hidden', flexShrink: 0 }}>
-                                                        {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                                    </div>
-                                                    
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                                            <h4 style={{ 
-                                                                fontFamily: 'var(--font-outfit), sans-serif',
-                                                                fontWeight: '800', 
-                                                                fontSize: '0.95rem',
-                                                                margin: 0,
-                                                                color: 'var(--text-main)',
-                                                                letterSpacing: '-0.01em',
-                                                                lineHeight: '1.25',
-                                                                wordBreak: 'break-word'
-                                                            }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
-                                                                {item.variant_label && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '0.15rem' }}>{item.variant_label}</span>}
-                                                            </h4>
-                                                            <button
-                                                                onClick={() => removeItem(item.id)}
-                                                                style={{
-                                                                    background: 'none',
-                                                                    border: 'none',
-                                                                    color: '#EF4444',
-                                                                    cursor: 'pointer',
-                                                                    padding: '2px',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    flexShrink: 0
-                                                                }}
-                                                                title={t.b2b.dashboard.remove}
-                                                            >
-                                                                <Trash2 size={16} strokeWidth={2} />
-                                                            </button>
+                                            {orderItems.map((item) => {
+                                                const uPrice = Number(item.unit_price || agreementPricesMap[item.product_id] || 0);
+                                                const itemSubtotal = item.quantity * uPrice;
+                                                return (
+                                                    <div key={item.id} className="cart-item-row" style={{
+                                                        display: 'flex',
+                                                        gap: '0.75rem',
+                                                        padding: '1rem 1.25rem',
+                                                        borderBottom: '1px solid #F3F4F6',
+                                                        alignItems: 'flex-start'
+                                                    }}>
+                                                        <div style={{ width: '52px', height: '52px', backgroundColor: '#f0f0f0', borderRadius: '12px', overflow: 'hidden', flexShrink: 0 }}>
+                                                            {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                                                         </div>
                                                         
-                                                        {/* Unit Price, Subtotal display and Quantity Controls */}
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', gap: '0.5rem' }}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                                                    $0 / {item.unit}
-                                                                </span>
-                                                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>
-                                                                    Total: $0
-                                                                </span>
-                                                            </div>
-
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '8px', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                                                <h4 style={{ 
+                                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                                    fontWeight: '800', 
+                                                                    fontSize: '0.95rem',
+                                                                    margin: 0,
+                                                                    color: 'var(--text-main)',
+                                                                    letterSpacing: '-0.01em',
+                                                                    lineHeight: '1.25',
+                                                                    wordBreak: 'break-word'
+                                                                }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                                    {item.variant_label && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '0.15rem' }}>{item.variant_label}</span>}
+                                                                </h4>
                                                                 <button
-                                                                    onClick={() => updateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                                                                    onClick={() => removeItem(item.id)}
                                                                     style={{
-                                                                        width: '26px', height: '26px',
-                                                                        borderRadius: '6px',
+                                                                        background: 'none',
                                                                         border: 'none',
-                                                                        backgroundColor: 'white',
+                                                                        color: '#EF4444',
                                                                         cursor: 'pointer',
-                                                                        fontSize: '0.85rem',
+                                                                        padding: '2px',
                                                                         display: 'flex',
                                                                         alignItems: 'center',
                                                                         justifyContent: 'center',
-                                                                        transition: 'all 0.2s',
-                                                                        fontWeight: '700',
-                                                                        color: 'var(--text-main)',
-                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                        flexShrink: 0
                                                                     }}
-                                                                >−</button>
-                                                                
-                                                                <div style={{ minWidth: '32px', textAlign: 'center' }}>
-                                                                    <span style={{ fontWeight: '900', fontSize: '0.9rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', display: 'block' }}>
-                                                                        {item.quantity}
+                                                                    title={t.b2b.dashboard.remove}
+                                                                >
+                                                                    <Trash2 size={16} strokeWidth={2} />
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            {/* Unit Price, Subtotal display and Quantity Controls */}
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', gap: '0.5rem' }}>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                                                                        ${uPrice.toLocaleString()} / {item.unit}
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>
+                                                                        Total: ${itemSubtotal.toLocaleString()}
                                                                     </span>
                                                                 </div>
 
-                                                                <button
-                                                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                                                    style={{
-                                                                        width: '26px', height: '26px',
-                                                                        borderRadius: '6px',
-                                                                        border: 'none',
-                                                                        backgroundColor: 'var(--primary)',
-                                                                        color: 'white',
-                                                                        cursor: 'pointer',
-                                                                        fontSize: '0.85rem',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        transition: 'all 0.2s',
-                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                                                    }}
-                                                                >+</button>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '8px', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                                    <button
+                                                                        onClick={() => updateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                                                                        style={{
+                                                                            width: '26px', height: '26px',
+                                                                            borderRadius: '6px',
+                                                                            border: 'none',
+                                                                            backgroundColor: 'white',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: '0.85rem',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            transition: 'all 0.2s',
+                                                                            fontWeight: '700',
+                                                                            color: 'var(--text-main)',
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                        }}
+                                                                    >−</button>
+                                                                    
+                                                                    <div style={{ minWidth: '32px', textAlign: 'center' }}>
+                                                                        <span style={{ fontWeight: '900', fontSize: '0.9rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', display: 'block' }}>
+                                                                            {item.quantity}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <button
+                                                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                                        style={{
+                                                                            width: '26px', height: '26px',
+                                                                            borderRadius: '6px',
+                                                                            border: 'none',
+                                                                            backgroundColor: 'var(--primary)',
+                                                                            color: 'white',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: '0.85rem',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            transition: 'all 0.2s',
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                                        }}
+                                                                    >+</button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
 
                                         {/* Total Summary */}
@@ -1277,9 +1354,9 @@ export default function B2BDashboard() {
                                             justifyContent: 'space-between',
                                             alignItems: 'center'
                                         }}>
-                                            <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total:</span>
+                                            <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total Subtotal:</span>
                                             <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                $0
+                                                ${orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || agreementPricesMap[i.product_id] || 0)), 0).toLocaleString()}
                                             </span>
                                         </div>
 
