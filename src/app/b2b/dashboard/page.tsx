@@ -5,10 +5,11 @@ import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
+import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
 
 interface OrderItem {
     id: string;
@@ -68,6 +69,8 @@ export default function B2BDashboard() {
     const [historicalOrders, setHistoricalOrders] = useState<any[]>([]);
     const [selectedHistoricalOrderId, setSelectedHistoricalOrderId] = useState<string>('');
     const [agreementPricesMap, setAgreementPricesMap] = useState<Record<string, number>>({});
+    const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<any | null>(null);
+    const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
     const searchParams = useSearchParams();
@@ -484,18 +487,37 @@ export default function B2BDashboard() {
         setOrderItems(prev => prev.filter(item => item.id !== id));
     };
 
-    // Fetch Invoices
+    // Fetch Invoices (Limit 5 most recent orders for active profile)
     useEffect(() => {
-        if (activeTab !== 'invoices' || !profile?.company_name) return;
+        if (activeTab !== 'invoices') return;
 
         const fetchInvoices = async () => {
             setIsLoadingInvoices(true);
             try {
+                const targetProfileId = activeProfile?.id || user?.id;
+                if (!targetProfileId) {
+                    setIsLoadingInvoices(false);
+                    return;
+                }
+
                 const { data, error } = await supabase
                     .from('orders')
-                    .select('*')
-                    .eq('profile_id', profile.id)
-                    .order('created_at', { ascending: false });
+                    .select(`
+                        *,
+                        profile:profiles(company_name, nit, address),
+                        order_items(
+                            id,
+                            product_id,
+                            quantity,
+                            unit_price,
+                            unit,
+                            nickname,
+                            products(id, name, name_en, unit_of_measure, sku, base_price)
+                        )
+                    `)
+                    .eq('profile_id', targetProfileId)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
 
                 if (error) throw error;
                 if (isMounted.current) setInvoices(data || []);
@@ -507,7 +529,7 @@ export default function B2BDashboard() {
         };
 
         fetchInvoices();
-    }, [activeTab, profile?.company_name]);
+    }, [activeTab, activeProfile?.id, user?.id]);
 
     // Fetch Consumption Data
     useEffect(() => {
@@ -1673,43 +1695,77 @@ export default function B2BDashboard() {
                                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                             >
-                                                <td style={{ padding: '1rem', borderRadius: '12px 0 0 12px', fontWeight: '700', color: 'var(--text-main)' }}>
-                                                    #{inv.id.substring(0, 8)}
+                                                <td style={{ padding: '1rem', borderRadius: '12px 0 0 12px', fontWeight: '800', color: 'var(--text-main)', fontFamily: 'monospace' }}>
+                                                    #{inv.sequence_id ? `PED-${inv.sequence_id}` : inv.id.substring(0, 8).toUpperCase()}
                                                 </td>
-                                                <td style={{ padding: '1rem', color: '#64748B', fontWeight: '500' }}>
+                                                <td style={{ padding: '1rem', color: '#64748B', fontWeight: '600', fontSize: '0.85rem' }}>
                                                     {new Date(inv.created_at).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                 </td>
-                                                <td style={{ padding: '1rem', fontWeight: '800', color: 'var(--primary)' }}>
-                                                    ${Number(inv.total_amount || 0).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                <td style={{ padding: '1rem', fontWeight: '900', color: 'var(--primary)', fontSize: '0.95rem' }}>
+                                                    ${formatPrice(inv.total || inv.subtotal || inv.total_amount || 0)}
                                                 </td>
                                                 <td style={{ padding: '1rem' }}>
                                                     <span style={{
                                                         padding: '0.35rem 0.75rem',
                                                         borderRadius: 'var(--radius-full)',
-                                                        fontSize: '0.75rem',
+                                                        fontSize: '0.72rem',
                                                         fontWeight: '800',
                                                         textTransform: 'uppercase',
-                                                        backgroundColor: inv.status === 'delivered' ? '#DCFCE7' : inv.status === 'pending' ? '#FEF3C7' : '#F1F5F9',
-                                                        color: inv.status === 'delivered' ? '#166534' : inv.status === 'pending' ? '#92400E' : '#475569'
+                                                        backgroundColor: inv.status === 'delivered' ? '#DCFCE7' : inv.status === 'pending' || inv.status === 'pending_approval' ? '#FEF3C7' : '#F1F5F9',
+                                                        color: inv.status === 'delivered' ? '#166534' : inv.status === 'pending' || inv.status === 'pending_approval' ? '#92400E' : '#475569'
                                                     }}>
-                                                        {inv.status === 'delivered' ? t.b2b.dashboard.delivered : inv.status === 'pending' ? t.b2b.dashboard.pending : inv.status}
+                                                        {inv.status === 'delivered' ? t.b2b.dashboard.delivered : inv.status === 'pending' || inv.status === 'pending_approval' ? 'Pendiente' : inv.status}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '1rem', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
+                                                <td style={{ padding: '1rem', borderRadius: '0 12px 12px 0', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                     <button 
                                                         onClick={() => {
-                                                            alert('Función de re-pedir disponible pronto.');
+                                                            setSelectedInvoiceOrder(inv);
+                                                            setIsInvoiceModalOpen(true);
                                                         }}
                                                         style={{
-                                                            background: 'none',
-                                                            border: 'none',
+                                                            padding: '0.4rem 0.85rem',
+                                                            borderRadius: THEME.radius.md,
+                                                            border: '1px solid #93C5FD',
+                                                            backgroundColor: '#EFF6FF',
+                                                            color: '#1D4ED8',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.78rem',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            marginRight: '0.5rem',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: '0 1px 3px rgba(37, 99, 235, 0.1)'
+                                                        }}
+                                                    >
+                                                        <Eye size={14} strokeWidth={2.2} /> Ver / Imprimir
+                                                    </button>
+
+                                                    <button 
+                                                        onClick={() => {
+                                                            applyHistoricalOrderToCart(inv);
+                                                            setActiveTab('order');
+                                                        }}
+                                                        style={{
+                                                            padding: '0.4rem 0.85rem',
+                                                            borderRadius: THEME.radius.md,
+                                                            border: '1px solid #A7F3D0',
+                                                            backgroundColor: '#ECFDF5',
                                                             color: 'var(--primary)',
                                                             fontWeight: '800',
                                                             cursor: 'pointer',
-                                                            fontSize: '0.85rem',
-                                                            textDecoration: 'underline'
+                                                            fontSize: '0.78rem',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: '0 1px 3px rgba(13, 122, 87, 0.1)'
                                                         }}
-                                                    >{t.b2b.dashboard.reorder}</button>
+                                                    >
+                                                        <RotateCcw size={14} strokeWidth={2.2} /> Re-pedir
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -2556,6 +2612,16 @@ export default function B2BDashboard() {
                     </div>
                 </div>
             )}
+
+            <InvoiceDocumentModal
+                isOpen={isInvoiceModalOpen}
+                onClose={() => {
+                    setIsInvoiceModalOpen(false);
+                    setSelectedInvoiceOrder(null);
+                }}
+                order={selectedInvoiceOrder}
+                clientProfile={activeProfile}
+            />
 
             <style jsx global>{`
                 .b2b-dashboard-grid {
