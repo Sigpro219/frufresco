@@ -30,6 +30,11 @@ export default function B2BDashboard() {
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     };
 
+    const formatQuantity = (val: number | string | null | undefined): string => {
+        const num = Number(val) || 0;
+        return num.toString().replace('.', ',');
+    };
+
     const { user, profile, loading: authLoading } = useAuth();
     const router = useRouter();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -1447,7 +1452,7 @@ export default function B2BDashboard() {
                                                                     
                                                                     <div style={{ minWidth: '44px', textAlign: 'center', padding: '0 4px' }}>
                                                                         <span style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', whiteSpace: 'nowrap' }}>
-                                                                            {item.quantity} <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B' }}>{item.unit}</span>
+                                                                            {formatQuantity(item.quantity)} <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B' }}>{item.unit}</span>
                                                                         </span>
                                                                     </div>
 
