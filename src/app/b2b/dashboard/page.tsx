@@ -50,6 +50,8 @@ export default function B2BDashboard() {
     const [quickAddQuantities, setQuickAddQuantities] = useState<Record<string, number>>({});
     const [agreements, setAgreements] = useState<any[]>([]);
     const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
+    const [simulatedClientId, setSimulatedClientId] = useState<string>('');
+    const [simulatedProfiles, setSimulatedProfiles] = useState<any[]>([]);
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
     const searchParams = useSearchParams();
@@ -62,6 +64,25 @@ export default function B2BDashboard() {
         isMounted.current = true;
         return () => { isMounted.current = false; };
     }, []);
+
+    // Fetch simulated profiles for B2B testing/onboarding
+    useEffect(() => {
+        const fetchSimProfiles = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, company_name, nit, parent_id')
+                .order('company_name');
+            if (data && isMounted.current) {
+                setSimulatedProfiles(data);
+            }
+        };
+        fetchSimProfiles();
+    }, []);
+
+    const activeProfile = simulatedClientId 
+        ? (simulatedProfiles.find(p => p.id === simulatedClientId) || profile) 
+        : profile;
+
 
     // Route Guard to protect B2B Dashboard
     useEffect(() => {
@@ -703,18 +724,58 @@ export default function B2BDashboard() {
                     gap: '1.5rem',
                     marginBottom: '1.5rem' 
                 }}>
-                    <div>
-                        <h1 style={{ 
-                            fontFamily: THEME.typography.fontFamilyMain,
-                            fontSize: '1.75rem', 
-                            fontWeight: '600', 
-                            color: THEME.colors.textMain, 
-                            marginBottom: '0',
-                            letterSpacing: '-0.02em'
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                        <div>
+                            <h1 style={{ 
+                                fontFamily: THEME.typography.fontFamilyMain,
+                                fontSize: '1.75rem', 
+                                fontWeight: '600', 
+                                color: THEME.colors.textMain, 
+                                marginBottom: '0',
+                                letterSpacing: '-0.02em'
+                            }}>
+                                {activeProfile?.company_name || profile?.company_name || t.b2b.dashboard.title}
+                            </h1>
+                            <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
+                        </div>
+
+                        {/* SELECTOR SIMULADOR B2B DE PRUEBAS */}
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.5rem', 
+                            backgroundColor: '#EFF6FF', 
+                            padding: '0.4rem 0.75rem', 
+                            borderRadius: THEME.radius.md,
+                            border: '1px solid #BFDBFE' 
                         }}>
-                            {profile?.company_name || t.b2b.dashboard.title}
-                        </h1>
-                        <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
+                                🔍 Probar como Cliente:
+                            </span>
+                            <select
+                                value={simulatedClientId || activeProfile?.id || ''}
+                                onChange={(e) => setSimulatedClientId(e.target.value)}
+                                style={{
+                                    fontSize: '0.85rem',
+                                    fontWeight: 600,
+                                    color: '#1E293B',
+                                    backgroundColor: 'white',
+                                    border: '1px solid #93C5FD',
+                                    borderRadius: '6px',
+                                    padding: '4px 8px',
+                                    cursor: 'pointer',
+                                    outline: 'none',
+                                    maxWidth: '280px'
+                                }}
+                            >
+                                <option value="">(Mi Cuenta Autenticada)</option>
+                                {simulatedProfiles.map(p => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.company_name} {p.nit ? `(NIT: ${p.nit})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     {/* TAB NAVIGATION — segmented control aligned right */}
