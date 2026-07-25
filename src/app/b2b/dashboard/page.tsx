@@ -5,7 +5,7 @@ import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -1134,16 +1134,18 @@ export default function B2BDashboard() {
                                                                     ${Number(agreementPricesMap[p.id]).toLocaleString()} / {p.unit_of_measure}
                                                                 </span>
                                                                 <span style={{
-                                                                    display: 'inline-block',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '3px',
                                                                     fontSize: '0.65rem',
                                                                     fontWeight: '800',
                                                                     color: '#065F46',
                                                                     backgroundColor: '#D1FAE5',
                                                                     padding: '2px 6px',
                                                                     borderRadius: '4px',
-                                                                    marginTop: '2px'
+                                                                    marginTop: '3px'
                                                                 }}>
-                                                                    🏷️ Precio de Acuerdo
+                                                                    <Tag size={10} strokeWidth={2.5} /> Precio de acuerdo
                                                                 </span>
                                                             </div>
                                                         ) : (
@@ -1152,7 +1154,9 @@ export default function B2BDashboard() {
                                                                     {p.base_price ? `$${Number(p.base_price).toLocaleString()} / ${p.unit_of_measure}` : p.unit_of_measure}
                                                                 </span>
                                                                 <span style={{
-                                                                    display: 'inline-block',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '3px',
                                                                     fontSize: '0.64rem',
                                                                     fontWeight: '700',
                                                                     color: '#475569',
@@ -1160,9 +1164,9 @@ export default function B2BDashboard() {
                                                                     border: '1px solid #E2E8F0',
                                                                     padding: '2px 6px',
                                                                     borderRadius: '4px',
-                                                                    marginTop: '2px'
+                                                                    marginTop: '3px'
                                                                 }}>
-                                                                    💡 Fuera de Convenio (General Institucional)
+                                                                    <Info size={10} strokeWidth={2.5} /> Fuera de convenio
                                                                 </span>
                                                             </div>
                                                         )}
