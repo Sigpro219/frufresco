@@ -1337,7 +1337,10 @@ export default function B2BDashboard() {
                                                         return (
                                                             <button
                                                                 key={ord.id}
-                                                                onClick={() => loadHistoricalOrderIntoCart(ord)}
+                                                                onClick={() => {
+                                                                    setSelectedHistoricalOrderId(ord.id);
+                                                                    applyHistoricalOrderToCart(ord);
+                                                                }}
                                                                 style={{
                                                                     flex: '1 0 auto',
                                                                     padding: '0.2rem 0.5rem',
