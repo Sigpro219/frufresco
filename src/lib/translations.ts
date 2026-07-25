@@ -108,7 +108,8 @@ export const translations = {
       'HO': 'Hortalizas',
       'LA': 'Lácteos',
       'DE': 'Despensa',
-      'CO': 'Congelados'
+      'CO': 'Congelados',
+      'PR': 'Procesados'
     },
     completeOrder: "Completa tu pedido",
     relatedProducts: "También te podría interesar",
