@@ -5,7 +5,7 @@ import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -23,6 +23,7 @@ interface OrderItem {
 
 export default function B2BDashboard() {
     const [focusMode, setFocusMode] = useState<'split' | 'catalog' | 'cart'>('split');
+    const [agreementFilter, setAgreementFilter] = useState<'all' | 'agreement' | 'non_agreement'>('all');
 
     const formatPrice = (val: number | string | null | undefined): string => {
         const num = Math.round(Number(val) || 0);
@@ -976,52 +977,110 @@ export default function B2BDashboard() {
                             overflow: 'visible',
                             position: 'relative'
                         }}>
-                            {/* Sticky Header Wrapper for Catalog Search and Categories */}
-                            <div className="b2b-sticky-catalog-header">
-                                {/* Header — neutral flat */}
-                                <div style={{
-                                    backgroundColor: THEME.colors.surface,
-                                    padding: '1.25rem 1.5rem',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    borderBottom: `1px solid ${THEME.colors.border}`,
-                                    borderLeft: `3px solid ${THEME.colors.primary}`,
-                                    borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
-                                }}>
-                                    <div>
-                                        <h2 style={{ 
-                                            fontFamily: THEME.typography.fontFamilyMain,
-                                            fontSize: '1.1rem', 
-                                            fontWeight: '600', 
-                                            margin: 0,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            color: THEME.colors.textMain,
-                                        }}>
-                                            <Search size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Buscar Productos'}
-                                        </h2>
-                                        <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '400' }}>
-                                            {t.b2b.dashboard.cardDesc}
-                                        </p>
+                            {/* Sticky Header Wrapper for Catalog Search and Categories — UNIFIED COMPACT SINGLE ROW */}
+                            <div className="b2b-sticky-catalog-header" style={{
+                                backgroundColor: THEME.colors.surface,
+                                padding: '0.75rem 1.25rem',
+                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                borderLeft: `3px solid ${THEME.colors.primary}`,
+                                borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '0.75rem'
+                            }}>
+                                {/* Left: Title + Agreement Filter Pills */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                    <h2 style={{ 
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        fontSize: '1.05rem', 
+                                        fontWeight: '800', 
+                                        margin: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        color: THEME.colors.textMain,
+                                    }}>
+                                        <Search size={16} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Catálogo'}
+                                    </h2>
+
+                                    {/* Agreement Status Filter Pills */}
+                                    <div style={{
+                                        display: 'flex',
+                                        backgroundColor: '#F1F5F9',
+                                        borderRadius: THEME.radius.md,
+                                        padding: '2px',
+                                        border: '1px solid #E2E8F0',
+                                        gap: '2px'
+                                    }}>
+                                        <button
+                                            onClick={() => setAgreementFilter('all')}
+                                            style={{
+                                                padding: '0.25rem 0.6rem',
+                                                borderRadius: THEME.radius.md,
+                                                border: 'none',
+                                                backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
+                                                color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
+                                                fontWeight: agreementFilter === 'all' ? '800' : '600',
+                                                fontSize: '0.72rem',
+                                                cursor: 'pointer',
+                                                boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                            }}
+                                        >
+                                            Todos
+                                        </button>
+
+                                        <button
+                                            onClick={() => setAgreementFilter('agreement')}
+                                            style={{
+                                                padding: '0.25rem 0.6rem',
+                                                borderRadius: THEME.radius.md,
+                                                border: 'none',
+                                                backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
+                                                color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
+                                                fontWeight: agreementFilter === 'agreement' ? '800' : '600',
+                                                fontSize: '0.72rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                            }}
+                                            title="Mostrar solo productos incluidos en tu acuerdo comercial"
+                                        >
+                                            <Tag size={12} /> En Convenio
+                                        </button>
+
+                                        <button
+                                            onClick={() => setAgreementFilter('non_agreement')}
+                                            style={{
+                                                padding: '0.25rem 0.6rem',
+                                                borderRadius: THEME.radius.md,
+                                                border: 'none',
+                                                backgroundColor: agreementFilter === 'non_agreement' ? '#F1F5F9' : 'transparent',
+                                                color: agreementFilter === 'non_agreement' ? '#334155' : '#64748B',
+                                                fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
+                                                fontSize: '0.72rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                            }}
+                                            title="Mostrar solo productos fuera de convenio"
+                                        >
+                                            <Info size={12} /> Fuera de Convenio
+                                        </button>
                                     </div>
                                 </div>
 
-                                {/* Search Bar & Category Dropdown Container */}
-                                <div style={{ 
-                                    padding: '1rem', 
-                                    borderBottom: '1px solid var(--border)', 
-                                    display: 'flex',
-                                    gap: '1rem',
-                                    flexWrap: 'wrap',
-                                    alignItems: 'center',
-                                    backgroundColor: '#fff'
-                                }}>
-                                    {/* Search Input (Takes main space) */}
-                                    <div style={{ flex: '2 1 300px', position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
-                                            <Search size={18} strokeWidth={2.5} />
+                                {/* Right: Compact Search Input & Category Dropdown */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    {/* Search Input */}
+                                    <div style={{ position: 'relative', minWidth: '170px' }}>
+                                        <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                            <Search size={14} strokeWidth={2} />
                                         </div>
                                         <input
                                             type="text"
@@ -1030,24 +1089,13 @@ export default function B2BDashboard() {
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.7rem 2.5rem 0.7rem 2.4rem',
-                                                borderRadius: 'var(--radius-md)',
+                                                padding: '0.4rem 1.8rem 0.4rem 1.8rem',
+                                                borderRadius: THEME.radius.md,
                                                 border: '1px solid var(--border)',
-                                                fontSize: '0.9rem',
+                                                fontSize: '0.78rem',
                                                 fontWeight: '500',
                                                 outline: 'none',
-                                                transition: 'all 0.2s',
                                                 backgroundColor: '#F9FAFB'
-                                            }}
-                                            onFocus={(e) => {
-                                                e.target.style.borderColor = 'var(--primary)';
-                                                e.target.style.backgroundColor = 'white';
-                                                e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
-                                            }}
-                                            onBlur={(e) => {
-                                                e.target.style.borderColor = 'var(--border)';
-                                                e.target.style.backgroundColor = '#F9FAFB';
-                                                e.target.style.boxShadow = 'none';
                                             }}
                                         />
                                         {searchTerm && (
@@ -1055,131 +1103,70 @@ export default function B2BDashboard() {
                                                 onClick={() => setSearchTerm('')}
                                                 style={{
                                                     position: 'absolute',
-                                                    right: '12px',
+                                                    right: '8px',
                                                     top: '50%',
                                                     transform: 'translateY(-50%)',
                                                     background: '#f3f4f6',
                                                     border: 'none',
                                                     borderRadius: '50%',
-                                                    width: '20px',
-                                                    height: '20px',
+                                                    width: '16px',
+                                                    height: '16px',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     color: '#6b7280',
                                                     cursor: 'pointer',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 'bold',
-                                                    zIndex: 5
+                                                    fontSize: '0.65rem'
                                                 }}
-                                                title="Limpiar búsqueda"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
-
-                                        {/* Search Results Dropdown */}
-                                        {(searchResults.length > 0 || isSearching) && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: '100%',
-                                                left: 0,
-                                                right: 0,
-                                                backgroundColor: 'white',
-                                                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                                                borderRadius: '0 0 var(--radius-md) var(--radius-md)',
-                                                zIndex: 100,
-                                                marginTop: '2px',
-                                                maxHeight: '300px',
-                                                overflowY: 'auto',
-                                                border: '1px solid var(--border)'
-                                            }}>
-                                                {isSearching ? (
-                                                    <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>{t.b2b.dashboard.searching}</p>
-                                                ) : (
-                                                    searchResults.map(p => (
-                                                        <div
-                                                            key={p.id}
-                                                            onClick={() => addFromSearch(p)}
-                                                            style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '1rem',
-                                                                padding: '0.75rem 1rem',
-                                                                cursor: 'pointer',
-                                                                borderBottom: '1px solid #f0f0f0'
-                                                            }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f9fafb'; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; }}
-                                                        >
-                                                            <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
-                                                            <div style={{ flex: 1 }}>
-                                                                <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{locale === 'en' ? (p.name_en || p.name) : p.name}</p>
-                                                                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
-                                                            </div>
-                                                            <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ {t.b2b.dashboard.add}</span>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
+                                            >✕</button>
                                         )}
                                     </div>
 
                                     {/* Category Combobox Selector */}
-                                    <div style={{ flex: '1 1 180px', position: 'relative' }}>
-                                        <select
-                                            value={selectedCategory || ''}
-                                            onChange={(e) => setSelectedCategory(e.target.value || null)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.7rem 2.2rem 0.7rem 1rem',
-                                                borderRadius: 'var(--radius-md)',
-                                                border: '1px solid var(--border)',
-                                                fontSize: '0.9rem',
-                                                fontWeight: '600',
-                                                color: 'var(--text-main)',
-                                                outline: 'none',
-                                                transition: 'all 0.2s',
-                                                backgroundColor: '#F9FAFB',
-                                                cursor: 'pointer',
-                                                appearance: 'none',
-                                                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230D7A57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                                                backgroundRepeat: 'no-repeat',
-                                                backgroundPosition: 'right 8px center',
-                                                backgroundSize: '16px'
-                                            }}
-                                            onFocus={(e) => {
-                                                e.target.style.borderColor = 'var(--primary)';
-                                                e.target.style.backgroundColor = 'white';
-                                                e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
-                                            }}
-                                            onBlur={(e) => {
-                                                e.target.style.borderColor = 'var(--border)';
-                                                e.target.style.backgroundColor = '#F9FAFB';
-                                                e.target.style.boxShadow = 'none';
-                                            }}
-                                        >
-                                            <option value="">{t.b2b.dashboard.allCategories}</option>
-                                            {categories.map(cat => (
-                                                <option key={cat} value={cat}>
-                                                    {t.categories[cat as keyof typeof t.categories] || cat}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <select
+                                        value={selectedCategory || ''}
+                                        onChange={(e) => setSelectedCategory(e.target.value || null)}
+                                        style={{
+                                            padding: '0.4rem 1.8rem 0.4rem 0.75rem',
+                                            borderRadius: THEME.radius.md,
+                                            border: '1px solid var(--border)',
+                                            fontSize: '0.78rem',
+                                            fontWeight: '600',
+                                            color: 'var(--text-main)',
+                                            outline: 'none',
+                                            backgroundColor: '#F9FAFB',
+                                            cursor: 'pointer',
+                                            appearance: 'none',
+                                            backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230D7A57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'right 6px center',
+                                            backgroundSize: '14px'
+                                        }}
+                                    >
+                                        <option value="">{t.b2b.dashboard.allCategories}</option>
+                                        {categories.map(cat => (
+                                            <option key={cat} value={cat}>
+                                                {t.categories[cat as keyof typeof t.categories] || (cat === 'PR' ? 'Procesados' : cat)}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 
                             {/* Category Products Results */}
-                            <div style={{ padding: '1.5rem 1rem' }}>
+                            <div style={{ padding: '1.25rem 1rem' }}>
                                 <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Package size={16} /> {selectedCategory ? (t.categories[selectedCategory as keyof typeof t.categories] || selectedCategory) : t.b2b.dashboard.allCategories}
+                                    <Package size={16} /> {selectedCategory ? (t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)) : t.b2b.dashboard.allCategories}
                                 </h4>
                                 {isLoadingCategory ? (
                                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
                                 ) : categoryProducts.length > 0 ? (
                                     <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-                                        {categoryProducts.map(p => (
+                                        {categoryProducts.filter(p => {
+                                            if (agreementFilter === 'agreement') return agreementPricesMap[p.id] !== undefined;
+                                            if (agreementFilter === 'non_agreement') return agreementPricesMap[p.id] === undefined;
+                                            return true;
+                                        }).map(p => (
                                             <div
                                                 key={p.id}
                                                 onClick={() => {
@@ -1281,15 +1268,16 @@ export default function B2BDashboard() {
                                 border: `1px solid ${THEME.colors.border}`,
                                 overflow: 'visible',
                             }}>
-                                {/* Cart Header */}
+                                {/* Cart Header — Ultra-Compact Single Row */}
                                 <div className="b2b-sticky-cart-header" style={{
                                     backgroundColor: '#F8FAFC',
-                                    padding: '1.25rem 1.5rem',
+                                    padding: '0.75rem 1.25rem',
                                     borderBottom: `1px solid ${THEME.colors.border}`,
                                     borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: historicalOrders.length > 0 ? '0.75rem' : '0' }}>
-                                        <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        {/* Title + Lucide Help Info Icon */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <h3 style={{ 
                                                 fontFamily: THEME.typography.fontFamilyMain,
                                                 fontSize: '1.05rem', 
@@ -1302,78 +1290,77 @@ export default function B2BDashboard() {
                                             }}>
                                                 <ShoppingCart size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
                                             </h3>
-                                            <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                                de acuerdo a tu última compra (con precios de acuerdo comercial)
-                                            </p>
+
+                                            <div 
+                                                title="Sugerencia basada en tus compras habituales con precios negociados. Haz clic en cualquiera de los 5 botones para cargar ese pedido dinámicamente."
+                                                style={{ cursor: 'help', display: 'flex', alignItems: 'center', color: '#64748B' }}
+                                            >
+                                                <Info size={15} strokeWidth={2} />
+                                            </div>
                                         </div>
+
                                         {orderItems.length > 0 && (
                                             <button
                                                 onClick={handleClearOrder}
                                                 title="Borrar todo y empezar de cero"
                                                 style={{
-                                                    padding: '0.35rem 0.75rem',
+                                                    padding: '0.3rem 0.65rem',
                                                     borderRadius: THEME.radius.md,
-                                                    border: `1px solid ${THEME.colors.border}`,
-                                                    background: 'white',
-                                                    color: '#EF4444',
-                                                    fontSize: '0.75rem',
+                                                    border: '1px solid #FCA5A5',
+                                                    background: '#FEF2F2',
+                                                    color: '#DC2626',
+                                                    fontWeight: '700',
+                                                    fontSize: '0.72rem',
+                                                    cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '5px',
-                                                    fontWeight: '800',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
+                                                    gap: '4px',
+                                                    transition: 'all 0.2s'
                                                 }}
-                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
-                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; }}
                                             >
                                                 <Trash2 size={13} strokeWidth={2} /> {t.b2b.dashboard.btnClear}
                                             </button>
                                         )}
                                     </div>
 
-                                    {/* Selector de los Últimos 5 Pedidos en Botones Pills */}
+                                    {/* Historical Orders Pills Bar with ONLY Lucide Clock Icon */}
                                     {historicalOrders.length > 0 && (
-                                        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                    📋 Repetir uno de tus últimos 5 pedidos:
+                                        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #E2E8F0' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                                                    <Clock size={12} strokeWidth={2} /> Repetir Pedido:
                                                 </span>
-                                            </div>
-                                            
-                                            <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', paddingBottom: '4px' }}>
-                                                {historicalOrders.map((ord, idx) => {
-                                                    const isSelected = ord.id === selectedHistoricalOrderId;
-                                                    const formattedDate = new Date(ord.created_at || ord.delivery_date).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short' });
-                                                    return (
-                                                        <button
-                                                            key={ord.id}
-                                                            onClick={() => {
-                                                                setSelectedHistoricalOrderId(ord.id);
-                                                                applyHistoricalOrderToCart(ord);
-                                                            }}
-                                                            style={{
-                                                                flex: 1,
-                                                                minWidth: '64px',
-                                                                padding: '0.4rem 0.3rem',
-                                                                borderRadius: '8px',
-                                                                border: isSelected ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
-                                                                color: isSelected ? 'var(--primary)' : '#475569',
-                                                                fontWeight: isSelected ? '900' : '700',
-                                                                fontSize: '0.72rem',
-                                                                cursor: 'pointer',
-                                                                textAlign: 'center',
-                                                                transition: 'all 0.15s ease',
-                                                                boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.15)' : 'none'
-                                                            }}
-                                                            title={`Pedido #${ord.sequence_id || ord.id.substring(0, 6)} - ${ord.order_items?.length || 0} productos`}
-                                                        >
-                                                            <div style={{ fontSize: '0.75rem', fontWeight: '900' }}>#{ord.sequence_id || (idx + 1)}</div>
-                                                            <div style={{ fontSize: '0.62rem', opacity: 0.85, whiteSpace: 'nowrap' }}>{formattedDate}</div>
-                                                        </button>
-                                                    );
-                                                })}
+                                                <div style={{ display: 'flex', gap: '0.3rem', flex: 1, overflowX: 'auto' }}>
+                                                    {historicalOrders.map((ord, idx) => {
+                                                        const isSelected = selectedHistoricalOrderId === ord.id;
+                                                        const dateStr = ord.created_at ? new Date(ord.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
+                                                        return (
+                                                            <button
+                                                                key={ord.id}
+                                                                onClick={() => loadHistoricalOrderIntoCart(ord)}
+                                                                style={{
+                                                                    flex: '1 0 auto',
+                                                                    padding: '0.2rem 0.5rem',
+                                                                    borderRadius: THEME.radius.md,
+                                                                    border: isSelected ? '1.5px solid var(--primary)' : '1px solid #CBD5E1',
+                                                                    backgroundColor: isSelected ? '#ECFDF5' : 'white',
+                                                                    color: isSelected ? 'var(--primary)' : '#334155',
+                                                                    cursor: 'pointer',
+                                                                    textAlign: 'center',
+                                                                    transition: 'all 0.2s',
+                                                                    fontSize: '0.72rem',
+                                                                    fontWeight: isSelected ? '800' : '600',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
+                                                                }}
+                                                            >
+                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800' }}>#{ord.sequence_number || (historicalOrders.length - idx)}</span>
+                                                                {dateStr && <span style={{ fontSize: '0.65rem', color: isSelected ? 'var(--primary)' : '#64748B' }}>({dateStr})</span>}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
