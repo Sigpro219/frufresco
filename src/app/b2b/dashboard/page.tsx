@@ -5,7 +5,7 @@ import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -22,6 +22,8 @@ interface OrderItem {
 }
 
 export default function B2BDashboard() {
+    const [focusMode, setFocusMode] = useState<'split' | 'catalog' | 'cart'>('split');
+
     const formatPrice = (val: number | string | null | undefined): string => {
         const num = Math.round(Number(val) || 0);
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -767,7 +769,7 @@ export default function B2BDashboard() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary }}>
 
-            <div className="container" style={{ padding: '2rem 1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
+            <div className="container" style={{ padding: '2rem 1.5rem 18rem', maxWidth: '1400px', margin: '0 auto' }}>
 
                 {/* HEADER & TAB NAVIGATION ROW (Compact in Y) */}
                 <div style={{ 
@@ -882,7 +884,100 @@ export default function B2BDashboard() {
 
                       {/* TAB CONTENT */}
                 {activeTab === 'order' && (
-                    <div className="b2b-dashboard-grid">
+                    <>
+                        {/* SELECTOR DE VISTA / ENFOQUE (Balanceado, Maximizar Catálogo, Maximizar Canasta) */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '1rem',
+                            backgroundColor: 'white',
+                            padding: '0.6rem 1rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1px solid ${THEME.colors.border}`,
+                            boxShadow: THEME.shadow.sm,
+                            flexWrap: 'wrap',
+                            gap: '0.5rem'
+                        }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Columns size={16} style={{ color: 'var(--primary)' }} /> Modo de Enfoque Visual:
+                            </span>
+
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                <button
+                                    onClick={() => setFocusMode('split')}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: focusMode === 'split' ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                        backgroundColor: focusMode === 'split' ? '#F0FDF4' : 'white',
+                                        color: focusMode === 'split' ? 'var(--primary)' : '#475569',
+                                        fontWeight: focusMode === 'split' ? '900' : '600',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: focusMode === 'split' ? '0 2px 4px rgba(13,122,87,0.15)' : 'none'
+                                    }}
+                                    title="Vista dividida balanceada (60/40)"
+                                >
+                                    <Columns size={14} /> Balanceado (60 / 40)
+                                </button>
+
+                                <button
+                                    onClick={() => setFocusMode(focusMode === 'catalog' ? 'split' : 'catalog')}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: focusMode === 'catalog' ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                        backgroundColor: focusMode === 'catalog' ? '#F0FDF4' : 'white',
+                                        color: focusMode === 'catalog' ? 'var(--primary)' : '#475569',
+                                        fontWeight: focusMode === 'catalog' ? '900' : '600',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: focusMode === 'catalog' ? '0 2px 4px rgba(13,122,87,0.15)' : 'none'
+                                    }}
+                                    title="Ampliar vista del Catálogo"
+                                >
+                                    <Maximize2 size={14} /> {focusMode === 'catalog' ? 'Restablecer' : 'Maximizar Catálogo'}
+                                </button>
+
+                                <button
+                                    onClick={() => setFocusMode(focusMode === 'cart' ? 'split' : 'cart')}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: focusMode === 'cart' ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                        backgroundColor: focusMode === 'cart' ? '#F0FDF4' : 'white',
+                                        color: focusMode === 'cart' ? 'var(--primary)' : '#475569',
+                                        fontWeight: focusMode === 'cart' ? '900' : '600',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: focusMode === 'cart' ? '0 2px 4px rgba(13,122,87,0.15)' : 'none'
+                                    }}
+                                    title="Ampliar vista de Pedido Sugerido / Canasta"
+                                >
+                                    <Maximize2 size={14} /> {focusMode === 'cart' ? 'Restablecer' : 'Maximizar Pedido Sugerido'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="b2b-dashboard-grid" style={{
+                            display: 'grid',
+                            gridTemplateColumns: focusMode === 'catalog' ? '1fr 300px' : focusMode === 'cart' ? '320px 1fr' : '1.3fr 1fr',
+                            gap: '1.5rem',
+                            transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }}>
                         {/* LEFT COLUMN: Catalog Browser */}
                         <div className="b2b-catalog-container" style={{
                             backgroundColor: THEME.colors.surface,
@@ -1543,6 +1638,7 @@ export default function B2BDashboard() {
                             </div>
                         </div>
                     </div>
+                </>
                 )}
 
                 {/* INVOICES TAB */}
