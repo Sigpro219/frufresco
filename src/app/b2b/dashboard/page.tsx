@@ -421,7 +421,7 @@ export default function B2BDashboard() {
                             products(id, name, name_en, unit_of_measure, image_url, base_price)
                         )
                     `)
-                    .or(`profile_id.eq.${targetProfileId},user_id.eq.${targetProfileId}`)
+                    .eq('profile_id', targetProfileId)
                     .order('created_at', { ascending: false })
                     .limit(5);
 
@@ -1248,39 +1248,49 @@ export default function B2BDashboard() {
                                         )}
                                     </div>
 
-                                    {/* Selector de Pedidos Históricos */}
+                                    {/* Selector de los Últimos 5 Pedidos en Botones Pills */}
                                     {historicalOrders.length > 0 && (
-                                        <div style={{ marginTop: '0.5rem' }}>
-                                            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: 'var(--primary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                📋 Repetir o basarse en pedido histórico:
-                                            </label>
-                                            <select
-                                                value={selectedHistoricalOrderId}
-                                                onChange={(e) => {
-                                                    const ordId = e.target.value;
-                                                    setSelectedHistoricalOrderId(ordId);
-                                                    const found = historicalOrders.find(o => o.id === ordId);
-                                                    if (found) applyHistoricalOrderToCart(found);
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '0.45rem 0.65rem',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #CBD5E1',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: '700',
-                                                    backgroundColor: 'white',
-                                                    color: 'var(--text-main)',
-                                                    cursor: 'pointer',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                }}
-                                            >
-                                                {historicalOrders.map((ord, idx) => (
-                                                    <option key={ord.id} value={ord.id}>
-                                                        Pedido #{ord.sequence_id || ord.id.substring(0, 6)} ({new Date(ord.created_at || ord.delivery_date).toLocaleDateString()}) — {ord.order_items?.length || 0} ítems
-                                                    </option>
-                                                ))}
-                                            </select>
+                                        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    📋 Repetir uno de tus últimos 5 pedidos:
+                                                </span>
+                                            </div>
+                                            
+                                            <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', paddingBottom: '4px' }}>
+                                                {historicalOrders.map((ord, idx) => {
+                                                    const isSelected = ord.id === selectedHistoricalOrderId;
+                                                    const formattedDate = new Date(ord.created_at || ord.delivery_date).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short' });
+                                                    return (
+                                                        <button
+                                                            key={ord.id}
+                                                            onClick={() => {
+                                                                setSelectedHistoricalOrderId(ord.id);
+                                                                applyHistoricalOrderToCart(ord);
+                                                            }}
+                                                            style={{
+                                                                flex: 1,
+                                                                minWidth: '64px',
+                                                                padding: '0.4rem 0.3rem',
+                                                                borderRadius: '8px',
+                                                                border: isSelected ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                                                backgroundColor: isSelected ? '#F0FDF4' : 'white',
+                                                                color: isSelected ? 'var(--primary)' : '#475569',
+                                                                fontWeight: isSelected ? '900' : '700',
+                                                                fontSize: '0.72rem',
+                                                                cursor: 'pointer',
+                                                                textAlign: 'center',
+                                                                transition: 'all 0.15s ease',
+                                                                boxShadow: isSelected ? '0 2px 4px rgba(13, 122, 87, 0.15)' : 'none'
+                                                            }}
+                                                            title={`Pedido #${ord.sequence_id || ord.id.substring(0, 6)} - ${ord.order_items?.length || 0} productos`}
+                                                        >
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: '900' }}>#{ord.sequence_id || (idx + 1)}</div>
+                                                            <div style={{ fontSize: '0.62rem', opacity: 0.85, whiteSpace: 'nowrap' }}>{formattedDate}</div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
