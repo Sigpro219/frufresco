@@ -77,6 +77,7 @@ export default function B2BDashboard() {
     const [selectedAgreementForModal, setSelectedAgreementForModal] = useState<any | null>(null);
     const [isAgreementModalOpen, setIsAgreementModalOpen] = useState<boolean>(false);
     const [agreementSearchTerm, setAgreementSearchTerm] = useState<string>('');
+    const [activeHoverPoint, setActiveHoverPoint] = useState<any | null>(null);
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
     const searchParams = useSearchParams();
@@ -2091,8 +2092,45 @@ export default function B2BDashboard() {
                                             };
 
                                             return (
-                                                <div style={{ width: '100%', overflowX: 'auto' }}>
-                                                    {/* SVG Canvas - Clean, Defined & Compact Axis Labels */}
+                                                <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
+                                                    {/* Floating Hover Tooltip Card */}
+                                                    {activeHoverPoint && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '10px',
+                                                            left: '50%',
+                                                            transform: 'translateX(-50%)',
+                                                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                                                            backdropFilter: 'blur(8px)',
+                                                            color: 'white',
+                                                            padding: '0.6rem 1.25rem',
+                                                            borderRadius: '12px',
+                                                            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                                            zIndex: 30,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '1.25rem',
+                                                            fontSize: '0.82rem',
+                                                            pointerEvents: 'none',
+                                                            border: '1px solid rgba(255,255,255,0.15)',
+                                                            animation: 'fadeIn 0.2s ease-in-out'
+                                                        }}>
+                                                            <div style={{ fontWeight: '800', color: '#6EE7B7' }}>
+                                                                📅 Despacho: {activeHoverPoint.date}
+                                                            </div>
+                                                            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem' }}>
+                                                                💵 Inversión: <strong style={{ color: '#34D399' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')} COP</strong>
+                                                            </div>
+                                                            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem' }}>
+                                                                ⚖️ Masa: <strong style={{ color: '#60A5FA' }}>{Math.round(activeHoverPoint.kg)} Kg</strong>
+                                                            </div>
+                                                            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem' }}>
+                                                                📊 Promedio: <strong>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* SVG Canvas - 100% Clean Lines & Bars without text clutter */}
                                                     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '650px', display: 'block' }}>
                                                         <defs>
                                                             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
@@ -2115,35 +2153,40 @@ export default function B2BDashboard() {
                                                                         strokeWidth={1}
                                                                         strokeDasharray={i === 4 ? "none" : "4,4"}
                                                                     />
-                                                                    {/* Left Axis: COP (Format in $M) */}
-                                                                    <text x={paddingLeft - 8} y={y + 3} textAnchor="end" style={{ fontSize: '9px', fill: '#047857', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
+                                                                    {/* Left Axis: COP */}
+                                                                    <text x={paddingLeft - 10} y={y + 3.5} textAnchor="end" style={{ fontSize: '9px', fill: '#047857', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
                                                                         {formatCompactCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
                                                                     {/* Right Axis: Kg */}
-                                                                    <text x={width - paddingRight + 8} y={y + 3} textAnchor="start" style={{ fontSize: '9px', fill: '#2563EB', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
+                                                                    <text x={width - paddingRight + 10} y={y + 3.5} textAnchor="start" style={{ fontSize: '9px', fill: '#2563EB', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
                                                                         {Math.round(maxKg - (maxKg * ratio))} Kg
                                                                     </text>
                                                                 </g>
                                                             );
                                                         })}
 
-                                                        {/* BARS: Spending COP */}
-                                                        {points.map((p, index) => (
-                                                            <g key={`bar-${index}`}>
-                                                                <rect
-                                                                    x={p.x - barWidth / 2}
-                                                                    y={p.yBar}
-                                                                    width={barWidth}
-                                                                    height={Math.max(4, p.barHeight)}
-                                                                    rx={4}
-                                                                    fill="url(#barGradient)"
-                                                                />
-                                                                {/* Compact Value Label on top of Bar */}
-                                                                <text x={p.x} y={Math.max(paddingTop - 4, p.yBar - 6)} textAnchor="middle" style={{ fontSize: '8.5px', fill: '#047857', fontWeight: '800', fontFamily: 'Inter, sans-serif' }}>
-                                                                    {formatCompactCOP(p.cop)}
-                                                                </text>
-                                                            </g>
-                                                        ))}
+                                                        {/* BARS: Spending COP (Clean Bars without text overlay) */}
+                                                        {points.map((p, index) => {
+                                                            const isHovered = activeHoverPoint?.date === p.date;
+                                                            return (
+                                                                <g key={`bar-${index}`}>
+                                                                    <rect
+                                                                        x={p.x - barWidth / 2}
+                                                                        y={p.yBar}
+                                                                        width={barWidth}
+                                                                        height={Math.max(4, p.barHeight)}
+                                                                        rx={4}
+                                                                        fill="url(#barGradient)"
+                                                                        opacity={isHovered ? 1 : 0.88}
+                                                                        stroke={isHovered ? '#047857' : 'none'}
+                                                                        strokeWidth={isHovered ? 2 : 0}
+                                                                        style={{ transition: 'all 0.2s', cursor: 'pointer' }}
+                                                                        onMouseEnter={() => setActiveHoverPoint(p)}
+                                                                        onMouseLeave={() => setActiveHoverPoint(null)}
+                                                                    />
+                                                                </g>
+                                                            );
+                                                        })}
 
                                                         {/* OVERLAY LINE: Volume Kg (Thin Defined Line) */}
                                                         {points.length > 1 && (
@@ -2157,22 +2200,34 @@ export default function B2BDashboard() {
                                                             />
                                                         )}
 
-                                                        {/* LINE NODES & Kg Badges */}
-                                                        {points.map((p, index) => (
-                                                            <g key={`point-${index}`}>
-                                                                <circle cx={p.x} cy={p.yKg} r={4} fill="#2563EB" stroke="white" strokeWidth={2} />
-                                                                
-                                                                {/* Small defined Kg Badge above line node */}
-                                                                <text x={p.x} y={p.yKg - 9} textAnchor="middle" style={{ fontSize: '8.5px', fill: '#1E40AF', fontWeight: '800', fontFamily: 'Inter, sans-serif' }}>
-                                                                    {Math.round(p.kg)} Kg
-                                                                </text>
+                                                        {/* LINE NODES (Clean Minimal Dots with Hover Area) */}
+                                                        {points.map((p, index) => {
+                                                            const isHovered = activeHoverPoint?.date === p.date;
+                                                            return (
+                                                                <g key={`point-${index}`} style={{ cursor: 'pointer' }} onMouseEnter={() => setActiveHoverPoint(p)} onMouseLeave={() => setActiveHoverPoint(null)}>
+                                                                    {/* Outer pulse ring on hover */}
+                                                                    {isHovered && (
+                                                                        <circle cx={p.x} cy={p.yKg} r={9} fill="#3B82F6" opacity={0.25} />
+                                                                    )}
+                                                                    <circle cx={p.x} cy={p.yKg} r={isHovered ? 6 : 4.5} fill="#2563EB" stroke="white" strokeWidth={2} />
 
-                                                                {/* Date Label on X Axis */}
-                                                                <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: '#475569', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
-                                                                    {p.date}
-                                                                </text>
-                                                            </g>
-                                                        ))}
+                                                                    {/* Invisible Hover Overlay Trigger */}
+                                                                    <rect
+                                                                        x={p.x - (chartWidth / points.length) / 2}
+                                                                        y={paddingTop}
+                                                                        width={chartWidth / points.length}
+                                                                        height={chartHeight}
+                                                                        fill="transparent"
+                                                                        style={{ cursor: 'pointer' }}
+                                                                    />
+
+                                                                    {/* Date Label on X Axis */}
+                                                                    <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '9.5px', fill: isHovered ? '#0F172A' : '#475569', fontWeight: isHovered ? '800' : '600', fontFamily: 'Inter, sans-serif' }}>
+                                                                        {p.date}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
                                                     </svg>
                                                 </div>
                                             );
