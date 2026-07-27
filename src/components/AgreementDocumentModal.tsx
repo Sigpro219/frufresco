@@ -281,19 +281,17 @@ export default function AgreementDocumentModal({
                                     <thead>
                                         <tr style={{ backgroundColor: '#F1F5F9', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.04em' }}>
                                             <th style={{ padding: '0.75rem 1rem' }}>#</th>
-                                            <th style={{ padding: '0.75rem 1rem' }}>SKU / Código</th>
-                                            <th style={{ padding: '0.75rem 1rem' }}>Producto Institucional</th>
+                                            <th style={{ padding: '0.75rem 1rem' }}>Insumo / Producto</th>
                                             <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Base General</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Convenio (COP)</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Ahorro Est.</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Lista Base</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Pactado Convenio</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Ahorro Garantizado</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {items.map((it, idx) => {
                                             const p = it.products;
                                             const name = it.product_name || p?.name || 'Producto';
-                                            const sku = p?.sku || 'N/A';
                                             const unit = p?.unit_of_measure || 'Kg';
                                             const basePrice = Number(p?.base_price || 0);
                                             const uPrice = Number(it.unit_price || 0);
@@ -301,45 +299,23 @@ export default function AgreementDocumentModal({
                                             const savingsPct = basePrice > 0 && savings > 0 ? ((savings / basePrice) * 100).toFixed(1) : 0;
 
                                             return (
-                                                <tr 
-                                                    key={it.id || idx}
-                                                    style={{ 
-                                                        borderBottom: '1px solid #F1F5F9',
-                                                        backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'
-                                                    }}
-                                                >
-                                                    <td style={{ padding: '0.65rem 1rem', color: '#94A3B8', fontWeight: '700', fontSize: '0.75rem' }}>
-                                                        {idx + 1}
+                                                <tr key={it.id || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>{idx + 1}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: '#0F172A', fontWeight: '800' }}>{name}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#475569', fontWeight: '600' }}>{unit}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#94A3B8', textDecoration: basePrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
+                                                        {basePrice > 0 ? `$${formatPrice(basePrice)}` : '-'}
                                                     </td>
-                                                    <td style={{ padding: '0.65rem 1rem', fontFamily: 'monospace', fontWeight: '700', color: '#475569', fontSize: '0.78rem' }}>
-                                                        {sku}
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 1rem', fontWeight: '800', color: '#0F172A' }}>
-                                                        {name}
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: '600', color: '#64748B' }}>
-                                                        {unit}
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#94A3B8', textDecoration: basePrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
-                                                        ${formatPrice(basePrice)}
-                                                    </td>
-                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: '900', color: '#0D7A57', fontSize: '0.9rem' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#0D7A57', fontWeight: '900', fontSize: '0.9rem' }}>
                                                         ${formatPrice(uPrice)}
                                                     </td>
-                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
                                                         {savings > 0 ? (
-                                                            <span style={{
-                                                                backgroundColor: '#DCFCE7',
-                                                                color: '#166534',
-                                                                fontSize: '0.7rem',
-                                                                fontWeight: '800',
-                                                                padding: '2px 6px',
-                                                                borderRadius: '4px'
-                                                            }}>
+                                                            <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: '800', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px' }}>
                                                                 -${formatPrice(savings)} ({savingsPct}%)
                                                             </span>
                                                         ) : (
-                                                            <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>—</span>
+                                                            <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>Tarifa Estándar</span>
                                                         )}
                                                     </td>
                                                 </tr>

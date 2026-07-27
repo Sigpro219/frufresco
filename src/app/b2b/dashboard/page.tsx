@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { isAbortError } from '@/lib/errorUtils';
 import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
@@ -2045,6 +2046,7 @@ export default function B2BDashboard() {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'linear-gradient(180deg, #10B981 0%, #047857 100%)' }}></div>
                                                     <span style={{ color: '#047857' }}>{locale === 'en' ? 'Spent ($ COP)' : 'Gasto por Pedido ($ COP)'}</span>
+                                                </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <div style={{ width: '12px', height: '3px', backgroundColor: '#2563EB', borderRadius: '2px' }}></div>
                                                     <span style={{ color: '#2563EB' }}>{locale === 'en' ? 'Volume (Kg)' : 'Tendencia Volumen (Kg)'}</span>
@@ -2093,44 +2095,50 @@ export default function B2BDashboard() {
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
-                                                    {/* Floating Glassmorphic Dynamic Hover Tooltip Card */}
-                                                    {activeHoverPoint && (
-                                                        <div style={{
-                                                            position: 'absolute',
-                                                            top: '6px',
-                                                            left: `${(activeHoverPoint.x / width) * 100}%`,
-                                                            transform: 'translateX(-50%)',
-                                                            backgroundColor: 'rgba(255, 255, 255, 0.60)',
-                                                            backdropFilter: 'blur(16px)',
-                                                            WebkitBackdropFilter: 'blur(16px)',
-                                                            color: '#0F172A',
-                                                            padding: '0.55rem 1.1rem',
-                                                            borderRadius: '14px',
-                                                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.12)',
-                                                            zIndex: 40,
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '1rem',
-                                                            fontSize: '0.8rem',
-                                                            pointerEvents: 'none',
-                                                            border: '1px solid rgba(255, 255, 255, 0.75)',
-                                                            transition: 'left 0.15s ease-out, opacity 0.15s ease-in-out',
-                                                            whiteSpace: 'nowrap'
-                                                        }}>
-                                                            <div style={{ fontWeight: '800', color: '#047857' }}>
-                                                                📅 Despacho: {activeHoverPoint.date}
+                                                    {/* Floating Glassmorphic Vertical Tooltip Card (Smart Clamped & Translucent) */}
+                                                    {activeHoverPoint && (() => {
+                                                        const leftPercent = Math.max(18, Math.min(82, (activeHoverPoint.x / width) * 100));
+                                                        return (
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                top: '12px',
+                                                                left: `${leftPercent}%`,
+                                                                transform: 'translateX(-50%)',
+                                                                backgroundColor: 'rgba(255, 255, 255, 0.45)',
+                                                                backdropFilter: 'blur(20px)',
+                                                                WebkitBackdropFilter: 'blur(20px)',
+                                                                color: '#0F172A',
+                                                                padding: '0.75rem 1rem',
+                                                                borderRadius: '14px',
+                                                                boxShadow: '0 10px 30px 0 rgba(31, 38, 135, 0.12)',
+                                                                zIndex: 40,
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.4rem',
+                                                                fontSize: '0.8rem',
+                                                                pointerEvents: 'none',
+                                                                border: '1px solid rgba(255, 255, 255, 0.85)',
+                                                                transition: 'left 0.18s ease-out',
+                                                                minWidth: '195px'
+                                                            }}>
+                                                                <div style={{ fontWeight: '800', color: '#047857', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '0.3rem', fontSize: '0.82rem' }}>
+                                                                    📅 Despacho: {activeHoverPoint.date}
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                                                    <span style={{ color: '#64748B' }}>💵 Inversión:</span>
+                                                                    <strong style={{ color: '#047857' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')}</strong>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                                                    <span style={{ color: '#64748B' }}>⚖️ Masa:</span>
+                                                                    <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg).toLocaleString('es-CO')} Kg</strong>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                                                    <span style={{ color: '#64748B' }}>📊 Promedio:</span>
+                                                                    <strong style={{ color: '#0F172A' }}>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
+                                                                </div>
                                                             </div>
-                                                            <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
-                                                                💵 Inversión: <strong style={{ color: '#047857' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')} COP</strong>
-                                                            </div>
-                                                            <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
-                                                                ⚖️ Masa: <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg).toLocaleString('es-CO')} Kg</strong>
-                                                            </div>
-                                                            <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
-                                                                📊 Promedio: <strong style={{ color: '#475569' }}>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                        );
+                                                    })()}
 
                                                     {/* SVG Canvas - 100% Clean Lines & Bars without text clutter */}
                                                     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '650px', display: 'block' }}>
@@ -2234,7 +2242,6 @@ export default function B2BDashboard() {
                                                 </div>
                                             );
                                         })()}
-                                        </div>
 
                                         {/* Executive Procurement Summary Banner */}
                                         <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
@@ -2257,121 +2264,154 @@ export default function B2BDashboard() {
                                     </div>
                                 )}
 
-                                {/* Frequently Ordered Products List */}
-                                <div style={{ marginTop: '2.5rem' }}>
-                                    <h3 style={{ 
-                                        margin: '0 0 1.25rem', 
-                                        fontSize: '1.05rem', 
-                                        fontWeight: '800', 
-                                        color: 'var(--text-main)', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '8px',
-                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                    }}>
-                                        <Smile size={20} color="var(--primary)" strokeWidth={2.5} /> {locale === 'en' ? 'Frequently Consumed Products' : 'Productos Más Consumidos'}
-                                    </h3>
-                                    
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem' }}>
-                                        {consumptionData.map((item, index) => {
-                                            const qtyValue = quickAddQuantities[item.id] ?? 1;
-                                            return (
-                                                <div key={item.id} style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    backgroundColor: '#F8FAFC',
-                                                    borderRadius: 'var(--radius-lg)',
-                                                    padding: '1rem 1.25rem',
-                                                    border: '1px solid var(--border)',
-                                                    flexWrap: 'wrap',
-                                                    gap: '1rem'
-                                                }}>
-                                                    {/* Ranking badge + Product image + Name */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '250px' }}>
-                                                        <div style={{
-                                                            width: '28px',
-                                                            height: '28px',
-                                                            borderRadius: '50%',
-                                                            backgroundColor: index === 0 ? '#FEF3C7' : index === 1 ? '#F1F5F9' : index === 2 ? '#E0F2FE' : '#F1F5F9',
-                                                            color: index === 0 ? '#B45309' : index === 1 ? '#475569' : index === 2 ? '#0369A1' : '#64748B',
+                                        {/* Frequently Ordered Products List - Clean & Executive UI */}
+                                        <div style={{ marginTop: '2.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                                <div>
+                                                    <h3 style={{ 
+                                                        margin: 0, 
+                                                        fontSize: '1.05rem', 
+                                                        fontWeight: '800', 
+                                                        color: 'var(--text-main)', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        gap: '8px',
+                                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                                    }}>
+                                                        <Smile size={20} color="var(--primary)" strokeWidth={2.5} /> {locale === 'en' ? 'Frequently Consumed Products' : 'Productos Más Consumidos'}
+                                                    </h3>
+                                                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#64748B' }}>
+                                                        Ranking de insumos recurrentes con opción de re-pedido en 1 clic hacia tu carrito.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                {consumptionData.map((item, index) => {
+                                                    const rawQty = quickAddQuantities[item.id] !== undefined ? String(quickAddQuantities[item.id]) : '1';
+                                                    return (
+                                                        <div key={item.id} style={{
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: '900'
+                                                            justifyContent: 'space-between',
+                                                            backgroundColor: '#FFFFFF',
+                                                            borderRadius: '12px',
+                                                            padding: '0.85rem 1.25rem',
+                                                            border: '1px solid #E2E8F0',
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                                            flexWrap: 'wrap',
+                                                            gap: '1rem',
+                                                            transition: 'all 0.15s ease-in-out'
                                                         }}>
-                                                            {index + 1}
-                                                        </div>
-                                                        <div style={{ width: '48px', height: '48px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#e2e8f0', border: '1px solid #E2E8F0' }}>
-                                                            {item.image && <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                                        </div>
-                                                        <div>
-                                                            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em' }}>{item.name}</h4>
-                                                            <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>
-                                                                {locale === 'en' ? 'Total consumed' : 'Consumo total'}: <strong style={{ color: 'var(--primary)' }}>{item.totalQuantity} {item.unit}</strong>
-                                                            </p>
-                                                        </div>
-                                                    </div>
+                                                            {/* Ranking badge + Product image + Name */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1.2, minWidth: '240px' }}>
+                                                                <div style={{
+                                                                    width: '26px',
+                                                                    height: '26px',
+                                                                    borderRadius: '50%',
+                                                                    backgroundColor: index === 0 ? '#FEF3C7' : index === 1 ? '#F1F5F9' : index === 2 ? '#E0F2FE' : '#F8FAFC',
+                                                                    color: index === 0 ? '#B45309' : index === 1 ? '#475569' : index === 2 ? '#0369A1' : '#64748B',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    fontSize: '0.8rem',
+                                                                    fontWeight: '900',
+                                                                    border: '1px solid rgba(0,0,0,0.06)'
+                                                                }}>
+                                                                    {index + 1}
+                                                                </div>
+                                                                <div style={{ width: '42px', height: '42px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                                    {item.image && <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                                </div>
+                                                                <div>
+                                                                    <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: '800', color: '#0F172A', letterSpacing: '-0.01em' }}>{item.name}</h4>
+                                                                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.15rem' }}>
+                                                                        Acumulado: <strong style={{ color: '#047857', fontWeight: '800' }}>{Math.round(item.totalQuantity).toLocaleString('es-CO')} {item.unit}</strong>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
 
-                                                    {/* Bar metric */}
-                                                    <div style={{ flex: 1, minWidth: '150px' }}>
-                                                        <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                                                            <div style={{ 
-                                                                width: `${Math.min(100, (item.ordersCount / (historicalOrders.length || 1)) * 100)}%`, 
-                                                                height: '100%', 
-                                                                backgroundColor: 'var(--primary)',
-                                                                borderRadius: '3px'
-                                                            }}></div>
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>
-                                                            <span>{t.b2b.dashboard.frequency}</span>
-                                                            <span>{item.ordersCount} {t.b2b.dashboard.ordersLabel}</span>
-                                                        </div>
-                                                    </div>
+                                                            {/* Frequency metric bar */}
+                                                            <div style={{ flex: 1, minWidth: '160px', padding: '0 0.5rem' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
+                                                                    <span>{t.b2b.dashboard.frequency}</span>
+                                                                    <strong style={{ color: '#0F172A' }}>{item.ordersCount} {t.b2b.dashboard.ordersLabel}</strong>
+                                                                </div>
+                                                                <div style={{ height: '5px', backgroundColor: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
+                                                                    <div style={{ 
+                                                                        width: `${Math.min(100, (item.ordersCount / (historicalOrders.length || 1)) * 100)}%`, 
+                                                                        height: '100%', 
+                                                                        backgroundColor: '#10B981',
+                                                                        borderRadius: '3px'
+                                                                    }}></div>
+                                                                </div>
+                                                            </div>
 
-                                                    {/* Quick purchase action */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', backgroundColor: 'white', overflow: 'hidden' }}>
-                                                            <button
-                                                                onClick={() => setQuickAddQuantities(prev => ({ ...prev, [item.id]: Math.max(1, qtyValue - 1) }))}
-                                                                style={{ border: 'none', background: 'none', padding: '0.35rem 0.6rem', fontWeight: '900', cursor: 'pointer', color: 'var(--text-muted)' }}
-                                                            >-</button>
-                                                            <input
-                                                                type="number"
-                                                                value={qtyValue}
-                                                                onChange={(e) => setQuickAddQuantities(prev => ({ ...prev, [item.id]: Math.max(1, Number(e.target.value)) }))}
-                                                                style={{ width: '40px', border: 'none', textAlign: 'center', fontSize: '0.85rem', fontWeight: '800', color: 'var(--text-main)', outline: 'none' }}
-                                                            />
-                                                            <button
-                                                                onClick={() => setQuickAddQuantities(prev => ({ ...prev, [item.id]: qtyValue + 1 }))}
-                                                                style={{ border: 'none', background: 'none', padding: '0.35rem 0.6rem', fontWeight: '900', cursor: 'pointer', color: 'var(--text-muted)' }}
-                                                            >+</button>
+                                                            {/* Quick purchase action button with Decimal Comma support */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', backgroundColor: '#F8FAFC', overflow: 'hidden' }}>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const num = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                            const next = Math.max(0.5, Math.round((num - 1) * 10) / 10);
+                                                                            setQuickAddQuantities(prev => ({ ...prev, [item.id]: String(next).replace('.', ',') }));
+                                                                        }}
+                                                                        style={{ border: 'none', background: 'none', padding: '0.3rem 0.55rem', fontWeight: '900', cursor: 'pointer', color: '#64748B', fontSize: '0.85rem' }}
+                                                                    >-</button>
+                                                                    <input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={rawQty}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
+                                                                            setQuickAddQuantities(prev => ({ ...prev, [item.id]: val }));
+                                                                        }}
+                                                                        onBlur={() => {
+                                                                            const num = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                            const formatted = String(num).replace('.', ',');
+                                                                            setQuickAddQuantities(prev => ({ ...prev, [item.id]: formatted }));
+                                                                        }}
+                                                                        style={{ width: '48px', border: 'none', textAlign: 'center', fontSize: '0.82rem', fontWeight: '800', color: '#0F172A', outline: 'none', backgroundColor: 'transparent' }}
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const num = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                            const next = Math.round((num + 1) * 10) / 10;
+                                                                            setQuickAddQuantities(prev => ({ ...prev, [item.id]: String(next).replace('.', ',') }));
+                                                                        }}
+                                                                        style={{ border: 'none', background: 'none', padding: '0.3rem 0.55rem', fontWeight: '900', cursor: 'pointer', color: '#64748B', fontSize: '0.85rem' }}
+                                                                    >+</button>
+                                                                </div>
+                                                                
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const numericQty = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                        handleQuickAdd(item.product, numericQty);
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '0.45rem 0.9rem',
+                                                                        backgroundColor: '#047857',
+                                                                        color: 'white',
+                                                                        borderRadius: '8px',
+                                                                        border: 'none',
+                                                                        fontSize: '0.78rem',
+                                                                        fontWeight: '800',
+                                                                        cursor: 'pointer',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '5px',
+                                                                        boxShadow: '0 2px 4px rgba(4, 120, 87, 0.15)',
+                                                                        transition: 'background-color 0.15s'
+                                                                    }}
+                                                                >
+                                                                    <span>🛒</span> {locale === 'en' ? '+ Add to order' : '+ Agregar al pedido'}
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                        
-                                                        <button
-                                                            onClick={() => handleQuickAdd(item.product, qtyValue)}
-                                                            className="btn-premium"
-                                                            style={{
-                                                                padding: '0.45rem 1rem',
-                                                                backgroundColor: 'var(--primary)',
-                                                                color: 'white',
-                                                                borderRadius: 'var(--radius-md)',
-                                                                border: 'none',
-                                                                fontSize: '0.8rem',
-                                                                fontWeight: '800',
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 2px 4px rgba(13,122,87,0.15)'
-                                                            }}
-                                                        >
-                                                            {locale === 'en' ? 'Add' : 'Agregar'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                             </>
                         ) : (
                             <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: 'var(--radius-lg)' }}>
@@ -2522,108 +2562,148 @@ export default function B2BDashboard() {
                                                 </div>
 
                                                 <div>
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedAgreementForModal(agreement);
-                                                            setIsAgreementModalOpen(true);
-                                                        }}
-                                                        className="btn-premium"
-                                                        style={{
-                                                            padding: '0.65rem 1.25rem',
-                                                            borderRadius: THEME.radius.md,
-                                                            backgroundColor: 'var(--primary)',
-                                                            color: 'white',
-                                                            fontWeight: '800',
-                                                            fontSize: '0.85rem',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '8px',
-                                                            border: 'none',
-                                                            boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)'
-                                                        }}
+                                                    <Link
+                                                        href={`/b2b/agreements/${agreement.id}/print`}
+                                                        target="_blank"
+                                                        style={{ textDecoration: 'none' }}
                                                     >
-                                                        <Eye size={16} /> Ver / Descargar Documento Formal
-                                                    </button>
+                                                        <button
+                                                            className="btn-premium"
+                                                            style={{
+                                                                padding: '0.65rem 1.25rem',
+                                                                borderRadius: THEME.radius.md,
+                                                                backgroundColor: 'var(--primary)',
+                                                                color: 'white',
+                                                                fontWeight: '800',
+                                                                fontSize: '0.85rem',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '8px',
+                                                                border: 'none',
+                                                                boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)'
+                                                            }}
+                                                        >
+                                                            <Eye size={16} /> Ver / Descargar Documento Formal
+                                                        </button>
+                                                    </Link>
                                                 </div>
                                             </div>
 
-                                            {/* Products Grid in Agreement */}
+                                            {/* Products Table in Agreement - Formal B2B Executive Table */}
                                             <div style={{ padding: '1.5rem' }}>
                                                 <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <Tag size={16} color="var(--primary)" /> Productos Incluidos en el Convenio ({filteredAgreementItems.length})
+                                                    <Tag size={16} color="var(--primary)" /> Insumos Incluidos en el Convenio Institucional ({filteredAgreementItems.length})
                                                 </h4>
 
                                                 {filteredAgreementItems.length > 0 ? (
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-                                                        {filteredAgreementItems.map((item: any) => {
-                                                            const p = Array.isArray(item.products) ? item.products[0] : item.products;
-                                                            const name = item.product_name || p?.name || 'Producto';
-                                                            const sku = p?.sku || '';
-                                                            const unit = p?.unit_of_measure || 'Kg';
-                                                            const basePrice = Number(p?.base_price || 0);
-                                                            const uPrice = Number(item.unit_price || 0);
-                                                            const savings = basePrice > uPrice ? (basePrice - uPrice) : 0;
-                                                            const savingsPct = basePrice > 0 && savings > 0 ? ((savings / basePrice) * 100).toFixed(1) : 0;
-                                                            const imgUrl = p?.image_url;
+                                                    <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '12px', backgroundColor: '#FFFFFF' }}>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                                            <thead>
+                                                                <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>
+                                                                    <th style={{ padding: '0.75rem 1rem' }}>#</th>
+                                                                    <th style={{ padding: '0.75rem 1rem' }}>Insumo / Producto</th>
+                                                                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
+                                                                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Lista Base</th>
+                                                                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Precio Pactado Convenio</th>
+                                                                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Descuento / Beneficio</th>
+                                                                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Acción de Re-Pedido</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {filteredAgreementItems.map((item: any, idx: number) => {
+                                                                    const p = Array.isArray(item.products) ? item.products[0] : item.products;
+                                                                    const name = item.product_name || p?.name || 'Producto';
+                                                                    const unit = p?.unit_of_measure || 'Kg';
+                                                                    const basePrice = Number(p?.base_price || 0);
+                                                                    const uPrice = Number(item.unit_price || 0);
+                                                                    const savings = basePrice > uPrice ? (basePrice - uPrice) : 0;
+                                                                    const savingsPct = basePrice > 0 && savings > 0 ? ((savings / basePrice) * 100).toFixed(1) : 0;
+                                                                    const itemKey = `agr_${agreement.id}_${item.id || idx}`;
+                                                                    const rawQty = quickAddQuantities[itemKey] !== undefined ? String(quickAddQuantities[itemKey]) : '1';
 
-                                                            return (
-                                                                <div key={item.id} style={{
-                                                                    border: '1px solid #E2E8F0',
-                                                                    borderRadius: '14px',
-                                                                    padding: '1rem',
-                                                                    backgroundColor: '#F8FAFC',
-                                                                    display: 'flex',
-                                                                    flexDirection: 'column',
-                                                                    justifyContent: 'space-between',
-                                                                    transition: 'all 0.2s'
-                                                                }}>
-                                                                    <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'flex-start' }}>
-                                                                        <div style={{ width: '48px', height: '48px', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#E2E8F0', flexShrink: 0, border: '1px solid #CBD5E1' }}>
-                                                                            {imgUrl ? <img src={imgUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={24} style={{ margin: '12px auto', display: 'block', color: '#94A3B8' }} />}
-                                                                        </div>
-                                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                                            <h5 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#0F172A', lineHeight: '1.25' }}>{name}</h5>
-                                                                            {sku && <span style={{ fontSize: '0.72rem', color: '#64748B', fontFamily: 'monospace', fontWeight: '600' }}>SKU: {sku}</span>}
-                                                                        </div>
-                                                                    </div>
+                                                                    return (
+                                                                        <tr key={itemKey} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
+                                                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>{idx + 1}</td>
+                                                                            <td style={{ padding: '0.75rem 1rem', color: '#0F172A', fontWeight: '800' }}>{name}</td>
+                                                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#475569', fontWeight: '600' }}>{unit}</td>
+                                                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#94A3B8', textDecoration: basePrice > uPrice ? 'line-through' : 'none', fontWeight: '600' }}>
+                                                                                {basePrice > 0 ? `$${formatPrice(basePrice)}` : '-'}
+                                                                            </td>
+                                                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#047857', fontWeight: '900', fontSize: '0.92rem' }}>
+                                                                                ${formatPrice(uPrice)} <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>/ {unit}</span>
+                                                                            </td>
+                                                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                                                                                {savings > 0 ? (
+                                                                                    <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', fontWeight: '800', fontSize: '0.75rem', padding: '3px 8px', borderRadius: '6px', display: 'inline-block' }}>
+                                                                                        -${formatPrice(savings)} ({savingsPct}%)
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>Tarifa Especial</span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '6px', backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                const num = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                                                const next = Math.max(0.5, Math.round((num - 1) * 10) / 10);
+                                                                                                setQuickAddQuantities(prev => ({ ...prev, [itemKey]: String(next).replace('.', ',') }));
+                                                                                            }}
+                                                                                            style={{ border: 'none', background: 'none', padding: '0.25rem 0.45rem', fontWeight: '900', cursor: 'pointer', color: '#64748B', fontSize: '0.8rem' }}
+                                                                                        >-</button>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            inputMode="decimal"
+                                                                                            value={rawQty}
+                                                                                            onChange={(e) => {
+                                                                                                const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
+                                                                                                setQuickAddQuantities(prev => ({ ...prev, [itemKey]: val }));
+                                                                                            }}
+                                                                                            onBlur={() => {
+                                                                                                const num = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                                                const formatted = String(num).replace('.', ',');
+                                                                                                setQuickAddQuantities(prev => ({ ...prev, [itemKey]: formatted }));
+                                                                                            }}
+                                                                                            style={{ width: '42px', border: 'none', textAlign: 'center', fontSize: '0.8rem', fontWeight: '800', color: '#0F172A', outline: 'none', backgroundColor: 'transparent' }}
+                                                                                        />
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                const num = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                                                const next = Math.round((num + 1) * 10) / 10;
+                                                                                                setQuickAddQuantities(prev => ({ ...prev, [itemKey]: String(next).replace('.', ',') }));
+                                                                                            }}
+                                                                                            style={{ border: 'none', background: 'none', padding: '0.25rem 0.45rem', fontWeight: '900', cursor: 'pointer', color: '#64748B', fontSize: '0.8rem' }}
+                                                                                        >+</button>
+                                                                                    </div>
 
-                                                                    <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                                                                        <div>
-                                                                            {basePrice > uPrice && (
-                                                                                <span style={{ display: 'block', fontSize: '0.75rem', color: '#94A3B8', textDecoration: 'line-through', fontWeight: '600' }}>
-                                                                                    ${formatPrice(basePrice)} / {unit}
-                                                                                </span>
-                                                                            )}
-                                                                            <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                                                ${formatPrice(uPrice)} <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>/ {unit}</span>
-                                                                            </span>
-                                                                            {savings > 0 && (
-                                                                                <span style={{ display: 'inline-block', fontSize: '0.68rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', padding: '1px 6px', borderRadius: '4px', marginTop: '2px' }}>
-                                                                                    -${formatPrice(savings)} ({savingsPct}%)
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-
-                                                                        <button
-                                                                            onClick={() => handleQuickAdd(p || { id: item.product_id, name, unit_of_measure: unit }, 1)}
-                                                                            style={{
-                                                                                padding: '0.4rem 0.75rem',
-                                                                                borderRadius: THEME.radius.md,
-                                                                                border: 'none',
-                                                                                backgroundColor: 'var(--primary)',
-                                                                                color: 'white',
-                                                                                fontWeight: '800',
-                                                                                fontSize: '0.78rem',
-                                                                                cursor: 'pointer'
-                                                                            }}
-                                                                        >
-                                                                            + Pedir
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            const numericQty = parseFloat(rawQty.replace(',', '.')) || 1;
+                                                                                            handleQuickAdd(p || { id: item.product_id, name, unit_of_measure: unit }, numericQty);
+                                                                                        }}
+                                                                                        style={{
+                                                                                            padding: '0.35rem 0.75rem',
+                                                                                            borderRadius: '6px',
+                                                                                            border: 'none',
+                                                                                            backgroundColor: '#047857',
+                                                                                            color: 'white',
+                                                                                            fontWeight: '800',
+                                                                                            fontSize: '0.78rem',
+                                                                                            cursor: 'pointer',
+                                                                                            boxShadow: '0 2px 4px rgba(4, 120, 87, 0.15)'
+                                                                                        }}
+                                                                                    >
+                                                                                        + Pedir
+                                                                                    </button>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
                                                     </div>
                                                 ) : (
                                                     <p style={{ color: '#64748B', fontSize: '0.85rem', margin: 0 }}>No se encontraron insumos que coincidan con la búsqueda.</p>
