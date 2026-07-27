@@ -2122,7 +2122,7 @@ export default function B2BDashboard() {
                                                                 💵 Inversión: <strong style={{ color: '#047857' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')} COP</strong>
                                                             </div>
                                                             <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
-                                                                ⚖️ Masa: <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg)} Kg</strong>
+                                                                ⚖️ Masa: <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg).toLocaleString('es-CO')} Kg</strong>
                                                             </div>
                                                             <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
                                                                 📊 Promedio: <strong style={{ color: '#475569' }}>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
@@ -2157,9 +2157,9 @@ export default function B2BDashboard() {
                                                                     <text x={paddingLeft - 10} y={y + 3.5} textAnchor="end" style={{ fontSize: '9px', fill: '#047857', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
                                                                         {formatCompactCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
-                                                                    {/* Right Axis: Kg */}
+                                                                    {/* Right Axis: Kg (Formateado con punto de miles) */}
                                                                     <text x={width - paddingRight + 10} y={y + 3.5} textAnchor="start" style={{ fontSize: '9px', fill: '#2563EB', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
-                                                                        {Math.round(maxKg - (maxKg * ratio))} Kg
+                                                                        {Math.round(maxKg - (maxKg * ratio)).toLocaleString('es-CO')} Kg
                                                                     </text>
                                                                 </g>
                                                             );
