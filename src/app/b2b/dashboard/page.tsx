@@ -2093,39 +2093,39 @@ export default function B2BDashboard() {
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
-                                                    {/* Floating Hover Tooltip Card */}
+                                                    {/* Floating Glassmorphic Hover Tooltip Card */}
                                                     {activeHoverPoint && (
                                                         <div style={{
                                                             position: 'absolute',
                                                             top: '10px',
                                                             left: '50%',
                                                             transform: 'translateX(-50%)',
-                                                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
-                                                            backdropFilter: 'blur(8px)',
-                                                            color: 'white',
+                                                            backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                                                            backdropFilter: 'blur(12px)',
+                                                            color: '#0F172A',
                                                             padding: '0.6rem 1.25rem',
                                                             borderRadius: '12px',
-                                                            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                                            boxShadow: '0 12px 30px rgba(15, 23, 42, 0.1)',
                                                             zIndex: 30,
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             gap: '1.25rem',
                                                             fontSize: '0.82rem',
                                                             pointerEvents: 'none',
-                                                            border: '1px solid rgba(255,255,255,0.15)',
+                                                            border: '1px solid rgba(226, 232, 240, 0.9)',
                                                             animation: 'fadeIn 0.2s ease-in-out'
                                                         }}>
-                                                            <div style={{ fontWeight: '800', color: '#6EE7B7' }}>
+                                                            <div style={{ fontWeight: '800', color: '#047857' }}>
                                                                 📅 Despacho: {activeHoverPoint.date}
                                                             </div>
-                                                            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem' }}>
-                                                                💵 Inversión: <strong style={{ color: '#34D399' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')} COP</strong>
+                                                            <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
+                                                                💵 Inversión: <strong style={{ color: '#047857' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')} COP</strong>
                                                             </div>
-                                                            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem' }}>
-                                                                ⚖️ Masa: <strong style={{ color: '#60A5FA' }}>{Math.round(activeHoverPoint.kg)} Kg</strong>
+                                                            <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
+                                                                ⚖️ Masa: <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg)} Kg</strong>
                                                             </div>
-                                                            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '1rem' }}>
-                                                                📊 Promedio: <strong>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
+                                                            <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '1rem' }}>
+                                                                📊 Promedio: <strong style={{ color: '#475569' }}>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
                                                             </div>
                                                         </div>
                                                     )}
@@ -2232,35 +2232,6 @@ export default function B2BDashboard() {
                                                 </div>
                                             );
                                         })()}
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', fontFamily: 'Inter, sans-serif' }}>
-                                                <thead>
-                                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
-                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: '700' }}>Despacho / Fecha</th>
-                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#047857' }}>Inversión ($ COP)</th>
-                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#2563EB' }}>Volumen (Kg)</th>
-                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700' }}>Costo Eficiencia ($/Kg)</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {consumptionHistory.map((row, idx) => {
-                                                        const unitCost = row.kg > 0 ? Math.round(row.cop / row.kg) : 0;
-                                                        return (
-                                                            <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                                <td style={{ padding: '0.65rem 0.75rem', fontWeight: '700', color: '#0F172A' }}>{row.date}</td>
-                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontWeight: '800', color: '#047857' }}>
-                                                                    ${Math.round(row.cop).toLocaleString('es-CO')}
-                                                                </td>
-                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontWeight: '800', color: '#2563EB' }}>
-                                                                    {Math.round(row.kg)} Kg
-                                                                </td>
-                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontWeight: '600', color: '#475569' }}>
-                                                                    ${unitCost.toLocaleString('es-CO')} / Kg
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
                                         </div>
 
                                         {/* Executive Procurement Summary Banner */}
