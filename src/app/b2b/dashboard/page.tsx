@@ -2022,6 +2022,7 @@ export default function B2BDashboard() {
                                 </div>
 
                                 {/* Historical Dual Line Chart */}
+                                {/* Historical Dual Line Chart - Clean & Non-Overlapping */}
                                 {consumptionHistory.length > 0 && (
                                     <div style={{
                                         backgroundColor: '#FFFFFF',
@@ -2030,27 +2031,29 @@ export default function B2BDashboard() {
                                         border: '1px solid var(--border)',
                                         marginBottom: '2.5rem'
                                     }}>
-                                        <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                            {locale === 'en' ? 'Volume (Kg) vs Value (COP) Evolution' : 'Evolución de Volumen (Kg) vs Gasto (COP)'}
-                                        </h3>
-                                        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', fontSize: '0.75rem', fontWeight: '800' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <div style={{ width: '12px', height: '3px', backgroundColor: 'var(--primary)', borderRadius: '1.5px' }}></div>
-                                                <span style={{ color: 'var(--primary)' }}>{locale === 'en' ? 'Volume (Kg)' : 'Volumen (Kg)'}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <div style={{ width: '12px', height: '3px', backgroundColor: '#3B82F6', borderRadius: '1.5px' }}></div>
-                                                <span style={{ color: '#3B82F6' }}>{locale === 'en' ? 'Gasto (COP)' : 'Gasto (COP)'}</span>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                {locale === 'en' ? 'Volume (Kg) vs Value (COP) Evolution' : 'Evolución de Volumen (Kg) vs Gasto (COP)'}
+                                            </h3>
+                                            <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.75rem', fontWeight: '800' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#0D7A57' }}></div>
+                                                    <span style={{ color: '#0D7A57' }}>{locale === 'en' ? 'Volume (Kg)' : 'Volumen (Kg)'}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#2563EB' }}></div>
+                                                    <span style={{ color: '#2563EB' }}>{locale === 'en' ? 'Gasto (COP)' : 'Gasto (COP)'}</span>
+                                                </div>
                                             </div>
                                         </div>
 
                                         {(() => {
-                                            const width = 800;
-                                            const height = 220;
-                                            const paddingLeft = 50;
-                                            const paddingRight = 80;
-                                            const paddingTop = 20;
-                                            const paddingBottom = 30;
+                                            const width = 850;
+                                            const height = 240;
+                                            const paddingLeft = 55;
+                                            const paddingRight = 95;
+                                            const paddingTop = 30;
+                                            const paddingBottom = 40;
 
                                             const chartWidth = width - paddingLeft - paddingRight;
                                             const chartHeight = height - paddingTop - paddingBottom;
@@ -2087,15 +2090,15 @@ export default function B2BDashboard() {
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto' }}>
-                                                    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '600px', display: 'block' }}>
+                                                    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '650px', display: 'block' }}>
                                                         <defs>
                                                             <linearGradient id="gradKg" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.15" />
-                                                                <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.0" />
+                                                                <stop offset="0%" stopColor="#0D7A57" stopOpacity="0.15" />
+                                                                <stop offset="100%" stopColor="#0D7A57" stopOpacity="0.0" />
                                                             </linearGradient>
                                                             <linearGradient id="gradCop" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.15" />
-                                                                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
+                                                                <stop offset="0%" stopColor="#2563EB" stopOpacity="0.12" />
+                                                                <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
                                                             </linearGradient>
                                                         </defs>
 
@@ -2111,10 +2114,10 @@ export default function B2BDashboard() {
                                                                         stroke="#F1F5F9"
                                                                         strokeWidth={1}
                                                                     />
-                                                                    <text x={paddingLeft - 10} y={y + 4} textAnchor="end" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
-                                                                        {Math.round(maxKg - (maxKg * ratio))}
+                                                                    <text x={paddingLeft - 8} y={y + 3} textAnchor="end" style={{ fontSize: '9px', fill: '#0D7A57', fontWeight: 'bold' }}>
+                                                                        {Math.round(maxKg - (maxKg * ratio))} Kg
                                                                     </text>
-                                                                    <text x={width - paddingRight + 10} y={y + 4} textAnchor="start" style={{ fontSize: '9px', fill: '#3B82F6', fontWeight: 'bold' }}>
+                                                                    <text x={width - paddingRight + 8} y={y + 3} textAnchor="start" style={{ fontSize: '9px', fill: '#2563EB', fontWeight: 'bold' }}>
                                                                         {formatCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
                                                                 </g>
@@ -2125,23 +2128,18 @@ export default function B2BDashboard() {
                                                             <>
                                                                 <path d={areaKgPath} fill="url(#gradKg)" />
                                                                 <path d={areaCopPath} fill="url(#gradCop)" />
-                                                            </>
-                                                        )}
-
-                                                        {points.length > 1 && (
-                                                            <>
                                                                 <polyline
                                                                     fill="none"
-                                                                    stroke="var(--primary)"
-                                                                    strokeWidth={3.5}
+                                                                    stroke="#0D7A57"
+                                                                    strokeWidth={3}
                                                                     points={pointsKgStr}
                                                                     strokeLinecap="round"
                                                                     strokeLinejoin="round"
                                                                 />
                                                                 <polyline
                                                                     fill="none"
-                                                                    stroke="#3B82F6"
-                                                                    strokeWidth={3.5}
+                                                                    stroke="#2563EB"
+                                                                    strokeWidth={3}
                                                                     points={pointsCopStr}
                                                                     strokeLinecap="round"
                                                                     strokeLinejoin="round"
@@ -2150,19 +2148,31 @@ export default function B2BDashboard() {
                                                         )}
 
                                                         {points.map((p, index) => {
+                                                            const isKgHigher = p.yKg <= p.yCop;
                                                             return (
                                                                 <g key={index}>
-                                                                    <circle cx={p.x} cy={p.yKg} r={4.5} fill="var(--primary)" stroke="white" strokeWidth={1.5} />
-                                                                    <circle cx={p.x} cy={p.yCop} r={4.5} fill="#3B82F6" stroke="white" strokeWidth={1.5} />
+                                                                    <circle cx={p.x} cy={p.yKg} r={5} fill="#0D7A57" stroke="white" strokeWidth={2} />
+                                                                    <circle cx={p.x} cy={p.yCop} r={5} fill="#2563EB" stroke="white" strokeWidth={2} />
                                                                     
-                                                                    <text x={p.x} y={p.yKg - 10} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--primary)', fontWeight: '800' }}>
+                                                                    {/* Non-overlapping text position: Kg above, COP below */}
+                                                                    <text 
+                                                                        x={p.x} 
+                                                                        y={isKgHigher ? p.yKg - 10 : p.yKg + 16} 
+                                                                        textAnchor="middle" 
+                                                                        style={{ fontSize: '9px', fill: '#0D7A57', fontWeight: '800' }}
+                                                                    >
                                                                         {Math.round(p.kg)} Kg
                                                                     </text>
-                                                                    <text x={p.x} y={p.yCop - 10} textAnchor="middle" style={{ fontSize: '9px', fill: '#3B82F6', fontWeight: '800' }}>
+                                                                    <text 
+                                                                        x={p.x} 
+                                                                        y={isKgHigher ? p.yCop + 16 : p.yCop - 10} 
+                                                                        textAnchor="middle" 
+                                                                        style={{ fontSize: '9px', fill: '#2563EB', fontWeight: '800' }}
+                                                                    >
                                                                         {formatCOP(p.cop)}
                                                                     </text>
 
-                                                                    <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                                                    <text x={p.x} y={height - 10} textAnchor="middle" style={{ fontSize: '9px', fill: '#64748B', fontWeight: 'bold' }}>
                                                                         {p.date}
                                                                     </text>
                                                                 </g>
