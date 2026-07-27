@@ -2122,55 +2122,68 @@ export default function B2BDashboard() {
                                                                 </g>
                                                             );
                                                         })}
-
-                                                        {/* BARS: Spending COP */}
-                                                        {points.map((p, index) => (
-                                                            <g key={`bar-${index}`}>
-                                                                <rect
-                                                                    x={p.x - barWidth / 2}
-                                                                    y={p.yBar}
-                                                                    width={barWidth}
-                                                                    height={Math.max(4, p.barHeight)}
-                                                                    rx={5}
-                                                                    fill="url(#barGradient)"
-                                                                    opacity={0.88}
-                                                                />
-                                                                {/* Badge on top of Bar */}
-                                                                <text x={p.x} y={p.yBar - 6} textAnchor="middle" style={{ fontSize: '9px', fill: '#047857', fontWeight: '800' }}>
-                                                                    {formatCOP(p.cop)}
-                                                                </text>
-                                                            </g>
-                                                        ))}
+                                                        {/* BARS: Spending COP (Value rendered INSIDE the bar in white to avoid any collision) */}
+                                                        {points.map((p, index) => {
+                                                            const hasEnoughHeight = p.barHeight >= 28;
+                                                            return (
+                                                                <g key={`bar-${index}`}>
+                                                                    <rect
+                                                                        x={p.x - barWidth / 2}
+                                                                        y={p.yBar}
+                                                                        width={barWidth}
+                                                                        height={Math.max(6, p.barHeight)}
+                                                                        rx={6}
+                                                                        fill="url(#barGradient)"
+                                                                        opacity={0.92}
+                                                                    />
+                                                                    {/* Value inside bar in white text */}
+                                                                    <text 
+                                                                        x={p.x} 
+                                                                        y={hasEnoughHeight ? p.yBar + 16 : p.yBar + 12} 
+                                                                        textAnchor="middle" 
+                                                                        style={{ 
+                                                                            fontSize: '9px', 
+                                                                            fill: 'white', 
+                                                                            fontWeight: '900',
+                                                                            letterSpacing: '-0.02em',
+                                                                            textShadow: '0 1px 2px rgba(0,0,0,0.4)'
+                                                                        }}
+                                                                    >
+                                                                        {formatCOP(p.cop)}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
 
                                                         {/* OVERLAY LINE: Volume Kg */}
                                                         {points.length > 1 && (
                                                             <polyline
                                                                 fill="none"
                                                                 stroke="#2563EB"
-                                                                strokeWidth={3}
+                                                                strokeWidth={3.5}
                                                                 points={pointsKgStr}
                                                                 strokeLinecap="round"
                                                                 strokeLinejoin="round"
                                                             />
                                                         )}
 
-                                                        {/* LINE POINTS & BADGES */}
+                                                        {/* LINE POINTS & BADGES (Floating cleanly ABOVE the line) */}
                                                         {points.map((p, index) => (
                                                             <g key={`point-${index}`}>
-                                                                <circle cx={p.x} cy={p.yKg} r={5} fill="#2563EB" stroke="white" strokeWidth={2.5} />
+                                                                <circle cx={p.x} cy={p.yKg} r={5.5} fill="#2563EB" stroke="white" strokeWidth={2.5} />
                                                                 
                                                                 {/* Kg badge pill background */}
                                                                 <rect 
-                                                                    x={p.x - 22} 
-                                                                    y={p.yKg - 22} 
-                                                                    width={44} 
-                                                                    height={14} 
-                                                                    rx={4} 
-                                                                    fill="#EFF6FF" 
-                                                                    stroke="#BFDBFE" 
-                                                                    strokeWidth={1} 
+                                                                    x={p.x - 24} 
+                                                                    y={p.yKg - 25} 
+                                                                    width={48} 
+                                                                    height={16} 
+                                                                    rx={5} 
+                                                                    fill="#2563EB" 
+                                                                    stroke="white" 
+                                                                    strokeWidth={1.5} 
                                                                 />
-                                                                <text x={p.x} y={p.yKg - 12} textAnchor="middle" style={{ fontSize: '9px', fill: '#1E40AF', fontWeight: '900' }}>
+                                                                <text x={p.x} y={p.yKg - 13} textAnchor="middle" style={{ fontSize: '9px', fill: 'white', fontWeight: '900' }}>
                                                                     {Math.round(p.kg)} Kg
                                                                 </text>
 
