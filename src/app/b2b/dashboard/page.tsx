@@ -10,6 +10,8 @@ import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
 import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
+import AgreementDocumentModal from '@/components/AgreementDocumentModal';
+import { ShieldCheck, CheckCircle2, Building2, Sparkles, ExternalLink, ArrowRight, Percent, Award } from 'lucide-react';
 
 interface OrderItem {
     id: string;
@@ -19,6 +21,7 @@ interface OrderItem {
     product_image: string;
     quantity: number;
     unit: string;
+    unit_price?: number;
     variant_label?: string;
 }
 
@@ -59,8 +62,8 @@ export default function B2BDashboard() {
     const [consumptionData, setConsumptionData] = useState<any[]>([]);
     const [isLoadingConsumption, setIsLoadingConsumption] = useState(false);
     const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
-    const [consumptionKpis, setConsumptionKpis] = useState<{ totalCop: number, totalKg: number, avgPrice: number }>({ totalCop: 0, totalKg: 0, avgPrice: 0 });
-    const [consumptionTimeRange, setConsumptionTimeRange] = useState<'30days' | '3months'>('30days');
+    const [consumptionKpis, setConsumptionKpis] = useState<{ totalCop: number, totalKg: number, totalSavingsCop: number, avgPrice: number }>({ totalCop: 0, totalKg: 0, totalSavingsCop: 0, avgPrice: 0 });
+    const [consumptionTimeRange, setConsumptionTimeRange] = useState<'30days' | '3months' | 'all'>('all');
     const [quickAddQuantities, setQuickAddQuantities] = useState<Record<string, number>>({});
     const [agreements, setAgreements] = useState<any[]>([]);
     const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
@@ -71,6 +74,9 @@ export default function B2BDashboard() {
     const [agreementPricesMap, setAgreementPricesMap] = useState<Record<string, number>>({});
     const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<any | null>(null);
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
+    const [selectedAgreementForModal, setSelectedAgreementForModal] = useState<any | null>(null);
+    const [isAgreementModalOpen, setIsAgreementModalOpen] = useState<boolean>(false);
+    const [agreementSearchTerm, setAgreementSearchTerm] = useState<string>('');
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
     const searchParams = useSearchParams();
@@ -533,16 +539,51 @@ export default function B2BDashboard() {
 
     // Fetch Consumption Data
     useEffect(() => {
-        if (activeTab !== 'consumption' || !profile?.company_name) return;
+        const targetProfileId = activeProfile?.id || user?.id;
+        if (activeTab !== 'consumption' || !targetProfileId) return;
 
         const fetchConsumption = async () => {
             setIsLoadingConsumption(true);
             try {
-                // Fetch all orders with created_at, delivery_date, total, status
+                const clientIds = [targetProfileId];
+                if (activeProfile?.parent_id) {
+                    clientIds.push(activeProfile.parent_id);
+                }
+
+                // 1. Fetch Agreements to get agreement prices & base prices for exact savings calculation
+                const { data: quoteAgreements } = await supabase
+                    .from('quotes')
+                    .select(`
+                        id,
+                        quote_items(
+                            product_id,
+                            unit_price,
+                            products(id, base_price)
+                        )
+                    `)
+                    .in('client_id', clientIds)
+                    .eq('status', 'agreement');
+
+                const agreementMap: Record<string, number> = {};
+                const basePriceMap: Record<string, number> = {};
+
+                if (quoteAgreements && quoteAgreements.length > 0) {
+                    quoteAgreements.forEach((q: any) => {
+                        q.quote_items?.forEach((qi: any) => {
+                            if (qi.product_id) {
+                                if (qi.unit_price) agreementMap[qi.product_id] = Number(qi.unit_price);
+                                const p = Array.isArray(qi.products) ? qi.products[0] : qi.products;
+                                if (p?.base_price) basePriceMap[qi.product_id] = Number(p.base_price);
+                            }
+                        });
+                    });
+                }
+
+                // 2. Fetch all valid orders for active profile / client
                 const { data: ordersData, error: ordersError } = await supabase
                     .from('orders')
-                    .select('id, created_at, delivery_date, total, status')
-                    .eq('profile_id', profile.id)
+                    .select('id, created_at, delivery_date, total, subtotal, status, profile_id')
+                    .in('profile_id', clientIds)
                     .neq('status', 'draft')
                     .neq('status', 'cancelled')
                     .order('delivery_date', { ascending: true });
@@ -552,20 +593,21 @@ export default function B2BDashboard() {
                 if (ordersData && ordersData.length > 0) {
                     const orderIds = ordersData.map(o => o.id);
                     
-                    // Fetch all items from those orders joining with products
+                    // Fetch items for those orders
                     const { data: itemsData, error: itemsError } = await supabase
                         .from('order_items')
-                        .select('product_id, order_id, quantity, products(id, name, name_en, unit_of_measure, image_url, base_price)')
+                        .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, base_price, category)')
                         .in('order_id', orderIds);
 
                     if (itemsError) throw itemsError;
 
                     // Filter based on consumptionTimeRange (client-side)
                     const now = new Date();
-                    const daysLimit = consumptionTimeRange === '30days' ? 30 : 90;
+                    const daysLimit = consumptionTimeRange === '30days' ? 30 : consumptionTimeRange === '3months' ? 90 : 99999;
                     const cutoffDate = new Date(now.getTime() - daysLimit * 24 * 60 * 60 * 1000);
 
                     const filteredOrders = (ordersData || []).filter(o => {
+                        if (consumptionTimeRange === 'all') return true;
                         const dateVal = new Date(o.delivery_date || o.created_at);
                         return dateVal >= cutoffDate;
                     });
@@ -573,30 +615,56 @@ export default function B2BDashboard() {
                     const filteredOrderIds = new Set(filteredOrders.map(o => o.id));
                     const filteredItems = (itemsData || []).filter(item => filteredOrderIds.has(item.order_id));
 
-                    // 1. KPI calculations
-                    const totalCop = filteredOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
-                    const totalKg = filteredItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+                    // Compute KPIs
+                    let totalCop = 0;
+                    let totalKg = 0;
+                    let totalSavingsCop = 0;
+
+                    filteredOrders.forEach(o => {
+                        const orderItems = filteredItems.filter(it => it.order_id === o.id);
+                        let itemsSum = 0;
+                        orderItems.forEach(it => {
+                            const qty = Number(it.quantity || 0);
+                            const p = Array.isArray(it.products) ? it.products[0] : it.products;
+                            const basePrice = Number(basePriceMap[it.product_id] || p?.base_price || 0);
+                            const uPrice = Number(it.unit_price || agreementMap[it.product_id] || basePrice || 0);
+
+                            itemsSum += (uPrice * qty);
+                            totalKg += qty;
+
+                            if (basePrice > uPrice) {
+                                totalSavingsCop += ((basePrice - uPrice) * qty);
+                            }
+                        });
+
+                        const dbTotal = Number(o.total || o.subtotal || 0);
+                        const effectiveOrderTotal = dbTotal > 0 ? dbTotal : itemsSum;
+                        totalCop += effectiveOrderTotal;
+                    });
+
                     const avgPrice = totalKg > 0 ? (totalCop / totalKg) : 0;
+
                     if (isMounted.current) {
-                        setConsumptionKpis({ totalCop, totalKg, avgPrice });
+                        setConsumptionKpis({ totalCop, totalKg, totalSavingsCop, avgPrice });
                     }
 
-                    // 2. Aggregate top products
+                    // Aggregate top consumed products
                     const aggregation: Record<string, any> = {};
                     filteredItems.forEach(item => {
                         const p = Array.isArray(item.products) ? item.products[0] : item.products;
-                        if (!p) return;
-                        const pName = locale === 'en' ? (p.name_en || p.name) : p.name;
-                        const pId = p.id;
+                        const pName = locale === 'en' ? (p?.name_en || p?.name || item.nickname) : (p?.name || item.nickname || 'Producto');
+                        const pId = item.product_id || p?.id;
+                        if (!pId) return;
+
                         if (!aggregation[pId]) {
                             aggregation[pId] = {
                                 id: pId,
                                 name: pName,
                                 totalQuantity: 0,
-                                unit: p.unit_of_measure || 'Kg',
-                                image: p.image_url || '',
+                                unit: p?.unit_of_measure || 'Kg',
+                                image: p?.image_url || '',
                                 ordersCount: 0,
-                                product: p
+                                product: p || { id: pId, name: pName, unit_of_measure: 'Kg' }
                             };
                         }
                         aggregation[pId].totalQuantity += Number(item.quantity || 0);
@@ -610,9 +678,8 @@ export default function B2BDashboard() {
                         setConsumptionData(sorted);
                     }
 
-                    // 3. History timeline for line graph
+                    // History timeline for evolution graph
                     const historyMap: Record<string, { date: string, cop: number, kg: number }> = {};
-                    // Initialize each order as a plot point to make sure we show all orders chronologically
                     filteredOrders.forEach(o => {
                         const rawDate = new Date(o.delivery_date || o.created_at);
                         const dateStr = rawDate.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
@@ -622,20 +689,19 @@ export default function B2BDashboard() {
                         if (!historyMap[dateStr]) {
                             historyMap[dateStr] = { date: dateStr, cop: 0, kg: 0 };
                         }
-                        historyMap[dateStr].cop += Number(o.total || 0);
-                    });
 
-                    filteredItems.forEach(item => {
-                        const order = filteredOrders.find(o => o.id === item.order_id);
-                        if (!order) return;
-                        const rawDate = new Date(order.delivery_date || order.created_at);
-                        const dateStr = rawDate.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
-                            month: 'short',
-                            day: 'numeric'
+                        const orderItems = filteredItems.filter(it => it.order_id === o.id);
+                        let itemsSum = 0;
+                        orderItems.forEach(it => {
+                            const qty = Number(it.quantity || 0);
+                            const p = Array.isArray(it.products) ? it.products[0] : it.products;
+                            const uPrice = Number(it.unit_price || agreementMap[it.product_id] || p?.base_price || 0);
+                            itemsSum += (uPrice * qty);
+                            historyMap[dateStr].kg += qty;
                         });
-                        if (historyMap[dateStr]) {
-                            historyMap[dateStr].kg += Number(item.quantity || 0);
-                        }
+
+                        const dbTotal = Number(o.total || o.subtotal || 0);
+                        historyMap[dateStr].cop += (dbTotal > 0 ? dbTotal : itemsSum);
                     });
 
                     const historyList = Object.values(historyMap);
@@ -646,7 +712,7 @@ export default function B2BDashboard() {
                     if (isMounted.current) {
                         setConsumptionData([]);
                         setConsumptionHistory([]);
-                        setConsumptionKpis({ totalCop: 0, totalKg: 0, avgPrice: 0 });
+                        setConsumptionKpis({ totalCop: 0, totalKg: 0, totalSavingsCop: 0, avgPrice: 0 });
                     }
                 }
             } catch (err) {
@@ -657,49 +723,55 @@ export default function B2BDashboard() {
         };
 
         fetchConsumption();
-    }, [activeTab, profile?.company_name, consumptionTimeRange]);
+    }, [activeTab, activeProfile?.id, user?.id, consumptionTimeRange]);
 
     // Fetch Agreements
     useEffect(() => {
-        if (activeTab !== 'agreements' || !profile?.id) return;
+        const targetProfileId = activeProfile?.id || user?.id;
+        if (activeTab !== 'agreements' || !targetProfileId) return;
 
         const fetchAgreements = async () => {
             setIsLoadingAgreements(true);
             try {
-                const clientIds = [profile.id];
-                if (profile.parent_id) {
-                    clientIds.push(profile.parent_id);
+                const clientIds = [targetProfileId];
+                if (activeProfile?.parent_id) {
+                    clientIds.push(activeProfile.parent_id);
                 }
 
-                // Try with join first; fall back to simple query if FK not configured
                 const { data, error } = await supabase
                     .from('quotes')
-                    .select('*, pricing_models!model_id(name)')
+                    .select(`
+                        *,
+                        pricing_models!model_id(name),
+                        quote_items(
+                            *,
+                            products(id, name, name_en, unit_of_measure, image_url, base_price, sku, category)
+                        )
+                    `)
                     .in('client_id', clientIds)
                     .eq('status', 'agreement')
                     .order('created_at', { ascending: false });
 
                 if (error) {
-                    // FK join may not exist — retry without it
-                    const { data: fallback, error: fallbackError } = await supabase
+                    // Retry fallback without pricing_models join if FK relation is omitted
+                    const { data: fallback } = await supabase
                         .from('quotes')
-                        .select('*')
+                        .select(`
+                            *,
+                            quote_items(
+                                *,
+                                products(id, name, name_en, unit_of_measure, image_url, base_price, sku, category)
+                            )
+                        `)
                         .in('client_id', clientIds)
                         .eq('status', 'agreement')
                         .order('created_at', { ascending: false });
 
-                    if (fallbackError) {
-                        // Non-critical: show empty state silently
-                        console.warn('[agreements] fetch failed, showing empty state');
-                        if (isMounted.current) setAgreements([]);
-                    } else {
-                        if (isMounted.current) setAgreements(fallback || []);
-                    }
+                    if (isMounted.current) setAgreements(fallback || []);
                 } else {
                     if (isMounted.current) setAgreements(data || []);
                 }
             } catch (err) {
-                // Unexpected error — degrade gracefully, do not propagate to global handler
                 console.warn('[agreements] unexpected error, showing empty state');
                 if (isMounted.current) setAgreements([]);
             } finally {
@@ -708,7 +780,7 @@ export default function B2BDashboard() {
         };
 
         fetchAgreements();
-    }, [activeTab, profile?.id]);
+    }, [activeTab, activeProfile?.id, user?.id]);
 
     const handleClearOrder = () => {
         if (window.confirm('¿Estás seguro de que quieres borrar todo el pedido y empezar de cero?')) {
@@ -1816,9 +1888,9 @@ export default function B2BDashboard() {
                                 <button
                                     onClick={() => setConsumptionTimeRange('30days')}
                                     style={{
-                                        padding: '0.5rem 1rem',
+                                        padding: '0.5rem 0.85rem',
                                         borderRadius: 'var(--radius-sm)',
-                                        fontSize: '0.8rem',
+                                        fontSize: '0.78rem',
                                         fontWeight: '800',
                                         border: 'none',
                                         backgroundColor: consumptionTimeRange === '30days' ? 'white' : 'transparent',
@@ -1834,9 +1906,9 @@ export default function B2BDashboard() {
                                 <button
                                     onClick={() => setConsumptionTimeRange('3months')}
                                     style={{
-                                        padding: '0.5rem 1rem',
+                                        padding: '0.5rem 0.85rem',
                                         borderRadius: 'var(--radius-sm)',
-                                        fontSize: '0.8rem',
+                                        fontSize: '0.78rem',
                                         fontWeight: '800',
                                         border: 'none',
                                         backgroundColor: consumptionTimeRange === '3months' ? 'white' : 'transparent',
@@ -1849,6 +1921,24 @@ export default function B2BDashboard() {
                                 >
                                     {locale === 'en' ? 'Last 3 Months' : 'Últimos 3 meses'}
                                 </button>
+                                <button
+                                    onClick={() => setConsumptionTimeRange('all')}
+                                    style={{
+                                        padding: '0.5rem 0.85rem',
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        border: 'none',
+                                        backgroundColor: consumptionTimeRange === 'all' ? 'white' : 'transparent',
+                                        color: consumptionTimeRange === 'all' ? 'var(--primary)' : 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        boxShadow: consumptionTimeRange === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {locale === 'en' ? 'All Time History' : 'Histórico Completo'}
+                                </button>
                             </div>
                         </div>
 
@@ -1857,33 +1947,77 @@ export default function B2BDashboard() {
                                 <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
                                 <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{t.b2b.dashboard.calculating}</p>
                             </div>
-                        ) : consumptionData.length > 0 ? (
+                        ) : (consumptionData.length > 0 || consumptionKpis.totalCop > 0) ? (
                             <>
-                                {/* KPIs Cards */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+                                {/* 4 KEY KPI CARDS */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+                                    {/* 1. Total Invertido */}
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: '16px', border: '1px solid #E2E8F0', position: 'relative', overflow: 'hidden' }}>
+                                        <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.08, color: 'var(--primary)' }}>
+                                            <ShoppingCart size={90} />
+                                        </div>
                                         <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             {locale === 'en' ? 'Total Spent' : 'Total Gasto (COP)'}
                                         </p>
                                         <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                             ${Math.round(consumptionKpis.totalCop).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                         </h3>
+                                        <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '4px', display: 'block' }}>
+                                            📦 Pedidos del cliente activo
+                                        </span>
                                     </div>
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+
+                                    {/* 2. Volumen Total */}
+                                    <div style={{ backgroundColor: '#EFF6FF', padding: '1.25rem 1.5rem', borderRadius: '16px', border: '1px solid #BFDBFE', position: 'relative', overflow: 'hidden' }}>
+                                        <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1, color: '#1E40AF' }}>
+                                            <Package size={90} />
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: '#1E40AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             {locale === 'en' ? 'Total Volume' : 'Volumen Total'}
                                         </p>
-                                        <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: '#1E40AF', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                            {Math.round(consumptionKpis.totalKg).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')} Kg
+                                        <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: '#1D4ED8', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            ${Math.round(consumptionKpis.totalKg).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')} Kg
                                         </h3>
+                                        <span style={{ fontSize: '0.72rem', color: '#3B82F6', fontWeight: '700', marginTop: '4px', display: 'block' }}>
+                                            ⚖️ Peso total abastecido
+                                        </span>
                                     </div>
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+
+                                    {/* 3. Ahorro Estimado por Convenio (DESTACADO) */}
+                                    <div style={{ backgroundColor: '#ECFDF5', padding: '1.25rem 1.5rem', borderRadius: '16px', border: '1.5px solid #6EE7B7', position: 'relative', overflow: 'hidden' }}>
+                                        <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.12, color: '#047857' }}>
+                                            <Tag size={90} />
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                {locale === 'en' ? 'Agreement Savings' : 'Ahorro por Convenio'}
+                                            </p>
+                                            <span style={{ backgroundColor: '#10B981', color: 'white', fontSize: '0.62rem', fontWeight: '900', padding: '1px 6px', borderRadius: '8px' }}>
+                                                GARANTIZADO
+                                            </span>
+                                        </div>
+                                        <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: '#047857', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            ${Math.round(consumptionKpis.totalSavingsCop).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                        </h3>
+                                        <span style={{ fontSize: '0.72rem', color: '#065F46', fontWeight: '700', marginTop: '4px', display: 'block' }}>
+                                            💡 Descuento vs precio base general
+                                        </span>
+                                    </div>
+
+                                    {/* 4. Precio Promedio por Kg */}
+                                    <div style={{ backgroundColor: '#FFFBEB', padding: '1.25rem 1.5rem', borderRadius: '16px', border: '1px solid #FDE68A', position: 'relative', overflow: 'hidden' }}>
+                                        <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1, color: '#B45309' }}>
+                                            <BarChart3 size={90} />
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             {locale === 'en' ? 'Avg. Price / Kg' : 'Precio Promedio / Kg'}
                                         </p>
                                         <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: '#D97706', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                             ${Math.round(consumptionKpis.avgPrice).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                         </h3>
+                                        <span style={{ fontSize: '0.72rem', color: '#92400E', fontWeight: '600', marginTop: '4px', display: 'block' }}>
+                                            📊 Eficiencia de compra promedio
+                                        </span>
                                     </div>
                                 </div>
 
@@ -1954,7 +2088,6 @@ export default function B2BDashboard() {
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto' }}>
                                                     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '600px', display: 'block' }}>
-                                                        {/* Definitions for gradients */}
                                                         <defs>
                                                             <linearGradient id="gradKg" x1="0" y1="0" x2="0" y2="1">
                                                                 <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.15" />
@@ -1966,7 +2099,6 @@ export default function B2BDashboard() {
                                                             </linearGradient>
                                                         </defs>
 
-                                                        {/* Grid & Axis Lines */}
                                                         {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
                                                             const y = paddingTop + chartHeight * ratio;
                                                             return (
@@ -1979,11 +2111,9 @@ export default function B2BDashboard() {
                                                                         stroke="#F1F5F9"
                                                                         strokeWidth={1}
                                                                     />
-                                                                    {/* Left axis (Kg) */}
                                                                     <text x={paddingLeft - 10} y={y + 4} textAnchor="end" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
                                                                         {Math.round(maxKg - (maxKg * ratio))}
                                                                     </text>
-                                                                    {/* Right axis (COP) */}
                                                                     <text x={width - paddingRight + 10} y={y + 4} textAnchor="start" style={{ fontSize: '9px', fill: '#3B82F6', fontWeight: 'bold' }}>
                                                                         {formatCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
@@ -1991,7 +2121,6 @@ export default function B2BDashboard() {
                                                             );
                                                         })}
 
-                                                        {/* Area Paths (Gradients) */}
                                                         {points.length > 1 && (
                                                             <>
                                                                 <path d={areaKgPath} fill="url(#gradKg)" />
@@ -1999,7 +2128,6 @@ export default function B2BDashboard() {
                                                             </>
                                                         )}
 
-                                                        {/* Polyline paths */}
                                                         {points.length > 1 && (
                                                             <>
                                                                 <polyline
@@ -2021,15 +2149,12 @@ export default function B2BDashboard() {
                                                             </>
                                                         )}
 
-                                                        {/* Graph Dots, Data labels, and X Axis labels */}
                                                         {points.map((p, index) => {
                                                             return (
                                                                 <g key={index}>
-                                                                    {/* Dots */}
                                                                     <circle cx={p.x} cy={p.yKg} r={4.5} fill="var(--primary)" stroke="white" strokeWidth={1.5} />
                                                                     <circle cx={p.x} cy={p.yCop} r={4.5} fill="#3B82F6" stroke="white" strokeWidth={1.5} />
                                                                     
-                                                                    {/* Floating values above dots */}
                                                                     <text x={p.x} y={p.yKg - 10} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--primary)', fontWeight: '800' }}>
                                                                         {Math.round(p.kg)} Kg
                                                                     </text>
@@ -2037,7 +2162,6 @@ export default function B2BDashboard() {
                                                                         {formatCOP(p.cop)}
                                                                     </text>
 
-                                                                    {/* X Axis Label */}
                                                                     <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
                                                                         {p.date}
                                                                     </text>
@@ -2112,7 +2236,7 @@ export default function B2BDashboard() {
                                                     <div style={{ flex: 1, minWidth: '150px' }}>
                                                         <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
                                                             <div style={{ 
-                                                                width: `${Math.min(100, (item.ordersCount / (invoices.length || 1)) * 100)}%`, 
+                                                                width: `${Math.min(100, (item.ordersCount / (historicalOrders.length || 1)) * 100)}%`, 
                                                                 height: '100%', 
                                                                 backgroundColor: 'var(--primary)',
                                                                 borderRadius: '3px'
@@ -2177,31 +2301,6 @@ export default function B2BDashboard() {
                                 <button onClick={() => setActiveTab('order')} className="btn btn-primary">{t.b2b.dashboard.makeOrder}</button>
                             </div>
                         )}
-                        
-                        {consumptionData.length > 0 && (
-                            <div style={{ 
-                                marginTop: '2.5rem', 
-                                paddingTop: '2rem', 
-                                borderTop: '1px solid #F1F5F9',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                             }}>
-                                <div style={{ opacity: 0.7, fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-                                    * {t.b2b.dashboard.basedOn.replace('{count}', (invoices.length || 0).toString())}
-                                </div>
-                                <button onClick={() => alert('Pronto: Reporte en PDF')} style={{
-                                    backgroundColor: '#EFF6FF',
-                                    color: '#1D4ED8',
-                                    padding: '0.6rem 1.25rem',
-                                    borderRadius: 'var(--radius-md)',
-                                    border: 'none',
-                                    fontSize: '0.85rem',
-                                    fontWeight: '800',
-                                    cursor: 'pointer'
-                                }}>{t.b2b.dashboard.exportReport}</button>
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -2213,98 +2312,341 @@ export default function B2BDashboard() {
                         padding: '2rem',
                         boxShadow: 'var(--shadow-lg)'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                            <h2 style={{ 
-                                margin: 0, 
-                                fontSize: '1.5rem', 
-                                fontWeight: '900', 
-                                fontFamily: 'var(--font-outfit), sans-serif',
-                                color: 'var(--text-main)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px'
-                            }}>
-                                <Rocket size={24} color="var(--primary)" /> {t.b2b.dashboard.agreementsTitle}
-                            </h2>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+                            <div>
+                                <h2 style={{ 
+                                    margin: 0, 
+                                    fontSize: '1.5rem', 
+                                    fontWeight: '900', 
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    color: 'var(--text-main)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <Rocket size={26} color="var(--primary)" /> {t.b2b.dashboard.agreementsTitle}
+                                </h2>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.3rem 0 0', fontSize: '0.9rem', fontWeight: '500' }}>
+                                    Precios fijos preferenciales negociados bajo convenio institucional para el cliente activo.
+                                </p>
+                            </div>
+
+                            {/* Search bar inside agreements */}
+                            {agreements.length > 0 && (
+                                <div style={{ position: 'relative', minWidth: '240px' }}>
+                                    <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                        <Search size={14} strokeWidth={2} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar en insumos del convenio..."
+                                        value={agreementSearchTerm}
+                                        onChange={(e) => setAgreementSearchTerm(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.45rem 1rem 0.45rem 2rem',
+                                            borderRadius: THEME.radius.md,
+                                            border: '1px solid #CBD5E1',
+                                            fontSize: '0.82rem',
+                                            fontWeight: '600',
+                                            outline: 'none',
+                                            backgroundColor: '#F8FAFC'
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {isLoadingAgreements ? (
-                            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingAgreements}</p>
+                            <div style={{ padding: '4rem', textAlign: 'center' }}>
+                                <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
+                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{t.b2b.dashboard.loadingAgreements}</p>
+                            </div>
                         ) : agreements.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-                                {agreements.map((agreement) => (
-                                    <div key={agreement.id} style={{
-                                        border: '1px solid #F1F5F9',
-                                        borderRadius: '16px',
-                                        padding: '1.5rem',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        transition: 'all 0.2s',
-                                        backgroundColor: '#fff'
-                                    }}>
-                                        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                                            <div style={{ 
-                                                width: '56px', 
-                                                height: '56px', 
-                                                backgroundColor: '#F0FDF4', 
-                                                borderRadius: '12px', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center',
-                                                color: 'var(--primary)',
-                                                border: '1px solid #DCFCE7'
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                {agreements.map((agreement) => {
+                                    const items: any[] = agreement.quote_items || [];
+                                    const filteredAgreementItems = items.filter(it => {
+                                        if (!agreementSearchTerm) return true;
+                                        const p = Array.isArray(it.products) ? it.products[0] : it.products;
+                                        const search = agreementSearchTerm.toLowerCase();
+                                        const name = (it.product_name || p?.name || '').toLowerCase();
+                                        const sku = (p?.sku || '').toLowerCase();
+                                        return name.includes(search) || sku.includes(search);
+                                    });
+
+                                    const createdDateStr = agreement.created_at ? new Date(agreement.created_at).toLocaleDateString('es-CO') : '';
+                                    const validDateStr = agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Renovación Automática';
+
+                                    return (
+                                        <div key={agreement.id} style={{
+                                            border: '1px solid #E2E8F0',
+                                            borderRadius: '20px',
+                                            overflow: 'hidden',
+                                            backgroundColor: '#FFFFFF',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                                        }}>
+                                            {/* Agreement Summary Header Card */}
+                                            <div style={{
+                                                backgroundColor: '#F8FAFC',
+                                                padding: '1.5rem',
+                                                borderBottom: '1px solid #E2E8F0',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap',
+                                                gap: '1rem'
                                             }}>
-                                                <FileText size={28} />
+                                                <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+                                                    <div style={{ 
+                                                        width: '56px', 
+                                                        height: '56px', 
+                                                        backgroundColor: '#ECFDF5', 
+                                                        borderRadius: '16px', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        color: 'var(--primary)',
+                                                        border: '1px solid #A7F3D0'
+                                                    }}>
+                                                        <Rocket size={28} />
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                            <span style={{ 
+                                                                padding: '3px 10px',
+                                                                borderRadius: '12px',
+                                                                backgroundColor: '#D1FAE5',
+                                                                color: '#065F46',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '900',
+                                                                textTransform: 'uppercase',
+                                                                letterSpacing: '0.05em'
+                                                            }}>
+                                                                🟢 ACUERDO VIGENTE Y ACTIVO
+                                                            </span>
+                                                            <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '700', fontFamily: 'monospace' }}>
+                                                                Ref: #ACU-{agreement.quote_number || agreement.id.substring(0, 6)}
+                                                            </span>
+                                                        </div>
+                                                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: 'var(--text-main)' }}>
+                                                            {agreement.model_snapshot_name || agreement.pricing_models?.name || 'Acuerdo Comercial Institucional - FruFresco'}
+                                                        </h3>
+                                                        <div style={{ display: 'flex', gap: '1.25rem', marginTop: '6px', fontSize: '0.82rem', color: '#64748B', fontWeight: '600' }}>
+                                                            <span>📅 Vigencia: <strong>{validDateStr}</strong></span>
+                                                            <span>📦 Portafolio en convenio: <strong style={{ color: 'var(--primary)' }}>{items.length} Insumos</strong></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedAgreementForModal(agreement);
+                                                            setIsAgreementModalOpen(true);
+                                                        }}
+                                                        className="btn-premium"
+                                                        style={{
+                                                            padding: '0.65rem 1.25rem',
+                                                            borderRadius: THEME.radius.md,
+                                                            backgroundColor: 'var(--primary)',
+                                                            color: 'white',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.85rem',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '8px',
+                                                            border: 'none',
+                                                            boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)'
+                                                        }}
+                                                    >
+                                                        <Eye size={16} /> Ver / Descargar Documento Formal
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>
-                                                    {t.b2b.dashboard.activeModel}
-                                                </div>
-                                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-main)' }}>
-                                                    {agreement.pricing_models?.name || 'Acuerdo de Precios Personalizado'}
-                                                </h3>
-                                                <div style={{ display: 'flex', gap: '1rem', marginTop: '8px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        📅 {t.b2b.dashboard.validUntil} <strong>{new Date(agreement.valid_until).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US')}</strong>
-                                                    </span>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        🏷️ Ref: <strong>{agreement.quote_number || 'N/A'}</strong>
-                                                    </span>
-                                                </div>
+
+                                            {/* Products Grid in Agreement */}
+                                            <div style={{ padding: '1.5rem' }}>
+                                                <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Tag size={16} color="var(--primary)" /> Productos Incluidos en el Convenio ({filteredAgreementItems.length})
+                                                </h4>
+
+                                                {filteredAgreementItems.length > 0 ? (
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+                                                        {filteredAgreementItems.map((item: any) => {
+                                                            const p = Array.isArray(item.products) ? item.products[0] : item.products;
+                                                            const name = item.product_name || p?.name || 'Producto';
+                                                            const sku = p?.sku || '';
+                                                            const unit = p?.unit_of_measure || 'Kg';
+                                                            const basePrice = Number(p?.base_price || 0);
+                                                            const uPrice = Number(item.unit_price || 0);
+                                                            const savings = basePrice > uPrice ? (basePrice - uPrice) : 0;
+                                                            const savingsPct = basePrice > 0 && savings > 0 ? ((savings / basePrice) * 100).toFixed(1) : 0;
+                                                            const imgUrl = p?.image_url;
+
+                                                            return (
+                                                                <div key={item.id} style={{
+                                                                    border: '1px solid #E2E8F0',
+                                                                    borderRadius: '14px',
+                                                                    padding: '1rem',
+                                                                    backgroundColor: '#F8FAFC',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    justifyContent: 'space-between',
+                                                                    transition: 'all 0.2s'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'flex-start' }}>
+                                                                        <div style={{ width: '48px', height: '48px', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#E2E8F0', flexShrink: 0, border: '1px solid #CBD5E1' }}>
+                                                                            {imgUrl ? <img src={imgUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={24} style={{ margin: '12px auto', display: 'block', color: '#94A3B8' }} />}
+                                                                        </div>
+                                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                                            <h5 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#0F172A', lineHeight: '1.25' }}>{name}</h5>
+                                                                            {sku && <span style={{ fontSize: '0.72rem', color: '#64748B', fontFamily: 'monospace', fontWeight: '600' }}>SKU: {sku}</span>}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                                                        <div>
+                                                                            {basePrice > uPrice && (
+                                                                                <span style={{ display: 'block', fontSize: '0.75rem', color: '#94A3B8', textDecoration: 'line-through', fontWeight: '600' }}>
+                                                                                    ${formatPrice(basePrice)} / {unit}
+                                                                                </span>
+                                                                            )}
+                                                                            <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                                                                ${formatPrice(uPrice)} <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>/ {unit}</span>
+                                                                            </span>
+                                                                            {savings > 0 && (
+                                                                                <span style={{ display: 'inline-block', fontSize: '0.68rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', padding: '1px 6px', borderRadius: '4px', marginTop: '2px' }}>
+                                                                                    -${formatPrice(savings)} ({savingsPct}%)
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        <button
+                                                                            onClick={() => handleQuickAdd(p || { id: item.product_id, name, unit_of_measure: unit }, 1)}
+                                                                            style={{
+                                                                                padding: '0.4rem 0.75rem',
+                                                                                borderRadius: THEME.radius.md,
+                                                                                border: 'none',
+                                                                                backgroundColor: 'var(--primary)',
+                                                                                color: 'white',
+                                                                                fontWeight: '800',
+                                                                                fontSize: '0.78rem',
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                        >
+                                                                            + Pedir
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <p style={{ color: '#64748B', fontSize: '0.85rem', margin: 0 }}>No se encontraron insumos que coincidan con la búsqueda.</p>
+                                                )}
                                             </div>
                                         </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <span style={{ 
-                                                display: 'inline-block',
-                                                padding: '6px 14px',
-                                                borderRadius: 'var(--radius-full)',
-                                                backgroundColor: '#D1FAE5',
-                                                color: '#065F46',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '900',
-                                                textTransform: 'uppercase'
-                                            }}>
-                                                {t.b2b.dashboard.statusActive}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
-                            <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: 'var(--radius-lg)' }}>
-                                <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                                    <Rocket size={32} color="#94A3B8" />
+                            /* INSTITUTIONAL BANNER IF NO AGREEMENT */
+                            <div style={{
+                                backgroundColor: '#F8FAFC',
+                                borderRadius: '24px',
+                                padding: '3rem 2rem',
+                                border: '1px solid #E2E8F0',
+                                textAlign: 'center',
+                                maxWidth: '800px',
+                                margin: '0 auto'
+                            }}>
+                                <div style={{
+                                    width: '72px',
+                                    height: '72px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#ECFDF5',
+                                    color: 'var(--primary)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    margin: '0 auto 1.5rem',
+                                    border: '1px solid #A7F3D0',
+                                    boxShadow: '0 8px 16px rgba(13, 122, 87, 0.1)'
+                                }}>
+                                    <Rocket size={36} strokeWidth={2} />
                                 </div>
-                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>{t.b2b.dashboard.noAgreements}</h3>
-                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0', fontWeight: '500' }}>{t.b2b.dashboard.noAgreementsDesc}</p>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>{t.b2b.dashboard.contactAdvisor}</p>
+
+                                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#0F172A', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                    Potencia el Abastecimiento Institucional de tu Negocio
+                                </h3>
+
+                                <p style={{ color: '#64748B', fontSize: '0.95rem', margin: '0.75rem 0 2rem', fontWeight: '500', lineHeight: 1.5 }}>
+                                    Actualmente el cliente activo no registra un <strong>Acuerdo Comercial Institucional</strong> activo. Solicita tu acuerdo con FruFresco y desbloquea los siguientes beneficios exclusivos:
+                                </p>
+
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                                    gap: '1rem',
+                                    textAlign: 'left',
+                                    marginBottom: '2.5rem'
+                                }}>
+                                    <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.9rem', marginBottom: '4px' }}>
+                                            🏷️ Precios Negociados Fijos
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                                            Garantía de tarifas preferenciales en tus insumos de alto volumen por periodo definido.
+                                        </div>
+                                    </div>
+
+                                    <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontWeight: '800', color: '#1D4ED8', fontSize: '0.9rem', marginBottom: '4px' }}>
+                                            💳 Crédito Institucional
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                                            Cupo asignado con días de plazo adaptados al flujo de caja de tu empresa.
+                                        </div>
+                                    </div>
+
+                                    <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontWeight: '800', color: '#D97706', fontSize: '0.9rem', marginBottom: '4px' }}>
+                                            🚛 Logística Prioritaria
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                                            Prioridad en ventana de entrega y control de calidad digital en bodega.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <a
+                                    href="https://wa.me/573001234567?text=Hola,%20quisiera%20solicitar%20un%20Acuerdo%20Comercial%20Institucional%20con%20FruFresco"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn-premium"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        backgroundColor: 'var(--primary)',
+                                        color: 'white',
+                                        padding: '0.85rem 2rem',
+                                        borderRadius: 'var(--radius-full)',
+                                        fontWeight: '900',
+                                        fontSize: '0.95rem',
+                                        textDecoration: 'none',
+                                        boxShadow: '0 12px 24px rgba(13, 122, 87, 0.25)'
+                                    }}
+                                >
+                                    <Rocket size={18} /> Solicitar Acuerdo Comercial Institucional
+                                </a>
                             </div>
                         )}
                     </div>
                 )}
-
-            </div> {/* Container End */}
+</div> {/* Container End */}
 
             {/* QUANTITY MODAL */}
             {selectedProductForModal && (
@@ -2612,6 +2954,16 @@ export default function B2BDashboard() {
                     </div>
                 </div>
             )}
+
+            <AgreementDocumentModal
+                isOpen={isAgreementModalOpen}
+                onClose={() => {
+                    setIsAgreementModalOpen(false);
+                    setSelectedAgreementForModal(null);
+                }}
+                agreement={selectedAgreementForModal}
+                clientProfile={activeProfile}
+            />
 
             <InvoiceDocumentModal
                 isOpen={isInvoiceModalOpen}
