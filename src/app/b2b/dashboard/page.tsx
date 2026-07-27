@@ -2093,28 +2093,29 @@ export default function B2BDashboard() {
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
-                                                    {/* Floating Glassmorphic Hover Tooltip Card */}
+                                                    {/* Floating Glassmorphic Dynamic Hover Tooltip Card */}
                                                     {activeHoverPoint && (
                                                         <div style={{
                                                             position: 'absolute',
-                                                            top: '10px',
-                                                            left: '50%',
+                                                            top: '-45px',
+                                                            left: `${(activeHoverPoint.x / width) * 100}%`,
                                                             transform: 'translateX(-50%)',
-                                                            backgroundColor: 'rgba(255, 255, 255, 0.70)',
-                                                            backdropFilter: 'blur(16px)',
-                                                            WebkitBackdropFilter: 'blur(16px)',
+                                                            backgroundColor: 'rgba(255, 255, 255, 0.50)',
+                                                            backdropFilter: 'blur(20px)',
+                                                            WebkitBackdropFilter: 'blur(20px)',
                                                             color: '#0F172A',
-                                                            padding: '0.6rem 1.25rem',
+                                                            padding: '0.55rem 1.1rem',
                                                             borderRadius: '14px',
-                                                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.12)',
+                                                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
                                                             zIndex: 30,
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '1.25rem',
-                                                            fontSize: '0.82rem',
+                                                            gap: '1rem',
+                                                            fontSize: '0.8rem',
                                                             pointerEvents: 'none',
-                                                            border: '1px solid rgba(255, 255, 255, 0.65)',
-                                                            animation: 'fadeIn 0.2s ease-in-out'
+                                                            border: '1px solid rgba(255, 255, 255, 0.75)',
+                                                            transition: 'left 0.15s ease-out, opacity 0.15s ease-in-out',
+                                                            whiteSpace: 'nowrap'
                                                         }}>
                                                             <div style={{ fontWeight: '800', color: '#047857' }}>
                                                                 📅 Despacho: {activeHoverPoint.date}
