@@ -2054,11 +2054,11 @@ export default function B2BDashboard() {
 
                                         {(() => {
                                             const width = 850;
-                                            const height = 260;
-                                            const paddingLeft = 60;
-                                            const paddingRight = 65;
-                                            const paddingTop = 35;
-                                            const paddingBottom = 45;
+                                            const height = 220;
+                                            const paddingLeft = 65;
+                                            const paddingRight = 75;
+                                            const paddingTop = 25;
+                                            const paddingBottom = 35;
 
                                             const chartWidth = width - paddingLeft - paddingRight;
                                             const chartHeight = height - paddingTop - paddingBottom;
@@ -2066,7 +2066,7 @@ export default function B2BDashboard() {
                                             const maxKg = Math.max(...consumptionHistory.map(d => d.kg), 10);
                                             const maxCop = Math.max(...consumptionHistory.map(d => d.cop), 10000);
 
-                                            const barWidth = Math.min(42, (chartWidth / consumptionHistory.length) * 0.45);
+                                            const barWidth = Math.min(36, (chartWidth / consumptionHistory.length) * 0.4);
 
                                             const points = consumptionHistory.map((d, index) => {
                                                 const step = chartWidth / (consumptionHistory.length || 1);
@@ -2087,15 +2087,12 @@ export default function B2BDashboard() {
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto' }}>
+                                                    {/* SVG Canvas - Clean & Defined */}
                                                     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '650px', display: 'block' }}>
                                                         <defs>
                                                             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="0%" stopColor="#10B981" />
-                                                                <stop offset="100%" stopColor="#047857" />
-                                                            </linearGradient>
-                                                            <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="0%" stopColor="#2563EB" stopOpacity="0.2" />
-                                                                <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
+                                                                <stop offset="0%" stopColor="#10B981" stopOpacity="0.9" />
+                                                                <stop offset="100%" stopColor="#047857" stopOpacity="0.95" />
                                                             </linearGradient>
                                                         </defs>
 
@@ -2111,84 +2108,53 @@ export default function B2BDashboard() {
                                                                         y2={y}
                                                                         stroke="#F1F5F9"
                                                                         strokeWidth={1}
-                                                                        strokeDasharray={i === 4 ? "none" : "3,3"}
+                                                                        strokeDasharray={i === 4 ? "none" : "4,4"}
                                                                     />
-                                                                    <text x={paddingLeft - 8} y={y + 3} textAnchor="end" style={{ fontSize: '9px', fill: '#047857', fontWeight: 'bold' }}>
+                                                                    {/* Left Axis: COP */}
+                                                                    <text x={paddingLeft - 10} y={y + 3.5} textAnchor="end" style={{ fontSize: '10px', fill: '#047857', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
                                                                         {formatCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
-                                                                    <text x={width - paddingRight + 8} y={y + 3} textAnchor="start" style={{ fontSize: '9px', fill: '#2563EB', fontWeight: 'bold' }}>
+                                                                    {/* Right Axis: Kg */}
+                                                                    <text x={width - paddingRight + 10} y={y + 3.5} textAnchor="start" style={{ fontSize: '10px', fill: '#2563EB', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
                                                                         {Math.round(maxKg - (maxKg * ratio))} Kg
                                                                     </text>
                                                                 </g>
                                                             );
                                                         })}
-                                                        {/* BARS: Spending COP (Value rendered INSIDE the bar in white to avoid any collision) */}
-                                                        {points.map((p, index) => {
-                                                            const hasEnoughHeight = p.barHeight >= 28;
-                                                            return (
-                                                                <g key={`bar-${index}`}>
-                                                                    <rect
-                                                                        x={p.x - barWidth / 2}
-                                                                        y={p.yBar}
-                                                                        width={barWidth}
-                                                                        height={Math.max(6, p.barHeight)}
-                                                                        rx={6}
-                                                                        fill="url(#barGradient)"
-                                                                        opacity={0.92}
-                                                                    />
-                                                                    {/* Value inside bar in white text */}
-                                                                    <text 
-                                                                        x={p.x} 
-                                                                        y={hasEnoughHeight ? p.yBar + 16 : p.yBar + 12} 
-                                                                        textAnchor="middle" 
-                                                                        style={{ 
-                                                                            fontSize: '9px', 
-                                                                            fill: 'white', 
-                                                                            fontWeight: '900',
-                                                                            letterSpacing: '-0.02em',
-                                                                            textShadow: '0 1px 2px rgba(0,0,0,0.4)'
-                                                                        }}
-                                                                    >
-                                                                        {formatCOP(p.cop)}
-                                                                    </text>
-                                                                </g>
-                                                            );
-                                                        })}
 
-                                                        {/* OVERLAY LINE: Volume Kg */}
+                                                        {/* BARS: Spending COP (Ultra Clean - No floating text overlay) */}
+                                                        {points.map((p, index) => (
+                                                            <g key={`bar-${index}`}>
+                                                                <rect
+                                                                    x={p.x - barWidth / 2}
+                                                                    y={p.yBar}
+                                                                    width={barWidth}
+                                                                    height={Math.max(4, p.barHeight)}
+                                                                    rx={4}
+                                                                    fill="url(#barGradient)"
+                                                                />
+                                                            </g>
+                                                        ))}
+
+                                                        {/* OVERLAY LINE: Volume Kg (Thin Defined Line) */}
                                                         {points.length > 1 && (
                                                             <polyline
                                                                 fill="none"
                                                                 stroke="#2563EB"
-                                                                strokeWidth={3.5}
+                                                                strokeWidth={2.5}
                                                                 points={pointsKgStr}
                                                                 strokeLinecap="round"
                                                                 strokeLinejoin="round"
                                                             />
                                                         )}
 
-                                                        {/* LINE POINTS & BADGES (Floating cleanly ABOVE the line) */}
+                                                        {/* LINE NODES (Clean Minimal Dots) */}
                                                         {points.map((p, index) => (
                                                             <g key={`point-${index}`}>
-                                                                <circle cx={p.x} cy={p.yKg} r={5.5} fill="#2563EB" stroke="white" strokeWidth={2.5} />
+                                                                <circle cx={p.x} cy={p.yKg} r={4.5} fill="#2563EB" stroke="white" strokeWidth={2} />
                                                                 
-                                                                {/* Kg badge pill background */}
-                                                                <rect 
-                                                                    x={p.x - 24} 
-                                                                    y={p.yKg - 25} 
-                                                                    width={48} 
-                                                                    height={16} 
-                                                                    rx={5} 
-                                                                    fill="#2563EB" 
-                                                                    stroke="white" 
-                                                                    strokeWidth={1.5} 
-                                                                />
-                                                                <text x={p.x} y={p.yKg - 13} textAnchor="middle" style={{ fontSize: '9px', fill: 'white', fontWeight: '900' }}>
-                                                                    {Math.round(p.kg)} Kg
-                                                                </text>
-
                                                                 {/* Date Label on X Axis */}
-                                                                <text x={p.x} y={height - 12} textAnchor="middle" style={{ fontSize: '9.5px', fill: '#475569', fontWeight: 'bold' }}>
+                                                                <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '10px', fill: '#475569', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
                                                                     {p.date}
                                                                 </text>
                                                             </g>
@@ -2197,6 +2163,39 @@ export default function B2BDashboard() {
                                                 </div>
                                             );
                                         })()}
+
+                                        {/* CLEAN EXECUTIVE DATA TABLE BELOW CHART */}
+                                        <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', fontFamily: 'Inter, sans-serif' }}>
+                                                <thead>
+                                                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
+                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: '700' }}>Despacho / Fecha</th>
+                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#047857' }}>Inversión ($ COP)</th>
+                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#2563EB' }}>Volumen (Kg)</th>
+                                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700' }}>Costo Eficiencia ($/Kg)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {consumptionHistory.map((row, idx) => {
+                                                        const unitCost = row.kg > 0 ? Math.round(row.cop / row.kg) : 0;
+                                                        return (
+                                                            <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                                <td style={{ padding: '0.65rem 0.75rem', fontWeight: '700', color: '#0F172A' }}>{row.date}</td>
+                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontWeight: '800', color: '#047857' }}>
+                                                                    ${Math.round(row.cop).toLocaleString('es-CO')}
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontWeight: '800', color: '#2563EB' }}>
+                                                                    {Math.round(row.kg)} Kg
+                                                                </td>
+                                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontWeight: '600', color: '#475569' }}>
+                                                                    ${unitCost.toLocaleString('es-CO')} / Kg
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
 
                                         {/* Executive Procurement Summary Banner */}
                                         <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
