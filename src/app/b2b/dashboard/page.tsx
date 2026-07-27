@@ -2044,7 +2044,6 @@ export default function B2BDashboard() {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'linear-gradient(180deg, #10B981 0%, #047857 100%)' }}></div>
                                                     <span style={{ color: '#047857' }}>{locale === 'en' ? 'Spent ($ COP)' : 'Gasto por Pedido ($ COP)'}</span>
-                                                </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <div style={{ width: '12px', height: '3px', backgroundColor: '#2563EB', borderRadius: '2px' }}></div>
                                                     <span style={{ color: '#2563EB' }}>{locale === 'en' ? 'Volume (Kg)' : 'Tendencia Volumen (Kg)'}</span>
@@ -2054,11 +2053,11 @@ export default function B2BDashboard() {
 
                                         {(() => {
                                             const width = 850;
-                                            const height = 220;
-                                            const paddingLeft = 65;
+                                            const height = 230;
+                                            const paddingLeft = 70;
                                             const paddingRight = 75;
-                                            const paddingTop = 25;
-                                            const paddingBottom = 35;
+                                            const paddingTop = 28;
+                                            const paddingBottom = 38;
 
                                             const chartWidth = width - paddingLeft - paddingRight;
                                             const chartHeight = height - paddingTop - paddingBottom;
@@ -2066,7 +2065,7 @@ export default function B2BDashboard() {
                                             const maxKg = Math.max(...consumptionHistory.map(d => d.kg), 10);
                                             const maxCop = Math.max(...consumptionHistory.map(d => d.cop), 10000);
 
-                                            const barWidth = Math.min(36, (chartWidth / consumptionHistory.length) * 0.4);
+                                            const barWidth = Math.min(34, (chartWidth / consumptionHistory.length) * 0.4);
 
                                             const points = consumptionHistory.map((d, index) => {
                                                 const step = chartWidth / (consumptionHistory.length || 1);
@@ -2080,14 +2079,20 @@ export default function B2BDashboard() {
 
                                             const pointsKgStr = points.map(p => `${p.x},${p.yKg}`).join(' ');
 
-                                            const formatCOP = (val: number) => {
-                                                const formatted = Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, locale === 'en' ? "," : ".");
-                                                return '$' + formatted;
+                                            // Compact Millions & Thousands Currency Formatter
+                                            const formatCompactCOP = (val: number) => {
+                                                if (val >= 1000000) {
+                                                    const mVal = (val / 1000000).toFixed(1).replace('.', ',');
+                                                    return '$' + (mVal.endsWith(',0') ? mVal.slice(0, -2) : mVal) + 'M';
+                                                } else if (val >= 1000) {
+                                                    return '$' + Math.round(val / 1000) + ' mil';
+                                                }
+                                                return '$' + Math.round(val);
                                             };
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto' }}>
-                                                    {/* SVG Canvas - Clean & Defined */}
+                                                    {/* SVG Canvas - Clean, Defined & Compact Axis Labels */}
                                                     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '650px', display: 'block' }}>
                                                         <defs>
                                                             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
@@ -2110,19 +2115,19 @@ export default function B2BDashboard() {
                                                                         strokeWidth={1}
                                                                         strokeDasharray={i === 4 ? "none" : "4,4"}
                                                                     />
-                                                                    {/* Left Axis: COP */}
-                                                                    <text x={paddingLeft - 10} y={y + 3.5} textAnchor="end" style={{ fontSize: '10px', fill: '#047857', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
-                                                                        {formatCOP(maxCop - (maxCop * ratio))}
+                                                                    {/* Left Axis: COP (Format in $M) */}
+                                                                    <text x={paddingLeft - 8} y={y + 3} textAnchor="end" style={{ fontSize: '9px', fill: '#047857', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
+                                                                        {formatCompactCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
                                                                     {/* Right Axis: Kg */}
-                                                                    <text x={width - paddingRight + 10} y={y + 3.5} textAnchor="start" style={{ fontSize: '10px', fill: '#2563EB', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
+                                                                    <text x={width - paddingRight + 8} y={y + 3} textAnchor="start" style={{ fontSize: '9px', fill: '#2563EB', fontWeight: '700', fontFamily: 'Inter, sans-serif' }}>
                                                                         {Math.round(maxKg - (maxKg * ratio))} Kg
                                                                     </text>
                                                                 </g>
                                                             );
                                                         })}
 
-                                                        {/* BARS: Spending COP (Ultra Clean - No floating text overlay) */}
+                                                        {/* BARS: Spending COP */}
                                                         {points.map((p, index) => (
                                                             <g key={`bar-${index}`}>
                                                                 <rect
@@ -2133,6 +2138,10 @@ export default function B2BDashboard() {
                                                                     rx={4}
                                                                     fill="url(#barGradient)"
                                                                 />
+                                                                {/* Compact Value Label on top of Bar */}
+                                                                <text x={p.x} y={Math.max(paddingTop - 4, p.yBar - 6)} textAnchor="middle" style={{ fontSize: '8.5px', fill: '#047857', fontWeight: '800', fontFamily: 'Inter, sans-serif' }}>
+                                                                    {formatCompactCOP(p.cop)}
+                                                                </text>
                                                             </g>
                                                         ))}
 
@@ -2148,13 +2157,18 @@ export default function B2BDashboard() {
                                                             />
                                                         )}
 
-                                                        {/* LINE NODES (Clean Minimal Dots) */}
+                                                        {/* LINE NODES & Kg Badges */}
                                                         {points.map((p, index) => (
                                                             <g key={`point-${index}`}>
-                                                                <circle cx={p.x} cy={p.yKg} r={4.5} fill="#2563EB" stroke="white" strokeWidth={2} />
+                                                                <circle cx={p.x} cy={p.yKg} r={4} fill="#2563EB" stroke="white" strokeWidth={2} />
                                                                 
+                                                                {/* Small defined Kg Badge above line node */}
+                                                                <text x={p.x} y={p.yKg - 9} textAnchor="middle" style={{ fontSize: '8.5px', fill: '#1E40AF', fontWeight: '800', fontFamily: 'Inter, sans-serif' }}>
+                                                                    {Math.round(p.kg)} Kg
+                                                                </text>
+
                                                                 {/* Date Label on X Axis */}
-                                                                <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '10px', fill: '#475569', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
+                                                                <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: '#475569', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
                                                                     {p.date}
                                                                 </text>
                                                             </g>
@@ -2163,9 +2177,6 @@ export default function B2BDashboard() {
                                                 </div>
                                             );
                                         })()}
-
-                                        {/* CLEAN EXECUTIVE DATA TABLE BELOW CHART */}
-                                        <div style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', fontFamily: 'Inter, sans-serif' }}>
                                                 <thead>
                                                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
