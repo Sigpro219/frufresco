@@ -31,7 +31,7 @@ export default function Letterhead({ children, title, date, reference }: Letterh
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    border-bottom: 2px solid #1e3a8a;
+                    border-bottom: 2px solid #0D7A57;
                     padding-bottom: 0.5rem;
                     margin-bottom: 1.5rem;
                 }
