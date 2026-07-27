@@ -19,8 +19,8 @@ export default function Letterhead({ children, title, date, reference }: Letterh
                     font-family: 'Inter', sans-serif;
                     width: 210mm; /* A4 width */
                     min-height: 297mm; /* A4 height */
-                    margin: 2rem auto;
-                    padding: 20mm;
+                    margin: 1rem auto;
+                    padding: 12mm 15mm;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
                     position: relative;
                     display: flex;
@@ -32,81 +32,83 @@ export default function Letterhead({ children, title, date, reference }: Letterh
                     justify-content: space-between;
                     align-items: center;
                     border-bottom: 2px solid #0D7A57;
-                    padding-bottom: 0.5rem;
-                    margin-bottom: 1.5rem;
+                    padding-bottom: 0.4rem;
+                    margin-bottom: 0.85rem;
                 }
 
                 .logo-section {
                     display: flex;
                     flex-direction: column;
-                    gap: 0.5rem;
+                    gap: 0.25rem;
                 }
 
                 .company-info {
                     text-align: right;
-                    font-size: 0.8rem;
+                    font-size: 0.76rem;
                     color: #4b5563;
-                    line-height: 1.4;
+                    line-height: 1.3;
                 }
 
                 .company-name {
                     font-weight: 800;
                     color: #111827;
-                    font-size: 1.1rem;
+                    font-size: 1rem;
                     text-transform: uppercase;
-                    margin-bottom: 0.25rem;
+                    margin-bottom: 0.15rem;
                 }
 
                 .document-body {
                     flex-grow: 1;
-                    font-size: 1rem;
-                    line-height: 1.6;
+                    font-size: 0.88rem;
+                    line-height: 1.4;
                     color: #374151;
                 }
 
                 .document-meta {
-                    margin-bottom: 2rem;
+                    margin-bottom: 0.85rem;
                     display: flex;
                     justify-content: space-between;
-                    font-size: 0.9rem;
+                    font-size: 0.85rem;
                     color: #6b7280;
+                    font-weight: 600;
                 }
 
                 .document-title {
-                    font-size: 1.5rem;
-                    font-weight: 700;
+                    font-size: 1.25rem;
+                    font-weight: 800;
                     color: #111827;
-                    margin-bottom: 1.5rem;
+                    margin-bottom: 0.85rem;
                     text-align: center;
+                    letter-spacing: -0.02em;
                 }
 
                 .letterhead-footer {
-                    margin-top: 3rem;
+                    margin-top: 1.5rem;
                     border-top: 1px solid #f3f4f6;
-                    padding-top: 1.5rem;
-                    font-size: 0.75rem;
+                    padding-top: 0.75rem;
+                    font-size: 0.7rem;
                     color: #9ca3af;
                     text-align: center;
                 }
 
                 @media print {
                     @page {
-                        margin: 10mm;
+                        margin: 8mm 10mm;
                     }
 
-                    /* 1. Global Reset: Hide EVERYTHING by default */
                     body, html {
                         visibility: hidden !important;
                         height: auto !important;
                         overflow: visible !important;
                     }
                     
-                    /* 2. Hide specific Next.js main wrappers just in case */
+                    footer, .footer, #footer, .letterhead-footer, .global-banner {
+                        display: none !important;
+                    }
+
                     body > *:not(.letterhead-container),
                     nav, 
-                    footer, 
                     .navbar, 
-                    .global-banner, 
                     header:not(.letterhead-header),
                     #root > *:not(.letterhead-container),
                     #__next > *:not(.letterhead-container),
@@ -120,12 +122,10 @@ export default function Letterhead({ children, title, date, reference }: Letterh
                         visibility: hidden !important;
                     }
 
-                    /* 3. Make the Letterhead and its children the ONLY visible things */
                     .letterhead-container, .letterhead-container * {
                         visibility: visible !important;
                     }
 
-                    /* 4. Position the letterhead to take over the document flow */
                     .letterhead-container {
                         position: absolute;
                         left: 0;
@@ -135,10 +135,10 @@ export default function Letterhead({ children, title, date, reference }: Letterh
                         padding: 0;
                         background: white;
                         display: block;
+                        box-shadow: none !important;
                     }
 
-                    /* 5. Ensure breaks are handled */
-                    .letterhead-header, .letterhead-footer {
+                    .letterhead-header {
                         break-inside: avoid;
                     }
                 }
@@ -147,9 +147,9 @@ export default function Letterhead({ children, title, date, reference }: Letterh
             <header className="letterhead-header">
                 <div className="logo-section">
                     <img 
-                        src="/assets/branding/logo_corporate.png?v=3" 
+                        src="/logo-investments.png" 
                         alt="Investments Cortes Logo" 
-                        style={{ height: '120px', width: 'auto', objectFit: 'contain' }}
+                        style={{ height: '55px', width: 'auto', objectFit: 'contain' }}
                     />
                 </div>
                 <div className="company-info" suppressHydrationWarning>
@@ -175,11 +175,6 @@ export default function Letterhead({ children, title, date, reference }: Letterh
                     {children}
                 </div>
             </main>
-
-            <footer className="letterhead-footer">
-                <p>Este documento es propiedad de Investments Cortes S.A.S. Prohibida su reproducción total o parcial sin autorización.</p>
-                <div style={{ marginTop: '0.5rem', fontWeight: 600 }}>CORTESÍA • CALIDAD • COMPROMISO</div>
-            </footer>
         </div>
     );
 }
