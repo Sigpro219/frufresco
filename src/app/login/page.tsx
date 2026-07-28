@@ -44,9 +44,11 @@ export default function LoginPage() {
             }
 
             console.log('🚪 Redirigiendo usuario con rol:', profile.role);
-            const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
+            const isStaff = profile.profile_type === 'employee' || 
+                            (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
+                            (profile.custom_permissions && profile.custom_permissions.length > 0);
             
-            if (staffRoles.includes(profile.role)) {
+            if (isStaff) {
                 router.push('/admin/dashboard');
             } else if (profile.role === 'b2b_client') {
                 router.push('/b2b/dashboard');
