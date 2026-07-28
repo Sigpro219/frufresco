@@ -95,6 +95,21 @@ export default function B2BDashboard() {
     // Fetch simulated profiles for B2B testing/onboarding — Restringido exclusivamente a las 3 sucursales del plan piloto
     useEffect(() => {
         const fetchSimProfiles = async () => {
+            try {
+                // 1. Try fetching via API route to bypass browser RLS constraints
+                const res = await fetch('/api/b2b/pilot-profiles');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.profiles && json.profiles.length > 0 && isMounted.current) {
+                        setSimulatedProfiles(json.profiles);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('API pilot profiles fetch failed, trying direct Supabase query:', e);
+            }
+
+            // 2. Direct Supabase Fallback
             const pilotIds = [
                 'dc3bd32e-32dd-4a35-934f-f5816ea576e0', // Yanuba Cedritos 150
                 'a9f31891-7278-49ea-8ee8-2252fdb44ec1', // El Corral Gourmet Floresta
