@@ -21,9 +21,9 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
     <div style={{ 
       display: 'flex', 
       flexDirection: 'column',
-      gap: '2.5rem', 
-      justifyContent: 'center', 
-      alignItems: 'center',
+      gap: '1.25rem', 
+      justifyContent: 'flex-start', 
+      alignItems: 'flex-start',
       marginTop: '1rem'
     }}>
       {/* Main CTA: Catalog */}
@@ -59,7 +59,7 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
         padding: '0.5rem'
       }}>
         {isB2bEnabled && (
-          <Link href="/b2b/register" style={{ textDecoration: 'none' }}>
+          <Link href="/b2b/dashboard" style={{ textDecoration: 'none' }}>
             <button className="btn-glass" style={{
               fontSize: '1.1rem',
               padding: '0.9rem 2.8rem',
@@ -77,32 +77,10 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
               boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
             }}>
               <Building2 size={22} strokeWidth={2} /> 
-              {t.btnInstitutional}
+              {t.btnInstitutional || 'Portal Institucional'}
             </button>
           </Link>
         )}
-        
-        <Link href="/register" style={{ textDecoration: 'none' }}>
-          <button className="btn-glass" style={{
-            fontSize: '1.1rem',
-            padding: '0.9rem 2.8rem',
-            fontWeight: '700',
-            borderRadius: 'var(--radius-full)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.8rem',
-            color: 'white',
-            border: '1px solid rgba(255,255,255,0.4)',
-            cursor: 'pointer',
-            backgroundColor: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(15px)',
-            transition: 'all 0.3s ease',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-          }}>
-            <ShoppingCart size={22} strokeWidth={2} /> 
-            {t.btnHome}
-          </button>
-        </Link>
       </div>
     </div>
   );
