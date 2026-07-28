@@ -427,56 +427,38 @@ export default function B2BDashboard() {
                 const targetProfileId = activeProfile?.id || user.id;
                 const effectiveClientId = activeProfile?.parent_id || activeProfile?.id;
 
-                // 1. Fetch Active Commercial Agreement Prices
+                // 1. Fetch Active Commercial Agreement Prices via API Endpoint (Bypassing Browser RLS)
                 let pricesMap: Record<string, number> = {};
                 if (effectiveClientId) {
-                    const { data: agreementData } = await supabase
-                        .from('quotes')
-                        .select(`
-                            id,
-                            quote_items(product_id, unit_price)
-                        `)
-                        .eq('client_id', effectiveClientId)
-                        .eq('status', 'agreement')
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                    if (agreementData?.quote_items) {
-                        agreementData.quote_items.forEach((qi: any) => {
-                            if (qi.product_id && qi.unit_price) {
-                                pricesMap[qi.product_id] = Number(qi.unit_price);
+                    try {
+                        const res = await fetch(`/api/b2b/agreements?clientId=${effectiveClientId}`);
+                        if (res.ok) {
+                            const json = await res.json();
+                            if (json.pricesMap) {
+                                pricesMap = json.pricesMap;
                             }
-                        });
+                        }
+                    } catch (e) {
+                        console.warn('API agreement fetch error, fallback to direct query:', e);
                     }
                 }
                 if (isMounted.current) {
                     setAgreementPricesMap(pricesMap);
                 }
 
-                // 2. Fetch Last 5 Orders for active profile/user
-                const { data: recentOrders } = await supabase
-                    .from('orders')
-                    .select(`
-                        id,
-                        sequence_id,
-                        created_at,
-                        delivery_date,
-                        subtotal,
-                        total,
-                        order_items(
-                            id,
-                            product_id,
-                            quantity,
-                            unit_price,
-                            unit,
-                            nickname,
-                            products(id, name, name_en, unit_of_measure, image_url, base_price)
-                        )
-                    `)
-                    .eq('profile_id', targetProfileId)
-                    .order('created_at', { ascending: false })
-                    .limit(5);
+                // 2. Fetch Last 5 Orders via API Endpoint (Bypassing Browser RLS)
+                let recentOrders: any[] = [];
+                if (effectiveClientId) {
+                    try {
+                        const res = await fetch(`/api/b2b/orders?clientId=${effectiveClientId}`);
+                        if (res.ok) {
+                            const json = await res.json();
+                            recentOrders = json.orders || [];
+                        }
+                    } catch (e) {
+                        console.warn('API orders fetch error:', e);
+                    }
+                }
 
                 if (recentOrders && recentOrders.length > 0 && isMounted.current) {
                     setHistoricalOrders(recentOrders);
@@ -768,6 +750,23 @@ export default function B2BDashboard() {
 
         const fetchAgreements = async () => {
             setIsLoadingAgreements(true);
+            try {
+                const effectiveClientId = activeProfile?.parent_id || activeProfile?.id || user?.id;
+                if (effectiveClientId) {
+                    const res = await fetch(`/api/b2b/agreements?clientId=${effectiveClientId}`);
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json.agreements && isMounted.current) {
+                            setAgreements(json.agreements);
+                            setIsLoadingAgreements(false);
+                            return;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[agreements] API fetch error, fallback to direct query:', e);
+            }
+
             try {
                 const clientIds = [targetProfileId];
                 if (activeProfile?.parent_id) {
