@@ -92,22 +92,41 @@ export default function B2BDashboard() {
         return () => { isMounted.current = false; };
     }, []);
 
-    // Fetch simulated profiles for B2B testing/onboarding — Restringido exclusivamente a las 3 sucursales del plan piloto
+    // Fetch all B2B profiles with active quotes/agreements for client selector
     useEffect(() => {
         const fetchSimProfiles = async () => {
-            const pilotIds = [
-                'dc3bd32e-32dd-4a35-934f-f5816ea576e0', // Yanuba Cedritos 150
-                'a9f31891-7278-49ea-8ee8-2252fdb44ec1', // El Corral Gourmet Floresta
-                'b7458b9c-f512-4063-847d-1c29991c15ff'  // CESNE Policía
-            ];
-            const { data } = await supabase
-                .from('profiles')
-                .select('id, company_name, nit, parent_id')
-                .in('id', pilotIds)
-                .order('company_name');
+            try {
+                // 1. Get client IDs that have quotes/agreements
+                const { data: quotesData } = await supabase
+                    .from('quotes')
+                    .select('client_id');
+                
+                const quoteClientIds = Array.from(new Set((quotesData || []).map(q => q.client_id).filter(Boolean)));
+                
+                // Default pilot fallback IDs if quotes query is restricted
+                const pilotIds = [
+                    'dc3bd32e-32dd-4a35-934f-f5816ea576e0', // Yanuba Cedritos 150
+                    'a9f31891-7278-49ea-8ee8-2252fdb44ec1', // El Corral Gourmet Floresta
+                    'b7458b9c-f512-4063-847d-1c29991c15ff'  // CESNE Policía
+                ];
 
-            if (data && isMounted.current) {
-                setSimulatedProfiles(data);
+                const allTargetIds = Array.from(new Set([...quoteClientIds, ...pilotIds]));
+
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('id, company_name, contact_name, nit, parent_id')
+                    .or(`role.eq.b2b_client,id.in.(${allTargetIds.join(',')})`)
+                    .order('company_name');
+
+                if (data && isMounted.current) {
+                    const formatted = data.map(p => ({
+                        ...p,
+                        company_name: p.company_name || p.contact_name || 'Cliente B2B'
+                    }));
+                    setSimulatedProfiles(formatted);
+                }
+            } catch (err) {
+                console.error('Error fetching B2B client profiles:', err);
             }
         };
         fetchSimProfiles();
