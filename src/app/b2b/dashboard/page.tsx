@@ -28,7 +28,7 @@ interface OrderItem {
 
 export default function B2BDashboard() {
     const [focusMode, setFocusMode] = useState<'split' | 'catalog' | 'cart'>('split');
-    const [agreementFilter, setAgreementFilter] = useState<'all' | 'agreement' | 'non_agreement'>('all');
+    const [agreementFilter, setAgreementFilter] = useState<'agreement' | 'non_agreement' | 'all'>('agreement');
 
     const formatPrice = (val: number | string | null | undefined): string => {
         const num = Math.round(Number(val) || 0);
@@ -137,26 +137,45 @@ export default function B2BDashboard() {
         const fetchCategoryProducts = async () => {
             setIsLoadingCategory(true);
             try {
-                let query = supabase
-                    .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price')
-                    .eq('is_active', true);
+                let allProducts: any[] = [];
+                let page = 0;
+                const pageSize = 1000;
+                let hasMore = true;
 
-                if (selectedCategory) {
-                    query = query.eq('category', selectedCategory);
-                }
+                while (hasMore) {
+                    let query = supabase
+                        .from('products')
+                        .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price, category')
+                        .eq('is_active', true)
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-                const { data, error } = await query
-                    .order('name')
-                    .abortSignal(signal as any);
+                    if (selectedCategory) {
+                        query = query.eq('category', selectedCategory);
+                    }
 
-                if (error) {
-                    if (isAbortError(error)) return;
-                    throw error;
+                    const { data, error } = await query
+                        .order('name')
+                        .abortSignal(signal as any);
+
+                    if (error) {
+                        if (isAbortError(error)) return;
+                        throw error;
+                    }
+
+                    if (data && data.length > 0) {
+                        allProducts = allProducts.concat(data);
+                        if (data.length < pageSize) {
+                            hasMore = false;
+                        } else {
+                            page++;
+                        }
+                    } else {
+                        hasMore = false;
+                    }
                 }
                 
                 // Priorizar productos con acuerdo comercial y luego por foto
-                const sorted = (data || []).sort((a, b) => {
+                const sorted = allProducts.sort((a, b) => {
                     const isAgreeA = agreementPricesMap[a.id] !== undefined;
                     const isAgreeB = agreementPricesMap[b.id] !== undefined;
                     if (isAgreeA && !isAgreeB) return -1;
@@ -1107,73 +1126,88 @@ export default function B2BDashboard() {
                                     </h2>
 
                                     {/* Agreement Status Filter Pills */}
-                                    <div style={{
-                                        display: 'flex',
-                                        backgroundColor: '#F1F5F9',
-                                        borderRadius: THEME.radius.md,
-                                        padding: '2px',
-                                        border: '1px solid #E2E8F0',
-                                        gap: '2px'
-                                    }}>
-                                        <button
-                                            onClick={() => setAgreementFilter('all')}
-                                            style={{
-                                                padding: '0.25rem 0.6rem',
-                                                borderRadius: THEME.radius.md,
-                                                border: 'none',
-                                                backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
-                                                color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
-                                                fontWeight: agreementFilter === 'all' ? '800' : '600',
-                                                fontSize: '0.72rem',
-                                                cursor: 'pointer',
-                                                boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                            }}
-                                        >
-                                            Todos
-                                        </button>
+                                    {(() => {
+                                        const activeProds = categoryProducts.filter(p => p.is_active !== false);
+                                        const countInAgreement = activeProds.filter(p => agreementPricesMap[p.id] !== undefined).length;
+                                        const countOutAgreement = activeProds.filter(p => agreementPricesMap[p.id] === undefined).length;
+                                        const countTotal = activeProds.length;
 
-                                        <button
-                                            onClick={() => setAgreementFilter('agreement')}
-                                            style={{
-                                                padding: '0.25rem 0.6rem',
-                                                borderRadius: THEME.radius.md,
-                                                border: 'none',
-                                                backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
-                                                color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
-                                                fontWeight: agreementFilter === 'agreement' ? '800' : '600',
-                                                fontSize: '0.72rem',
-                                                cursor: 'pointer',
+                                        return (
+                                            <div style={{
                                                 display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                            }}
-                                            title="Mostrar solo productos incluidos en tu acuerdo comercial"
-                                        >
-                                            <Tag size={12} /> En Convenio
-                                        </button>
+                                                backgroundColor: '#F1F5F9',
+                                                borderRadius: THEME.radius.md,
+                                                padding: '2px',
+                                                border: '1px solid #E2E8F0',
+                                                gap: '2px'
+                                            }}>
+                                                {/* 1. En Convenio (Default) */}
+                                                <button
+                                                    onClick={() => setAgreementFilter('agreement')}
+                                                    style={{
+                                                        padding: '0.25rem 0.6rem',
+                                                        borderRadius: THEME.radius.md,
+                                                        border: 'none',
+                                                        backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
+                                                        color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
+                                                        fontWeight: agreementFilter === 'agreement' ? '800' : '600',
+                                                        fontSize: '0.72rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                                    }}
+                                                    title="Mostrar solo productos incluidos en tu acuerdo comercial"
+                                                >
+                                                    <Tag size={12} /> En Convenio <span style={{ opacity: 0.8, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'agreement' ? '#059669' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countInAgreement}</span>
+                                                </button>
 
-                                        <button
-                                            onClick={() => setAgreementFilter('non_agreement')}
-                                            style={{
-                                                padding: '0.25rem 0.6rem',
-                                                borderRadius: THEME.radius.md,
-                                                border: 'none',
-                                                backgroundColor: agreementFilter === 'non_agreement' ? '#F1F5F9' : 'transparent',
-                                                color: agreementFilter === 'non_agreement' ? '#334155' : '#64748B',
-                                                fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
-                                                fontSize: '0.72rem',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                            }}
-                                            title="Mostrar solo productos fuera de convenio"
-                                        >
-                                            <Info size={12} /> Fuera de Convenio
-                                        </button>
-                                    </div>
+                                                {/* 2. Fuera de Convenio */}
+                                                <button
+                                                    onClick={() => setAgreementFilter('non_agreement')}
+                                                    style={{
+                                                        padding: '0.25rem 0.6rem',
+                                                        borderRadius: THEME.radius.md,
+                                                        border: 'none',
+                                                        backgroundColor: agreementFilter === 'non_agreement' ? '#E2E8F0' : 'transparent',
+                                                        color: agreementFilter === 'non_agreement' ? '#1E293B' : '#64748B',
+                                                        fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
+                                                        fontSize: '0.72rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                                    }}
+                                                    title="Mostrar solo productos fuera de convenio"
+                                                >
+                                                    <Info size={12} /> Fuera de Convenio <span style={{ opacity: 0.8, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'non_agreement' ? '#475569' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countOutAgreement}</span>
+                                                </button>
+
+                                                {/* 3. Todos */}
+                                                <button
+                                                    onClick={() => setAgreementFilter('all')}
+                                                    style={{
+                                                        padding: '0.25rem 0.6rem',
+                                                        borderRadius: THEME.radius.md,
+                                                        border: 'none',
+                                                        backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
+                                                        color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
+                                                        fontWeight: agreementFilter === 'all' ? '800' : '600',
+                                                        fontSize: '0.72rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                                    }}
+                                                >
+                                                    Todos <span style={{ opacity: 0.8, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'all' ? 'var(--primary)' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countTotal}</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Right: Compact Search Input & Category Dropdown */}
@@ -1256,14 +1290,26 @@ export default function B2BDashboard() {
 
                             {/* Category Products Results */}
                             <div style={{ padding: '1.25rem 1rem' }}>
-                                <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Package size={16} /> {selectedCategory ? (t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)) : t.b2b.dashboard.allCategories}
-                                </h4>
+                                {(() => {
+                                    const filteredList = categoryProducts.filter(p => {
+                                        if (p.is_active === false) return false;
+                                        if (agreementFilter === 'agreement') return agreementPricesMap[p.id] !== undefined;
+                                        if (agreementFilter === 'non_agreement') return agreementPricesMap[p.id] === undefined;
+                                        return true;
+                                    });
+                                    const filterLabel = agreementFilter === 'agreement' ? 'En Convenio' : agreementFilter === 'non_agreement' ? 'Fuera de Convenio' : 'Todos los Productos';
+                                    return (
+                                        <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Package size={16} color="var(--primary)" /> {filterLabel} ({filteredList.length}) {selectedCategory ? `— ${t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)}` : ''}
+                                        </h4>
+                                    );
+                                })()}
                                 {isLoadingCategory ? (
                                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
                                 ) : categoryProducts.length > 0 ? (
                                     <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
                                         {categoryProducts.filter(p => {
+                                            if (p.is_active === false) return false;
                                             if (agreementFilter === 'agreement') return agreementPricesMap[p.id] !== undefined;
                                             if (agreementFilter === 'non_agreement') return agreementPricesMap[p.id] === undefined;
                                             return true;
@@ -2489,8 +2535,9 @@ export default function B2BDashboard() {
                                 {agreements.map((agreement) => {
                                     const items: any[] = agreement.quote_items || [];
                                     const filteredAgreementItems = items.filter(it => {
-                                        if (!agreementSearchTerm) return true;
                                         const p = Array.isArray(it.products) ? it.products[0] : it.products;
+                                        if (p && p.is_active === false) return false;
+                                        if (!agreementSearchTerm) return true;
                                         const search = agreementSearchTerm.toLowerCase();
                                         const name = (it.product_name || p?.name || '').toLowerCase();
                                         const sku = (p?.sku || '').toLowerCase();
