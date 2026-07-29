@@ -84,6 +84,9 @@ export default function CheckoutPage() {
     const searchParams = useSearchParams();
     
     const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+    const [isGiftForRecipient, setIsGiftForRecipient] = useState(false);
+    const [recipientName, setRecipientName] = useState('');
+    const [recipientPhone, setRecipientPhone] = useState('');
 
     const itemBreakdownSummary = useMemo(() => {
         if (!items || items.length === 0) return '';
@@ -521,6 +524,11 @@ export default function CheckoutPage() {
             );
         }
 
+        if (isGiftForRecipient) {
+            if (!recipientName.trim()) return alert(locale === 'es' ? 'Por favor ingresa el Nombre Completo de quien recibe.' : 'Please enter the Recipient Full Name.');
+            if (!recipientPhone.trim()) return alert(locale === 'es' ? 'Por favor ingresa el Número de Celular de quien recibe.' : 'Please enter the Recipient Phone Number.');
+        }
+
         setShowConfirmationModal(true);
     };
 
@@ -535,6 +543,10 @@ export default function CheckoutPage() {
             const safeLat = latitude ? parseFloat(latitude.toFixed(8)) : null;
             const safeLng = longitude ? parseFloat(longitude.toFixed(8)) : null;
 
+            const clientNotesHeader = isGiftForRecipient 
+                ? `[COMPRADOR / FACTURACIÓN: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[DESTINATARIO / RECIBE EN PUERTA: ${recipientName} | Tel: ${recipientPhone}]`
+                : `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]`;
+
             const orderDataToInsert = {
                 type: isB2B ? 'b2b_client' : 'b2c_client',
                 delivery_date: date,
@@ -547,7 +559,7 @@ export default function CheckoutPage() {
                 profile_id: matchedProfileId || null,
                 payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
                 payment_status: 'Pendiente',
-                special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]${packagingFeeEnabled ? `\n[EMPAQUE PLÁSTICO (${packagingFeePercentage}%): +$${packagingFeeAmount.toLocaleString('es-CO')} COP]` : ''}\n[ORIGIN: web]\n${specialNotes || ''}`
+                special_notes: `${clientNotesHeader}${packagingFeeEnabled ? `\n[EMPAQUE PLÁSTICO (${packagingFeePercentage}%): +$${packagingFeeAmount.toLocaleString('es-CO')} COP]` : ''}\n[ORIGIN: web]\n${specialNotes || ''}`
             };
 
             const orderItemsData = items.map(item => ({
@@ -1472,13 +1484,8 @@ export default function CheckoutPage() {
                                                 style={{ 
                                                     background: 'none', 
                                                     border: 'none', 
-                                                    color: isCustomerOutOfZone ? '#D97706' : '#166534', 
+                                                    color: isCustomerOutOfZone ? '#D97706' : '#059669', 
                                                     cursor: 'pointer', 
-                                                    fontSize: '0.75rem', 
-                                                    fontWeight: '800', 
-                                                    textDecoration: 'underline',
-                                                    flexShrink: 0,
-                                                    whiteSpace: 'nowrap',
                                                     paddingTop: '2px'
                                                 }}
                                             >
@@ -2135,7 +2142,18 @@ export default function CheckoutPage() {
                                 <div>
                                     <div style={{ fontWeight: '700', color: '#334155' }}>{locale === 'es' ? 'Dirección de Entrega' : 'Delivery Address'}</div>
                                     <div style={{ color: '#64748B', marginTop: '2px' }}>{address}</div>
-                                    <div style={{ color: '#94A3B8', fontSize: '0.8rem', marginTop: '1px' }}>{name} ({phone})</div>
+                                    <div style={{ color: '#94A3B8', fontSize: '0.8rem', marginTop: '1px' }}>
+                                        {isGiftForRecipient ? (
+                                            <>
+                                                <div>👤 {locale === 'es' ? 'Comprador:' : 'Buyer:'} {name} ({phone})</div>
+                                                <div style={{ color: '#047857', fontWeight: '700', marginTop: '2px' }}>
+                                                    🎁 {locale === 'es' ? 'Recibe en puerta:' : 'Recipient:'} {recipientName} ({recipientPhone})
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>{name} ({phone})</>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
