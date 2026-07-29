@@ -80,15 +80,25 @@ export async function POST(request: Request) {
                     if (!dbProd) {
                         return NextResponse.json({ error: `Product not found: ${item.product_id}` }, { status: 400 });
                     }
-                    const modelPriceObj = dbProd.pricing_model_prices?.find((p: any) => p.model_id === pricingModelId);
-                    const modelPrice = modelPriceObj?.price ?? dbProd.base_price ?? 0;
                     const isLibraUnit = !!(item.unit && (item.unit.toLowerCase().includes('libra') || item.unit.toLowerCase().includes('500g')));
                     const isKgProd = (dbProd.unit_of_measure || '').toLowerCase() === 'kg';
                     const unitFactor = (isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1);
-                    const expectedPrice = Math.ceil((modelPrice * unitFactor) / 50) * 50;
 
-                    if (modelPrice > 0 && Math.abs(expectedPrice - item.unit_price) > 0.01) {
-                        console.error(`Price manipulation detected! Product: ${item.product_id}, Sent price: ${item.unit_price}, Expected: ${expectedPrice}, PricingModel: ${pricingModelId}`);
+                    const allowedPrices = [
+                        Math.ceil(((dbProd.base_price || 0) * unitFactor) / 50) * 50
+                    ];
+                    if (dbProd.pricing_model_prices) {
+                        for (const p of dbProd.pricing_model_prices) {
+                            if (p.price > 0) {
+                                allowedPrices.push(Math.ceil((p.price * unitFactor) / 50) * 50);
+                            }
+                        }
+                    }
+
+                    const isPriceValid = item.unit_price === 0 || allowedPrices.some(ap => ap > 0 && Math.abs(ap - item.unit_price) <= 0.01);
+
+                    if (!isPriceValid) {
+                        console.error(`Price manipulation detected! Product: ${item.product_id}, Sent price: ${item.unit_price}, Allowed prices:`, allowedPrices);
                         return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
                     }
                 }
