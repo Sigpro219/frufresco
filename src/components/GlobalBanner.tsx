@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
-import { Truck, Clock, Calendar } from 'lucide-react';
 
 export default function GlobalBanner() {
   const searchParams = useSearchParams();
@@ -83,7 +82,7 @@ export default function GlobalBanner() {
         <span style={{ 
           display: 'inline-flex', 
           alignItems: 'center', 
-          gap: '5px', 
+          gap: '6px', 
           backgroundColor: 'rgba(255, 255, 255, 0.18)', 
           padding: '3px 10px', 
           borderRadius: '20px', 
@@ -92,10 +91,20 @@ export default function GlobalBanner() {
           fontSize: '0.75rem',
           letterSpacing: '0.05em'
         }}>
-          <Truck size={13} strokeWidth={2.5} /> ENTREGAS HOGAR
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+            <path d="M15 18H9" />
+            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14v10" />
+            <circle cx="17" cy="18" r="2" />
+            <circle cx="7" cy="18" r="2" />
+          </svg>
+          ENTREGAS HOGAR
         </span>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <Clock size={14} strokeWidth={2} style={{ color: '#A7F3D0' }} />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#A7F3D0' }}>
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
           <span>
             {customDeliveryDate ? (
               <>Tu pedido llegará el <b>{customDeliveryDate}</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
