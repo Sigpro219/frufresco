@@ -5,6 +5,23 @@ import { supabase } from '../lib/supabase';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 
+function formatSpanishDate(dateVal: string | Date): string {
+    let d: Date;
+    if (typeof dateVal === 'string') {
+        const parts = dateVal.split('-');
+        if (parts.length === 3) {
+            d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        } else {
+            d = new Date(dateVal);
+        }
+    } else {
+        d = dateVal;
+    }
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    return `${days[d.getDay()]} ${d.getDate()} de ${months[d.getMonth()]}`;
+}
+
 export default function GlobalBanner() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -12,6 +29,7 @@ export default function GlobalBanner() {
   const t = translations[locale];
   const [bannerText, setBannerText] = useState<string | null>(null);
   const [customDeliveryDate, setCustomDeliveryDate] = useState<string | null>(null);
+  const [cutoffEnabled, setCutoffEnabled] = useState(false);
 
   const isCheckout = pathname === '/checkout';
 
@@ -21,22 +39,22 @@ export default function GlobalBanner() {
       try {
         const { data, error } = await supabase
           .from('app_settings')
-          .select('value')
-          .eq('key', locale === 'en' ? 'global_banner_en' : 'global_banner')
-          .maybeSingle(); 
+          .select('key, value')
+          .in('key', [locale === 'en' ? 'global_banner_en' : 'global_banner', 'enable_cutoff_rules']); 
         
         if (!isMounted) return;
 
-        if (error) {
-            console.warn('GlobalBanner: Error fetching banner config', error.message);
-            setBannerText(t.bannerText);
-            return;
-        }
-
-        if (data?.value) {
-          let text = data.value;
-          text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
-          setBannerText(text);
+        if (data) {
+          data.forEach(s => {
+            if (s.key === 'enable_cutoff_rules') {
+              setCutoffEnabled(s.value === 'true');
+            }
+            if (s.key === (locale === 'en' ? 'global_banner_en' : 'global_banner')) {
+              let text = s.value;
+              if (text) text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
+              setBannerText(text || t.bannerText);
+            }
+          });
         } else {
           setBannerText(t.bannerText);
         }
@@ -61,6 +79,18 @@ export default function GlobalBanner() {
   }, [isCheckout]);
 
   if (isCheckout) {
+    // Calculate Bogota hour (UTC-5)
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const bogotaNow = new Date(utc + (3600000 * -5));
+    const currentHour = bogotaNow.getHours();
+    const isAfterCutoff = cutoffEnabled && currentHour >= 17;
+
+    const daysToAdd = isAfterCutoff ? 2 : 1;
+    const defaultTargetDate = new Date(bogotaNow);
+    defaultTargetDate.setDate(defaultTargetDate.getDate() + daysToAdd);
+    const formattedDefaultDate = formatSpanishDate(defaultTargetDate);
+
     return (
       <div style={{
         background: 'linear-gradient(90deg, #044E38 0%, #0D7A57 50%, #056848 100%)',
@@ -107,9 +137,13 @@ export default function GlobalBanner() {
           </svg>
           <span>
             {customDeliveryDate ? (
-              <>Tu pedido llegará el <b>{customDeliveryDate}</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
+              <>Tu pedido llegará el <b>{formatSpanishDate(customDeliveryDate)}</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
+            ) : cutoffEnabled && !isAfterCutoff ? (
+              <>⚡ ¡Pide antes de las <b>5:00 p.m.</b> y recibe <b>MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b>!</>
+            ) : cutoffEnabled && isAfterCutoff ? (
+              <>🕒 Corte de las 5:00 p.m. cerrado: Tu pedido llegará <b>PASADO MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
             ) : (
-              <>Tu pedido llegará <b>mañana de 8:00 a.m. a 5:00 p.m.</b> <span style={{ opacity: 0.85, fontWeight: '500' }}>(a menos que elijas una fecha diferente)</span></>
+              <>🚚 Tu pedido llegará <b>MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
             )}
           </span>
         </div>
