@@ -589,9 +589,16 @@ export default function CheckoutPage() {
             const result = await Promise.race([createOrderPromise, timeoutPromise]) as Response;
 
             if (!result.ok) {
-                const errorData = await result.json().catch(() => ({}));
-                console.error('❌ Error insertando pedido:', errorData);
-                throw new Error(`Error al crear el pedido: ${errorData.error || result.statusText}`);
+                const rawText = await result.text().catch(() => '');
+                let errorMsg = result.statusText || 'Error al procesar pedido';
+                try {
+                    const parsed = JSON.parse(rawText);
+                    if (parsed.error) errorMsg = parsed.error;
+                } catch {
+                    if (rawText) errorMsg = rawText;
+                }
+                console.error('❌ Error insertando pedido:', errorMsg);
+                throw new Error(`Error al crear el pedido: ${errorMsg}`);
             }
 
             const { order: orderData } = await result.json();
