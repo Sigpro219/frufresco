@@ -67,12 +67,13 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             .reduce((acc: any, opt: any) => {
                 let values = opt.values || [];
                 if (opt.name.toLowerCase().includes('presentaci')) {
-                    const defaultVal = product.web_unit || product.unit_of_measure || 'Kg';
-                    if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
-                        values = [defaultVal, ...values];
-                    }
-                    if (isBaseInKg && !values.some((v: string) => v.toLowerCase().includes('libra') || v.toLowerCase().includes('lb'))) {
-                        values = [...values, 'Libra|500'];
+                    if (isBaseInKg) {
+                        values = [isEn ? 'Pound (500g)|500' : 'Libra (500g)|500'];
+                    } else {
+                        const defaultVal = product.web_unit || product.unit_of_measure || 'Unidad';
+                        if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                            values = [defaultVal, ...values];
+                        }
                     }
                 }
                 return { ...acc, [opt.name]: values };
@@ -81,10 +82,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
     const hasPresentationKey = Object.keys(displayOptions).some(k => k.toLowerCase().includes('presentaci'));
     if (isBaseInKg && !hasPresentationKey) {
-        const defaultVal = product.web_unit || product.unit_of_measure || 'Kg';
         displayOptions = {
             ...displayOptions,
-            'Presentación': [defaultVal, 'Libra|500']
+            'Presentación': [isEn ? 'Pound (500g)|500' : 'Libra (500g)|500']
         };
     }
 
@@ -107,16 +107,15 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             const val = parseFloat(gMatch[1]);
             if (!isNaN(val) && val > 0) return val / 1000;
         }
-        if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+        if (clean.includes('libra') || clean.includes('lb') || clean.includes('pound')) return 0.5;
         return null;
     };
 
     // Initialize selections with the first option of each category (sorted alphabetically)
-    // Initialize selections with the first option of each category (sorted alphabetically)
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
         if (Array.isArray(values) && values.length > 0) {
-            const defaultUnit = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+            const defaultUnit = isBaseInKg ? (isEn ? 'pound (500g)' : 'libra (500g)') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
             const sortedValues = values.slice().sort((valA, valB) => {
                 const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                 const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
@@ -138,11 +137,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         }
     });
 
-    const defaultUnit = (product.web_unit || product.unit_of_measure || '').toLowerCase();
+    const defaultUnit = isBaseInKg ? (isEn ? 'pound (500g)' : 'libra (500g)') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
     const isDefaultSelected = selectedPresentationVal?.toLowerCase() === defaultUnit;
-    const parsedWeight = selectedPresentationVal && !isDefaultSelected ? getParsedWeight(selectedPresentationVal) : null;
-    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
-    const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : (product.web_unit || product.unit_of_measure);
+    const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+    const activeConversionFactor = isBaseInKg ? 0.5 : (parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1));
+    const activeUnit = isBaseInKg ? (isEn ? 'Libra (500g)' : 'Libra (500g)') : (selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : (product.web_unit || product.unit_of_measure));
 
     // Solo considerar variantes que estén marcadas para mostrarse en web
     const visibleVariants = (product.variants || []).filter(v => (v as any).show_on_web !== false);
