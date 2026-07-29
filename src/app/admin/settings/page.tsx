@@ -637,95 +637,102 @@ export default function AdminSettingsPage() {
                             border: `1px solid ${THEME.colors.border}`,
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
-                            {settings.filter(s => ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'].includes(s.key)).map((setting) => (
-                                <div key={setting.key} style={{ 
-                                    backgroundColor: THEME.colors.surface, 
-                                    borderRadius: THEME.radius.md, 
-                                    padding: '1rem', 
-                                    border: `1px solid ${THEME.colors.border}`,
-                                    boxShadow: THEME.shadow.sm,
-                                    gridColumn: setting.key === 'packaging_fee_note' ? '1 / -1' : 'span 1'
-                                }}>
-                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {setting.key === 'delivery_fee' ? 'Costo de Envío' :
-                                         setting.key === 'min_order_hogar' ? 'Mínimo Hogar' :
-                                         setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
-                                         setting.key === 'store_status' ? 'Estado Tienda' :
-                                         setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
-                                         setting.key === 'enable_cutoff_rules' ? 'Reglas Hora de Corte (5 PM)' :
-                                         setting.key === 'packaging_fee_enabled' ? '🛍️ Cobro Empaque Plástico (Checkout)' :
-                                         setting.key === 'packaging_fee_percentage' ? '🛍️ Porcentaje Empaque (%)' :
-                                         setting.key === 'packaging_fee_note' ? '🛍️ Explicación de Empaque (Nota Cliente)' :
-                                         setting.key.replace(/_/g, ' ')}
-                                    </h4>
-                                    {setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'packaging_fee_enabled' ? (
-                                        <select 
-                                            value={setting.value} 
-                                            onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
-                                            style={{ 
-                                                width: '100%', 
-                                                padding: '8px 12px', 
-                                                borderRadius: THEME.radius.sm, 
-                                                border: `1px solid ${THEME.colors.borderActive}`, 
-                                                fontWeight: '600',
-                                                fontSize: '0.85rem',
-                                                color: THEME.colors.textMain,
-                                                backgroundColor: THEME.colors.surface,
-                                                cursor: 'pointer',
-                                                outline: 'none'
-                                            }}
-                                        >
-                                            <option value={setting.key === 'store_status' ? "open" : "true"}>{setting.key === 'store_status' ? "ABIERTA" : "ACTIVADA"}</option>
-                                            <option value={setting.key === 'store_status' ? "closed" : "false"}>{setting.key === 'store_status' ? "CERRADA" : "DESACTIVADA"}</option>
-                                        </select>
-                                    ) : setting.key === 'packaging_fee_note' ? (
-                                        <textarea
-                                            defaultValue={setting.value}
-                                            onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '8px 12px',
-                                                borderRadius: THEME.radius.sm,
-                                                border: `1px solid ${THEME.colors.borderActive}`,
-                                                fontWeight: '500',
-                                                fontSize: '0.8rem',
-                                                color: THEME.colors.textMain,
-                                                outline: 'none',
-                                                minHeight: '60px',
-                                                resize: 'vertical'
-                                            }}
-                                        />
-                                    ) : (
-                                        <div>
-                                            <div style={{ position: 'relative' }}>
-                                                <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: '600', color: THEME.colors.textSecondary }}>
-                                                    {setting.key === 'packaging_fee_percentage' ? '%' : '$'}
-                                                </span>
-                                                <input 
-                                                    type="number" 
-                                                    defaultValue={setting.value} 
-                                                    onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                            {(() => {
+                                const opKeys = ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                return settings
+                                    .filter(s => opKeys.includes(s.key))
+                                    .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
+                                    .map((setting) => (
+                                        <div key={setting.key} style={{ 
+                                            backgroundColor: THEME.colors.surface, 
+                                            borderRadius: THEME.radius.md, 
+                                            padding: '1rem', 
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            boxShadow: THEME.shadow.sm,
+                                            gridColumn: setting.key === 'packaging_fee_note' ? '1 / -1' : 'span 1'
+                                        }}>
+                                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                {setting.key === 'delivery_fee' ? 'Costo de Envío' :
+                                                 setting.key === 'min_order_hogar' ? 'Mínimo Hogar' :
+                                                 setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
+                                                 setting.key === 'store_status' ? 'Estado Tienda' :
+                                                 setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
+                                                 setting.key === 'enable_cutoff_rules' ? 'Reglas Hora de Corte (5 PM)' :
+                                                 setting.key === 'packaging_fee_enabled' ? '🛍️ Cobro Empaque Plástico (Checkout)' :
+                                                 setting.key === 'packaging_fee_percentage' ? '🛍️ Porcentaje Empaque (%)' :
+                                                 setting.key === 'packaging_fee_note' ? '🛍️ Explicación de Empaque (Nota Cliente)' :
+                                                 setting.key.replace(/_/g, ' ')}
+                                            </h4>
+                                            {setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'packaging_fee_enabled' ? (
+                                                <select 
+                                                    value={setting.value} 
+                                                    onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
                                                     style={{ 
                                                         width: '100%', 
-                                                        padding: '8px 8px 8px 25px', 
+                                                        padding: '8px 12px', 
                                                         borderRadius: THEME.radius.sm, 
                                                         border: `1px solid ${THEME.colors.borderActive}`, 
                                                         fontWeight: '600',
+                                                        fontSize: '0.85rem',
                                                         color: THEME.colors.textMain,
+                                                        backgroundColor: THEME.colors.surface,
+                                                        cursor: 'pointer',
                                                         outline: 'none'
-                                                    }} 
+                                                    }}
+                                                >
+                                                    <option value={setting.key === 'store_status' ? "open" : "true"}>{setting.key === 'store_status' ? "ABIERTA" : "ACTIVADA"}</option>
+                                                    <option value={setting.key === 'store_status' ? "closed" : "false"}>{setting.key === 'store_status' ? "CERRADA" : "DESACTIVADA"}</option>
+                                                </select>
+                                            ) : setting.key === 'packaging_fee_note' ? (
+                                                <textarea
+                                                    defaultValue={setting.value}
+                                                    onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '8px 12px',
+                                                        borderRadius: THEME.radius.sm,
+                                                        border: `1px solid ${THEME.colors.borderActive}`,
+                                                        fontWeight: '500',
+                                                        fontSize: '0.8rem',
+                                                        color: THEME.colors.textMain,
+                                                        outline: 'none',
+                                                        minHeight: '60px',
+                                                        resize: 'vertical'
+                                                    }}
                                                 />
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                                                <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>Formato local:</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.primary }}>
-                                                    {formatMoney(parseFloat(setting.value || '0'))}
-                                                </span>
-                                            </div>
+                                            ) : (
+                                                <div>
+                                                    <div style={{ position: 'relative' }}>
+                                                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: '600', color: THEME.colors.textSecondary }}>
+                                                            {setting.key === 'packaging_fee_percentage' ? '%' : '$'}
+                                                        </span>
+                                                        <input 
+                                                            type="number" 
+                                                            defaultValue={setting.value} 
+                                                            onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                                                            style={{ 
+                                                                width: '100%', 
+                                                                padding: '8px 8px 8px 25px', 
+                                                                borderRadius: THEME.radius.sm, 
+                                                                border: `1px solid ${THEME.colors.borderActive}`, 
+                                                                fontWeight: '600',
+                                                                color: THEME.colors.textMain,
+                                                                outline: 'none'
+                                                            }} 
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                                                        <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>Formato local:</span>
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.primary }}>
+                                                            {setting.key === 'packaging_fee_percentage' ? `${setting.value}%` : formatMoney(parseFloat(setting.value || '0'))}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            ))}
+                                    ));
+                            })()}
+                        </div>
                         </div>
                     )}
                 </div>
