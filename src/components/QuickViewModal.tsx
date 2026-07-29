@@ -88,12 +88,13 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                 .reduce((acc: any, opt: any) => {
                     let values = opt.values || [];
                     if (opt.name.toLowerCase().includes('presentaci')) {
-                        const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Kg';
-                        if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
-                            values = [defaultVal, ...values];
-                        }
-                        if (isBaseInKg && !values.some((v: string) => v.toLowerCase().includes('libra') || v.toLowerCase().includes('lb'))) {
-                            values = [...values, 'Libra|500'];
+                        if (isBaseInKg) {
+                            values = [locale === 'en' ? 'Pound (500g)|500' : 'Libra (500g)|500'];
+                        } else {
+                            const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Unidad';
+                            if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                                values = [defaultVal, ...values];
+                            }
                         }
                     }
                     return { ...acc, [opt.name]: values };
@@ -102,21 +103,22 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
 
         const hasPresentationKey = Object.keys(opts).some(k => k.toLowerCase().includes('presentaci'));
         if (isBaseInKg && !hasPresentationKey) {
-            const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Kg';
             opts = {
                 ...opts,
-                'Presentación': [defaultVal, 'Libra|500']
+                'Presentación': [locale === 'en' ? 'Pound (500g)|500' : 'Libra (500g)|500']
             };
         }
         return opts;
-    }, [product, masterAttributes]);
+    }, [product, masterAttributes, locale]);
 
     // Initialize selections with the first option of each category (sorted alphabetically)
     const initialSelections = useMemo(() => {
         const selections: Record<string, string> = {};
+        const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+        const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
         Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
             if (Array.isArray(values) && values.length > 0) {
-                const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+                const defaultUnit = isBaseInKg ? (locale === 'en' ? 'pound (500g)' : 'libra (500g)') : ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
                 const sortedValues = values.slice().sort((valA, valB) => {
                     const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                     const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
@@ -128,7 +130,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
             }
         });
         return selections;
-    }, [displayOptions, product]);
+    }, [displayOptions, product, locale]);
 
     const [selections, setSelections] = useState(initialSelections);
 
@@ -164,7 +166,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
             const val = parseFloat(gMatch[1]);
             if (!isNaN(val) && val > 0) return val / 1000;
         }
-        if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+        if (clean.includes('libra') || clean.includes('lb') || clean.includes('pound')) return 0.5;
         return null;
     };
 
@@ -176,11 +178,11 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
         }
     });
 
-    const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-    const isDefaultSelected = selectedPresentationVal?.toLowerCase() === defaultUnit;
-    const parsedWeight = selectedPresentationVal && !isDefaultSelected ? getParsedWeight(selectedPresentationVal) : null;
-    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1);
-    const activeUnit = selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : ((product as any).web_unit || product.unit_of_measure);
+    const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
+    const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
+    const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
+    const activeConversionFactor = isBaseInKg ? 0.5 : (parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1));
+    const activeUnit = isBaseInKg ? (locale === 'en' ? 'Pound (500g)' : 'Libra (500g)') : (selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : ((product as any).web_unit || product.unit_of_measure));
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
     const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;
