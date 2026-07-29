@@ -18,7 +18,8 @@ import {
     Settings, 
     Activity,
     FileText,
-    Users
+    Users,
+    Banknote
 } from 'lucide-react';
 
 interface Order {
@@ -37,6 +38,8 @@ interface Order {
     address_complement?: string;
     display_slot?: string;
     slot_type?: 'manual' | 'profile' | 'b2c_slot' | 'flexible';
+    payment_method?: string;
+    payment_status?: string;
 }
 
 interface Vehicle {
@@ -242,7 +245,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     is_b2b: resolvedIsB2B,
                     delivery_zone: o.delivery_zone || '',
                     display_slot: displaySlot,
-                    slot_type: slotType
+                    slot_type: slotType,
+                    payment_method: o.payment_method,
+                    payment_status: o.payment_status
                 };
             });
             setOrders(mappedOrders);
@@ -869,18 +874,22 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 }}>
                                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={10} strokeWidth={1.5} /> {order.display_slot}</span> {order.slot_type === 'manual' ? ' (Manual)' : order.slot_type === 'profile' ? ' (Ficha)' : ''}
                                                 </div>
-                                                {order.payment_status !== 'Pagado' && (
+                                                {order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
                                                     <div style={{
-                                                        fontSize: '0.55rem',
-                                                        fontWeight: '900',
-                                                        color: '#92400E',
-                                                        backgroundColor: '#FEF3C7',
+                                                        fontSize: '0.58rem',
+                                                        fontWeight: '800',
+                                                        color: '#B45309',
+                                                        backgroundColor: '#FFFBEB',
                                                         border: '1px solid #FDE68A',
-                                                        padding: '0.15rem 0.4rem',
+                                                        padding: '1px 6px',
                                                         borderRadius: '4px',
-                                                        display: 'inline-block'
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px',
+                                                        whiteSpace: 'nowrap',
+                                                        marginTop: '3px'
                                                     }}>
-                                                        💵 PENDIENTE DE PAGO
+                                                        <Banknote size={10} strokeWidth={1.5} /> Cobrar en puerta
                                                     </div>
                                                 )}
                                             </div>
