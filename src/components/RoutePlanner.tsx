@@ -869,6 +869,20 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 }}>
                                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={10} strokeWidth={1.5} /> {order.display_slot}</span> {order.slot_type === 'manual' ? ' (Manual)' : order.slot_type === 'profile' ? ' (Ficha)' : ''}
                                                 </div>
+                                                {order.payment_status !== 'Pagado' && (
+                                                    <div style={{
+                                                        fontSize: '0.55rem',
+                                                        fontWeight: '900',
+                                                        color: '#92400E',
+                                                        backgroundColor: '#FEF3C7',
+                                                        border: '1px solid #FDE68A',
+                                                        padding: '0.15rem 0.4rem',
+                                                        borderRadius: '4px',
+                                                        display: 'inline-block'
+                                                    }}>
+                                                        💵 PENDIENTE DE PAGO
+                                                    </div>
+                                                )}
                                             </div>
                                             {order.novedad && (
                                                 <div style={{ 

@@ -64,11 +64,10 @@ export async function POST(request: Request) {
             }
 
             const productIds = items.map((item: any) => item.product_id);
-            const { data: dbProducts, error: dbErr } = await serverSupabase
+            const { data: dbProducts, error: dbErr } = await supabase
                 .from('products')
-                .select('id, base_price, web_conversion_factor, pricing_model_prices(price)')
-                .in('id', productIds)
-                .eq('pricing_model_prices.model_id', pricingModelId);
+                .select('id, base_price, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id)')
+                .in('id', productIds);
 
             if (dbErr) {
                 console.warn("Pricing cache check skipped due to DB error:", dbErr.message);
@@ -78,10 +77,14 @@ export async function POST(request: Request) {
                     if (!dbProd) {
                         return NextResponse.json({ error: `Product not found: ${item.product_id}` }, { status: 400 });
                     }
-                    const modelPrice = dbProd.pricing_model_prices?.[0]?.price ?? dbProd.base_price ?? 0;
-                    const expectedPrice = Math.ceil((modelPrice * (dbProd.web_conversion_factor || 1)) / 50) * 50;
+                    const modelPriceObj = dbProd.pricing_model_prices?.find((p: any) => p.model_id === pricingModelId);
+                    const modelPrice = modelPriceObj?.price ?? dbProd.base_price ?? 0;
+                    const isLibraUnit = (item.unit && (item.unit.toLowerCase().includes('libra') || item.unit.toLowerCase().includes('500g'))) || order.type === 'b2c_client';
+                    const isKgProd = (dbProd.unit_of_measure || '').toLowerCase() === 'kg';
+                    const unitFactor = (isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1);
+                    const expectedPrice = Math.ceil((modelPrice * unitFactor) / 50) * 50;
 
-                    if (Math.abs(expectedPrice - item.unit_price) > 0.01) {
+                    if (modelPrice > 0 && Math.abs(expectedPrice - item.unit_price) > 0.01) {
                         console.error(`Price manipulation detected! Product: ${item.product_id}, Sent price: ${item.unit_price}, Expected: ${expectedPrice}`);
                         return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
                     }
