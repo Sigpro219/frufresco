@@ -31,6 +31,9 @@ export default function GlobalBanner() {
   const [customDeliveryDate, setCustomDeliveryDate] = useState<string | null>(null);
   const [cutoffEnabled, setCutoffEnabled] = useState(false);
 
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [fadeState, setFadeState] = useState(true);
+
   const isCheckout = pathname === '/checkout';
 
   useEffect(() => {
@@ -75,7 +78,19 @@ export default function GlobalBanner() {
     };
     checkDate();
     window.addEventListener('storage', checkDate);
-    return () => window.removeEventListener('storage', checkDate);
+
+    const interval = setInterval(() => {
+      setFadeState(false);
+      setTimeout(() => {
+        setMessageIndex(prev => (prev + 1) % 2);
+        setFadeState(true);
+      }, 300);
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('storage', checkDate);
+      clearInterval(interval);
+    };
   }, [isCheckout]);
 
   if (isCheckout) {
@@ -130,22 +145,42 @@ export default function GlobalBanner() {
           </svg>
           ENTREGAS HOGAR
         </span>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#A7F3D0' }}>
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-          <span>
-            {customDeliveryDate ? (
-              <>Tu pedido llegará el <b>{formatSpanishDate(customDeliveryDate)}</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
-            ) : cutoffEnabled && !isAfterCutoff ? (
-              <>⚡ ¡Pide antes de las <b>5:00 p.m.</b> y recibe <b>MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b>!</>
-            ) : cutoffEnabled && isAfterCutoff ? (
-              <>🕒 Corte de las 5:00 p.m. cerrado: Tu pedido llegará <b>PASADO MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
-            ) : (
-              <>🚚 Tu pedido llegará <b>MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
-            )}
-          </span>
+        <div style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: '6px',
+          opacity: fadeState ? 1 : 0,
+          transform: fadeState ? 'translateY(0)' : 'translateY(-3px)',
+          transition: 'all 0.3s ease-in-out'
+        }}>
+          {messageIndex === 0 ? (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#A7F3D0' }}>
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>
+                {customDeliveryDate ? (
+                  <>Tu pedido llegará el <b>{formatSpanishDate(customDeliveryDate)}</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
+                ) : cutoffEnabled && !isAfterCutoff ? (
+                  <>⚡ ¡Pide antes de las <b>5:00 p.m.</b> y recibe <b>MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b>!</>
+                ) : cutoffEnabled && isAfterCutoff ? (
+                  <>🕒 Corte de las 5:00 p.m. cerrado: Tu pedido llegará <b>PASADO MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
+                ) : (
+                  <>🚚 Tu pedido llegará <b>MAÑANA ({formattedDefaultDate})</b> de <b>8:00 a.m. a 5:00 p.m.</b></>
+                )}
+              </span>
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#FEF08A' }}>
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+              <span>
+                📱 Nos pondremos en contacto contigo <b>1 hora antes</b> de la entrega de tu pedido.
+              </span>
+            </>
+          )}
         </div>
       </div>
     );
