@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize server-side Supabase client with admin privileges if needed or normal client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function maskText(str: string): string {
     if (!str) return '';
@@ -30,38 +30,83 @@ export async function POST(request: Request) {
         const normalizedEmail = email.toLowerCase().trim();
         const normalizedNit = nit.toLowerCase().trim();
 
-        // 1. Query the B2C client from profiles
-        const { data: profilesList, error } = await supabase
+        let clientRecord: {
+            id?: string;
+            name: string;
+            address: string;
+            phone: string;
+            latitude: number | null;
+            longitude: number | null;
+        } | null = null;
+
+        // 1. Query client profile from profiles table
+        const { data: profilesList } = await supabase
             .from('profiles')
             .select('id, contact_name, address, phone, contact_phone, latitude, longitude')
-            .eq('role', 'b2c_client')
             .eq('email', normalizedEmail)
             .eq('nit', normalizedNit)
             .order('created_at', { ascending: false })
             .limit(1);
 
-        if (error || !profilesList || profilesList.length === 0) {
+        if (profilesList && profilesList.length > 0) {
+            const prof = profilesList[0];
+            clientRecord = {
+                id: prof.id,
+                name: prof.contact_name || '',
+                address: prof.address || '',
+                phone: prof.contact_phone || prof.phone || '',
+                latitude: prof.latitude ? parseFloat(prof.latitude) : null,
+                longitude: prof.longitude ? parseFloat(prof.longitude) : null
+            };
+        }
+
+        // 2. Fallback: Query historical approved orders if profile is missing or lacks coordinates
+        if (!clientRecord || !clientRecord.latitude || !clientRecord.longitude) {
+            const { data: orderList } = await supabase
+                .from('orders')
+                .select('id, shipping_address, latitude, longitude, special_notes, created_at')
+                .not('latitude', 'is', null)
+                .not('longitude', 'is', null)
+                .or(`special_notes.ilike.%ID: ${normalizedNit}%,special_notes.ilike.%Email: ${normalizedEmail}%`)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (orderList && orderList.length > 0) {
+                const ord = orderList[0];
+                const notes = ord.special_notes || '';
+                const nameMatch = notes.match(/\[CLIENTE:\s*([^|]+)\|/i);
+                const telMatch = notes.match(/Tel:\s*([^|]+)\|/i);
+
+                clientRecord = {
+                    id: ord.id,
+                    name: nameMatch?.[1]?.trim() || clientRecord?.name || '',
+                    address: ord.shipping_address || clientRecord?.address || '',
+                    phone: telMatch?.[1]?.trim() || clientRecord?.phone || '',
+                    latitude: ord.latitude ? parseFloat(ord.latitude) : null,
+                    longitude: ord.longitude ? parseFloat(ord.longitude) : null
+                };
+            }
+        }
+
+        if (!clientRecord || (!clientRecord.name && !clientRecord.address)) {
             console.log(`Lookup not found for email: ${normalizedEmail}, nit: ${normalizedNit}`);
-            if (error) console.error('DB error during lookup:', error);
             return NextResponse.json({ found: false });
         }
 
-        const profile = profilesList[0];
-
-        // STEP 2: If phone is provided, run verification and return unmasked data
+        // STEP 2: If phone is provided, run verification and return unmasked data with GPS coordinates
         if (phone !== undefined) {
             const clientEnteredPhone = cleanPhone(phone);
-            const dbPhone = cleanPhone(profile.phone || profile.contact_phone);
+            const dbPhone = cleanPhone(clientRecord.phone);
 
             if (clientEnteredPhone && dbPhone && clientEnteredPhone === dbPhone) {
-                console.log(`Successfully verified and unlocked profile for: ${normalizedEmail}`);
+                console.log(`Successfully verified and unlocked profile/history for: ${normalizedEmail}`);
                 return NextResponse.json({
                     verified: true,
-                    name: profile.contact_name,
-                    address: profile.address,
-                    phone: profile.contact_phone || profile.phone,
-                    latitude: profile.latitude,
-                    longitude: profile.longitude
+                    name: clientRecord.name,
+                    address: clientRecord.address,
+                    phone: clientRecord.phone,
+                    latitude: clientRecord.latitude,
+                    longitude: clientRecord.longitude
                 });
             } else {
                 console.log(`Phone verification failed for: ${normalizedEmail}. Entered: ${clientEnteredPhone}, DB: ${dbPhone}`);
@@ -70,11 +115,11 @@ export async function POST(request: Request) {
         }
 
         // STEP 1: No phone provided, return masked data safely
-        console.log(`Profile found for: ${normalizedEmail}. Returning masked preview.`);
+        console.log(`Profile/History found for: ${normalizedEmail}. Returning masked preview.`);
         return NextResponse.json({
             found: true,
-            name: maskText(profile.contact_name),
-            address: maskText(profile.address)
+            name: maskText(clientRecord.name),
+            address: maskText(clientRecord.address)
         });
 
     } catch (e: any) {
