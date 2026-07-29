@@ -129,7 +129,10 @@ export async function POST(request: Request) {
         } catch (weightErr) {
             console.error('Error calculating weight in public order api:', weightErr);
         }
-        order.total_weight_kg = calculatedWeight;
+        // Ensure profile_id is a valid UUID or null
+        if (order.profile_id && (typeof order.profile_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.profile_id))) {
+            order.profile_id = null;
+        }
 
         // 1. Crear la cabecera del pedido
         const { data: orderData, error: orderError } = await supabase
