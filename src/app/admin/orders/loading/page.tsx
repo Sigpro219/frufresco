@@ -71,7 +71,7 @@ const getChannelBadge = (source: string) => {
         case 'web_b2c': 
             return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Home size={10} strokeWidth={1.5} /> Web Hogar</span>;
         case 'web_b2b': 
-            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> Web Horeca</span>;
+            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> Web Institucional</span>;
         default: 
             return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
     }
@@ -1624,7 +1624,17 @@ export default function OrderLoadingPage() {
                                                 >
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>{friendlyId}</div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: isB2B ? '#6366F1' : '#EC4899' }}>{isB2B ? 'B2B' : 'B2C'}</div>
+                                                        <div>
+                                                            {isB2B ? (
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.68rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '6px' }}>
+                                                                    <Building2 size={11} strokeWidth={2} /> Institucional
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.68rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', padding: '1px 6px', borderRadius: '6px' }}>
+                                                                    <Home size={11} strokeWidth={2} /> Hogar
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>{order.customer_name}</div>
