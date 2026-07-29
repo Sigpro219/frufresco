@@ -307,7 +307,7 @@ export default function CheckoutPage() {
                             setPhone(data.phone);
                             localStorage.setItem('checkout_phone', data.phone);
                             setOriginalAddress(data.address);
-                            setMatchedProfileId(data.id || 'matched');
+                            setMatchedProfileId((data.id && data.id !== 'matched') ? data.id : null);
                             localStorage.setItem('checkout_is_profile_autofilled', 'true');
                             setUnlockedEmail(emailVal);
                             setUnlockedId(idVal);
@@ -553,6 +553,8 @@ export default function CheckoutPage() {
                 ? `[COMPRADOR / FACTURACIÓN: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[DESTINATARIO / RECIBE EN PUERTA: ${recipientName} | Tel: ${recipientPhone}]`
                 : `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]`;
 
+            const isValidUuid = (str: any) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
             const orderDataToInsert = {
                 type: isB2B ? 'b2b_client' : 'b2c_client',
                 delivery_date: date,
@@ -562,7 +564,7 @@ export default function CheckoutPage() {
                 total: finalOrderTotal,
                 latitude: safeLat,
                 longitude: safeLng,
-                profile_id: matchedProfileId || null,
+                profile_id: isValidUuid(matchedProfileId) ? matchedProfileId : null,
                 payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
                 payment_status: 'Pendiente',
                 special_notes: `${clientNotesHeader}${packagingFeeEnabled ? `\n[EMPAQUE PLÁSTICO (${packagingFeePercentage}%): +$${packagingFeeAmount.toLocaleString('es-CO')} COP]` : ''}\n[ORIGIN: web]\n${specialNotes || ''}`
