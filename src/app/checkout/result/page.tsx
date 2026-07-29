@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/cartContext';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, CheckCircle2, Clock, XCircle, Banknote, ShoppingBag } from 'lucide-react';
 
 function ResultContent() {
     const searchParams = useSearchParams();
@@ -68,15 +68,19 @@ function ResultContent() {
 
     const renderIconStatus = () => {
         switch (status) {
-            case 'success': return '✅';
-            case 'pending': return '⏳';
-            case 'error': return '❌';
-            default: return '🌀';
+            case 'success': 
+                return <CheckCircle2 size={64} color="#10B981" />;
+            case 'pending': 
+                return <Clock size={64} color="#F59E0B" />;
+            case 'error': 
+                return <XCircle size={64} color="#EF4444" />;
+            default: 
+                return <Clock size={64} color="#94A3B8" />;
         }
     };
 
     const renderMessage = () => {
-        if (codStatus === 'cod_success') return '¡Pedido Recibido con Éxito!';
+        if (codStatus === 'cod_success') return '¡Pedido Registrado con Éxito!';
         switch (status) {
             case 'success': return '¡Pago Aprobado!';
             case 'pending': return 'Pago en Proceso';
@@ -104,12 +108,12 @@ function ResultContent() {
             boxShadow: 'var(--shadow-lg)',
             border: '1px solid var(--border)'
         }}>
-            <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>{renderIconStatus()}</div>
-            <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem' }}>{renderMessage()}</h1>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>{renderIconStatus()}</div>
+            <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem', color: '#0F172A', fontFamily: 'var(--font-outfit), sans-serif' }}>{renderMessage()}</h1>
 
-            <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem', fontSize: '1.1rem' }}>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem', fontSize: '1.05rem', lineHeight: '1.5' }}>
                 {codStatus === 'cod_success'
-                    ? 'Tu pedido ha sido registrado con pago contra entrega. Alistaremos tus productos para despacharlos en la fecha indicada.'
+                    ? 'Tu pedido ha sido guardado exitosamente con modalidad de Pago Contra Entrega. Iniciaremos el alistamiento de tus alimentos frescos inmediatamente.'
                     : status === 'success'
                         ? 'Tu pedido ha sido confirmado y está siendo preparado por nuestro equipo.'
                         : status === 'pending'
@@ -117,11 +121,32 @@ function ResultContent() {
                             : 'La transacción no pudo completarse. Por favor, intenta de nuevo o usa otro medio de pago.'}
             </p>
 
+            {codStatus === 'cod_success' && (
+                <div style={{
+                    backgroundColor: '#FFFBEB',
+                    border: '1px solid #FDE68A',
+                    borderRadius: '18px',
+                    padding: '1.25rem 1.5rem',
+                    marginBottom: '2rem',
+                    textAlign: 'left',
+                    color: '#92400E',
+                    fontSize: '0.9rem'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '800', fontSize: '1rem', color: '#B45309', marginBottom: '6px' }}>
+                        <Banknote size={20} color="#D97706" /> Recordatorio de Pago al Recibir
+                    </div>
+                    <div style={{ color: '#78350F', lineHeight: '1.4' }}>
+                        Al momento de la entrega en tu domicilio, recuerda cancelar el valor exacto de tu pedido en <strong>efectivo o transferencia (Nequi / Daviplata / PSE)</strong> al domiciliario.
+                    </div>
+                </div>
+            )}
+
             {(transactionId || codStatus === 'cod_success') && (
                 <div style={{
-                    backgroundColor: '#F3F4F6',
-                    padding: '1.25rem',
-                    borderRadius: '16px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    padding: '1.25rem 1.5rem',
+                    borderRadius: '18px',
                     marginBottom: '2.5rem',
                     textAlign: 'left',
                     display: 'flex',
@@ -129,22 +154,23 @@ function ResultContent() {
                     gap: '0.5rem'
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
                             {codStatus === 'cod_success' ? 'Método de Pago' : 'ID de Transacción'}
                         </span>
-                        <span style={{ fontSize: '0.9rem', fontFamily: codStatus === 'cod_success' ? 'sans-serif' : 'monospace', fontWeight: '600' }}>
-                            {codStatus === 'cod_success' ? 'Contra entrega (Efectivo/Transferencia)' : transactionId}
+                        <span style={{ fontSize: '0.9rem', fontFamily: codStatus === 'cod_success' ? 'sans-serif' : 'monospace', fontWeight: '700', color: '#334155' }}>
+                            {codStatus === 'cod_success' ? 'Contra Entrega (Efectivo / Transferencia)' : transactionId}
                         </span>
                     </div>
                     {friendlyId && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E5E7EB', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase' }}>Número de Pedido</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <span style={{ 
                                     fontSize: '1.3rem', 
                                     fontWeight: '900', 
                                     color: 'var(--primary)',
-                                    letterSpacing: '0.05em'
+                                    letterSpacing: '0.05em',
+                                    fontFamily: 'var(--font-outfit), sans-serif'
                                 }}>
                                     {friendlyId}
                                 </span>
@@ -153,7 +179,7 @@ function ResultContent() {
                                     title="Copiar Pedido"
                                     style={{
                                         background: copied ? '#F0FDF4' : 'white',
-                                        border: `1px solid ${copied ? '#16A34A' : '#E5E7EB'}`,
+                                        border: `1px solid ${copied ? '#16A34A' : '#E2E8F0'}`,
                                         borderRadius: '8px',
                                         padding: '6px',
                                         cursor: 'pointer',
@@ -172,12 +198,12 @@ function ResultContent() {
                 </div>
             )}
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                <Link href="/" className="btn btn-primary" style={{ padding: '0.8rem 2rem' }}>
-                    Volver al Inicio
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Link href="/" className="btn btn-primary" style={{ padding: '0.85rem 2rem', display: 'inline-flex', alignItems: 'center', gap: '8px', borderRadius: '14px', fontWeight: '800' }}>
+                    <ShoppingBag size={18} /> Volver al Inicio
                 </Link>
                 {status === 'error' && (
-                    <Link href="/checkout" className="btn" style={{ padding: '0.8rem 2rem', border: '1px solid var(--border)' }}>
+                    <Link href="/checkout" className="btn" style={{ padding: '0.85rem 2rem', border: '1px solid var(--border)', borderRadius: '14px', fontWeight: '700' }}>
                         Reintentar
                     </Link>
                 )}
