@@ -339,7 +339,7 @@ export default function CheckoutPage() {
             }, 400);
             return () => clearTimeout(delayDebounceFn);
         }
-    }, [phone, isProfileUnlocked, email, identification]);
+    }, [phone, isProfileMatched, isProfileUnlocked, email, identification]);
 
     // Step 3: Monitor lookup fields to clear auto-filled profile details if credentials change/are removed
     useEffect(() => {
