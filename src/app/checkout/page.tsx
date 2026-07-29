@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCart } from '../../lib/cartContext';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
