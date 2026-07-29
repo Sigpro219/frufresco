@@ -35,7 +35,10 @@ import {
     ArrowLeft,
     ShoppingBag,
     Package,
-    Edit3
+    Edit3,
+    Gift,
+    UserCheck,
+    FileText
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import dynamic from 'next/dynamic';
@@ -1319,10 +1322,143 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            {/* 5. Dirección de Entrega */}
+                            {/* Selector de Enviar a Otra Persona / Regalo */}
+                            <div style={{
+                                marginTop: '1rem',
+                                padding: '1rem 1.25rem',
+                                backgroundColor: isGiftForRecipient ? '#F0FDF4' : '#F8FAFC',
+                                border: `1px solid ${isGiftForRecipient ? '#A7F3D0' : '#E2E8F0'}`,
+                                borderRadius: '16px',
+                                transition: 'all 0.25s ease'
+                            }}>
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    cursor: 'pointer',
+                                    userSelect: 'none'
+                                }}>
+                                    <div style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        backgroundColor: isGiftForRecipient ? '#DCFCE7' : '#EAEFEA',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: isGiftForRecipient ? '#059669' : 'var(--primary)',
+                                        flexShrink: 0
+                                    }}>
+                                        <Gift size={20} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: isGiftForRecipient ? '#065F46' : 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            {locale === 'es' ? '¿Quieres enviárselo a otra persona?' : 'Send as a gift / to someone else?'}
+                                        </div>
+                                        <div style={{ fontSize: '0.76rem', color: isGiftForRecipient ? '#047857' : '#64748B', marginTop: '1px' }}>
+                                            {locale === 'es' 
+                                                ? 'Marca esta casilla para ingresar el nombre, celular y dirección del destinatario.' 
+                                                : 'Check this box to enter recipient details and delivery address.'}
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={isGiftForRecipient}
+                                        onChange={(e) => setIsGiftForRecipient(e.target.checked)}
+                                        style={{
+                                            width: '20px',
+                                            height: '20px',
+                                            accentColor: 'var(--primary)',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                </label>
+                            </div>
+
+                            {/* Bloque de Destinatario (Si es para otra persona) */}
+                            {isGiftForRecipient && (
+                                <div style={{
+                                    padding: '1.25rem',
+                                    backgroundColor: '#F0FDF4',
+                                    border: '1px solid #A7F3D0',
+                                    borderRadius: '16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #C6F6D5', paddingBottom: '0.5rem' }}>
+                                        <UserCheck size={18} color="#047857" />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#065F46', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            {locale === 'es' ? 'Datos de quien recibe el pedido' : 'Recipient Information'}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                {locale === 'es' ? 'Nombre de quien recibe *' : 'Recipient Full Name *'}
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: '#059669', pointerEvents: 'none' }}>
+                                                    <User size={15} />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={recipientName}
+                                                    onChange={(e) => setRecipientName(e.target.value)}
+                                                    placeholder={locale === 'es' ? 'Ej: Juan Pérez (Mamá / Amigo)' : 'e.g. John Doe'}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.55rem 1rem 0.55rem 2.5rem',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid #A7F3D0',
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: '500',
+                                                        backgroundColor: 'white',
+                                                        outline: 'none',
+                                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                {locale === 'es' ? 'Celular de quien recibe *' : 'Recipient Phone *'}
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: '#059669', pointerEvents: 'none' }}>
+                                                    <Phone size={15} />
+                                                </div>
+                                                <input
+                                                    type="tel"
+                                                    value={recipientPhone}
+                                                    onChange={(e) => setRecipientPhone(e.target.value)}
+                                                    placeholder={locale === 'es' ? 'Ej: 3001234567' : 'e.g. 3001234567'}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.55rem 1rem 0.55rem 2.5rem',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid #A7F3D0',
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: '500',
+                                                        backgroundColor: 'white',
+                                                        outline: 'none',
+                                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 5. Dirección de Entrega (Del Destinatario o Propia) */}
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                    Dirección de Entrega
+                                    {isGiftForRecipient 
+                                        ? (locale === 'es' ? 'Dirección de Entrega del Destinatario *' : 'Recipient Delivery Address *')
+                                        : (locale === 'es' ? 'Dirección de Entrega *' : 'Delivery Address *')}
                                 </label>
                                 <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
                                     <div style={{ 
@@ -1336,23 +1472,23 @@ export default function CheckoutPage() {
                                         opacity: 0.5, 
                                         pointerEvents: 'none' 
                                     }}>
-                                        {isProfileMatched ? <LockIcon size={14} /> : <MapPin size={15} />}
+                                        {isProfileMatched && !isGiftForRecipient ? <LockIcon size={14} /> : <MapPin size={15} />}
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
-                                        value={isProfileMatched ? maskedAddress : address}
+                                        placeholder={isGiftForRecipient ? "Ej: Calle 140 # 19-35, Apto 402" : "Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"}
+                                        value={isProfileMatched && !isGiftForRecipient ? maskedAddress : address}
                                         onChange={(e) => handleAddressChange(e.target.value)}
-                                        readOnly={isProfileMatched}
+                                        readOnly={isProfileMatched && !isGiftForRecipient}
                                         style={{ 
                                             width: '100%', 
                                             padding: '0.55rem 1rem 0.55rem 2.5rem', 
                                             borderRadius: '12px', 
-                                            border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
+                                            border: isProfileMatched && !isGiftForRecipient ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
                                             fontSize: '0.85rem', 
                                             fontWeight: '500', 
-                                            backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
-                                            color: isProfileMatched ? '#6B7280' : '#111827',
+                                            backgroundColor: isProfileMatched && !isGiftForRecipient ? '#F3F4F6' : 'white', 
+                                            color: isProfileMatched && !isGiftForRecipient ? '#6B7280' : '#111827',
                                             boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                             fontFamily: 'var(--font-outfit), sans-serif',
                                             outline: 'none' 
@@ -1537,7 +1673,7 @@ export default function CheckoutPage() {
                                     </span>
                                 </div>
                                 <textarea
-                                    placeholder={t.specialNotesPlaceholder}
+                                    placeholder={isGiftForRecipient ? "Ej: Dejar en portería y decir que es un regalo de parte de German Higuera" : t.specialNotesPlaceholder}
                                     value={specialNotes}
                                     onChange={(e) => handleNotesChange(e.target.value.slice(0, 150))}
                                     style={{ 
@@ -1556,89 +1692,6 @@ export default function CheckoutPage() {
                                     }}
                                     className="checkout-input-modern"
                                 />
-                            </div>
-
-                            {/* 🎁 Enviar a otra persona / Destinatario */}
-                            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed #E2E8F0' }}>
-                                <label style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.92rem',
-                                    fontWeight: '700',
-                                    color: 'var(--primary-dark)',
-                                    userSelect: 'none'
-                                }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={isGiftForRecipient}
-                                        onChange={(e) => setIsGiftForRecipient(e.target.checked)}
-                                        style={{
-                                            width: '18px',
-                                            height: '18px',
-                                            accentColor: 'var(--primary)',
-                                            cursor: 'pointer'
-                                        }}
-                                    />
-                                    <span>🎁 {locale === 'es' ? '¿Quieres enviárselo a otra persona?' : 'Send as a gift / to someone else?'}</span>
-                                </label>
-
-                                {isGiftForRecipient && (
-                                    <div style={{
-                                        marginTop: '1rem',
-                                        padding: '1.25rem',
-                                        backgroundColor: '#F8FAFC',
-                                        border: '1px solid #E2E8F0',
-                                        borderRadius: '16px',
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                                        gap: '12px'
-                                    }}>
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                {locale === 'es' ? 'Nombre de quien recibe *' : 'Recipient Full Name *'}
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={recipientName}
-                                                onChange={(e) => setRecipientName(e.target.value)}
-                                                placeholder={locale === 'es' ? 'Ej: Juan Pérez' : 'e.g. John Doe'}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '0.55rem 1rem',
-                                                    borderRadius: '12px',
-                                                    border: '1px solid #CBD5E1',
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: '500',
-                                                    backgroundColor: 'white',
-                                                    outline: 'none'
-                                                }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                {locale === 'es' ? 'Celular de quien recibe *' : 'Recipient Phone *'}
-                                            </label>
-                                            <input
-                                                type="tel"
-                                                value={recipientPhone}
-                                                onChange={(e) => setRecipientPhone(e.target.value)}
-                                                placeholder={locale === 'es' ? 'Ej: 3001234567' : 'e.g. 3001234567'}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '0.55rem 1rem',
-                                                    borderRadius: '12px',
-                                                    border: '1px solid #CBD5E1',
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: '500',
-                                                    backgroundColor: 'white',
-                                                    outline: 'none'
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
