@@ -51,8 +51,11 @@ export async function POST(request: Request) {
             const { data: { session } } = await serverSupabase.auth.getSession();
             const userId = session?.user?.id;
 
-            let pricingModelId = userId ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2B (General Institucional) vs B2C
-            if (userId) {
+            let pricingModelId = (order.type === 'b2c_client') 
+                ? 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee' 
+                : 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
+
+            if (userId && order.type !== 'b2c_client') {
                 const { data: profile } = await serverSupabase
                     .from('profiles')
                     .select('pricing_model_id')
@@ -85,7 +88,7 @@ export async function POST(request: Request) {
                     const expectedPrice = Math.ceil((modelPrice * unitFactor) / 50) * 50;
 
                     if (modelPrice > 0 && Math.abs(expectedPrice - item.unit_price) > 0.01) {
-                        console.error(`Price manipulation detected! Product: ${item.product_id}, Sent price: ${item.unit_price}, Expected: ${expectedPrice}`);
+                        console.error(`Price manipulation detected! Product: ${item.product_id}, Sent price: ${item.unit_price}, Expected: ${expectedPrice}, PricingModel: ${pricingModelId}`);
                         return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
                     }
                 }
