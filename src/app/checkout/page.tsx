@@ -232,10 +232,12 @@ export default function CheckoutPage() {
         localStorage.setItem('checkout_address', val);
     };
 
-    const handleNotesChange = (val: string) => {
-        setSpecialNotes(val);
-        localStorage.setItem('checkout_specialNotes', val);
-    };
+    useEffect(() => {
+        if (date) {
+            localStorage.setItem('checkout_selected_delivery_date', date);
+            window.dispatchEvent(new Event('storage'));
+        }
+    }, [date]);
 
     // Step 1: Automatic B2C profile detection (Debounced)
     useEffect(() => {
