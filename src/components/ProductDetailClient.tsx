@@ -208,7 +208,10 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         });
 
         const name = (isEn && product.name_en) ? product.name_en : (product.display_name || product.name);
-        alert(t.addedToCart.replace('{name}', name));
+        if (typeof window !== 'undefined' && (window as any).showToast) {
+            (window as any).showToast(t.addedToCart.replace('{name}', name), 'success');
+        }
+        router.push(isEn ? '/?lang=en#catalog' : '/#catalog');
     };
 
     const handleBuyNow = () => {
