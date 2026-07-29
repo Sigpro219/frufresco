@@ -39,8 +39,7 @@ import {
     Gift,
     UserCheck,
     FileText,
-    Banknote,
-    CheckCircle2
+    Banknote
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import dynamic from 'next/dynamic';
