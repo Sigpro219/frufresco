@@ -151,9 +151,31 @@ export async function POST(req: Request) {
             return true;
           });
           
+          // Clean subject from technical prefixes like [RAW_WEBHOOK], RV:, RE:, VS:, Fwd:, FW:
+          const cleanSubject = subject
+            .replace(/^\[RAW_WEBHOOK\]\s*/i, '')
+            .replace(/^(?:RV|RE|VS|Fwd|FW):\s*/gi, '')
+            .trim();
+
           // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
           let cleanedBodyText = plainText;
-          const forwardBlockRegex = /[-]+\s*Forwarded\s+message\s*[-]+\s*\r?\n(?:(?:De|From|Date|Fecha|Subject|Asunto|To|Para|Cc):\s*[^\r\n]*\r?\n)*/i;
+          let forwardedOriginalEmail: string | null = null;
+          let forwardedOriginalName: string | null = null;
+
+          // Detect Spanish & English forward headers
+          const forwardBlockRegex = /[-]+\s*(?:Mensaje reenviado|Forwarded message)\s*[-]+\s*\r?\n(?:(?:De|From|Date|Fecha|Subject|Asunto|To|Para|Cc):\s*[^\r\n]*\r?\n)*/gi;
+          
+          // Extract original sender from forwarded header block before stripping it
+          const deMatch = plainText.match(/(?:De|From):\s*([^<\r\n]+)?\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/i);
+          if (deMatch) {
+            if (deMatch[1] && deMatch[1].trim()) {
+              forwardedOriginalName = deMatch[1].trim();
+            }
+            if (deMatch[2] && deMatch[2].trim()) {
+              forwardedOriginalEmail = deMatch[2].trim().toLowerCase();
+            }
+          }
+
           cleanedBodyText = cleanedBodyText.replace(forwardBlockRegex, '').trim();
           
           // DEBUG: Append attachment info to plainText so we can see it in Supabase
@@ -169,8 +191,14 @@ export async function POST(req: Request) {
           senderEmail = senderEmail.trim().toLowerCase();
 
           // Cuentas corporativas conocidas de FruFresco y del administrador
-          const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
-          const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
+          const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com', 'ship@info.vercel.com', 'noreply@supabase.com'];
+          const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co') || senderEmail.includes('vercel') || senderEmail.includes('supabase');
+
+          // If sender is corporate/internal (or forwarded email), override senderEmail with extracted original email if available
+          if (isCorporateSender && forwardedOriginalEmail && !corporateEmails.includes(forwardedOriginalEmail)) {
+            console.log(`[Email Inbound] Correo reenviado detectado. Reemplazando remitente corporativo (${senderEmail}) con cliente original: ${forwardedOriginalEmail}`);
+            senderEmail = forwardedOriginalEmail;
+          }
 
           // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
           const isAutoReply = 
@@ -284,8 +312,19 @@ export async function POST(req: Request) {
             console.log(`[Email Inbound] Correo entrante recibido de cliente: ${senderEmail} hacia corporativo: ${recipientEmail} con asunto: ${subject}`);
           }
 
-    // 1. Declare client profile reference
+    // 1. Declare client profile reference and pre-fetch active products for SKU matching
     let profile: any = null;
+    let globalDbProducts: any[] = [];
+    try {
+      const { data: dbProducts } = await supabaseAdmin
+        .from('products')
+        .select('id, name, base_price, unit_of_measure, weight_kg')
+        .eq('is_active', true);
+      if (dbProducts) globalDbProducts = dbProducts;
+    } catch (e) {
+      console.error('[Email Ingest] Error pre-fetching active products:', e);
+    }
+
     const draftUuid = crypto.randomUUID();
     let attachmentUrl: string | null = null;
     let attachmentName: string | null = null;
@@ -1469,20 +1508,64 @@ export async function POST(req: Request) {
               originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
               const nameLower = originalName.toLowerCase();
               let observations = itm.observations || '';
-              
+              let assignedUnit = itm.unit;
+
               if (nameLower.includes('libra') || nameLower.includes('lb')) {
+                assignedUnit = 'Lb';
                 if (!observations.toLowerCase().includes('libra')) {
                   observations = `Solicitado en Libras. ${observations}`.trim();
                 }
-                return { ...itm, originalName, unit: 'Lb', observations };
-              }
-              if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+              } else if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+                assignedUnit = 'Litro';
                 if (!observations.toLowerCase().includes('litro')) {
                   observations = `Solicitado en Litros. ${observations}`.trim();
                 }
-                return { ...itm, originalName, unit: 'Litro', observations };
               }
-              return { ...itm, originalName };
+
+              // In-memory SKU match against active products database
+              let matchedProductId = itm.matched_product_id || null;
+              let resolvedUnitPrice = itm.unit_price || 0;
+
+              if (!matchedProductId && originalName) {
+                const cleanText = (txt: string) => txt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                const targetClean = cleanText(originalName);
+                const targetWords = targetClean.split(/\s+/).filter(w => w.length > 2);
+
+                let bestMatch: any = null;
+                let highestScore = -999;
+
+                for (const p of (parsedAttachments.length > 0 ? (globalDbProducts || []) : (globalDbProducts || []))) {
+                  const pClean = cleanText(p.name);
+                  if (pClean === targetClean) {
+                    bestMatch = p;
+                    highestScore = 9999;
+                    break;
+                  }
+                  const pWords = pClean.split(/\s+/).filter(w => w.length > 2);
+                  const shared = targetWords.filter(w => pWords.includes(w));
+                  if (shared.length > 0) {
+                    const score = shared.length * 10 - Math.abs(pWords.length - shared.length);
+                    if (score > highestScore) {
+                      highestScore = score;
+                      bestMatch = p;
+                    }
+                  }
+                }
+                if (bestMatch && (highestScore >= 8 || highestScore === 9999)) {
+                  matchedProductId = bestMatch.id;
+                  resolvedUnitPrice = bestMatch.base_price || 0;
+                  if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';
+                }
+              }
+
+              return {
+                ...itm,
+                originalName,
+                unit: assignedUnit || 'Unidad',
+                matched_product_id: matchedProductId,
+                unit_price: resolvedUnitPrice,
+                observations
+              };
             })
           ],
           status: 'pending'
