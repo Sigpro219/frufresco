@@ -1655,18 +1655,22 @@ export default function OrderLoadingPage() {
                                                         }}>
                                                             {getStatusLabel(order.status)}
                                                         </div>
-                                                        {order.payment_status !== 'Pagado' && (
+                                                        {order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
                                                             <div style={{
                                                                 marginTop: '4px',
-                                                                padding: '2px 6px',
+                                                                padding: '1px 6px',
                                                                 borderRadius: '4px',
-                                                                fontSize: '0.6rem',
-                                                                fontWeight: '900',
-                                                                backgroundColor: '#FEF3C7',
-                                                                color: '#92400E',
-                                                                border: '1px solid #FCD34D'
+                                                                fontSize: '0.58rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: '#FFFBEB',
+                                                                color: '#B45309',
+                                                                border: '1px solid #FDE68A',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                whiteSpace: 'nowrap'
                                                             }}>
-                                                                💵 PENDIENTE DE PAGO
+                                                                <Coins size={10} strokeWidth={1.5} /> Cobrar en puerta
                                                             </div>
                                                         )}
                                                     </td>
