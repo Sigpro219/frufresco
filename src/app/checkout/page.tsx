@@ -275,12 +275,14 @@ export default function CheckoutPage() {
         }
     }, [email, identification]);
 
-    // Step 2: Automatic phone verification to unlock details (Debounced)
+    // Step 2: Automatic phone verification & GPS coordinate recovery (Debounced)
     useEffect(() => {
         const cleanPhoneStr = (p: string) => (p || '').replace(/\D/g, '');
         const phoneVal = cleanPhoneStr(phone);
+        const emailVal = (email || '').trim().toLowerCase();
+        const idVal = (identification || '').trim().toLowerCase();
 
-        if (isProfileMatched && !isProfileUnlocked && phoneVal.length >= 10) {
+        if (!isProfileUnlocked && emailVal.includes('@') && idVal.length >= 5 && phoneVal.length >= 10) {
             const delayDebounceFn = setTimeout(async () => {
                 setLookupLoading(true);
                 setLookupError('');
@@ -289,8 +291,8 @@ export default function CheckoutPage() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            email: (email || '').trim(),
-                            nit: (identification || '').trim(),
+                            email: emailVal,
+                            nit: idVal,
                             phone: phoneVal
                         })
                     });
@@ -298,17 +300,17 @@ export default function CheckoutPage() {
                         const data = await res.json();
                         if (data.verified) {
                             setIsProfileUnlocked(true);
-                            setName(data.name);
+                            setName(prev => prev || data.name);
                             localStorage.setItem('checkout_name', data.name);
-                            setAddress(data.address);
+                            setAddress(prev => prev || data.address);
                             localStorage.setItem('checkout_address', data.address);
                             setPhone(data.phone);
                             localStorage.setItem('checkout_phone', data.phone);
                             setOriginalAddress(data.address);
-                            setMatchedProfileId(data.id || null);
+                            setMatchedProfileId(data.id || 'matched');
                             localStorage.setItem('checkout_is_profile_autofilled', 'true');
-                            setUnlockedEmail((email || '').trim());
-                            setUnlockedId((identification || '').trim());
+                            setUnlockedEmail(emailVal);
+                            setUnlockedId(idVal);
                             setUnlockedPhone(phoneVal);
                             if (data.latitude && data.longitude) {
                                 const latVal = parseFloat(data.latitude);
@@ -334,10 +336,10 @@ export default function CheckoutPage() {
                 } finally {
                     setLookupLoading(false);
                 }
-            }, 500);
+            }, 400);
             return () => clearTimeout(delayDebounceFn);
         }
-    }, [phone, isProfileMatched, isProfileUnlocked, email, identification]);
+    }, [phone, isProfileUnlocked, email, identification]);
 
     // Step 3: Monitor lookup fields to clear auto-filled profile details if credentials change/are removed
     useEffect(() => {
