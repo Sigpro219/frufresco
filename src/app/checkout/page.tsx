@@ -38,7 +38,9 @@ import {
     Edit3,
     Gift,
     UserCheck,
-    FileText
+    FileText,
+    Banknote,
+    CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import dynamic from 'next/dynamic';
@@ -1934,9 +1936,18 @@ export default function CheckoutPage() {
                                 ) : (outOfZone && !isB2B) ? (
                                     <>{locale === 'es' ? 'Sin Cobertura' : 'No Coverage'} <MapPin size={20} /></>
                                 ) : (
-                                    <>{paymentMethod === 'wompi' ? (locale === 'es' ? 'Pagar Pedido' : 'Pay Order') : (locale === 'es' ? 'Confirmar Pedido' : 'Confirm Order')} <Rocket size={20} strokeWidth={2.5} /></>
+                                    <>{paymentMethod === 'wompi' 
+                                        ? (locale === 'es' ? 'Confirmar y Pagar Online' : 'Confirm & Pay Online') 
+                                        : (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')
+                                    } {paymentMethod === 'wompi' ? <ShieldCheck size={20} strokeWidth={2} /> : <Truck size={20} strokeWidth={2} />}</>
                                 )}
                             </button>
+
+                            {paymentMethod === 'contra_entrega' && latitude && (
+                                <p style={{ fontSize: '0.8rem', color: '#047857', textAlign: 'center', marginTop: '0.8rem', fontWeight: '700', backgroundColor: '#ECFDF5', padding: '8px 14px', borderRadius: '10px', border: '1px solid #A7F3D0' }}>
+                                    💡 {locale === 'es' ? 'No pagas nada hoy. Cancelas el valor exacto al recibir tu pedido en puerta.' : 'You pay nothing today. Pay exact amount on delivery.'}
+                                </p>
+                            )}
 
                             {!latitude && address.trim().length > 3 && (
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem', fontWeight: '600', opacity: 0.7 }}>
@@ -2306,6 +2317,34 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
+                        {paymentMethod === 'contra_entrega' && (
+                            <div style={{
+                                marginTop: '1.25rem',
+                                backgroundColor: '#FFFBEB',
+                                border: '1px solid #FDE68A',
+                                borderRadius: '16px',
+                                padding: '1.1rem 1.4rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '14px'
+                            }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #FCD34D' }}>
+                                    <Banknote size={22} color="#D97706" />
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: '800', color: '#B45309', fontSize: '0.95rem' }}>
+                                        🚚 {locale === 'es' ? 'Pedido Contra Entrega Programado' : 'Scheduled Cash on Delivery Order'}
+                                    </div>
+                                    <div style={{ marginTop: '2px', color: '#78350F', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                                        {locale === 'es' 
+                                            ? `Registraremos tu pedido inmediatamente. Pagarás el total de $${finalOrderTotal.toLocaleString('es-CO')} COP al repartidor en la puerta de tu domicilio en efectivo o transferencia (Nequi / Daviplata / PSE) al recibir.`
+                                            : `Your order will be registered immediately. You will pay $${finalOrderTotal.toLocaleString('en-US')} COP on delivery in cash or bank transfer.`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Footer Action Buttons */}
                         <div style={{ display: 'flex', gap: '14px', justifyContent: 'flex-end', marginTop: '1.75rem', flexWrap: 'wrap' }}>
                             <button
@@ -2349,10 +2388,13 @@ export default function CheckoutPage() {
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                                {loading ? <Loader2 size={20} className="animate-spin" /> : (paymentMethod === 'contra_entrega' ? <CheckCircle2 size={20} /> : <ShieldCheck size={20} />)}
                                 {loading 
                                     ? (locale === 'es' ? 'Procesando...' : 'Processing...') 
-                                    : (locale === 'es' ? 'Confirmar y Pagar' : 'Confirm & Pay')}
+                                    : paymentMethod === 'contra_entrega'
+                                        ? (locale === 'es' ? 'Confirmar Pedido (Pagar al Recibir)' : 'Confirm Order (Pay on Delivery)')
+                                        : (locale === 'es' ? 'Ir a Pagar Seguro (Wompi)' : 'Proceed to Secure Payment')
+                                }
                             </button>
                         </div>
                     </div>
