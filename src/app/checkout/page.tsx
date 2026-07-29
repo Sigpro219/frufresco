@@ -97,6 +97,35 @@ export default function CheckoutPage() {
 
     const isB2B = profile?.role === 'b2b_client';
 
+    const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(true);
+    const [packagingFeePercentage, setPackagingFeePercentage] = useState(3);
+    const [packagingFeeNote, setPackagingFeeNote] = useState('Para garantizar la inocuidad, higiene y conservación de tus alimentos frescos, todos los pedidos se entregan empacados en bolsas plásticas.');
+
+    useEffect(() => {
+        const fetchPackagingSettings = async () => {
+            try {
+                const { data } = await supabase
+                    .from('app_settings')
+                    .select('key, value')
+                    .in('key', ['packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note']);
+
+                if (data) {
+                    data.forEach(s => {
+                        if (s.key === 'packaging_fee_enabled') setPackagingFeeEnabled(s.value === 'true');
+                        if (s.key === 'packaging_fee_percentage') setPackagingFeePercentage(parseFloat(s.value) || 3);
+                        if (s.key === 'packaging_fee_note') setPackagingFeeNote(s.value || '');
+                    });
+                }
+            } catch (err) {
+                console.error('Error loading packaging settings:', err);
+            }
+        };
+        fetchPackagingSettings();
+    }, []);
+
+    const packagingFeeAmount = packagingFeeEnabled ? Math.round(totalPrice * (packagingFeePercentage / 100)) : 0;
+    const finalOrderTotal = totalPrice + packagingFeeAmount;
+
     useEffect(() => {
         setIsMounted(true);
         if (typeof window !== 'undefined') {
@@ -460,21 +489,19 @@ export default function CheckoutPage() {
             const safeLat = latitude ? parseFloat(latitude.toFixed(8)) : null;
             const safeLng = longitude ? parseFloat(longitude.toFixed(8)) : null;
 
-            // Create a Promise race to handle potential Supabase client hangs
             const orderDataToInsert = {
-                type: paymentMethod === 'wompi' ? 'b2c_wompi' : 'b2c',
-                status: 'pending_approval',
+                type: isB2B ? 'b2b_client' : 'b2c_client',
                 delivery_date: date,
                 shipping_address: address,
                 subtotal: totalPrice - taxAmount,
                 tax: taxAmount,
-                total: totalPrice,
+                total: finalOrderTotal,
                 latitude: safeLat,
                 longitude: safeLng,
                 profile_id: matchedProfileId || null,
                 payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
                 payment_status: 'Pendiente',
-                special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[ORIGIN: web]\n${specialNotes || ''}`
+                special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]${packagingFeeEnabled ? `\n[EMPAQUE PLÁSTICO (${packagingFeePercentage}%): +$${packagingFeeAmount.toLocaleString('es-CO')} COP]` : ''}\n[ORIGIN: web]\n${specialNotes || ''}`
             };
 
             const orderItemsData = items.map(item => ({
@@ -522,7 +549,7 @@ export default function CheckoutPage() {
 
             console.log('3️⃣ Requesting Wompi hash...');
             
-            const amountInCents = totalPrice * 100;
+            const amountInCents = finalOrderTotal * 100;
             let response;
             let requestError;
             const maxRetries = 2;
@@ -1488,7 +1515,37 @@ export default function CheckoutPage() {
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.taxes}</span>
                                 <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem' }}>
+
+                            {packagingFeeEnabled && packagingFeeAmount > 0 && (
+                                <div style={{ 
+                                    marginTop: '0.6rem',
+                                    marginBottom: '0.8rem',
+                                    padding: '0.75rem 1rem', 
+                                    backgroundColor: '#F0FDF4', 
+                                    borderRadius: '14px', 
+                                    border: '1.5px solid #A7F3D0',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '4px',
+                                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.05)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ color: '#047857', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            🛍️ Empaque e Inocuidad ({packagingFeePercentage}%):
+                                        </span>
+                                        <span style={{ fontWeight: '900', color: '#047857', fontSize: '0.88rem' }}>
+                                            +${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
+                                        </span>
+                                    </div>
+                                    {packagingFeeNote && (
+                                        <span style={{ fontSize: '0.68rem', color: '#065F46', opacity: 0.9, lineHeight: '1.35', fontWeight: '500' }}>
+                                            {packagingFeeNote}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem', marginTop: '0.5rem' }}>
                                 <span style={{ 
                                     fontFamily: 'var(--font-outfit), sans-serif',
                                     fontSize: '1.1rem', 
@@ -1502,7 +1559,7 @@ export default function CheckoutPage() {
                                     fontWeight: '900', 
                                     color: 'var(--primary)',
                                     letterSpacing: '-0.04em'
-                                }}>${totalPrice.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
+                                }}>${finalOrderTotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
 
                             {!isMinOrderMet && (
