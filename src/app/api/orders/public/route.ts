@@ -82,7 +82,7 @@ export async function POST(request: Request) {
                     }
                     const modelPriceObj = dbProd.pricing_model_prices?.find((p: any) => p.model_id === pricingModelId);
                     const modelPrice = modelPriceObj?.price ?? dbProd.base_price ?? 0;
-                    const isLibraUnit = (item.unit && (item.unit.toLowerCase().includes('libra') || item.unit.toLowerCase().includes('500g'))) || order.type === 'b2c_client';
+                    const isLibraUnit = !!(item.unit && (item.unit.toLowerCase().includes('libra') || item.unit.toLowerCase().includes('500g')));
                     const isKgProd = (dbProd.unit_of_measure || '').toLowerCase() === 'kg';
                     const unitFactor = (isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1);
                     const expectedPrice = Math.ceil((modelPrice * unitFactor) / 50) * 50;
