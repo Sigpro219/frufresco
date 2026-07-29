@@ -32,7 +32,10 @@ import {
     Lock as LockIcon,
     Pencil,
     RotateCcw,
-    ArrowLeft
+    ArrowLeft,
+    ShoppingBag,
+    Package,
+    Edit3
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import dynamic from 'next/dynamic';
@@ -80,6 +83,38 @@ export default function CheckoutPage() {
     const { profile } = useAuth();
     const searchParams = useSearchParams();
     
+    const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+
+    const itemBreakdownSummary = useMemo(() => {
+        if (!items || items.length === 0) return '';
+        const unitCounts: Record<string, number> = {};
+
+        items.forEach(item => {
+            const qty = item.quantity || 1;
+            let u = (item.unit || 'Unidad').trim();
+            const uLower = u.toLowerCase();
+            if (uLower.includes('libra') || uLower.includes('lb') || uLower.includes('pound')) {
+                u = 'Libra';
+            } else if (uLower.includes('bandeja')) {
+                u = 'Bandeja';
+            } else if (uLower.includes('bolsa')) {
+                u = 'Bolsa';
+            } else if (uLower.includes('kg') || uLower.includes('kilo')) {
+                u = 'Kg';
+            } else if (uLower.includes('un')) {
+                u = 'Unidad';
+            }
+            unitCounts[u] = (unitCounts[u] || 0) + qty;
+        });
+
+        const parts = Object.entries(unitCounts).map(([unitName, count]) => {
+            const unitLabel = count === 1 ? unitName : (unitName.endsWith('a') ? `${unitName}s` : (unitName.endsWith('d') ? `${unitName}es` : `${unitName}s`));
+            return `${count} ${unitLabel}`;
+        });
+
+        return parts.join(', ');
+    }, [items]);
+
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
     
@@ -480,6 +515,11 @@ export default function CheckoutPage() {
             );
         }
 
+        setShowConfirmationModal(true);
+    };
+
+    const executeOrderSubmission = async () => {
+        setShowConfirmationModal(false);
         setLoading(true);
 
         try {
@@ -1919,6 +1959,239 @@ export default function CheckoutPage() {
                         setEditingCartItem(null);
                     }}
                 />
+            )}
+
+            {/* Modal de Confirmación Previo al Pago (Sobrio, Elegante B2C/B2B) */}
+            {showConfirmationModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '24px',
+                        width: '100%',
+                        maxWidth: '680px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        padding: '2rem',
+                        position: 'relative'
+                    }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '12px',
+                                    backgroundColor: '#EAEFEA',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'var(--primary)'
+                                }}>
+                                    <ShoppingBag size={22} strokeWidth={2} />
+                                </div>
+                                <div>
+                                    <h3 style={{ fontSize: '1.35rem', fontWeight: '800', margin: 0, color: 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                        {locale === 'es' ? 'Confirmación Final de tu Pedido' : 'Final Order Confirmation'}
+                                    </h3>
+                                    <p style={{ fontSize: '0.85rem', color: '#64748B', margin: '2px 0 0 0' }}>
+                                        {locale === 'es' ? 'Verifica el desglose de productos y datos de entrega antes de pagar.' : 'Review product details and delivery info before paying.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmationModal(false)}
+                                style={{
+                                    border: 'none',
+                                    background: '#F1F5F9',
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    color: '#64748B',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Minimalist Product List (Sobrio y Elegante sin emoticones por item) */}
+                        <div style={{
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '16px',
+                            overflow: 'hidden',
+                            backgroundColor: '#FAFAFA',
+                            marginBottom: '1rem'
+                        }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: '2fr 1fr 1fr',
+                                padding: '0.65rem 1rem',
+                                backgroundColor: '#F8FAFC',
+                                borderBottom: '1px solid #E2E8F0',
+                                fontSize: '0.72rem',
+                                fontWeight: '700',
+                                color: '#64748B',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}>
+                                <span>{locale === 'es' ? 'Producto' : 'Product'}</span>
+                                <span style={{ textAlign: 'center' }}>{locale === 'es' ? 'Presentación' : 'Quantity'}</span>
+                                <span style={{ textAlign: 'right' }}>Subtotal</span>
+                            </div>
+                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                {items.map((item, idx) => {
+                                    const itemTotal = Math.round(item.price * item.quantity);
+                                    return (
+                                        <div key={idx} style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '2fr 1fr 1fr',
+                                            padding: '0.75rem 1rem',
+                                            borderBottom: idx < items.length - 1 ? '1px solid #F1F5F9' : 'none',
+                                            fontSize: '0.88rem',
+                                            alignItems: 'center',
+                                            backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA'
+                                        }}>
+                                            <span style={{ fontWeight: '600', color: '#1E293B' }}>
+                                                {item.name}
+                                            </span>
+                                            <span style={{ textAlign: 'center', color: '#475569', fontWeight: '500' }}>
+                                                {item.quantity} {item.unit || 'Un'}
+                                            </span>
+                                            <span style={{ textAlign: 'right', fontWeight: '700', color: 'var(--primary-dark)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                ${itemTotal.toLocaleString('es-CO')}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Fila Resumen Única de Empaque y Total */}
+                        <div style={{
+                            backgroundColor: '#F0FDF4',
+                            border: '1px solid #BBF7D0',
+                            borderRadius: '14px',
+                            padding: '0.9rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '10px',
+                            marginBottom: '1.25rem'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontWeight: '700', fontSize: '0.9rem' }}>
+                                <Package size={18} color="#15803D" />
+                                <span>
+                                    {items.length} {items.length === 1 ? 'producto' : 'productos'} • {itemBreakdownSummary}
+                                </span>
+                            </div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#15803D', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                Total: ${finalOrderTotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')} COP
+                            </div>
+                        </div>
+
+                        {/* Resumen de Entrega y Pago */}
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '14px',
+                            padding: '1rem',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                            gap: '12px',
+                            fontSize: '0.85rem'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <MapPin size={16} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                <div>
+                                    <div style={{ fontWeight: '700', color: '#334155' }}>{locale === 'es' ? 'Dirección de Entrega' : 'Delivery Address'}</div>
+                                    <div style={{ color: '#64748B', marginTop: '2px' }}>{address}</div>
+                                    <div style={{ color: '#94A3B8', fontSize: '0.78rem' }}>{name} ({phone})</div>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <Calendar size={16} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                <div>
+                                    <div style={{ fontWeight: '700', color: '#334155' }}>{locale === 'es' ? 'Fecha y Método de Pago' : 'Delivery Date & Payment'}</div>
+                                    <div style={{ color: '#64748B', marginTop: '2px' }}>{date}</div>
+                                    <div style={{ color: '#0D7A57', fontWeight: '600', fontSize: '0.8rem' }}>
+                                        {paymentMethod === 'wompi' ? 'Wompi (PSE / Nequi / Tarjeta)' : (locale === 'es' ? 'Pago Contra Entrega' : 'Cash on Delivery')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Action Buttons */}
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmationModal(false)}
+                                style={{
+                                    padding: '0.85rem 1.4rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#475569',
+                                    fontWeight: '600',
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <Edit3 size={16} />
+                                {locale === 'es' ? 'Modificar Pedido' : 'Edit Order'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={executeOrderSubmission}
+                                disabled={loading}
+                                style={{
+                                    padding: '0.85rem 1.75rem',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    backgroundColor: 'var(--primary)',
+                                    color: 'white',
+                                    fontWeight: '700',
+                                    fontSize: '0.95rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                                {loading 
+                                    ? (locale === 'es' ? 'Procesando...' : 'Processing...') 
+                                    : (locale === 'es' ? 'Confirmar y Pagar' : 'Confirm & Pay')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </main>
     );
