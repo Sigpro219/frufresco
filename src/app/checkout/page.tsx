@@ -108,7 +108,13 @@ export default function CheckoutPage() {
         });
 
         const parts = Object.entries(unitCounts).map(([unitName, count]) => {
-            const unitLabel = count === 1 ? unitName : (unitName.endsWith('a') ? `${unitName}s` : (unitName.endsWith('d') ? `${unitName}es` : `${unitName}s`));
+            let unitLabel = unitName;
+            if (count > 1) {
+                const lower = unitName.toLowerCase();
+                if (!lower.endsWith('s')) {
+                    unitLabel = lower.endsWith('d') ? `${unitName}es` : `${unitName}s`;
+                }
+            }
             return `${count} ${unitLabel}`;
         });
 
@@ -1975,40 +1981,40 @@ export default function CheckoutPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '1rem'
+                    padding: '1.5rem'
                 }}>
                     <div style={{
                         backgroundColor: '#FFFFFF',
                         borderRadius: '24px',
                         width: '100%',
-                        maxWidth: '680px',
-                        maxHeight: '90vh',
+                        maxWidth: '880px',
+                        maxHeight: '92vh',
                         overflowY: 'auto',
-                        boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25)',
+                        boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.28)',
                         border: '1px solid #E2E8F0',
-                        padding: '2rem',
+                        padding: '2.5rem',
                         position: 'relative'
                     }}>
                         {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                                 <div style={{
-                                    width: '42px',
-                                    height: '42px',
-                                    borderRadius: '12px',
+                                    width: '48px',
+                                    height: '48px',
+                                    borderRadius: '14px',
                                     backgroundColor: '#EAEFEA',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     color: 'var(--primary)'
                                 }}>
-                                    <ShoppingBag size={22} strokeWidth={2} />
+                                    <ShoppingBag size={24} strokeWidth={2} />
                                 </div>
                                 <div>
-                                    <h3 style={{ fontSize: '1.35rem', fontWeight: '800', margin: 0, color: 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                    <h3 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0, color: 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif', letterSpacing: '-0.02em' }}>
                                         {locale === 'es' ? 'Confirmación Final de tu Pedido' : 'Final Order Confirmation'}
                                     </h3>
-                                    <p style={{ fontSize: '0.85rem', color: '#64748B', margin: '2px 0 0 0' }}>
+                                    <p style={{ fontSize: '0.88rem', color: '#64748B', margin: '3px 0 0 0' }}>
                                         {locale === 'es' ? 'Verifica el desglose de productos y datos de entrega antes de pagar.' : 'Review product details and delivery info before paying.'}
                                     </p>
                                 </div>
@@ -2019,8 +2025,8 @@ export default function CheckoutPage() {
                                 style={{
                                     border: 'none',
                                     background: '#F1F5F9',
-                                    width: '36px',
-                                    height: '36px',
+                                    width: '38px',
+                                    height: '38px',
                                     borderRadius: '50%',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -2030,44 +2036,45 @@ export default function CheckoutPage() {
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                <X size={18} />
+                                <X size={20} />
                             </button>
                         </div>
 
-                        {/* Minimalist Product List (Sobrio y Elegante sin emoticones por item) */}
+                        {/* Minimalist Product List (Sobrio, Elegante y Amplio) */}
                         <div style={{
                             border: '1px solid #E2E8F0',
-                            borderRadius: '16px',
+                            borderRadius: '18px',
                             overflow: 'hidden',
-                            backgroundColor: '#FAFAFA',
-                            marginBottom: '1rem'
+                            backgroundColor: '#FFFFFF',
+                            marginBottom: '1.25rem',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)'
                         }}>
                             <div style={{
                                 display: 'grid',
-                                gridTemplateColumns: '2fr 1fr 1fr',
-                                padding: '0.65rem 1rem',
+                                gridTemplateColumns: 'minmax(280px, 2.5fr) 1.5fr 1fr',
+                                padding: '0.8rem 1.25rem',
                                 backgroundColor: '#F8FAFC',
                                 borderBottom: '1px solid #E2E8F0',
-                                fontSize: '0.72rem',
+                                fontSize: '0.75rem',
                                 fontWeight: '700',
                                 color: '#64748B',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em'
                             }}>
                                 <span>{locale === 'es' ? 'Producto' : 'Product'}</span>
-                                <span style={{ textAlign: 'center' }}>{locale === 'es' ? 'Presentación' : 'Quantity'}</span>
+                                <span style={{ textAlign: 'center' }}>{locale === 'es' ? 'Cantidad / Presentación' : 'Quantity'}</span>
                                 <span style={{ textAlign: 'right' }}>Subtotal</span>
                             </div>
-                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                            <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
                                 {items.map((item, idx) => {
                                     const itemTotal = Math.round(item.price * item.quantity);
                                     return (
                                         <div key={idx} style={{
                                             display: 'grid',
-                                            gridTemplateColumns: '2fr 1fr 1fr',
-                                            padding: '0.75rem 1rem',
+                                            gridTemplateColumns: 'minmax(280px, 2.5fr) 1.5fr 1fr',
+                                            padding: '0.85rem 1.25rem',
                                             borderBottom: idx < items.length - 1 ? '1px solid #F1F5F9' : 'none',
-                                            fontSize: '0.88rem',
+                                            fontSize: '0.92rem',
                                             alignItems: 'center',
                                             backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA'
                                         }}>
@@ -2086,26 +2093,26 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Fila Resumen Única de Empaque y Total */}
+                        {/* Fila Resumen Única de Empaque y Total (Ancha y Sobria) */}
                         <div style={{
                             backgroundColor: '#F0FDF4',
-                            border: '1px solid #BBF7D0',
-                            borderRadius: '14px',
-                            padding: '0.9rem 1.25rem',
+                            border: '1px solid #A7F3D0',
+                            borderRadius: '16px',
+                            padding: '1.1rem 1.5rem',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             flexWrap: 'wrap',
-                            gap: '10px',
-                            marginBottom: '1.25rem'
+                            gap: '12px',
+                            marginBottom: '1.5rem'
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontWeight: '700', fontSize: '0.9rem' }}>
-                                <Package size={18} color="#15803D" />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#166534', fontWeight: '700', fontSize: '0.98rem' }}>
+                                <Package size={20} color="#059669" />
                                 <span>
-                                    {items.length} {items.length === 1 ? 'producto' : 'productos'} • {itemBreakdownSummary}
+                                    {items.length} {items.length === 1 ? 'producto' : 'productos'} en total • {itemBreakdownSummary}
                                 </span>
                             </div>
-                            <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#15803D', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                            <div style={{ fontSize: '1.35rem', fontWeight: '950', color: '#047857', fontFamily: 'var(--font-outfit), sans-serif', letterSpacing: '-0.02em' }}>
                                 Total: ${finalOrderTotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')} COP
                             </div>
                         </div>
@@ -2114,27 +2121,31 @@ export default function CheckoutPage() {
                         <div style={{
                             backgroundColor: '#F8FAFC',
                             border: '1px solid #E2E8F0',
-                            borderRadius: '14px',
-                            padding: '1rem',
+                            borderRadius: '16px',
+                            padding: '1.25rem',
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                            gap: '12px',
-                            fontSize: '0.85rem'
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                            gap: '16px',
+                            fontSize: '0.88rem'
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                <MapPin size={16} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#EAEFEA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <MapPin size={18} color="var(--primary)" />
+                                </div>
                                 <div>
                                     <div style={{ fontWeight: '700', color: '#334155' }}>{locale === 'es' ? 'Dirección de Entrega' : 'Delivery Address'}</div>
                                     <div style={{ color: '#64748B', marginTop: '2px' }}>{address}</div>
-                                    <div style={{ color: '#94A3B8', fontSize: '0.78rem' }}>{name} ({phone})</div>
+                                    <div style={{ color: '#94A3B8', fontSize: '0.8rem', marginTop: '1px' }}>{name} ({phone})</div>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                <Calendar size={16} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#EAEFEA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Calendar size={18} color="var(--primary)" />
+                                </div>
                                 <div>
                                     <div style={{ fontWeight: '700', color: '#334155' }}>{locale === 'es' ? 'Fecha y Método de Pago' : 'Delivery Date & Payment'}</div>
                                     <div style={{ color: '#64748B', marginTop: '2px' }}>{date}</div>
-                                    <div style={{ color: '#0D7A57', fontWeight: '600', fontSize: '0.8rem' }}>
+                                    <div style={{ color: '#0D7A57', fontWeight: '700', fontSize: '0.82rem', marginTop: '1px' }}>
                                         {paymentMethod === 'wompi' ? 'Wompi (PSE / Nequi / Tarjeta)' : (locale === 'es' ? 'Pago Contra Entrega' : 'Cash on Delivery')}
                                     </div>
                                 </div>
@@ -2142,26 +2153,26 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* Footer Action Buttons */}
-                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '14px', justifyContent: 'flex-end', marginTop: '1.75rem', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 onClick={() => setShowConfirmationModal(false)}
                                 style={{
-                                    padding: '0.85rem 1.4rem',
-                                    borderRadius: '12px',
+                                    padding: '0.9rem 1.75rem',
+                                    borderRadius: '14px',
                                     border: '1px solid #CBD5E1',
                                     backgroundColor: 'white',
                                     color: '#475569',
-                                    fontWeight: '600',
-                                    fontSize: '0.9rem',
+                                    fontWeight: '700',
+                                    fontSize: '0.92rem',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '6px',
+                                    gap: '8px',
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                <Edit3 size={16} />
+                                <Edit3 size={17} />
                                 {locale === 'es' ? 'Modificar Pedido' : 'Edit Order'}
                             </button>
                             <button
@@ -2169,22 +2180,22 @@ export default function CheckoutPage() {
                                 onClick={executeOrderSubmission}
                                 disabled={loading}
                                 style={{
-                                    padding: '0.85rem 1.75rem',
-                                    borderRadius: '12px',
+                                    padding: '0.9rem 2.25rem',
+                                    borderRadius: '14px',
                                     border: 'none',
                                     backgroundColor: 'var(--primary)',
                                     color: 'white',
-                                    fontWeight: '700',
-                                    fontSize: '0.95rem',
+                                    fontWeight: '800',
+                                    fontSize: '1rem',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '8px',
-                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
+                                    gap: '10px',
+                                    boxShadow: '0 4px 14px rgba(13, 122, 87, 0.3)',
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                                {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
                                 {loading 
                                     ? (locale === 'es' ? 'Procesando...' : 'Processing...') 
                                     : (locale === 'es' ? 'Confirmar y Pagar' : 'Confirm & Pay')}
