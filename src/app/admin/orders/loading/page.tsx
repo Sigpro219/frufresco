@@ -1655,6 +1655,20 @@ export default function OrderLoadingPage() {
                                                         }}>
                                                             {getStatusLabel(order.status)}
                                                         </div>
+                                                        {order.payment_status !== 'Pagado' && (
+                                                            <div style={{
+                                                                marginTop: '4px',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.6rem',
+                                                                fontWeight: '900',
+                                                                backgroundColor: '#FEF3C7',
+                                                                color: '#92400E',
+                                                                border: '1px solid #FCD34D'
+                                                            }}>
+                                                                💵 PENDIENTE DE PAGO
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                                                         <input 
