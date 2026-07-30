@@ -320,6 +320,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                             show_on_web: attr ? attr.show_on_web !== false : true
                         };
                     }),
+                    options: options.reduce((acc: any, opt: any) => {
+                        if (opt.name && Array.isArray(opt.values) && opt.values.length > 0) {
+                            acc[opt.name] = opt.values;
+                        }
+                        return acc;
+                    }, {}),
                     variants: variants,
                     iva_rate: formData.iva_rate,
                     name_en: formData.name_en,
