@@ -904,7 +904,7 @@ export default function B2BDashboard() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary }}>
 
-            <div className="container" style={{ padding: '2rem 1.5rem 18rem', maxWidth: '1400px', margin: '0 auto' }}>
+            <div className="container" style={{ padding: '1.25rem 1.5rem 2rem', maxWidth: '1400px', margin: '0 auto' }}>
 
                 {/* UNIFIED ULTRA-COMPACT HEADER & TOOLBAR */}
                 <div style={{ 
@@ -1108,7 +1108,7 @@ export default function B2BDashboard() {
                             borderRadius: THEME.radius.lg,
                             boxShadow: THEME.shadow.md,
                             border: `1px solid ${THEME.colors.border}`,
-                            overflow: 'visible',
+                            overflow: 'hidden',
                             position: 'relative'
                         }}>
                             {/* Sticky Header Wrapper for Catalog Search and Categories — UNIFIED COMPACT SINGLE ROW */}
@@ -1445,7 +1445,7 @@ export default function B2BDashboard() {
                                 borderRadius: THEME.radius.lg,
                                 boxShadow: THEME.shadow.md,
                                 border: `1px solid ${THEME.colors.border}`,
-                                overflow: 'visible',
+                                overflow: 'hidden',
                             }}>
                                 {/* Cart Header — Ultra-Compact Single Row */}
                                 <div className="b2b-sticky-cart-header" style={{
@@ -3292,9 +3292,11 @@ export default function B2BDashboard() {
                         grid-template-columns: 1.5fr 1fr;
                         align-items: start;
                     }
-                    /* Columna 1 (Catálogo) con altura fija */
+                    /* Columna 1 (Catálogo) con altura adaptativa al Viewport */
                     .b2b-catalog-container {
-                        height: 858px;
+                        height: calc(100vh - 170px);
+                        min-height: 650px;
+                        max-height: 920px;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
@@ -3304,30 +3306,37 @@ export default function B2BDashboard() {
                     /* Cuerpo scrolleable de productos en Columna 1 (1) */
                     .b2b-catalog-container > div:last-child {
                         flex: 1;
+                        min-height: 0;
                         overflow-y: auto !important;
                         padding: 1.5rem 1rem;
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
-                        height: 858px;
+                        height: calc(100vh - 170px);
+                        min-height: 650px;
+                        max-height: 920px;
                         display: flex;
                         flex-direction: column;
                         justify-content: space-between;
+                        box-sizing: border-box;
                     }
-                    /* Carrito con altura fija */
+                    /* Carrito con altura flexible y contenida */
                     .b2b-cart-sidebar > div:first-child {
-                        height: 710px;
+                        flex: 1;
+                        min-height: 0;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
                         position: relative;
                         box-sizing: border-box;
                     }
-                    /* Sección pequeña de Soporte WhatsApp de 124px */
+                    /* Sección pequeña de Soporte WhatsApp */
                     .b2b-cart-sidebar > div:last-child {
-                        height: 124px;
-                        margin-top: 24px !important;
+                        height: auto;
+                        min-height: 110px;
+                        margin-top: 16px !important;
                         box-sizing: border-box;
+                        flex-shrink: 0;
                     }
                     .b2b-sticky-catalog-header {
                         position: relative;
