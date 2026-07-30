@@ -27,8 +27,32 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [parentSearch, setParentSearch] = useState('');
     const [showParentResults, setShowParentResults] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const parseInitialOptions = (prod: any) => {
+        if (Array.isArray(prod.options_config) && prod.options_config.length > 0) {
+            return prod.options_config.map((opt: any) => ({
+                name: opt.name || '',
+                values: Array.isArray(opt.values) ? opt.values : []
+            }));
+        }
+        if (prod.options) {
+            if (Array.isArray(prod.options) && prod.options.length > 0) {
+                return prod.options.map((opt: any) => ({
+                    name: opt.name || '',
+                    values: Array.isArray(opt.values) ? opt.values : []
+                }));
+            }
+            if (typeof prod.options === 'object' && Object.keys(prod.options).length > 0) {
+                return Object.entries(prod.options).map(([name, values]) => ({
+                    name,
+                    values: Array.isArray(values) ? values : []
+                }));
+            }
+        }
+        return [];
+    };
+
     const [previewUrl, setPreviewUrl] = useState<string | null>(product.image_url);
-    const [options, setOptions] = useState<any[]>(product.options_config || []);
+    const [options, setOptions] = useState<any[]>(() => parseInitialOptions(product));
     const [variants, setVariants] = useState<any[]>(() => {
         const raw = product.variants || [];
         const seen = new Set<string>();
@@ -323,6 +347,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         show_on_web: attr ? attr.show_on_web !== false : true
                     };
                 }),
+                options: options.reduce((acc: any, opt: any) => {
+                    if (opt.name && Array.isArray(opt.values) && opt.values.length > 0) {
+                        acc[opt.name] = opt.values;
+                    }
+                    return acc;
+                }, {}),
                 variants: variants,
                 iva_rate: formData.iva_rate,
                 display_name: formData.display_name,
