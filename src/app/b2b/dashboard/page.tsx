@@ -6,13 +6,13 @@ import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
 import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
 import AgreementDocumentModal from '@/components/AgreementDocumentModal';
-import { ShieldCheck, CheckCircle2, Building2, Sparkles, ExternalLink, ArrowRight, Percent, Award } from 'lucide-react';
+import { ShieldCheck, ExternalLink, ArrowRight, Percent, Award } from 'lucide-react';
 
 interface OrderItem {
     id: string;
@@ -137,7 +137,7 @@ export default function B2BDashboard() {
     useEffect(() => {
         if (!authLoading) {
             if (!user) {
-                console.log('🔒 Acceso no autorizado: redirigiendo a login');
+                console.log('Acceso no autorizado: redirigiendo a login');
                 router.push('/login?redirect=/b2b/dashboard');
                 return;
             }
@@ -333,7 +333,7 @@ export default function B2BDashboard() {
                 return nameA.localeCompare(nameB);
             }));
         }
-        alert(`✅ ${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) ${locale === 'en' ? 'added to order' : 'agregado al pedido'}`);
+        alert(`${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) ${locale === 'en' ? 'added to order' : 'agregado al pedido'}`);
     };
 
     // Time calculation logic
@@ -826,22 +826,22 @@ export default function B2BDashboard() {
     const handleSubmit = () => {
         const itemsToSubmit = orderItems.filter(item => item.quantity > 0);
         
-        console.log('🔍 handleSubmit called');
-        console.log('📦 Total items:', orderItems.length);
-        console.log('✅ Items with quantity > 0:', itemsToSubmit.length);
-        console.log('📅 Delivery date:', deliveryDate);
+        console.log('handleSubmit called');
+        console.log('Total items:', orderItems.length);
+        console.log('Items with quantity > 0:', itemsToSubmit.length);
+        console.log('� Delivery date:', deliveryDate);
         
         if (itemsToSubmit.length === 0) {
-            alert('⚠️ Debes agregar al menos un producto con cantidad mayor a 0 para confirmar el pedido.');
+            alert('Debes agregar al menos un producto con cantidad mayor a 0 para confirmar el pedido.');
             return;
         }
         
         if (!deliveryDate) {
-            alert('⚠️ Por favor selecciona una fecha de entrega.');
+            alert('Por favor selecciona una fecha de entrega.');
             return;
         }
         
-        console.log('✅ Opening summary modal');
+        console.log('Opening summary modal');
         setIsSummaryModalOpen(true);
     };
 
@@ -947,7 +947,7 @@ export default function B2BDashboard() {
                             border: '1px solid #BFDBFE' 
                         }}>
                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
-                                🔍 Cliente:
+                                 Cliente:
                             </span>
                             <select
                                 value={simulatedClientId || activeProfile?.id || ''}
@@ -1119,13 +1119,11 @@ export default function B2BDashboard() {
                                 borderLeft: `3px solid ${THEME.colors.primary}`,
                                 borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                                 display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                flexWrap: 'wrap',
+                                flexDirection: 'column',
                                 gap: '0.75rem'
                             }}>
-                                {/* Left: Title + Agreement Filter Pills */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                {/* Fila 1: Título + Buscador + Categoria */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                                     <h2 style={{ 
                                         fontFamily: THEME.typography.fontFamilyMain,
                                         fontSize: '1.05rem', 
@@ -1136,173 +1134,174 @@ export default function B2BDashboard() {
                                         gap: '6px',
                                         color: THEME.colors.textMain,
                                     }}>
-                                        <Search size={16} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Catálogo'}
+                                        <Package size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Catálogo'}
                                     </h2>
-
-                                    {/* Agreement Status Filter Pills */}
-                                    {(() => {
-                                        const activeProds = categoryProducts.filter(p => p.is_active !== false);
-                                        const countInAgreement = activeProds.filter(p => agreementPricesMap[p.id] !== undefined).length;
-                                        const countOutAgreement = activeProds.filter(p => agreementPricesMap[p.id] === undefined).length;
-                                        const countTotal = activeProds.length;
-
-                                        return (
-                                            <div style={{
-                                                display: 'flex',
-                                                backgroundColor: '#F1F5F9',
-                                                borderRadius: THEME.radius.md,
-                                                padding: '2px',
-                                                border: '1px solid #E2E8F0',
-                                                gap: '2px'
-                                            }}>
-                                                {/* 1. En Convenio (Default) */}
-                                                <button
-                                                    onClick={() => setAgreementFilter('agreement')}
-                                                    style={{
-                                                        padding: '0.25rem 0.6rem',
-                                                        borderRadius: THEME.radius.md,
-                                                        border: 'none',
-                                                        backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
-                                                        color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
-                                                        fontWeight: agreementFilter === 'agreement' ? '800' : '600',
-                                                        fontSize: '0.72rem',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                                    }}
-                                                    title="Mostrar solo productos incluidos en tu acuerdo comercial"
-                                                >
-                                                    <Tag size={12} /> En Convenio <span style={{ opacity: 0.8, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'agreement' ? '#059669' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countInAgreement}</span>
-                                                </button>
-
-                                                {/* 2. Fuera de Convenio */}
-                                                <button
-                                                    onClick={() => setAgreementFilter('non_agreement')}
-                                                    style={{
-                                                        padding: '0.25rem 0.6rem',
-                                                        borderRadius: THEME.radius.md,
-                                                        border: 'none',
-                                                        backgroundColor: agreementFilter === 'non_agreement' ? '#E2E8F0' : 'transparent',
-                                                        color: agreementFilter === 'non_agreement' ? '#1E293B' : '#64748B',
-                                                        fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
-                                                        fontSize: '0.72rem',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                                    }}
-                                                    title="Mostrar solo productos fuera de convenio"
-                                                >
-                                                    <Info size={12} /> Fuera de Convenio <span style={{ opacity: 0.8, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'non_agreement' ? '#475569' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countOutAgreement}</span>
-                                                </button>
-
-                                                {/* 3. Todos */}
-                                                <button
-                                                    onClick={() => setAgreementFilter('all')}
-                                                    style={{
-                                                        padding: '0.25rem 0.6rem',
-                                                        borderRadius: THEME.radius.md,
-                                                        border: 'none',
-                                                        backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
-                                                        color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
-                                                        fontWeight: agreementFilter === 'all' ? '800' : '600',
-                                                        fontSize: '0.72rem',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                                    }}
-                                                >
-                                                    Todos <span style={{ opacity: 0.8, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'all' ? 'var(--primary)' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countTotal}</span>
-                                                </button>
+                                    
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <div style={{ position: 'relative', minWidth: '170px' }}>
+                                            <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                                <Search size={14} strokeWidth={2} />
                                             </div>
-                                        );
-                                    })()}
-                                </div>
-
-                                {/* Right: Compact Search Input & Category Dropdown */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    {/* Search Input */}
-                                    <div style={{ position: 'relative', minWidth: '170px' }}>
-                                        <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
-                                            <Search size={14} strokeWidth={2} />
+                                            <input
+                                                type="text"
+                                                placeholder={t.b2b.dashboard.searchPlaceholder}
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.4rem 1.8rem 0.4rem 1.8rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: '1px solid var(--border)',
+                                                    fontSize: '0.78rem',
+                                                    fontWeight: '500',
+                                                    outline: 'none',
+                                                    backgroundColor: '#F9FAFB'
+                                                }}
+                                            />
+                                            {searchTerm && (
+                                                <button
+                                                    onClick={() => setSearchTerm('')}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        right: '8px',
+                                                        top: '50%',
+                                                        transform: 'translateY(-50%)',
+                                                        background: '#f3f4f6',
+                                                        border: 'none',
+                                                        borderRadius: '50%',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: '#6b7280',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.65rem'
+                                                    }}
+                                                >✕</button>
+                                            )}
                                         </div>
-                                        <input
-                                            type="text"
-                                            placeholder={t.b2b.dashboard.searchPlaceholder}
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
+
+                                        <select
+                                            value={selectedCategory || ''}
+                                            onChange={(e) => setSelectedCategory(e.target.value || null)}
                                             style={{
-                                                width: '100%',
-                                                padding: '0.4rem 1.8rem 0.4rem 1.8rem',
+                                                padding: '0.4rem 1.8rem 0.4rem 0.75rem',
                                                 borderRadius: THEME.radius.md,
                                                 border: '1px solid var(--border)',
                                                 fontSize: '0.78rem',
-                                                fontWeight: '500',
+                                                fontWeight: '600',
+                                                color: 'var(--text-main)',
                                                 outline: 'none',
-                                                backgroundColor: '#F9FAFB'
+                                                backgroundColor: '#F9FAFB',
+                                                cursor: 'pointer',
+                                                appearance: 'none',
+                                                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230D7A57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'right 6px center',
+                                                backgroundSize: '14px'
                                             }}
-                                        />
-                                        {searchTerm && (
+                                        >
+                                            <option value="">{t.b2b.dashboard.allCategories}</option>
+                                            {categories.map(cat => (
+                                                <option key={cat} value={cat}>
+                                                    {t.categories[cat] || (cat === 'PR' ? 'Procesados' : cat)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Fila 2: Filtros de Convenio */}
+                                {(() => {
+                                    const activeProds = categoryProducts.filter(p => p.is_active !== false);
+                                    const countInAgreement = activeProds.filter(p => agreementPricesMap[p.id] !== undefined).length;
+                                    const countOutAgreement = activeProds.filter(p => agreementPricesMap[p.id] === undefined).length;
+                                    const countTotal = activeProds.length;
+
+                                    return (
+                                        <div style={{
+                                            display: 'flex',
+                                            width: '100%',
+                                            backgroundColor: '#F1F5F9',
+                                            borderRadius: THEME.radius.md,
+                                            padding: '2px',
+                                            border: '1px solid #E2E8F0',
+                                            gap: '4px'
+                                        }}>
                                             <button
-                                                onClick={() => setSearchTerm('')}
+                                                onClick={() => setAgreementFilter('agreement')}
                                                 style={{
-                                                    position: 'absolute',
-                                                    right: '8px',
-                                                    top: '50%',
-                                                    transform: 'translateY(-50%)',
-                                                    background: '#f3f4f6',
+                                                    flex: 1,
+                                                    padding: '0.35rem 0.5rem',
+                                                    borderRadius: THEME.radius.md,
                                                     border: 'none',
-                                                    borderRadius: '50%',
-                                                    width: '16px',
-                                                    height: '16px',
+                                                    backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
+                                                    color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
+                                                    fontWeight: agreementFilter === 'agreement' ? '800' : '600',
+                                                    fontSize: '0.72rem',
+                                                    cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    color: '#6b7280',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.65rem'
+                                                    gap: '4px',
+                                                    boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                                                 }}
-                                            >✕</button>
-                                        )}
-                                    </div>
+                                            >
+                                                <Tag size={14} /> En Convenio 
+                                                <span style={{ marginLeft: 'auto', opacity: 0.9, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'agreement' ? '#059669' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countInAgreement}</span>
+                                            </button>
 
-                                    {/* Category Combobox Selector */}
-                                    <select
-                                        value={selectedCategory || ''}
-                                        onChange={(e) => setSelectedCategory(e.target.value || null)}
-                                        style={{
-                                            padding: '0.4rem 1.8rem 0.4rem 0.75rem',
-                                            borderRadius: THEME.radius.md,
-                                            border: '1px solid var(--border)',
-                                            fontSize: '0.78rem',
-                                            fontWeight: '600',
-                                            color: 'var(--text-main)',
-                                            outline: 'none',
-                                            backgroundColor: '#F9FAFB',
-                                            cursor: 'pointer',
-                                            appearance: 'none',
-                                            backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230D7A57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                                            backgroundRepeat: 'no-repeat',
-                                            backgroundPosition: 'right 6px center',
-                                            backgroundSize: '14px'
-                                        }}
-                                    >
-                                        <option value="">{t.b2b.dashboard.allCategories}</option>
-                                        {categories.map(cat => (
-                                            <option key={cat} value={cat}>
-                                                {t.categories[cat as keyof typeof t.categories] || (cat === 'PR' ? 'Procesados' : cat)}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                            <button
+                                                onClick={() => setAgreementFilter('non_agreement')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '0.35rem 0.5rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: 'none',
+                                                    backgroundColor: agreementFilter === 'non_agreement' ? '#E2E8F0' : 'transparent',
+                                                    color: agreementFilter === 'non_agreement' ? '#1E293B' : '#64748B',
+                                                    fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
+                                                    fontSize: '0.72rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                                }}
+                                            >
+                                                <Info size={14} /> Fuera Convenio 
+                                                <span style={{ marginLeft: 'auto', opacity: 0.9, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'non_agreement' ? '#475569' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countOutAgreement}</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => setAgreementFilter('all')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '0.35rem 0.5rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: 'none',
+                                                    backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
+                                                    color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
+                                                    fontWeight: agreementFilter === 'all' ? '800' : '600',
+                                                    fontSize: '0.72rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                                }}
+                                            >
+                                                <Layers size={14} /> Todos 
+                                                <span style={{ marginLeft: 'auto', opacity: 0.9, fontWeight: '700', fontSize: '0.68rem', backgroundColor: agreementFilter === 'all' ? 'var(--primary)' : '#CBD5E1', color: 'white', padding: '1px 5px', borderRadius: '10px' }}>{countTotal}</span>
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
-                            {/* Category Products Results */}
                             <div style={{ padding: '1.25rem 1rem' }}>
                                 {(() => {
                                     const filteredList = categoryProducts.filter(p => {
@@ -2025,7 +2024,7 @@ export default function B2BDashboard() {
                                             ${Math.round(consumptionKpis.totalCop).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                         </h3>
                                         <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '4px', display: 'block' }}>
-                                            📦 Pedidos del cliente activo
+                                             Pedidos del cliente activo
                                         </span>
                                     </div>
 
@@ -2041,7 +2040,7 @@ export default function B2BDashboard() {
                                             ${Math.round(consumptionKpis.totalKg).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')} Kg
                                         </h3>
                                         <span style={{ fontSize: '0.72rem', color: '#3B82F6', fontWeight: '700', marginTop: '4px', display: 'block' }}>
-                                            ⚖️ Peso total abastecido
+                                            ⚖ Peso total abastecido
                                         </span>
                                     </div>
 
@@ -2062,7 +2061,7 @@ export default function B2BDashboard() {
                                             ${Math.round(consumptionKpis.totalSavingsCop).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                         </h3>
                                         <span style={{ fontSize: '0.72rem', color: '#065F46', fontWeight: '700', marginTop: '4px', display: 'block' }}>
-                                            💡 Descuento vs precio base general
+                                            � Descuento vs precio base general
                                         </span>
                                     </div>
 
@@ -2078,7 +2077,7 @@ export default function B2BDashboard() {
                                             ${Math.round(consumptionKpis.avgPrice).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                         </h3>
                                         <span style={{ fontSize: '0.72rem', color: '#92400E', fontWeight: '600', marginTop: '4px', display: 'block' }}>
-                                            📊 Eficiencia de compra promedio
+                                             Eficiencia de compra promedio
                                         </span>
                                     </div>
                                 </div>
@@ -2182,18 +2181,18 @@ export default function B2BDashboard() {
                                                                 minWidth: '195px'
                                                             }}>
                                                                 <div style={{ fontWeight: '800', color: '#047857', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '0.3rem', fontSize: '0.82rem' }}>
-                                                                    📅 Despacho: {activeHoverPoint.date}
+                                                                    � Despacho: {activeHoverPoint.date}
                                                                 </div>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-                                                                    <span style={{ color: '#64748B' }}>💵 Inversión:</span>
+                                                                    <span style={{ color: '#64748B' }}>� Inversión:</span>
                                                                     <strong style={{ color: '#047857' }}>${Math.round(activeHoverPoint.cop).toLocaleString('es-CO')}</strong>
                                                                 </div>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-                                                                    <span style={{ color: '#64748B' }}>⚖️ Masa:</span>
+                                                                    <span style={{ color: '#64748B' }}>⚖ Masa:</span>
                                                                     <strong style={{ color: '#2563EB' }}>{Math.round(activeHoverPoint.kg).toLocaleString('es-CO')} Kg</strong>
                                                                 </div>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-                                                                    <span style={{ color: '#64748B' }}>📊 Promedio:</span>
+                                                                    <span style={{ color: '#64748B' }}> Promedio:</span>
                                                                     <strong style={{ color: '#0F172A' }}>${Math.round(activeHoverPoint.pricePerKg).toLocaleString('es-CO')} / Kg</strong>
                                                                 </div>
                                                             </div>
@@ -2307,7 +2306,7 @@ export default function B2BDashboard() {
                                         <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                 <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#ECFDF5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                                                    💡
+                                                    �
                                                 </div>
                                                 <div>
                                                     <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0F172A' }}>Análisis de Eficiencia de Compra</div>
@@ -2318,7 +2317,7 @@ export default function B2BDashboard() {
                                             </div>
 
                                             <div style={{ fontSize: '0.75rem', backgroundColor: '#F8FAFC', padding: '6px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', color: '#475569', fontWeight: '700' }}>
-                                                🎯 Ritmo de Compra: <span style={{ color: '#2563EB' }}>Cada 6.2 días</span>
+                                                � Ritmo de Compra: <span style={{ color: '#2563EB' }}>Cada 6.2 días</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2464,7 +2463,7 @@ export default function B2BDashboard() {
                                                                         transition: 'background-color 0.15s'
                                                                     }}
                                                                 >
-                                                                    <span>🛒</span> {locale === 'en' ? '+ Add to order' : '+ Agregar al pedido'}
+                                                                    <span></span> {locale === 'en' ? '+ Add to order' : '+ Agregar al pedido'}
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -2606,7 +2605,7 @@ export default function B2BDashboard() {
                                                                 textTransform: 'uppercase',
                                                                 letterSpacing: '0.05em'
                                                             }}>
-                                                                🟢 ACUERDO VIGENTE Y ACTIVO
+                                                                � ACUERDO VIGENTE Y ACTIVO
                                                             </span>
                                                             <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '700', fontFamily: 'monospace' }}>
                                                                 Ref: #ACU-{agreement.quote_number || agreement.id.substring(0, 6)}
@@ -2616,8 +2615,8 @@ export default function B2BDashboard() {
                                                             {agreement.model_snapshot_name || agreement.pricing_models?.name || 'Acuerdo Comercial Institucional - FruFresco'}
                                                         </h3>
                                                         <div style={{ display: 'flex', gap: '1.25rem', marginTop: '6px', fontSize: '0.82rem', color: '#64748B', fontWeight: '600' }}>
-                                                            <span>📅 Vigencia: <strong>{validDateStr}</strong></span>
-                                                            <span>📦 Portafolio en convenio: <strong style={{ color: 'var(--primary)' }}>{items.length} Insumos</strong></span>
+                                                            <span>� Vigencia: <strong>{validDateStr}</strong></span>
+                                                            <span> Portafolio en convenio: <strong style={{ color: 'var(--primary)' }}>{items.length} Insumos</strong></span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2818,7 +2817,7 @@ export default function B2BDashboard() {
                                 }}>
                                     <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                                         <div style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.9rem', marginBottom: '4px' }}>
-                                            🏷️ Precios Negociados Fijos
+                                             Precios Negociados Fijos
                                         </div>
                                         <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
                                             Garantía de tarifas preferenciales en tus insumos de alto volumen por periodo definido.
@@ -2827,7 +2826,7 @@ export default function B2BDashboard() {
 
                                     <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                                         <div style={{ fontWeight: '800', color: '#1D4ED8', fontSize: '0.9rem', marginBottom: '4px' }}>
-                                            💳 Crédito Institucional
+                                            � Crédito Institucional
                                         </div>
                                         <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
                                             Cupo asignado con días de plazo adaptados al flujo de caja de tu empresa.
@@ -2836,7 +2835,7 @@ export default function B2BDashboard() {
 
                                     <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                                         <div style={{ fontWeight: '800', color: '#D97706', fontSize: '0.9rem', marginBottom: '4px' }}>
-                                            🚛 Logística Prioritaria
+                                             Logística Prioritaria
                                         </div>
                                         <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
                                             Prioridad en ventana de entrega y control de calidad digital en bodega.
