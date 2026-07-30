@@ -446,11 +446,11 @@ export default function B2BDashboard() {
                     setAgreementPricesMap(pricesMap);
                 }
 
-                // 2. Fetch Last 5 Orders via API Endpoint (Bypassing Browser RLS)
+                // 2. Fetch Last 10 Orders via API Endpoint (Bypassing Browser RLS)
                 let recentOrders: any[] = [];
-                if (effectiveClientId) {
+                if (targetProfileId) {
                     try {
-                        const res = await fetch(`/api/b2b/orders?clientId=${effectiveClientId}`);
+                        const res = await fetch(`/api/b2b/orders?clientId=${targetProfileId}`);
                         if (res.ok) {
                             const json = await res.json();
                             recentOrders = json.orders || [];
@@ -1512,7 +1512,7 @@ export default function B2BDashboard() {
                                                                     gap: '4px'
                                                                 }}
                                                             >
-                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800' }}>#{ord.sequence_number || (historicalOrders.length - idx)}</span>
+                                                                <span style={{ fontFamily: 'monospace', fontWeight: '800' }}>#{ord.sequence_id || ord.sequence_number || (historicalOrders.length - idx)}</span>
                                                                 {dateStr && <span style={{ fontSize: '0.65rem', color: isSelected ? 'var(--primary)' : '#64748B' }}>({dateStr})</span>}
                                                             </button>
                                                         );
