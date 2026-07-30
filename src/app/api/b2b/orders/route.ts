@@ -16,6 +16,27 @@ export async function GET(request: Request) {
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
         const supabase = createClient(supabaseUrl, serviceKey);
 
+        // Fetch client profile to check parent_id or corporate parent status
+        const { data: clientProfile } = await supabase
+            .from('profiles')
+            .select('id, parent_id, is_corporate_parent')
+            .eq('id', clientId)
+            .single();
+
+        let targetProfileIds = [clientId];
+        if (clientProfile?.parent_id) {
+            targetProfileIds.push(clientProfile.parent_id);
+        }
+        if (clientProfile?.is_corporate_parent) {
+            const { data: children } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('parent_id', clientId);
+            if (children && children.length > 0) {
+                targetProfileIds.push(...children.map(c => c.id));
+            }
+        }
+
         const { data: orders, error } = await supabase
             .from('orders')
             .select(`
@@ -31,10 +52,11 @@ export async function GET(request: Request) {
                     product_id,
                     quantity,
                     unit_price,
-                    products(id, name, unit_of_measure, image_url)
+                    nickname,
+                    products(id, name, name_en, unit_of_measure, image_url)
                 )
             `)
-            .eq('profile_id', clientId)
+            .in('profile_id', targetProfileIds)
             .order('created_at', { ascending: false })
             .limit(10);
 
