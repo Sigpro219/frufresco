@@ -857,8 +857,8 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "Estado", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
-            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
+            "Estado", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
             "Regimen_Simple", "Actividad_Economica", "Correos_Facturacion_Adicionales", "Responsable_Cartera", 
@@ -870,8 +870,8 @@ export default function ClientsModule() {
         ];
 
         const sample1 = [
-            "ACTIVO", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
-            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
+            "ACTIVO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
             "NO", "5611", "contabilidad@elgourmet.com", "Luz Marina Pérez", 
@@ -883,21 +883,21 @@ export default function ClientsModule() {
         ];
 
         const sample2 = [
-            "ACTIVO", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
-            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
+            "ACTIVO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "unicentro@elgourmet.com", "", "", "Avenida Carrera 15 # 124-30", "Local 12 - Zona Comercial", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "HEREDADO_MATRIZ",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
             "NO", "5611", "", "", 
             "", "", "", "",
             "", "", "", "",
-            "", "", "NO", "remission", 
+            "", "", "NO", "HEREDADO", 
             "NO", "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2,
             4.7022, -74.0411, "", "", "ZR-Norte", "LP-01", 0
         ];
 
         const sample3 = [
-            "ACTIVO", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
-            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
+            "ACTIVO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "marcela.rincon@gmail.com", "", "", "Carrera 7 # 150-10", "Apto 402 - Torre B", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
             "NO", "", "", "", 
@@ -959,7 +959,13 @@ export default function ClientsModule() {
                         phone: (row.Telefono || '').toString().trim(),
                         contact_phone: (row.Telefono || '').toString().trim(),
                         email: (row.Email || '').toString().trim(),
+                        email_2: (row.Email_Notificacion_2 || '').toString().trim() || null,
+                        email_3: (row.Email_Notificacion_3 || '').toString().trim() || null,
+                        notify_email_1: !!row.Email,
+                        notify_email_2: !!row.Email_Notificacion_2,
+                        notify_email_3: !!row.Email_Notificacion_3,
                         address: (row.Direccion || '').toString().trim(),
+                        address_complement: (row.Complemento_Direccion || '').toString().trim() || null,
                         city: (row.Ciudad || 'Bogotá').toString().trim(),
                         municipality: (row.Municipio || row.Ciudad || 'Bogotá').toString().trim(),
                         department: (row.Departamento || 'Cundinamarca').toString().trim(),
