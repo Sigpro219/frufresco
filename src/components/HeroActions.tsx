@@ -1,7 +1,8 @@
 'use client';
 
-import { LayoutGrid, Building2, ShoppingCart, ArrowRight } from 'lucide-react';
+import { LayoutGrid, Building2, ArrowRight, Bot, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '../lib/authContext';
 
 interface HeroActionsProps {
   t: any;
@@ -9,6 +10,8 @@ interface HeroActionsProps {
 }
 
 export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
+  const { user } = useAuth();
+
   const scrollToCatalog = (e: React.MouseEvent) => {
     e.preventDefault();
     const catalogElement = document.getElementById('catalog');
@@ -51,37 +54,37 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
         <ArrowRight size={20} style={{ opacity: 0.7 }} />
       </button>
 
+      {/* Chatbot HORECA CTA */}
       <div style={{ 
         display: 'flex', 
-        gap: '1.5rem', 
-        justifyContent: 'center', 
-        flexWrap: 'wrap',
-        padding: '0.5rem'
+        gap: '1rem', 
+        alignItems: 'center',
+        flexWrap: 'wrap'
       }}>
-        {isB2bEnabled && (
-          <Link href="/b2b/dashboard" style={{ textDecoration: 'none' }}>
-            <button className="btn-glass" style={{
-              fontSize: '1.1rem',
-              padding: '0.9rem 2.8rem',
-              fontWeight: '700',
-              borderRadius: 'var(--radius-full)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.8rem',
-              color: 'white',
-              border: '1px solid rgba(255,255,255,0.4)',
-              cursor: 'pointer',
-              backgroundColor: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(15px)',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-            }}>
-              <Building2 size={22} strokeWidth={2} /> 
-              {t.btnInstitutional || 'Portal Institucional'}
-            </button>
-          </Link>
-        )}
+        <Link href="/b2b/register" style={{ textDecoration: 'none' }}>
+          <button className="btn-glass" style={{
+            fontSize: '1.1rem',
+            padding: '0.9rem 2rem',
+            fontWeight: '700',
+            borderRadius: 'var(--radius-full)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            color: '#A7F3D0',
+            border: '1px solid rgba(167, 243, 208, 0.4)',
+            cursor: 'pointer',
+            backgroundColor: 'rgba(6, 78, 59, 0.4)',
+            backdropFilter: 'blur(15px)',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
+          }}>
+            <Bot size={22} strokeWidth={2.2} />
+            <span>Chatbot Cotizador HORECA</span>
+            <Sparkles size={16} />
+          </button>
+        </Link>
       </div>
     </div>
   );
 }
+
