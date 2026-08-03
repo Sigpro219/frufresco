@@ -1363,8 +1363,9 @@ export default function MasterProductsPage() {
                         </span>
                     </div>
 
-                    {/* Botón Informativo Estándar (Hover) */}
+                    {/* Botón Informativo Estándar (Hover/Click) */}
                     <div 
+                        onClick={() => setShowHelpTooltip(prev => !prev)}
                         onMouseEnter={() => setShowHelpTooltip(true)}
                         onMouseLeave={() => setShowHelpTooltip(false)}
                         style={{ 
@@ -1377,7 +1378,7 @@ export default function MasterProductsPage() {
                             display: 'flex', 
                             alignItems: 'center', 
                             justifyContent: 'center',
-                            cursor: 'help',
+                            cursor: 'pointer',
                             border: `1px solid ${THEME.colors.border}`,
                             fontSize: '0.9rem',
                             fontWeight: '600',
@@ -1392,44 +1393,140 @@ export default function MasterProductsPage() {
                                 position: 'absolute',
                                 top: '44px',
                                 right: '0',
-                                width: '320px',
-                                backgroundColor: '#1A231E',
+                                width: '380px',
+                                backgroundColor: '#111827',
                                 color: 'white',
-                                padding: '1rem',
-                                borderRadius: THEME.radius.lg,
-                                boxShadow: THEME.shadow.lg,
+                                padding: '1.2rem',
+                                borderRadius: '16px',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
                                 zIndex: 1000,
-                                fontSize: '0.75rem',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                fontSize: '0.78rem',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
                                 lineHeight: '1.5',
-                                pointerEvents: 'none',
                                 animation: 'fadeInDown 0.2s ease-out'
                             }}>
-                                <div style={{ fontWeight: '750', color: '#10B981', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
-                                    <Dna size={12} strokeWidth={1.5} /> COMANDOS MAESTROS (@)
+                                <div style={{ fontWeight: '800', color: '#10B981', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Dna size={14} strokeWidth={2} /> COMANDOS MAESTROS (@)
+                                    </div>
+                                    <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'normal' }}>Clic para aplicar</span>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
                                     {[
-                                        { tag: '@web', desc: 'En Tienda' },
+                                        { tag: '@web', desc: 'En Tienda Web' },
                                         { tag: '@oculto', desc: 'No Web' },
                                         { tag: '@sindatos', desc: 'Faltan datos' },
-                                        { tag: '@padre', desc: 'Producto Base' },
-                                        { tag: '@19', desc: 'IVA 19%' },
-                                        { tag: '@0', desc: 'Exentos' },
                                         { tag: '@activo', desc: 'Habilitados' },
-                                        { tag: '@hijo', desc: 'Fraccionado' }
+                                        { tag: '@padre', desc: 'Producto Base' },
+                                        { tag: '@hijo', desc: 'Fraccionado' },
+                                        { tag: '@19', desc: 'IVA 19%' },
+                                        { tag: '@0', desc: 'Exentos IVA' },
+                                        { tag: '@frutas', desc: 'Cat. Frutas' },
+                                        { tag: '@verduras', desc: 'Cat. Verduras' },
+                                        { tag: '@despensa', desc: 'Cat. Despensa' },
+                                        { tag: '#ID', desc: 'ID Contable (#12)' }
                                     ].map((item, i) => (
-                                        <div key={i}>
+                                        <div 
+                                            key={i}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const cleanTag = item.tag === '#ID' ? '#' : item.tag;
+                                                setSearchQuery(prev => {
+                                                    if (!prev) return cleanTag;
+                                                    if (prev.toLowerCase().includes(cleanTag.toLowerCase())) return prev;
+                                                    return `${prev}, ${cleanTag}`;
+                                                });
+                                            }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                padding: '4px 6px',
+                                                borderRadius: '6px',
+                                                backgroundColor: 'rgba(255,255,255,0.05)',
+                                                transition: 'background 0.15s'
+                                            }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)')}
+                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)')}
+                                        >
                                             <b style={{ color: '#FCD34D' }}>{item.tag}</b>: {item.desc}
                                         </div>
                                     ))}
                                 </div>
-                                <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
-                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: Papa, @web, @activo
+                                <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+                                    💡 Tip: Filtra por campos combinados separando con comas (,). Ejemplo: <code>Papa, @web, @activo</code>
                                 </div>
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Accesos Rápidos de Comandos Maestros (Chips) */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px' }}>
+                        Filtros Rápidos:
+                    </span>
+                    {[
+                        { tag: '@web', label: '🌐 @web' },
+                        { tag: '@oculto', label: '🙈 @oculto' },
+                        { tag: '@sindatos', label: '⚠️ @sindatos' },
+                        { tag: '@activo', label: '✅ @activo' },
+                        { tag: '@padre', label: '📦 @padre' },
+                        { tag: '@hijo', label: '🧩 @hijo' },
+                        { tag: '@19', label: '🏷️ @19' },
+                        { tag: '@0', label: '🌿 @0' },
+                        { tag: '@frutas', label: '🍎 @frutas' },
+                        { tag: '@verduras', label: '🥦 @verduras' },
+                        { tag: '@despensa', label: '🥫 @despensa' }
+                    ].map((btn) => {
+                        const isActive = searchQuery.toLowerCase().includes(btn.tag.toLowerCase());
+                        return (
+                            <button
+                                key={btn.tag}
+                                type="button"
+                                onClick={() => {
+                                    setSearchQuery(prev => {
+                                        if (!prev) return btn.tag;
+                                        if (prev.toLowerCase().includes(btn.tag.toLowerCase())) {
+                                            return prev.split(',').map(s => s.trim()).filter(s => s.toLowerCase() !== btn.tag.toLowerCase()).join(', ');
+                                        }
+                                        return `${prev}, ${btn.tag}`;
+                                    });
+                                }}
+                                style={{
+                                    padding: '4px 10px',
+                                    borderRadius: '99px',
+                                    border: isActive ? '1px solid #10B981' : `1px solid ${THEME.colors.border}`,
+                                    backgroundColor: isActive ? '#ECFDF5' : THEME.colors.surface,
+                                    color: isActive ? '#059669' : THEME.colors.textSecondary,
+                                    fontSize: '0.78rem',
+                                    fontWeight: isActive ? '800' : '600',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: isActive ? '0 2px 6px rgba(16, 185, 129, 0.15)' : 'none'
+                                }}
+                            >
+                                {btn.label}
+                            </button>
+                        );
+                    })}
+                    {searchQuery && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            style={{
+                                padding: '4px 10px',
+                                borderRadius: '99px',
+                                border: '1px solid #FECACA',
+                                backgroundColor: '#FEF2F2',
+                                color: '#DC2626',
+                                fontSize: '0.78rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                marginLeft: 'auto'
+                            }}
+                        >
+                            🧹 Limpiar Filtros
+                        </button>
+                    )}
                 </div>
 
                 <div style={{ 
