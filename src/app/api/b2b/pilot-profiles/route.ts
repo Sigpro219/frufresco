@@ -18,7 +18,7 @@ export async function GET() {
 
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, company_name, contact_name, nit, parent_id')
+            .select('id, company_name, contact_name, nit, parent_id, allow_off_agreement_purchases, override_parent_off_agreement')
             .in('id', pilotIds)
             .order('company_name');
 
@@ -27,10 +27,33 @@ export async function GET() {
             return NextResponse.json({ profiles: [] }, { status: 500 });
         }
 
-        const formatted = (data || []).map(p => ({
-            ...p,
-            company_name: p.company_name || p.contact_name || 'Cliente Piloto'
-        }));
+        // Fetch parent profiles for inheritance if sucursales exist
+        const parentIds = (data || []).map(p => p.parent_id).filter(Boolean);
+        let parentsMap: Record<string, any> = {};
+        if (parentIds.length > 0) {
+            const { data: parentProfiles } = await supabase
+                .from('profiles')
+                .select('id, allow_off_agreement_purchases')
+                .in('id', parentIds);
+            
+            (parentProfiles || []).forEach(p => {
+                parentsMap[p.id] = p;
+            });
+        }
+
+        const formatted = (data || []).map(p => {
+            const parent = p.parent_id ? parentsMap[p.parent_id] : null;
+            // If branch and not overriding, inherit allow_off_agreement_purchases from parent
+            const effectiveAllow = (p.parent_id && !p.override_parent_off_agreement && parent) 
+                ? parent.allow_off_agreement_purchases 
+                : p.allow_off_agreement_purchases;
+
+            return {
+                ...p,
+                company_name: p.company_name || p.contact_name || 'Cliente Piloto',
+                allow_off_agreement_purchases: effectiveAllow !== undefined ? effectiveAllow : true
+            };
+        });
 
         return NextResponse.json({ profiles: formatted });
     } catch (err: any) {

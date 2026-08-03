@@ -119,7 +119,7 @@ export default function B2BDashboard() {
             ];
             const { data } = await supabase
                 .from('profiles')
-                .select('id, company_name, nit, parent_id')
+                .select('id, company_name, nit, parent_id, allow_off_agreement_purchases, override_parent_off_agreement')
                 .in('id', pilotIds)
                 .order('company_name');
 
