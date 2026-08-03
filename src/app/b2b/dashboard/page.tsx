@@ -23,6 +23,7 @@ interface OrderItem {
     quantity: number;
     unit: string;
     unit_price?: number;
+    base_price?: number;
     variant_label?: string;
 }
 
@@ -65,7 +66,7 @@ export default function B2BDashboard() {
     const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
     const [consumptionKpis, setConsumptionKpis] = useState<{ totalCop: number, totalKg: number, totalSavingsCop: number, avgPrice: number }>({ totalCop: 0, totalKg: 0, totalSavingsCop: 0, avgPrice: 0 });
     const [consumptionTimeRange, setConsumptionTimeRange] = useState<'30days' | '3months' | 'all'>('all');
-    const [quickAddQuantities, setQuickAddQuantities] = useState<Record<string, number>>({});
+    const [quickAddQuantities, setQuickAddQuantities] = useState<Record<string, any>>({});
     const [agreements, setAgreements] = useState<any[]>([]);
     const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
     const [simulatedClientId, setSimulatedClientId] = useState<string>('');
@@ -289,6 +290,10 @@ export default function B2BDashboard() {
         if (exists) {
             updateQuantity(exists.id, exists.quantity + modalQuantity);
         } else {
+            const agreementPrice = agreementPricesMap[product.id];
+            const basePrice = product.base_price ? Number(product.base_price) : undefined;
+            const resolvedPrice = agreementPrice !== undefined ? Number(agreementPrice) : basePrice;
+
             const newItem: OrderItem = {
                 id: Math.random().toString(36).substr(2, 9), // Temp ID
                 product_id: product.id,
@@ -297,6 +302,8 @@ export default function B2BDashboard() {
                 product_image: product.image_url || '',
                 quantity: modalQuantity,
                 unit: product.unit_of_measure || 'kg',
+                unit_price: resolvedPrice,
+                base_price: basePrice,
                 variant_label: optionValues.join(', ') || undefined
             };
             setOrderItems(prev => [...prev, newItem].sort((a, b) => {
@@ -318,6 +325,10 @@ export default function B2BDashboard() {
         if (exists) {
             updateQuantity(exists.id, exists.quantity + qty);
         } else {
+            const agreementPrice = agreementPricesMap[product.id];
+            const basePrice = product.base_price ? Number(product.base_price) : undefined;
+            const resolvedPrice = agreementPrice !== undefined ? Number(agreementPrice) : basePrice;
+
             const newItem: OrderItem = {
                 id: Math.random().toString(36).substr(2, 9),
                 product_id: product.id,
@@ -325,7 +336,9 @@ export default function B2BDashboard() {
                 product_name_en: product.name_en,
                 product_image: product.image_url || '',
                 quantity: qty,
-                unit: product.unit_of_measure || 'Kg'
+                unit: product.unit_of_measure || 'Kg',
+                unit_price: resolvedPrice,
+                base_price: basePrice
             };
             setOrderItems(prev => [...prev, newItem].sort((a, b) => {
                 const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
@@ -851,6 +864,11 @@ export default function B2BDashboard() {
         setSubmitting(true);
 
         try {
+            const calculatedSubtotal = itemsToSubmit.reduce((acc, item) => {
+                const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                return acc + (Number(item.quantity || 0) * price);
+            }, 0);
+
             // Create new order
             const { data: order, error: orderError } = await supabase
                 .from('orders')
@@ -860,8 +878,8 @@ export default function B2BDashboard() {
                     status: 'pending_approval',
                     delivery_date: deliveryDate,
                     shipping_address: profile?.address_main || 'Dirección registrada',
-                    subtotal: 0,
-                    total: 0,
+                    subtotal: calculatedSubtotal,
+                    total: calculatedSubtotal,
                     special_notes: '[ORIGIN: web]'
                 })
                 .select()
@@ -870,14 +888,17 @@ export default function B2BDashboard() {
             if (orderError) throw orderError;
 
             // Create order items
-            const itemsToInsert = itemsToSubmit.map(item => ({
-                order_id: order.id,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: 0,
-                variant_label: item.variant_label || null,
-                nickname: item.variant_label || null
-            }));
+            const itemsToInsert = itemsToSubmit.map(item => {
+                const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                return {
+                    order_id: order.id,
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: price,
+                    variant_label: item.variant_label || null,
+                    nickname: item.variant_label || null
+                };
+            });
 
             await supabase.from('order_items').insert(itemsToInsert);
 
@@ -1546,7 +1567,7 @@ export default function B2BDashboard() {
                                     <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                         <div style={{ flex: 1, overflowY: 'auto' }}>
                                             {orderItems.map((item) => {
-                                                const uPrice = Number(item.unit_price || agreementPricesMap[item.product_id] || 0);
+                                                const uPrice = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
                                                 const itemSubtotal = item.quantity * uPrice;
                                                 return (
                                                     <div key={item.id} className="cart-item-row" style={{
@@ -1666,7 +1687,7 @@ export default function B2BDashboard() {
                                         }}>
                                             <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total Subtotal:</span>
                                             <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                ${formatPrice(orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || agreementPricesMap[i.product_id] || 0)), 0))}
+                                                ${formatPrice(orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? i.base_price ?? 0)), 0))}
                                             </span>
                                         </div>
 
