@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { isInsidePolygon, Point, getDistanceToPolygon } from '../lib/geoUtils';
 import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
-import { User } from 'lucide-react';
+import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket, Sparkles, FileText, Bot } from 'lucide-react';
 import { translations, Locale } from '../lib/translations';
 import { Polygon } from './admin/GeofencingManager';
 
@@ -52,7 +52,7 @@ type Message = {
     id: number;
     text: string;
     sender: 'bot' | 'user';
-    options?: string[]; // Para mostrar botones de respuesta rápida
+    options?: string[];
 };
 
 const ALL_CATEGORIES = [
@@ -66,6 +66,14 @@ const ALL_CATEGORIES = [
   'Procesados'
 ];
 
+const BUSINESS_TYPES = ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro'];
+
+const BUSINESS_SIZES = [
+  'Menos de $10M COP (Pequeño)',
+  'Entre $10M y $30M COP (Mediano)',
+  '> $30M COP (Grande)'
+];
+
 type LeadData = {
     is_out_of_coverage: boolean;
     is_near_coverage?: boolean;
@@ -75,7 +83,7 @@ type LeadData = {
     nit: string;
     business_type: string;
     business_size: string; 
-    selected_categories?: string[];
+    selected_categories: string[];
     contact_name: string;
     phone: string;
     email: string;
@@ -89,29 +97,38 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     const locale = (lang === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
 
+    const [currentStep, setCurrentStep] = useState<number>(1); // 1: Necesidad, 2: Cobertura, 3: Contacto
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: t.b2b.bot.welcome, sender: 'bot' },
-        { id: 2, text: t.b2b.bot.intro, sender: 'bot' },
-        { id: 3, text: t.b2b.bot.qCompany, sender: 'bot' }
+        { id: 1, text: "👋 ¡Bienvenido! Pre-cotiza tu cuenta institucional en 3 simples pasos con precios de origen.", sender: 'bot' },
+        { id: 2, text: "Paso 1 de 3: Configura el perfil y necesidades de tu operación:", sender: 'bot' }
     ]);
-    const [currentStep, setCurrentStep] = useState<number>(0); 
-    const [inputValue, setInputValue] = useState('');
-    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    
+    // Step 1 Form State
+    const [selectedType, setSelectedType] = useState<string>('Restaurante');
+    const [selectedCategories, setSelectedCategories] = useState<string[]>(['Frutas', 'Verduras']);
+    const [selectedSize, setSelectedSize] = useState<string>('Entre $10M y $30M COP (Mediano)');
+
+    // Step 2 Form State
+    const [addressInput, setAddressInput] = useState<string>('');
+    
+    // Step 3 Form State
+    const [nameInput, setNameInput] = useState<string>('');
+    const [phoneInput, setPhoneInput] = useState<string>('');
+    const [emailInput, setEmailInput] = useState<string>('');
+
     const [leadData, setLeadData] = useState<LeadData>({ 
         is_out_of_coverage: false,
         is_near_coverage: false,
         distance_to_coverage: 0,
         wants_coverage_call: false,
-        company_name: '', nit: '', business_type: '', business_size: '', 
-        selected_categories: [],
+        company_name: '', nit: '', business_type: 'Restaurante', business_size: 'Entre $10M y $30M COP (Mediano)', 
+        selected_categories: ['Frutas', 'Verduras'],
         contact_name: '', phone: '', email: '', 
         address: '', municipality: '', latitude: null, longitude: null 
     });
-    // Multi-step sync: use Ref to avoid stale closure during the conversation flow
-    const leadDataRef = useRef<LeadData>(leadData);
     
-    // Sync ref when state changes (for UI consistency), 
-    // but handleInput will primarily use/update the Ref.
+    const leadDataRef = useRef<LeadData>(leadData);
+
     useEffect(() => {
         leadDataRef.current = leadData;
     }, [leadData]);
@@ -126,8 +143,6 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     const [b2bGeofence, setB2bGeofence] = useState<Point[]>([]);
     const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 4.67, lng: -74.06 });
     const [mapZoom, setMapZoom] = useState<number>(11);
-    const [mapExpanded, setMapExpanded] = useState<boolean>(false);
-    const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
     useEffect(() => {
         async function fetchB2BGeofence() {
@@ -139,6 +154,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
         }
         fetchB2BGeofence();
     }, []);
+
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -150,244 +166,196 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isTyping]);
+    }, [messages, currentStep, isTyping]);
 
-    const handleInput = async (e?: React.FormEvent, textOverride?: string, dataUpdate?: Partial<LeadData>) => {
-        if (e) e.preventDefault();
-        const userText = textOverride || inputValue;
-        if (!userText && !dataUpdate) return;
-
-        // Use the Ref value for the latest data, merging any new updates
-        const updatedLeadData = { ...leadDataRef.current, ...dataUpdate };
-        
-        // Input validations per active step
-        if (currentStep === 1) { // Contact Name
-            if (userText.length < 2) {
-                setError(locale === 'en' ? 'Please enter a valid name.' : 'Por favor ingresa un nombre válido');
-                return;
-            }
-        }
-        if (currentStep === 2) { // WhatsApp Phone
-            if (userText.length < 7) {
-                setError(locale === 'en' ? 'Please enter a valid phone number.' : 'Por favor ingresa un número de teléfono válido');
-                return;
-            }
-        }
-        if (currentStep === 3) { // Email
-            if (!userText.toLowerCase().includes('no') && !userText.includes('@')) {
-                setError(locale === 'en' ? 'Invalid email format' : 'Formato de correo inválido');
-                return;
-            }
-        }
-        if (currentStep === 4) { // Address
-            if (userText.length < 5) {
-                setError(locale === 'en' ? 'Please enter a more complete address.' : 'Por favor ingresa una dirección más completa.');
-                return;
-            }
-        }
-        setError('');
-
-        const newMsg: Message = { id: Date.now(), text: userText, sender: 'user' };
-        setMessages(prev => [...prev, newMsg]);
-        setInputValue('');
-        setIsTyping(true);
-
-        let nextBotMessages: Message[] = [];
-
-        if (currentStep === 0) { // Captured Company Name
-            updatedLeadData.company_name = userText;
-            nextBotMessages = [{ 
-                id: Date.now() + 1, 
-                text: t.b2b.bot.qName, 
-                sender: 'bot'
-            }];
-        } else if (currentStep === 1) { // Captured Contact Name
-            updatedLeadData.contact_name = userText;
-            nextBotMessages = [{ 
-                id: Date.now() + 1, 
-                text: t.b2b.bot.qPhone, 
-                sender: 'bot'
-            }];
-        } else if (currentStep === 2) { // Captured WhatsApp Phone
-            updatedLeadData.phone = userText;
-            nextBotMessages = [{ 
-                id: Date.now() + 1, 
-                text: t.b2b.bot.qEmail, 
-                sender: 'bot'
-            }];
-        } else if (currentStep === 3) { // Captured Email
-            updatedLeadData.email = userText.toLowerCase().includes('no') ? '' : userText;
-            nextBotMessages = [{ 
-                id: Date.now() + 1, 
-                text: t.b2b.bot.qAddress, 
-                sender: 'bot'
-            }];
-        } else if (currentStep === 4) { // Captured Address
-            updatedLeadData.address = userText;
-            
-            // Geocode the address using Google Maps Geocoder API
-            try {
-                const geoRes = await fetch(`/api/geocode?address=${encodeURIComponent(userText)}`);
-                const geoData = await geoRes.json();
-                if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
-                    const loc = geoData.results[0].geometry.location;
-                    const lat = loc.lat;
-                    const lng = loc.lng;
-                    updatedLeadData.latitude = lat;
-                    updatedLeadData.longitude = lng;
-                    
-                    // Center and zoom map to this location
-                    setMapCenter({ lat, lng });
-                    setMapZoom(15);
-                    
-                    // Extract municipality
-                    const components = geoData.results[0].address_components;
-                    const city = components.find((c: any) => 
-                        c.types.includes('locality') || 
-                        c.types.includes('administrative_area_level_2')
-                    );
-                    updatedLeadData.municipality = city ? city.long_name : 'Desconocido';
-                }
-            } catch (err) {
-                console.error('Error geocoding address:', err);
-            }
-
-            nextBotMessages = [
-                { id: Date.now() + 1, text: t.b2b.bot.qLocation, sender: 'bot' }
-            ];
-        } else if (currentStep === 5) { // Location confirmed (triggers from confirm click)
-            // Skipped / Handled in map click / confirm button click directly.
-        } else if (currentStep === 6) { // Captured Monthly purchases/consumption in COP (Semaforo)
-            updatedLeadData.business_size = userText;
-            nextBotMessages = [{ 
-                id: Date.now() + 1, 
-                text: t.b2b.bot.qType.replace('{name}', updatedLeadData.company_name), 
-                sender: 'bot',
-                options: locale === 'en' ? ['Restaurant', 'Hotel', 'School', 'Casino/Catering', 'Other'] : ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
-            }];
-        } else if (currentStep === 7) { // Captured Business Type -> Ask for Category Selection
-            updatedLeadData.business_type = userText;
-            nextBotMessages = [{ 
-                id: Date.now() + 1, 
-                text: locale === 'en'
-                    ? `Great! What product categories do you need to quote for ${updatedLeadData.company_name}? (Select all options that apply below):`
-                    : `¡Excelente! ¿Qué categorías de productos necesitas cotizar para ${updatedLeadData.company_name}? (Puedes seleccionar varias de acuerdo a tu necesidad):`,
-                sender: 'bot'
-            }];
-        } else if (currentStep === 8) { // Captured NIT (final step!)
-            updatedLeadData.nit = userText.toLowerCase().includes('no') ? '' : userText.replace(/[^0-9-]/g, '');
-            leadDataRef.current = updatedLeadData;
-            setLeadData(updatedLeadData);
-            await submitLead(updatedLeadData);
-            return;
-        } else if (currentStep === 10) { // Borderline call prompt response
-            const lowerText = userText.toLowerCase();
-            const agreed = lowerText.includes('sí') || lowerText.includes('si') || lowerText.includes('yes') || lowerText.includes('agendar');
-            
-            const nextUpdate = { wants_coverage_call: agreed };
-            const mergedData = { ...updatedLeadData, ...nextUpdate };
-            
-            if (agreed) {
-                // Yes, schedule call -> Ask for their average purchases tier (Step 6)
-                const purchasesQuestion = locale === 'en'
-                    ? "Great! We will schedule a call to review your location. To design your customized proposal, what is your average monthly food purchases volume in COP?"
-                    : "¡Excelente elección! Agendaremos una llamada para revisar tu caso de cobertura. Para diseñar tu propuesta personalizada, por favor dinos: ¿Cuál es tu volumen promedio de compras mensuales de alimentos en COP?";
-                nextBotMessages = [{
-                    id: Date.now() + 1,
-                    text: purchasesQuestion,
-                    sender: 'bot',
-                    options: locale === 'en' 
-                        ? ['> $30M COP (Large)', 'Between $10M and $30M COP (Medium)', 'Less than $10M COP (Small)'] 
-                        : ['> $30M COP (Grande)', 'Entre $10M y $30M COP (Mediano)', 'Menos de $10M COP (Pequeño)']
-                }];
-                leadDataRef.current = mergedData;
-                setLeadData(mergedData);
-                setCurrentStep(6); // Jump to COP Purchases Tier step
-            } else {
-                // No thanks -> Save lead immediately as rejected, end flow
-                leadDataRef.current = mergedData;
-                setLeadData(mergedData);
-                await submitLead(mergedData);
-                return;
-            }
-            
-            let delay = 0;
-            nextBotMessages.forEach((msg, index) => {
-                delay += 1000 + (index * 800);
-                setTimeout(() => {
-                    if (index === nextBotMessages.length - 1) setIsTyping(false);
-                    setMessages(prev => [...prev, msg]);
-                }, delay);
-            });
-            return;
-        }
-
-        // Final state and Ref sync
-        leadDataRef.current = updatedLeadData;
-        setLeadData(updatedLeadData);
-        setCurrentStep(prev => prev + 1);
-
-        let delay = 0;
-        nextBotMessages.forEach((msg, index) => {
-            delay += 1000 + (index * 800);
-            setTimeout(() => {
-                if (index === nextBotMessages.length - 1) setIsTyping(false);
-                setMessages(prev => [...prev, msg]);
-            }, delay);
-        });
-    };
-    
-    const handleConfirmCategories = (catsOverride?: string[]) => {
-        const chosen = (catsOverride && catsOverride.length > 0)
-            ? catsOverride
-            : (selectedCategories.length > 0 ? selectedCategories : ALL_CATEGORIES);
-        const catsText = chosen.join(', ');
-
-        const updatedLeadData = {
+    // Handle Step 1 Submission -> Move to Step 2
+    const handleStep1Submit = () => {
+        const cats = selectedCategories.length > 0 ? selectedCategories : ALL_CATEGORIES;
+        const updatedData = {
             ...leadDataRef.current,
-            selected_categories: chosen
+            business_type: selectedType,
+            business_size: selectedSize,
+            selected_categories: cats
         };
-        leadDataRef.current = updatedLeadData;
-        setLeadData(updatedLeadData);
+        leadDataRef.current = updatedData;
+        setLeadData(updatedData);
 
-        const newMsg: Message = {
-            id: Date.now(),
-            text: locale === 'en' ? `Categories to quote: ${catsText}` : `Categorías a cotizar: ${catsText}`,
-            sender: 'user'
-        };
-        setMessages(prev => [...prev, newMsg]);
+        const catsText = cats.join(', ');
+        setMessages(prev => [
+            ...prev,
+            { 
+                id: Date.now(), 
+                text: `Paso 1 completado: Operación ${selectedType} | Categorías: ${catsText} | Volumen: ${selectedSize}`, 
+                sender: 'user' 
+            }
+        ]);
 
         setIsTyping(true);
         setTimeout(() => {
             setIsTyping(false);
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                text: t.b2b.bot.qNit,
-                sender: 'bot'
-            }]);
-            setCurrentStep(8);
-        }, 1000);
+            setMessages(prev => [
+                ...prev,
+                { 
+                    id: Date.now() + 1, 
+                    text: `¡Excelente elección! Tenemos tarifas especiales para tu volumen. Paso 2 de 3: Ingresa tu dirección para validar la cobertura logística en tiempo real:`, 
+                    sender: 'bot' 
+                }
+            ]);
+            setCurrentStep(2);
+        }, 800);
     };
-    
-    const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+
+    // Handle Geocode in Step 2
+    const handleGeocodeAddress = async () => {
+        if (!addressInput || addressInput.trim().length < 5) {
+            setError('Por favor ingresa una dirección de entrega más completa.');
+            return;
+        }
+        setError('');
+        setIsTyping(true);
+
         try {
-            console.log('--- 🛰️ REVERSE GEOCODING VÍA PROXY ---');
-            const response = await fetch(`/api/geocode?latlng=${lat},${lng}`);
-            const data = await response.json();
-            
-            if (data.status === 'OK' && data.results && data.results.length > 0) {
-                // Find municipality/city in address components
-                const components = data.results[0].address_components;
+            const geoRes = await fetch(`/api/geocode?address=${encodeURIComponent(addressInput)}`);
+            const geoData = await geoRes.json();
+            if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
+                const loc = geoData.results[0].geometry.location;
+                const lat = loc.lat;
+                const lng = loc.lng;
+                
+                setMapCenter({ lat, lng });
+                setMapZoom(15);
+
+                const components = geoData.results[0].address_components;
                 const city = components.find((c: any) => 
                     c.types.includes('locality') || 
                     c.types.includes('administrative_area_level_2')
                 );
-                return city ? city.long_name : 'Desconocido';
+                const mun = city ? city.long_name : 'Bogotá';
+
+                const updatedData = {
+                    ...leadDataRef.current,
+                    address: addressInput,
+                    latitude: lat,
+                    longitude: lng,
+                    municipality: mun
+                };
+                leadDataRef.current = updatedData;
+                setLeadData(updatedData);
             }
-        } catch (error) {
-            console.error('Error in reverse geocoding proxy:', error);
+        } catch (err) {
+            console.error('Error geocoding:', err);
+        } finally {
+            setIsTyping(false);
         }
-        return 'Desconocido';
+    };
+
+    // Confirm Location in Step 2 -> Move to Step 3
+    const handleConfirmLocation = () => {
+        const lat = leadData.latitude || mapCenter.lat;
+        const lng = leadData.longitude || mapCenter.lng;
+        const inside = isInsidePolygon({ lat, lng }, b2bGeofence);
+
+        if (inside) {
+            const updatedData = {
+                ...leadDataRef.current,
+                latitude: lat,
+                longitude: lng,
+                is_out_of_coverage: false
+            };
+            leadDataRef.current = updatedData;
+            setLeadData(updatedData);
+
+            setMessages(prev => [
+                ...prev,
+                { id: Date.now(), text: `📍 Ubicación confirmada: ${addressInput || 'Bogotá'}`, sender: 'user' }
+            ]);
+
+            setIsTyping(true);
+            setTimeout(() => {
+                setIsTyping(false);
+                setMessages(prev => [
+                    ...prev,
+                    { 
+                        id: Date.now() + 1, 
+                        text: `📍 ¡Ubicación confirmada en zona de cobertura activa! Paso 3 de 3: ¿A dónde enviamos tu pre-cotización en PDF y propuesta de precios?`, 
+                        sender: 'bot' 
+                    }
+                ]);
+                setCurrentStep(3);
+            }, 800);
+        } else {
+            const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
+            const isNear = distance <= 2000;
+            const updatedData = {
+                ...leadDataRef.current,
+                latitude: lat,
+                longitude: lng,
+                is_out_of_coverage: true,
+                is_near_coverage: isNear,
+                distance_to_coverage: distance
+            };
+            leadDataRef.current = updatedData;
+            setLeadData(updatedData);
+
+            setMessages(prev => [
+                ...prev,
+                { id: Date.now(), text: `📍 Ubicación verificada fuera de zona principal.`, sender: 'user' }
+            ]);
+
+            setIsTyping(true);
+            setTimeout(() => {
+                setIsTyping(false);
+                if (isNear) {
+                    setMessages(prev => [
+                        ...prev,
+                        { 
+                            id: Date.now() + 1, 
+                            text: `¡Estás muy cerca! Tu ubicación está a unos ${Math.round(distance)}m de nuestra zona activa. Paso 3 de 3: Déjanos tu contacto para agendar la activación especial de tu ruta:`, 
+                            sender: 'bot' 
+                        }
+                    ]);
+                    setCurrentStep(3);
+                } else {
+                    setMessages(prev => [
+                        ...prev,
+                        { id: Date.now() + 1, text: "Por el momento tu sector no está en nuestra ruta principal. Déjanos tu contacto para avisarte apenas abramos cobertura.", sender: 'bot' }
+                    ]);
+                    setCurrentStep(3);
+                }
+            }, 800);
+        }
+    };
+
+    // Handle Final Step 3 Submission
+    const handleStep3Submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!nameInput || nameInput.trim().length < 2) {
+            setError('Por favor ingresa tu nombre o el de tu empresa.');
+            return;
+        }
+        if (!phoneInput || phoneInput.trim().length < 7) {
+            setError('Por favor ingresa un número de WhatsApp válido.');
+            return;
+        }
+
+        setError('');
+        const finalData = {
+            ...leadDataRef.current,
+            company_name: nameInput.trim(),
+            contact_name: nameInput.trim(),
+            phone: phoneInput.trim(),
+            email: emailInput.trim()
+        };
+
+        leadDataRef.current = finalData;
+        setLeadData(finalData);
+
+        setMessages(prev => [
+            ...prev,
+            { id: Date.now(), text: `Contacto: ${nameInput} | WA: ${phoneInput}`, sender: 'user' }
+        ]);
+
+        await submitLead(finalData);
     };
 
     const submitLead = async (finalData: LeadData) => {
@@ -412,18 +380,18 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 .from('leads')
                 .insert([{
                     company_name: finalData.company_name,
-                    nit: finalData.nit && !isNaN(parseInt(finalData.nit.replace(/[^0-9]/g, ''))) ? parseInt(finalData.nit.replace(/[^0-9]/g, '')) : null,
+                    nit: null,
                     contact_name: finalData.contact_name,
                     phone: finalData.phone,
                     email: finalData.email,
-                    business_type: finalData.business_type || 'No especificado',
-                    business_size: finalData.business_size || 'No especificado',
+                    business_type: finalData.business_type || 'Restaurante',
+                    business_size: finalData.business_size || 'Entre $10M y $30M COP',
                     latitude: finalData.latitude,
                     longitude: finalData.longitude,
-                    address: finalData.address,
-                    municipality: finalData.municipality || 'Desconocido',
+                    address: finalData.address || 'Bogotá',
+                    municipality: finalData.municipality || 'Bogotá',
                     status: statusValue,
-                    notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Desconocido'}${catTag} | ORIG: ${finalData.address}${notesTag} | BOT_V2.2 🤖`
+                    notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Bogotá'}${catTag} | ORIG: ${finalData.address}${notesTag} | PASOS_3_V2.5 🚀`
                 }])
                 .select('id')
                 .single();
@@ -509,7 +477,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         const cached = modelPrices?.find(mp => mp.product_id === p.id);
                         const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * (colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15);
 
-                        const qty = 10; // Default quantity for pre-quotation
+                        const qty = 10;
                         const itemSubtotal = unitPrice * qty;
                         const itemTaxRate = Number(p.iva_rate || 0);
                         const itemTax = itemSubtotal * (itemTaxRate / 100);
@@ -554,13 +522,10 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         createdQuoteId = newQuote.id;
                         setQuoteId(newQuote.id);
 
-                        // Insert Quote Items
                         const itemsWithQuoteId = itemsToInsert.map(it => ({ ...it, quote_id: newQuote.id }));
-                        const { error: itemsErr } = await supabase
+                        await supabase
                             .from('quote_items')
                             .insert(itemsWithQuoteId);
-
-                        if (itemsErr) console.error('Error inserting quote items:', itemsErr);
                     }
                 }
             }
@@ -568,14 +533,10 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             setTimeout(() => {
                 setIsTyping(false);
                 const isSuccess = statusValue === 'new';
-                let successMsg = isSuccess ? t.b2b.bot.success : (t.b2b.bot as any).outOfZoneSuccess;
+                let successMsg = isSuccess 
+                    ? "¡Pre-Cotización personalizada generada con éxito! Hemos cargado la lista de productos de tus categorías con nuestras tarifas mayoristas de origen."
+                    : "Hemos guardado tus datos en nuestra lista prioritaria de expansión.";
                 
-                if (isSuccess && createdQuoteId) {
-                    successMsg = locale === 'en'
-                        ? "Registration completed! We have generated a custom B2B pre-quotation with our wholesale prices. You can download it below."
-                        : "¡Registro completado! Hemos generado una pre-cotización B2B personalizada con nuestros precios mayoristas sugeridos. Puedes descargarla aquí abajo.";
-                }
-
                 setMessages(prev => [...prev, {
                     id: Date.now(),
                     text: successMsg,
@@ -607,63 +568,95 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            height: '600px', // Fixed height for chat container
-            maxHeight: '80vh'
+            height: '620px',
+            maxHeight: '85vh'
         }}>
-            {/* Header - Premium Concierge Style */}
+            {/* Header */}
             <div style={{ 
                 backgroundColor: 'var(--primary)', 
-                padding: '20px 25px', 
+                padding: '18px 24px', 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: '15px', 
+                justifyContent: 'space-between',
                 color: 'white',
                 boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
                 zIndex: 10
             }}>
-                <div style={{ 
-                    width: '52px', 
-                    height: '52px', 
-                    backgroundColor: 'rgba(255,255,255,0.2)', 
-                    borderRadius: '50%', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    backdropFilter: 'blur(10px)',
-                    border: '2px solid rgba(255,255,255,0.4)',
-                    overflow: 'hidden'
-                }}>
-                    <img src="/assistant_avatar.png" alt="Asistente" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ 
+                        width: '46px', 
+                        height: '46px', 
+                        backgroundColor: 'rgba(255,255,255,0.2)', 
+                        borderRadius: '50%', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        backdropFilter: 'blur(10px)',
+                        border: '2px solid rgba(255,255,255,0.4)',
+                        overflow: 'hidden'
+                    }}>
+                        <img src="/assistant_avatar.png" alt="Asistente" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div>
+                        <h3 style={{ 
+                            margin: 0, 
+                            fontSize: '1.1rem', 
+                            fontWeight: '900', 
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            letterSpacing: '-0.02em' 
+                        }}>Asistente Institucional HORECA</h3>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4ADE80', boxShadow: '0 0 10px #4ADE80' }}></div>
+                            Cotización en 3 Pasos Lógicos
+                        </span>
+                    </div>
                 </div>
-                <div>
-                    <h3 style={{ 
-                        margin: 0, 
-                        fontSize: '1.2rem', 
-                        fontWeight: '900', 
-                        fontFamily: 'var(--font-outfit), sans-serif',
-                        letterSpacing: '-0.02em' 
-                    }}>Asistente Clientes Institucionales</h3>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4ADE80', boxShadow: '0 0 10px #4ADE80' }}></div>
-                        Conectado · Respuesta Inmediata
-                    </span>
+
+                {/* Step Indicator Badges */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '99px',
+                        fontSize: '0.75rem',
+                        fontWeight: '800',
+                        backgroundColor: currentStep >= 1 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
+                        color: currentStep >= 1 ? '#064E3B' : 'white'
+                    }}>1</span>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>›</span>
+                    <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '99px',
+                        fontSize: '0.75rem',
+                        fontWeight: '800',
+                        backgroundColor: currentStep >= 2 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
+                        color: currentStep >= 2 ? '#064E3B' : 'white'
+                    }}>2</span>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>›</span>
+                    <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '99px',
+                        fontSize: '0.75rem',
+                        fontWeight: '800',
+                        backgroundColor: currentStep >= 3 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
+                        color: currentStep >= 3 ? '#064E3B' : 'white'
+                    }}>3</span>
                 </div>
             </div>
 
             {/* Messages Area */}
             <div 
                 ref={messagesContainerRef}
-                style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem', backgroundColor: '#F9FAFB' }}
+                style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', backgroundColor: '#F9FAFB' }}
             >
                 {messages.map((msg) => (
-                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
                         <div style={{
                             backgroundColor: msg.sender === 'user' ? 'var(--primary)' : 'white',
                             color: msg.sender === 'user' ? 'white' : 'var(--text-main)',
-                            padding: '1.1rem 1.4rem',
-                            borderRadius: msg.sender === 'user' ? '24px 24px 4px 24px' : '4px 24px 24px 24px',
-                            boxShadow: msg.sender === 'user' ? '0 10px 20px rgba(26, 77, 46, 0.2)' : '0 4px 15px rgba(0,0,0,0.03)',
-                            fontSize: '0.95rem',
+                            padding: '0.9rem 1.25rem',
+                            borderRadius: msg.sender === 'user' ? '20px 20px 4px 20px' : '4px 20px 20px 20px',
+                            boxShadow: msg.sender === 'user' ? '0 8px 18px rgba(26, 77, 46, 0.2)' : '0 4px 12px rgba(0,0,0,0.03)',
+                            fontSize: '0.9rem',
                             fontWeight: '500',
                             lineHeight: '1.5',
                             border: msg.sender === 'user' ? 'none' : '1px solid var(--border)',
@@ -671,36 +664,11 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         }}>
                             {msg.text}
                         </div>
-                        
-                        {msg.sender === 'bot' && msg.options && (currentStep === 6 || currentStep === 7 || currentStep === 10) && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
-                                {msg.options.map(opt => (
-                                    <button 
-                                        key={opt}
-                                        onClick={() => handleInput(undefined, opt)}
-                                        className="btn-premium"
-                                        style={{
-                                            padding: '10px 20px',
-                                            borderRadius: 'var(--radius-full)',
-                                            border: '1px solid var(--primary)',
-                                            backgroundColor: 'white',
-                                            color: 'var(--primary)',
-                                            fontWeight: '800',
-                                            fontSize: '0.85rem',
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(26, 77, 46, 0.08)',
-                                            letterSpacing: '0.02em'
-                                        }}
-                                    >
-                                        {opt}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                     </div>
                 ))}
 
-                {currentStep === 7 && (
+                {/* PASO 1 CARD: Tu Necesidad */}
+                {!isCompleted && currentStep === 1 && (
                     <div style={{
                         width: '100%',
                         backgroundColor: 'white',
@@ -710,65 +678,118 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.85rem',
-                        marginTop: '0.5rem',
-                        marginBottom: '0.5rem',
+                        gap: '1rem',
+                        margin: '0.5rem 0',
                         flexShrink: 0
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                            <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                🛒 Categorías del Catálogo FruFresco:
-                            </p>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B' }}>
-                                (Selecciona varias de acuerdo a tu necesidad)
-                            </span>
+                        <div style={{ borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Rocket size={20} color="var(--primary)" />
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                Paso 1: Configura tu Necesidad de Compra
+                            </h4>
                         </div>
 
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {ALL_CATEGORIES.map((cat) => {
-                                const isSelected = selectedCategories.includes(cat);
-                                return (
+                        {/* 1. Tipo de Operacion */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                🏨 Tipo de Operación:
+                            </label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {BUSINESS_TYPES.map(type => (
                                     <button
-                                        key={cat}
+                                        key={type}
                                         type="button"
-                                        onClick={() => {
-                                            setSelectedCategories(prev =>
-                                                prev.includes(cat)
-                                                    ? prev.filter(c => c !== cat)
-                                                    : [...prev, cat]
-                                            );
-                                        }}
-                                        className="btn-premium"
+                                        onClick={() => setSelectedType(type)}
                                         style={{
-                                            padding: '8px 16px',
-                                            borderRadius: 'var(--radius-full)',
-                                            border: isSelected ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                            backgroundColor: isSelected ? '#ECFDF5' : 'white',
-                                            color: isSelected ? 'var(--primary)' : '#334155',
-                                            fontWeight: isSelected ? '800' : '600',
-                                            fontSize: '0.85rem',
+                                            padding: '6px 14px',
+                                            borderRadius: '99px',
+                                            border: selectedType === type ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                            backgroundColor: selectedType === type ? '#ECFDF5' : '#F8FAFC',
+                                            color: selectedType === type ? 'var(--primary)' : '#334155',
+                                            fontWeight: selectedType === type ? '800' : '600',
+                                            fontSize: '0.8rem',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            boxShadow: isSelected ? '0 4px 12px rgba(16, 185, 129, 0.25)' : '0 2px 6px rgba(0,0,0,0.03)'
+                                            transition: 'all 0.2s'
                                         }}
                                     >
-                                        <span style={{ fontSize: '0.8rem' }}>{isSelected ? '✅' : '➕'}</span>
-                                        <span>{cat}</span>
+                                        {type}
                                     </button>
-                                );
-                            })}
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 2. Categorias del Catalogo */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                🛒 Categorías a Cotizar (Selecciona varias):
+                            </label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {ALL_CATEGORIES.map(cat => {
+                                    const isSel = selectedCategories.includes(cat);
+                                    return (
+                                        <button
+                                            key={cat}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedCategories(prev =>
+                                                    prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                                                );
+                                            }}
+                                            style={{
+                                                padding: '6px 12px',
+                                                borderRadius: '99px',
+                                                border: isSel ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                                backgroundColor: isSel ? '#ECFDF5' : 'white',
+                                                color: isSel ? 'var(--primary)' : '#475569',
+                                                fontWeight: isSel ? '800' : '600',
+                                                fontSize: '0.78rem',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            {isSel ? '✅ ' : '➕ '}{cat}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* 3. Volumen de Compras */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                📊 Volumen de Compras Mensual Estimado (COP):
+                            </label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {BUSINESS_SIZES.map(size => (
+                                    <button
+                                        key={size}
+                                        type="button"
+                                        onClick={() => setSelectedSize(size)}
+                                        style={{
+                                            padding: '8px 14px',
+                                            borderRadius: '12px',
+                                            border: selectedSize === size ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                            backgroundColor: selectedSize === size ? '#ECFDF5' : '#F8FAFC',
+                                            color: selectedSize === size ? 'var(--primary)' : '#334155',
+                                            fontWeight: selectedSize === size ? '800' : '600',
+                                            fontSize: '0.82rem',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {selectedSize === size ? '🔘 ' : '⚪ '}{size}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <button
                             type="button"
-                            onClick={() => handleConfirmCategories()}
+                            onClick={handleStep1Submit}
                             style={{
-                                marginTop: '4px',
-                                padding: '12px 20px',
-                                borderRadius: 'var(--radius-full)',
+                                padding: '12px',
+                                borderRadius: '99px',
                                 border: 'none',
                                 backgroundColor: 'var(--primary)',
                                 color: 'white',
@@ -780,56 +801,82 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '8px',
-                                transition: 'all 0.2s'
+                                marginTop: '4px'
                             }}
                         >
-                            {selectedCategories.length > 0
-                                ? `✅ Confirmar ${selectedCategories.length} ${selectedCategories.length === 1 ? 'Categoría' : 'Categorías'}`
-                                : '✅ Confirmar Categorías (Todas)'}
+                            <span>Siguiente: Validar Cobertura (Paso 2/3)</span>
+                            <ArrowRight size={18} />
                         </button>
                     </div>
                 )}
 
-                {currentStep === 5 && (
-                    <div style={{ 
-                        width: '100%', 
-                        minHeight: mapExpanded ? '480px' : '300px', 
-                        height: mapExpanded ? '480px' : '300px', 
-                        borderRadius: '16px', 
-                        overflow: 'hidden', 
-                        border: '3px solid var(--primary)', 
-                        marginTop: '1rem', 
-                        marginBottom: '1rem', 
-                        flexShrink: 0,
-                        transition: 'all 0.3s ease-in-out',
-                        position: 'relative'
+                {/* PASO 2 CARD: Cobertura Logistica */}
+                {!isCompleted && currentStep === 2 && (
+                    <div style={{
+                        width: '100%',
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '1.25rem',
+                        border: '2px solid var(--primary)',
+                        boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.9rem',
+                        margin: '0.5rem 0',
+                        flexShrink: 0
                     }}>
-                        <button 
-                            type="button"
-                            onClick={() => setMapExpanded(!mapExpanded)}
-                            style={{
-                                position: 'absolute',
-                                top: '10px',
-                                right: '10px',
-                                zIndex: 1000,
-                                backgroundColor: 'white',
-                                border: '1px solid #D1D5DB',
-                                borderRadius: '8px',
-                                padding: '6px 12px',
-                                fontSize: '0.8rem',
-                                fontWeight: 'bold',
-                                color: '#374151',
-                                cursor: 'pointer',
-                                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontFamily: 'var(--font-inter), sans-serif'
-                            }}
-                        >
-                            {mapExpanded ? '🔍 Contraer Mapa' : '🔍 Expandir Mapa'}
-                        </button>
-                        <Map
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <MapPin size={20} color="var(--primary)" />
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                Paso 2: Ubicación & Cobertura Logística
+                            </h4>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                type="text"
+                                value={addressInput}
+                                onChange={(e) => setAddressInput(e.target.value)}
+                                placeholder="Ej: Calle 93 # 12-45, Bogotá"
+                                style={{
+                                    flex: 1,
+                                    padding: '10px 14px',
+                                    borderRadius: '12px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.88rem',
+                                    outline: 'none'
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleGeocodeAddress}
+                                style={{
+                                    padding: '10px 16px',
+                                    backgroundColor: '#0F172A',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Ubicar
+                            </button>
+                        </div>
+
+                        {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
+
+                        {/* Interactive Google Map */}
+                        <div style={{
+                            width: '100%',
+                            height: '240px',
+                            borderRadius: '14px',
+                            overflow: 'hidden',
+                            border: '2px solid #E2E8F0',
+                            position: 'relative'
+                        }}>
+                            <Map
                                 center={mapCenter}
                                 zoom={mapZoom}
                                 onCameraChanged={(ev) => {
@@ -842,67 +889,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     const lat = e.detail?.latLng?.lat;
                                     const lng = e.detail?.latLng?.lng;
                                     if (lat && lng) {
-                                        const inside = isInsidePolygon({ lat, lng }, b2bGeofence);
-                                        reverseGeocode(lat, lng).then(mun => {
-                                            if (inside) {
-                                                setIsTerminated(false);
-                                                setError('');
-                                                const gpsUpdate = { latitude: lat, longitude: lng, municipality: mun, is_out_of_coverage: false };
-                                                setLeadData(prev => ({ ...prev, ...gpsUpdate }));
-                                                leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
-                                                setIsTyping(true);
-                                                setTimeout(() => {
-                                                    setIsTyping(false);
-                                                    const welcomeText = locale === 'en'
-                                                        ? "📍 Location confirmed! You are within our active coverage area."
-                                                        : "📍 ¡Ubicación confirmada! Te encuentras dentro de nuestra zona de cobertura.";
-                                                    const promptText = locale === 'en'
-                                                        ? "To offer you our best wholesale deal, what is your average monthly purchases volume in COP?"
-                                                        : "Para ofrecerte nuestra mejor oferta, ¿cuál es tu volumen promedio de compras mensuales de alimentos en COP?";
-                                                    setMessages(prev => [...prev, 
-                                                        { id: Date.now(), text: welcomeText, sender: 'bot' },
-                                                        { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['> $30M COP (Large)', 'Between $10M and $30M COP (Medium)', 'Less than $10M COP (Small)'] : ['> $30M COP (Grande)', 'Entre $10M y $30M COP (Mediano)', 'Menos de $10M COP (Pequeño)'] }
-                                                    ]);
-                                                    setCurrentStep(6);
-                                                }, 1000);
-                                            } else {
-                                                const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
-                                                const isNear = distance <= 2000;
-                                                const gpsUpdate = { 
-                                                    latitude: lat, 
-                                                    longitude: lng, 
-                                                    municipality: mun, 
-                                                    is_out_of_coverage: true, 
-                                                    is_near_coverage: isNear,
-                                                    distance_to_coverage: distance
-                                                };
-                                                setLeadData(prev => ({ ...prev, ...gpsUpdate }));
-                                                leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
-                                                setIsTyping(true);
-                                                setTimeout(() => {
-                                                    setIsTyping(false);
-                                                    if (isNear) {
-                                                        const welcomeText = locale === 'en'
-                                                            ? `You are very close! Your location is about ${Math.round(distance)} meters from our active coverage area.`
-                                                            : `¡Estás muy cerca! Tu ubicación está a unos ${Math.round(distance)} metros de nuestra zona de cobertura activa.`;
-                                                        const promptText = locale === 'en'
-                                                            ? "Would you like us to schedule a call right away to check if we can enable delivery for your business?"
-                                                            : "¿Te gustaría que agendemos una llamada de inmediato para revisar si podemos habilitar la entrega para tu negocio?";
-                                                        setMessages(prev => [...prev, 
-                                                            { id: Date.now(), text: welcomeText, sender: 'bot' },
-                                                            { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['Yes, schedule call', 'No, thanks'] : ['Sí, agendar llamada', 'No, gracias'] }
-                                                        ]);
-                                                        setCurrentStep(10);
-                                                    } else {
-                                                        setMessages(prev => [...prev, 
-                                                            { id: Date.now(), text: t.b2b.bot.outOfZone, sender: 'bot' },
-                                                            { id: Date.now() + 1, text: (t.b2b.bot as any).outOfZoneWaitlist, sender: 'bot' }
-                                                        ]);
-                                                        setCurrentStep(4);
-                                                    }
-                                                }, 1000);
-                                            }
-                                        });
+                                        setLeadData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+                                        leadDataRef.current = { ...leadDataRef.current, latitude: lat, longitude: lng };
                                     }
                                 }}
                             >
@@ -910,273 +898,236 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     <Polygon 
                                         paths={b2bGeofence}
                                         fillColor="#10B981"
-                                        fillOpacity={0.12}
+                                        fillOpacity={0.15}
                                         strokeColor="#10B981"
                                         strokeWeight={1.5}
                                         clickable={false}
                                     />
                                 )}
-                                {leadData.latitude && leadData.longitude && (
-                                    <Marker position={{ lat: leadData.latitude, lng: leadData.longitude }} />
+                                {(leadData.latitude || mapCenter.lat) && (
+                                    <Marker position={{ lat: leadData.latitude || mapCenter.lat, lng: leadData.longitude || mapCenter.lng }} />
                                 )}
                             </Map>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleConfirmLocation}
+                            style={{
+                                padding: '12px',
+                                borderRadius: '99px',
+                                border: 'none',
+                                backgroundColor: '#10B981',
+                                color: 'white',
+                                fontWeight: '800',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}
+                        >
+                            <span>✅ Confirmar Ubicación y Cobertura (Paso 3/3)</span>
+                            <ArrowRight size={18} />
+                        </button>
                     </div>
                 )}
+
+                {/* PASO 3 CARD: Contacto y Envio */}
+                {!isCompleted && currentStep === 3 && (
+                    <form onSubmit={handleStep3Submit} style={{
+                        width: '100%',
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '1.25rem',
+                        border: '2px solid var(--primary)',
+                        boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.9rem',
+                        margin: '0.5rem 0',
+                        flexShrink: 0
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FileText size={20} color="var(--primary)" />
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                Paso 3: Datos de Contacto y Envío de Pre-Cotización
+                            </h4>
+                        </div>
+
+                        {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                                👤 Nombre o Razón Social de tu Empresa: *
+                            </label>
+                            <input
+                                type="text"
+                                value={nameInput}
+                                onChange={(e) => setNameInput(e.target.value)}
+                                placeholder="Ej: Diana Rincón / Restaurante Gourmet"
+                                required
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '12px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.88rem',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                                💬 WhatsApp Directo (para envío de propuesta PDF): *
+                            </label>
+                            <input
+                                type="tel"
+                                value={phoneInput}
+                                onChange={(e) => setPhoneInput(e.target.value)}
+                                placeholder="Ej: 3001234567"
+                                required
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '12px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.88rem',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                                ✉️ Correo Electrónico (Opcional):
+                            </label>
+                            <input
+                                type="email"
+                                value={emailInput}
+                                onChange={(e) => setEmailInput(e.target.value)}
+                                placeholder="ejemplo@empresa.com"
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '12px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.88rem',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            style={{
+                                padding: '14px',
+                                borderRadius: '99px',
+                                border: 'none',
+                                backgroundColor: 'var(--primary)',
+                                color: 'white',
+                                fontWeight: '900',
+                                fontSize: '0.95rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 15px rgba(26, 77, 46, 0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                marginTop: '4px'
+                            }}
+                        >
+                            <Rocket size={20} />
+                            <span>🚀 Generar mi Pre-Cotización PDF al Instante</span>
+                        </button>
+                    </form>
+                )}
+
                 {isTyping && (
                     <div style={{ alignSelf: 'flex-start', backgroundColor: '#E5E7EB', padding: '0.6rem 1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.8rem', color: '#4B5563', fontWeight: '500' }}>
-                        {t.b2b.bot.typing}
+                        FruFresco está verificando tarifas...
                     </div>
                 )}
                 <div ref={messagesEndRef} />
             </div>
 
-            
-            {/* Input Area */}
-            {(!isCompleted && !isSubmitting && !isTerminated) ? (
-                <form onSubmit={handleInput} style={{ padding: '1.2rem', backgroundColor: 'white', borderTop: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: '0 0 5px 10px', fontWeight: 'bold' }}>{error}</p>}
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {currentStep === 5 ? (
-                            leadData.latitude && leadData.longitude ? (
-                                <button 
-                                    type="button" 
-                                    onClick={() => {
-                                        const lat = leadData.latitude!;
-                                        const lng = leadData.longitude!;
-                                        const inside = isInsidePolygon({ lat, lng }, b2bGeofence);
-                                        if (inside) {
-                                            const gpsUpdate = { is_out_of_coverage: false };
-                                            setLeadData(prev => ({ ...prev, ...gpsUpdate }));
-                                            leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
-                                            setIsTyping(true);
-                                            setTimeout(() => {
-                                                setIsTyping(false);
-                                                const welcomeText = locale === 'en'
-                                                    ? "📍 Location confirmed! You are within our active coverage area."
-                                                    : "📍 ¡Ubicación confirmada! Te encuentras dentro de nuestra zona de cobertura.";
-                                                const promptText = locale === 'en'
-                                                    ? "To offer you our best wholesale deal, what is your average monthly purchases volume in COP?"
-                                                    : "Para ofrecerte nuestra mejor oferta, ¿cuál es tu volumen promedio de compras mensuales de alimentos en COP?";
-                                                setMessages(prev => [...prev, 
-                                                    { id: Date.now(), text: welcomeText, sender: 'bot' },
-                                                    { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['> $30M COP (Large)', 'Between $10M and $30M COP (Medium)', 'Less than $10M COP (Small)'] : ['> $30M COP (Grande)', 'Entre $10M y $30M COP (Mediano)', 'Menos de $10M COP (Pequeño)'] }
-                                                ]);
-                                                setCurrentStep(6);
-                                            }, 1000);
-                                        } else {
-                                            const distance = getDistanceToPolygon({ lat, lng }, b2bGeofence);
-                                            const isNear = distance <= 2000;
-                                            const gpsUpdate = { 
-                                                is_out_of_coverage: true, 
-                                                is_near_coverage: isNear,
-                                                distance_to_coverage: distance
-                                            };
-                                            setLeadData(prev => ({ ...prev, ...gpsUpdate }));
-                                            leadDataRef.current = { ...leadDataRef.current, ...gpsUpdate };
-                                            setIsTyping(true);
-                                            setTimeout(() => {
-                                                setIsTyping(false);
-                                                if (isNear) {
-                                                    const welcomeText = locale === 'en'
-                                                        ? `You are very close! Your location is about ${Math.round(distance)} meters from our active coverage area.`
-                                                        : `¡Estás muy cerca! Tu ubicación está a unos ${Math.round(distance)} metros de nuestra zona de cobertura activa.`;
-                                                    const promptText = locale === 'en'
-                                                        ? "Would you like us to schedule a call right away to check if we can enable delivery for your business?"
-                                                        : "¿Te gustaría que agendemos una llamada de inmediato para revisar si podemos habilitar la entrega para tu negocio?";
-                                                    setMessages(prev => [...prev, 
-                                                        { id: Date.now(), text: welcomeText, sender: 'bot' },
-                                                        { id: Date.now() + 1, text: promptText, sender: 'bot', options: locale === 'en' ? ['Yes, schedule call', 'No, thanks'] : ['Sí, agendar llamada', 'No, gracias'] }
-                                                    ]);
-                                                    setCurrentStep(10);
-                                                } else {
-                                                    setMessages(prev => [...prev, 
-                                                        { id: Date.now(), text: t.b2b.bot.outOfZone, sender: 'bot' },
-                                                        { id: Date.now() + 1, text: (t.b2b.bot as any).outOfZoneWaitlist, sender: 'bot' }
-                                                    ]);
-                                                    setCurrentStep(4);
-                                                }
-                                            }, 1000);
-                                        }
-                                    }}
-                                    style={{
-                                        flex: 1,
-                                        padding: '1rem',
-                                        backgroundColor: '#10B981',
-                                        color: 'white',
-                                        borderRadius: '99px',
-                                        fontSize: '1rem',
-                                        fontWeight: '700',
-                                        textAlign: 'center',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    ✅ Confirmar Ubicación Actual
-                                </button>
-                            ) : (
-                                <div style={{ flex: 1, padding: '1rem', backgroundColor: '#F0FDF4', color: '#166534', borderRadius: '99px', fontSize: '0.9rem', fontWeight: '700', textAlign: 'center', border: '1px dashed #166534' }}>
-                                    👆 Haz clic arriba en el mapa
-                                </div>
-                            )
-                        ) : (
-                            <input
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => { setInputValue(e.target.value); setError(''); }}
-                                placeholder={
-                                    currentStep === 8 ? (locale === 'en' ? "E.g. 901234567-1 (Optional)" : "Ej: 901234567-1 (Opcional)") :
-                                    currentStep === 1 ? (locale === 'en' ? "Your name or position" : "Tu nombre o cargo") : 
-                                    currentStep === 2 ? (locale === 'en' ? "E.g. 3001234567" : "Ej: 3001234567") : 
-                                    currentStep === 3 ? "you@email.com" : 
-                                    t.b2b.bot.placeholder
-                                }
-                                autoFocus
-                                style={{
-                                    flex: 1,
-                                    padding: '1rem 1.25rem',
-                                    borderRadius: '99px',
-                                    border: error ? '2px solid #DC2626' : '1px solid #D1D5DB',
-                                    backgroundColor: '#F9FAFB',
-                                    fontSize: '1rem',
-                                    outline: 'none',
-                                    transition: 'all 0.2s'
-                                }}
-                            />
-                        )}
-                        <button type="submit" disabled={currentStep === 5} style={{
-                            backgroundColor: currentStep === 5 ? '#E5E7EB' : 'var(--primary)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '54px',
-                            height: '54px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '1.5rem',
-                            cursor: currentStep === 5 ? 'default' : 'pointer',
-                            transition: 'transform 0.1s'
-                        }}>
-                            ➤
-                        </button>
-                    </div>
-                </form>
-            ) : (
-                <div style={{ padding: '1.5rem', backgroundColor: '#F0FDF4', borderTop: '1px solid #BBF7D0', textAlign: 'center' }}>
-                    {isTerminated ? (
-                        <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#FEF2F2', borderTop: '1px solid #FECACA', borderRadius: '16px' }}>
-                            <p style={{ color: '#991B1B', fontWeight: '800', marginBottom: '1rem', fontSize: '1.1rem' }}>📍 {locale === 'en' ? 'Out of coverage zone' : 'Zona sin cobertura'}</p>
-                            <p style={{ color: '#991B1B', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.4' }}>
-                                {locale === 'en' 
-                                    ? `Thank you for your interest, ${leadData.contact_name}. We have successfully registered ${leadData.company_name} on our waitlist. We will notify you at ${leadData.phone} or ${leadData.email} as soon as we expand to ${leadData.municipality || 'your area'}.` 
-                                    : `Gracias por tu interés, ${leadData.contact_name}. Hemos registrado con éxito a ${leadData.company_name} en nuestra lista de espera. Te avisaremos al WhatsApp ${leadData.phone} o al correo ${leadData.email} apenas abramos cobertura en ${leadData.municipality || 'tu zona'}.`}
+            {/* Success & PDF Download Screen */}
+            {isCompleted && (
+                <div style={{ padding: '1.5rem', backgroundColor: '#F0FDF4', borderTop: '2px solid #BBF7D0', textAlign: 'center', flexShrink: 0 }}>
+                    <p style={{ color: '#166534', fontWeight: '900', marginBottom: '0.5rem', fontSize: '1.2rem' }}>
+                        🎉 ¡Pre-Cotización Generada con Éxito!
+                    </p>
+                    <p style={{ color: '#166534', fontSize: '0.88rem', marginBottom: '1.2rem', lineHeight: '1.4' }}>
+                        Hola <strong>{leadData.contact_name}</strong>, hemos procesado la pre-cotización institucional para <strong>{leadData.company_name}</strong> con tarifas ajustadas a tu consumo.
+                    </p>
+
+                    {quoteId && (
+                        <div style={{ marginBottom: '1.2rem', padding: '1rem', backgroundColor: 'white', borderRadius: '16px', border: '1.5px solid #BBF7D0', boxShadow: '0 4px 12px rgba(22, 101, 52, 0.08)' }}>
+                            <p style={{ color: '#166534', fontWeight: '800', fontSize: '0.9rem', marginBottom: '0.8rem' }}>
+                                📄 Tu Documento Oficial de Pre-Cotización está listo:
                             </p>
-                            <Link href="/" style={{
-                                backgroundColor: 'white',
-                                color: '#991B1B',
-                                border: '1px solid #FECACA',
+                            <a 
+                                href={`/admin/commercial/quotes/${quoteId}/print`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                style={{
+                                    backgroundColor: 'var(--primary)',
+                                    color: 'white',
+                                    textDecoration: 'none',
+                                    fontWeight: '800',
+                                    padding: '12px 24px',
+                                    borderRadius: '99px',
+                                    fontSize: '0.9rem',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 4px 12px rgba(21, 128, 61, 0.25)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                📥 Descargar Pre-Cotización (PDF)
+                            </a>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                        <a 
+                            href={`https://wa.me/57${leadData.phone.replace(/[^0-9]/g, '')}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style={{
+                                backgroundColor: '#25D366',
+                                color: 'white',
                                 textDecoration: 'none',
                                 fontWeight: '700',
                                 padding: '10px 20px',
                                 borderRadius: '99px',
-                                fontSize: '0.9rem',
-                                display: 'inline-block'
-                            }}>
-                                {locale === 'en' ? 'Back to home' : 'Volver al inicio'}
-                            </Link>
-                        </div>
-                    ) : isCompleted ? (
-                        <div>
-                            <p style={{ color: '#166534', fontWeight: '800', marginBottom: '0.8rem', fontSize: '1.1rem' }}>🎉 ¡Registro B2B Exitoso!</p>
-                            <p style={{ color: '#166534', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.4' }}>
-                                Hola <strong>{leadData.contact_name}</strong>, hemos recibido los datos de <strong>{leadData.company_name}</strong>.<br />
-                                Un asesor comercial se comunicará contigo al WhatsApp <strong>{leadData.phone}</strong> en menos de 2 horas para formalizar tu tarifa especial y activar tu cuenta.
-                            </p>
-                            {quoteShown && (
-                                <div style={{ marginBottom: '1.5rem' }}>
-                                    <p style={{ color: '#166534', fontWeight: '800', marginBottom: '1rem', fontSize: '1rem' }}>📋 Planes sugeridos para tu negocio:</p>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        {leadData.business_type === 'Restaurante' && (
-                                            <>
-                                                <button className="btn" style={{ backgroundColor: 'white', border: '1px solid var(--primary)', color: 'var(--primary)', fontSize: '0.9rem', padding: '12px', borderRadius: '12px', fontWeight: 'bold' }}>📦 Plan Basic: Surtido Diario AM</button>
-                                                <button className="btn" style={{ backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.9rem', padding: '12px', borderRadius: '12px', fontWeight: 'bold' }}>🔥 Plan Pro: Todo Incluido + Mise en Place</button>
-                                            </>
-                                        )}
-                                        {leadData.business_type === 'Colegio' && (
-                                            <>
-                                                <button className="btn" style={{ backgroundColor: 'white', border: '1px solid var(--primary)', color: 'var(--primary)', fontSize: '0.9rem', padding: '12px', borderRadius: '12px', fontWeight: 'bold' }}>🍎 Menú Saludable: Fruta Seleccionada</button>
-                                                <button className="btn" style={{ backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.9rem', padding: '12px', borderRadius: '12px', fontWeight: 'bold' }}>🏢 Plan Institucional: Trazabilidad Total</button>
-                                            </>
-                                        )}
-                                        {(leadData.business_type !== 'Restaurante' && leadData.business_type !== 'Colegio') && (
-                                            <button className="btn" style={{ backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.9rem', padding: '12px', borderRadius: '12px', fontWeight: 'bold' }}>💎 Plan Premium: Selección de Origen</button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                            {quoteId && (
-                                <div style={{ marginTop: '1.5rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#F0FDF4', borderRadius: '16px', border: '1.5px solid #BBF7D0' }}>
-                                    <p style={{ color: '#166534', fontWeight: '800', fontSize: '0.9rem', marginBottom: '0.8rem' }}>
-                                        📄 {locale === 'en' ? "Custom Pre-Quotation generated!" : "¡Pre-Cotización personalizada generada!"}
-                                    </p>
-                                    <a 
-                                        href={`/admin/commercial/quotes/${quoteId}/print`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        style={{
-                                            backgroundColor: 'var(--primary)',
-                                            color: 'white',
-                                            textDecoration: 'none',
-                                            fontWeight: '800',
-                                            padding: '12px 24px',
-                                            borderRadius: '99px',
-                                            fontSize: '0.9rem',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            boxShadow: '0 4px 12px rgba(21, 128, 61, 0.2)',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        📥 {locale === 'en' ? "Download Pre-Quotation (PDF)" : "Descargar Pre-Cotización (PDF)"}
-                                    </a>
-                                </div>
-                            )}
-                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '1rem' }}>
-                                <a href={`https://wa.me/57${leadData.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{
-                                    backgroundColor: '#25D366',
-                                    color: 'white',
-                                    textDecoration: 'none',
-                                    fontWeight: '700',
-                                    padding: '10px 20px',
-                                    borderRadius: '99px',
-                                    fontSize: '0.9rem',
-                                    boxShadow: '0 4px 12px rgba(37, 211, 102, 0.2)'
-                                }}>
-                                    💬 Chatear por WhatsApp
-                                </a>
-                                <Link href="/" style={{
-                                    backgroundColor: 'white',
-                                    color: 'var(--text-main)',
-                                    border: '1px solid #D1D5DB',
-                                    textDecoration: 'none',
-                                    fontWeight: '700',
-                                    padding: '10px 20px',
-                                    borderRadius: '99px',
-                                    fontSize: '0.9rem'
-                                }}>
-                                    Volver al inicio
-                                </Link>
-                            </div>
-                        </div>
-                    ) : (
-                         <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-                            <p style={{ color: '#166534', fontWeight: '600', marginBottom: '1rem' }}>¡Conversación Finalizada!</p>
-                            <Link href="/" style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: '700' }}>Volver al inicio</Link>
-                         </div>
-                    )}
+                                fontSize: '0.85rem',
+                                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.2)'
+                            }}
+                        >
+                            💬 Chatear por WhatsApp
+                        </a>
+                        <Link 
+                            href="/" 
+                            style={{
+                                backgroundColor: 'white',
+                                color: 'var(--text-main)',
+                                border: '1px solid #CBD5E1',
+                                textDecoration: 'none',
+                                fontWeight: '700',
+                                padding: '10px 20px',
+                                borderRadius: '99px',
+                                fontSize: '0.85rem'
+                            }}
+                        >
+                            Volver al inicio
+                        </Link>
+                    </div>
                 </div>
             )}
         </div>

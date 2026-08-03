@@ -119,9 +119,9 @@ export const translations = {
     loadMore: "Ver más productos",
     addedToCart: "¡{name} añadido al carrito!",
     b2b: {
-      badge: "Exclusivo HORECA Bogotá, Girardot, Melgar y Anapoima",
+      badge: "Pre-cotiza en 3 simples pasos · Exclusivo HORECA",
       title: "Tu Operación Merece \n Lo Mejor del Campo",
-      description: "Únete a los +500 restaurantes y hoteles que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos.",
+      description: "Pre-cotiza en 3 simples pasos y activa tu cuenta institucional sin demoras. Precios fijos de origen y trazabilidad total.",
       benefits: [
         { title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
         { title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },

@@ -42,7 +42,10 @@ import {
     MapPin,
     Scale,
     Send,
-    Lock
+    Lock,
+    ChevronDown,
+    Filter,
+    X
 } from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
@@ -140,6 +143,14 @@ export default function OrderLoadingPage() {
         fetchEmailCounts();
     }, [refreshTrigger]);
 
+    useEffect(() => {
+        const handleClickOutside = () => {
+            setOpenHeaderDropdown(null);
+        };
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
+
     const [selectedDate, setSelectedDate] = useState(() => {
         try {
             const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -178,6 +189,23 @@ export default function OrderLoadingPage() {
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     const [selectedChannel, setSelectedChannel] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
+    const [filterGps, setFilterGps] = useState('');
+    const [filterChannel, setFilterChannel] = useState('');
+    const [filterClientType, setFilterClientType] = useState('');
+    const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
+
+    const clearAllFilters = () => {
+        setFilterStatus('');
+        setFilterGps('');
+        setFilterChannel('');
+        setFilterClientType('');
+        setSelectedChannel('');
+        setSearchTerm('');
+        setOpenHeaderDropdown(null);
+    };
+
+    const hasActiveFilters = !!(filterStatus || filterGps || filterChannel || selectedChannel || filterClientType || searchTerm);
 
     // Edit Fields
     const [editStatus, setEditStatus] = useState('');
@@ -445,78 +473,90 @@ export default function OrderLoadingPage() {
 
     const filteredOrders = useMemo(() => {
         return orders.filter(order => {
-            // Filtro por canal dropdown
-            if (selectedChannel && order.origin_source !== selectedChannel) return false;
-
-            if (!searchTerm) return true;
-            
-            const term = searchTerm.toLowerCase().trim();
             const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
             const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
             const friendlyId = getFriendlyOrderId(order).toLowerCase();
+            const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+            const paymentMethodStr = (order.paymentMethod || '').toLowerCase();
 
-            // Check for @ commands
-            if (term.startsWith('@')) {
-                const command = term.substring(1).replace(/[\s-]+/g, '_');
-                
-                if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
-                if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
-                if (command === 'b2b') return isB2B;
-                if (command === 'b2c' || command === 'hogar') return !isB2B;
-                const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
-                
-                // Actualizado para buscar en origin_source de forma estructurada con fallback
-                if (command === 'web' || command === '🛒' || command === 'app') {
-                    return order.origin_source === 'web_b2c' || order.origin_source === 'web_b2b' || notes.includes('[origin: web]') || order.type === 'b2c_wompi';
-                }
-                if (command === 'whatsapp' || command === '💬') {
-                    return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
-                }
-                if (command === 'telefono' || command === 'phone' || command === '📞') {
-                    return order.origin_source === 'phone' || notes.includes('[origin: phone]');
-                }
-                if (command === 'email' || command === 'correo') {
-                    return order.origin_source === 'email' || notes.includes('[origin: email]');
-                }
-                if (command === 'carga' || command === 'excel' || command === 'ocr') {
-                    return order.origin_source === 'file_upload';
-                }
-                
-                if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
-                if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
-                if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
-                if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
-                if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
-                if (command === 'incompleto' || command === 'incompletos' || command === 'error' || command === 'alerta') return !order.isComplete;
-                if (command === 'completo' || command === 'completos' || command === 'ok') return order.isComplete;
-                if (command === 'pago' || command === 'pagos' || command === 'con_pago') return !!order.paymentMethod;
-                if (command === 'sin_pago' || command === 'no_pago') return !order.paymentMethod;
-                if (command === 'efectivo' || command === 'cash') return (order.paymentMethod || '').toLowerCase().includes('efectivo');
-                if (command === 'transferencia' || command === 'banco') return (order.paymentMethod || '').toLowerCase().includes('transferencia');
-                if (command === 'contraentrega' || command === 'cobro') return (order.paymentMethod || '').toLowerCase().includes('contraentrega');
+            // 1. Channel Filter
+            const activeChannel = filterChannel || selectedChannel;
+            if (activeChannel) {
+                if (activeChannel === 'web_b2c' && !(order.origin_source === 'web_b2c' || notes.includes('[origin: web_b2c]') || order.type === 'b2c_wompi')) return false;
+                if (activeChannel === 'web_b2b' && !(order.origin_source === 'web_b2b' || notes.includes('[origin: web_b2b]'))) return false;
+                if (activeChannel === 'email' && !(order.origin_source === 'email' || notes.includes('[origin: email]'))) return false;
+                if (activeChannel === 'whatsapp' && !(order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]'))) return false;
+                if (activeChannel === 'phone' && !(order.origin_source === 'phone' || notes.includes('[origin: phone]'))) return false;
+                if (activeChannel === 'file_upload' && !(order.origin_source === 'file_upload')) return false;
             }
 
-            // Generic search normalization
-            const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
-            const normTerm = term.replace(/[_\s-]/g, '');
-            const rawSeqStr = (order.sequence_id || '').toString();
+            // 2. Status Filter
+            if (filterStatus) {
+                if (filterStatus === 'cobrar_puerta') {
+                    const isDoor = paymentMethodStr.includes('puerta') || paymentMethodStr.includes('contraentrega') || notes.includes('cobrar') || notes.includes('puerta');
+                    if (!isDoor) return false;
+                } else {
+                    if (order.status !== filterStatus) return false;
+                }
+            }
 
-            return (
-                friendlyId.includes(term) ||
-                normFriendlyId.includes(normTerm) ||
-                rawSeqStr === term ||
-                order.id.toLowerCase().includes(term) ||
-                (order.customer_name || '').toLowerCase().includes(term) ||
-                (order.customer_nit || '').toLowerCase().includes(term) ||
-                (order.customer_phone || '').toLowerCase().includes(term) ||
-                (order.shipping_address || '').toLowerCase().includes(term) ||
-                (order.status || '').toLowerCase().includes(term) ||
-                (order.paymentMethod || '').toLowerCase().includes(term) ||
-                (order.admin_notes || '').toLowerCase().includes(term) ||
-                (order.special_notes || '').toLowerCase().includes(term)
-            );
+            // 3. GPS Filter
+            if (filterGps) {
+                if (filterGps === 'ok' && !hasGPS) return false;
+                if (filterGps === 'missing' && hasGPS) return false;
+            }
+
+            // 4. Client Type Filter
+            if (filterClientType) {
+                if (filterClientType === 'b2b' && !isB2B) return false;
+                if (filterClientType === 'b2c' && isB2B) return false;
+            }
+
+            // 5. Search Term Filter
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase().trim();
+                if (term.startsWith('@')) {
+                    const command = term.substring(1).replace(/[\s-]+/g, '_');
+                    if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
+                    if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
+                    if (command === 'b2b') return isB2B;
+                    if (command === 'b2c' || command === 'hogar') return !isB2B;
+                    if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
+                    if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
+                    if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
+                    if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
+                    if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
+                }
+
+                const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
+                const normTerm = term.replace(/[_\s-]/g, '');
+                const rawSeqStr = (order.sequence_id || '').toString();
+
+                const matchesText = friendlyId.includes(term) ||
+                    normFriendlyId.includes(normTerm) ||
+                    rawSeqStr === term ||
+                    order.id.toLowerCase().includes(term) ||
+                    (order.customer_name || '').toLowerCase().includes(term) ||
+                    (order.customer_nit || '').toLowerCase().includes(term) ||
+                    (order.customer_phone || '').toLowerCase().includes(term) ||
+                    (order.shipping_address || '').toLowerCase().includes(term) ||
+                    (order.status || '').toLowerCase().includes(term) ||
+                    paymentMethodStr.includes(term) ||
+                    (order.admin_notes || '').toLowerCase().includes(term) ||
+                    (order.special_notes || '').toLowerCase().includes(term);
+
+                if (!matchesText) return false;
+            }
+
+            return true;
         });
-    }, [orders, selectedChannel, searchTerm]);
+    }, [orders, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType]);
+
+    const filteredMetrics = useMemo(() => {
+        const count = filteredOrders.length;
+        const totalMoney = filteredOrders.reduce((acc, o) => acc + (parseFloat(o.total_amount) || 0), 0);
+        return { count, totalMoney };
+    }, [filteredOrders]);
 
     const toggleSelectAll = () => {
         const completeOrders = filteredOrders.filter(o => o.isComplete);
@@ -1579,21 +1619,154 @@ export default function OrderLoadingPage() {
                     </div>
                 )}
 
+                {/* Barra de Filtros Activos y Totales */}
+                {hasActiveFilters && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '0.6rem 1rem', borderRadius: '10px', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Filter size={14} /> Filtros Activos:
+                            </span>
+                            {filterClientType && (
+                                <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    Tipo: {filterClientType === 'b2b' ? 'Institucional' : 'Hogar'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setFilterClientType('')} />
+                                </span>
+                            )}
+                            {filterGps && (
+                                <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    GPS: {filterGps === 'ok' ? 'GPS OK' : 'SIN GPS'}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setFilterGps('')} />
+                                </span>
+                            )}
+                            {(filterChannel || selectedChannel) && (
+                                <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    Canal: {filterChannel || selectedChannel}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => { setFilterChannel(''); setSelectedChannel(''); }} />
+                                </span>
+                            )}
+                            {filterStatus && (
+                                <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    Estado: {filterStatus === 'cobrar_puerta' ? 'Cobrar en Puerta' : getStatusLabel(filterStatus)}
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setFilterStatus('')} />
+                                </span>
+                            )}
+                            {searchTerm && (
+                                <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    Texto: "{searchTerm}"
+                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
+                                </span>
+                            )}
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginLeft: '6px' }}>
+                                ({filteredMetrics.count} pedidos • Total: {formatMoney(filteredMetrics.totalMoney)})
+                            </span>
+                        </div>
+                        <button 
+                            onClick={clearAllFilters}
+                            style={{ fontSize: '0.7rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                            Limpiar Todo
+                        </button>
+                    </div>
+                )}
+
                 {/* List View (Conditional) */}
                 {!loading && filteredOrders.length > 0 && (
                     <>
                         {viewMode === 'table' ? (
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                            <th style={{ padding: '1rem', width: '12%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ID / TIPO</th>
+                                            <th style={{ padding: '1rem', width: '12%', textAlign: 'left', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span>ID / TIPO</span>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'type' ? null : 'type'); }}
+                                                        style={{ background: filterClientType ? THEME.colors.primary : '#E2E8F0', color: filterClientType ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="Filtrar por tipo de cliente"
+                                                    >
+                                                        <ChevronDown size={12} />
+                                                    </button>
+                                                </div>
+                                                {openHeaderDropdown === 'type' && (
+                                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterClientType(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterClientType === '' ? 'bold' : 'normal', backgroundColor: filterClientType === '' ? '#F1F5F9' : 'transparent' }}>Todos los tipos</div>
+                                                        <div onClick={() => { setFilterClientType('b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterClientType === 'b2b' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2b' ? '#F1F5F9' : 'transparent' }}>🏢 Institucional (B2B)</div>
+                                                        <div onClick={() => { setFilterClientType('b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterClientType === 'b2c' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2c' ? '#F1F5F9' : 'transparent' }}>👤 Hogar (B2C)</div>
+                                                    </div>
+                                                )}
+                                            </th>
                                             <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                                            <th style={{ padding: '1rem', width: '24%', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
-                                            <th style={{ padding: '1rem', width: '15%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
+                                            <th style={{ padding: '1rem', width: '24%', textAlign: 'left', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span>DIRECCIÓN / GPS</span>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'gps' ? null : 'gps'); }}
+                                                        style={{ background: filterGps ? THEME.colors.primary : '#E2E8F0', color: filterGps ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="Filtrar por GPS"
+                                                    >
+                                                        <ChevronDown size={12} />
+                                                    </button>
+                                                </div>
+                                                {openHeaderDropdown === 'gps' && (
+                                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterGps(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterGps === '' ? 'bold' : 'normal', backgroundColor: filterGps === '' ? '#F1F5F9' : 'transparent' }}>Todas las ubicaciones</div>
+                                                        <div onClick={() => { setFilterGps('ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterGps === 'ok' ? 'bold' : 'normal', backgroundColor: filterGps === 'ok' ? '#F1F5F9' : 'transparent' }}>📍 GPS OK</div>
+                                                        <div onClick={() => { setFilterGps('missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterGps === 'missing' ? 'bold' : 'normal', backgroundColor: filterGps === 'missing' ? '#F1F5F9' : 'transparent' }}>⚠️ SIN GPS</div>
+                                                    </div>
+                                                )}
+                                            </th>
+                                            <th style={{ padding: '1rem', width: '15%', textAlign: 'left', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span>ASUNTO / ORIGEN</span>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'channel' ? null : 'channel'); }}
+                                                        style={{ background: (filterChannel || selectedChannel) ? THEME.colors.primary : '#E2E8F0', color: (filterChannel || selectedChannel) ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="Filtrar por canal de origen"
+                                                    >
+                                                        <ChevronDown size={12} />
+                                                    </button>
+                                                </div>
+                                                {openHeaderDropdown === 'channel' && (
+                                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterChannel(''); setSelectedChannel(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>Todos los canales</div>
+                                                        <div onClick={() => { setFilterChannel('web_b2c'); setSelectedChannel('web_b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>🏠 Web Hogar</div>
+                                                        <div onClick={() => { setFilterChannel('web_b2b'); setSelectedChannel('web_b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>🏢 Web Institucional</div>
+                                                        <div onClick={() => { setFilterChannel('email'); setSelectedChannel('email'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>📧 Correo</div>
+                                                        <div onClick={() => { setFilterChannel('whatsapp'); setSelectedChannel('whatsapp'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>💬 WhatsApp</div>
+                                                        <div onClick={() => { setFilterChannel('phone'); setSelectedChannel('phone'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>📞 Teléfono</div>
+                                                        <div onClick={() => { setFilterChannel('file_upload'); setSelectedChannel('file_upload'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>📁 Carga Masiva</div>
+                                                    </div>
+                                                )}
+                                            </th>
                                             <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
                                             <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', position: 'relative', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span>ESTADO</span>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'status' ? null : 'status'); }}
+                                                        style={{ background: filterStatus ? THEME.colors.primary : '#E2E8F0', color: filterStatus ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="Filtrar por estado del pedido"
+                                                    >
+                                                        <ChevronDown size={12} />
+                                                    </button>
+                                                </div>
+                                                {openHeaderDropdown === 'status' && (
+                                                    <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', textAlign: 'left', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterStatus(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>Todos los estados</div>
+                                                        <div onClick={() => { setFilterStatus('para_compra'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>COMPRAS / QA</div>
+                                                        <div onClick={() => { setFilterStatus('pending_approval'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>POR APROBAR</div>
+                                                        <div onClick={() => { setFilterStatus('approved'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>APROBADO</div>
+                                                        <div onClick={() => { setFilterStatus('picking'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>EN PREPARACIÓN</div>
+                                                        <div onClick={() => { setFilterStatus('shipped'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>DESPACHADO</div>
+                                                        <div onClick={() => { setFilterStatus('delivered'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>ENTREGADO</div>
+                                                        <div onClick={() => { setFilterStatus('cancelled'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>CANCELADO</div>
+                                                        <div style={{ borderTop: '1px solid #E2E8F0', margin: '4px 0' }}></div>
+                                                        <div onClick={() => { setFilterStatus('cobrar_puerta'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', color: '#D97706', fontWeight: 'bold' }}>🔑 Cobrar en puerta</div>
+                                                    </div>
+                                                )}
+                                            </th>
                                             <th style={{ padding: '1rem', width: '7%', textAlign: 'center' }}>
                                                 <input 
                                                     type="checkbox" 
