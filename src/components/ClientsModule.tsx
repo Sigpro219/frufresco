@@ -52,7 +52,8 @@ import {
     MessageSquare,
     Scale,
     DollarSign,
-    Calendar
+    Calendar,
+    Gift
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -857,8 +858,8 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "Estado", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
-            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
+            "Estado", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
             "Regimen_Simple", "Actividad_Economica", "Correos_Facturacion_Adicionales", "Responsable_Cartera", 
@@ -870,8 +871,8 @@ export default function ClientsModule() {
         ];
 
         const sample1 = [
-            "ACTIVO", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
-            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
+            "ACTIVO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
             "NO", "5611", "contabilidad@elgourmet.com", "Luz Marina Pérez", 
@@ -883,21 +884,21 @@ export default function ClientsModule() {
         ];
 
         const sample2 = [
-            "ACTIVO", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
-            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
+            "ACTIVO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "unicentro@elgourmet.com", "", "", "Avenida Carrera 15 # 124-30", "Local 12 - Zona Comercial", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "HEREDADO_MATRIZ",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
             "NO", "5611", "", "", 
             "", "", "", "",
             "", "", "", "",
-            "", "", "NO", "remission", 
+            "", "", "NO", "HEREDADO", 
             "NO", "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2,
             4.7022, -74.0411, "", "", "ZR-Norte", "LP-01", 0
         ];
 
         const sample3 = [
-            "ACTIVO", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
-            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
+            "ACTIVO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "marcela.rincon@gmail.com", "", "", "Carrera 7 # 150-10", "Apto 402 - Torre B", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
             "NO", "", "", "", 
@@ -959,7 +960,13 @@ export default function ClientsModule() {
                         phone: (row.Telefono || '').toString().trim(),
                         contact_phone: (row.Telefono || '').toString().trim(),
                         email: (row.Email || '').toString().trim(),
+                        email_2: (row.Email_Notificacion_2 || '').toString().trim() || null,
+                        email_3: (row.Email_Notificacion_3 || '').toString().trim() || null,
+                        notify_email_1: !!row.Email,
+                        notify_email_2: !!row.Email_Notificacion_2,
+                        notify_email_3: !!row.Email_Notificacion_3,
                         address: (row.Direccion || '').toString().trim(),
+                        address_complement: (row.Complemento_Direccion || '').toString().trim() || null,
                         city: (row.Ciudad || 'Bogotá').toString().trim(),
                         municipality: (row.Municipio || row.Ciudad || 'Bogotá').toString().trim(),
                         department: (row.Departamento || 'Cundinamarca').toString().trim(),
@@ -3316,7 +3323,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                             ) : null}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
                             <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
+                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.document_type === 'gift_remission' ? 'REM-OBSEQUIO' : (client.remission_with_prices ? 'REM-$' : 'REM-S/S'))}
                             </span>
                         </div>
                     </>
@@ -4445,8 +4452,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             </div>
                         )}
 
-                        {/* BLOQUE: CONFIGURACIÓN DE DOCUMENTO (EXCLUYENTE / HEREDABLE PARA MATRIZ) */}
-                        {isB2B && (
+                        {/* BLOQUE: CONFIGURACIÓN DE DOCUMENTO MAESTRA (SOLO CASA MATRIZ) */}
+                        {isB2B && formData.is_corporate_parent && (
                             <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                                 {formData.is_corporate_parent && (
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', paddingBottom: '0.8rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -4911,69 +4918,69 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     </div>
                                 ) : (
                                     <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                                <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
-                                                {agreement ? (() => {
-                                                    const expiry = agreement.valid_until;
-                                                    const status = (() => {
-                                                        if (!expiry) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
-                                                        const exp = new Date(expiry);
-                                                        const today = new Date();
-                                                        today.setHours(0,0,0,0);
-                                                        const diff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                                                        if (diff < 0) return { label: 'Vencido', color: '#EF4444', bgColor: '#FEF2F2', type: 'expired' };
-                                                        if (diff <= 15) return { label: `Vence en ${diff}d`, color: '#D97706', bgColor: '#FFFBEB', type: 'warning' };
-                                                        return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
-                                                    })();
-                                                    
-                                                    const agreementId = (() => {
-                                                        const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
-                                                        const day = String(date.getDate()).padStart(2, '0');
-                                                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                                                        const paddedSeq = String(agreement.quote_number).padStart(4, '0');
-                                                        return `ACI ${day}${month} ${paddedSeq}`;
-                                                    })();
+                                         <div style={{ display: 'grid', gridTemplateColumns: !formData.is_corporate_parent ? '2fr 1fr 1fr' : '1fr 1fr', gap: '1.2rem' }}>
+                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                 <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
+                                                 {agreement ? (() => {
+                                                     const expiry = agreement.valid_until;
+                                                     const status = (() => {
+                                                         if (!expiry) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
+                                                         const exp = new Date(expiry);
+                                                         const today = new Date();
+                                                         today.setHours(0,0,0,0);
+                                                         const diff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                         if (diff < 0) return { label: 'Vencido', color: '#EF4444', bgColor: '#FEF2F2', type: 'expired' };
+                                                         if (diff <= 15) return { label: `Vence en ${diff}d`, color: '#D97706', bgColor: '#FFFBEB', type: 'warning' };
+                                                         return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
+                                                     })();
+                                                     
+                                                     const agreementId = (() => {
+                                                         const date = agreement.created_at ? new Date(agreement.created_at) : new Date();
+                                                         const day = String(date.getDate()).padStart(2, '0');
+                                                         const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                         const paddedSeq = String(agreement.quote_number).padStart(4, '0');
+                                                         return `ACI ${day}${month} ${paddedSeq}`;
+                                                     })();
 
-                                                    return (
-                                                        <div 
-                                                            onClick={() => setIsAgreementModalOpen(true)}
-                                                            title="Haga clic para ver los precios congelados del acuerdo"
-                                                            style={{ 
-                                                                padding: '0.8rem 1rem', 
-                                                                borderRadius: THEME.radius.md, 
-                                                                backgroundColor: status.bgColor, 
-                                                                border: `1.5px solid ${status.type === 'expired' ? '#FCA5A5' : status.type === 'warning' ? '#FDE68A' : '#A7F3D0'}`, 
-                                                                color: status.color, 
-                                                                display: 'flex',
-                                                                flexDirection: 'column',
-                                                                gap: '0.25rem',
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s',
-                                                                position: 'relative'
-                                                            }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-                                                        >
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                    <FileText size={15} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                                                    <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#1E293B' }}>
-                                                                        {agreementId}
-                                                                    </span>
-                                                                    {inheritedFromParent && (
-                                                                        <span style={{ fontSize: '0.6rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                            Matriz
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <span style={{ fontSize: '0.55rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', backgroundColor: status.type === 'expired' ? '#FEE2E2' : status.type === 'warning' ? '#FEF3C7' : '#D1FAE5', color: status.color, textTransform: 'uppercase' }}>
-                                                                    {status.label}
-                                                                </span>
-                                                            </div>
-                                                            <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                                                                <span>Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
-                                                                <span style={{ fontSize: '0.6rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline' }}>Ver Precios →</span>
+                                                     return (
+                                                         <div 
+                                                             onClick={() => setIsAgreementModalOpen(true)}
+                                                             title="Haga clic para ver los precios congelados del acuerdo"
+                                                             style={{ 
+                                                                 padding: '0.8rem 1rem', 
+                                                                 borderRadius: THEME.radius.md, 
+                                                                 backgroundColor: status.bgColor, 
+                                                                 border: `1.5px solid ${status.type === 'expired' ? '#FCA5A5' : status.type === 'warning' ? '#FDE68A' : '#A7F3D0'}`, 
+                                                                 color: status.color, 
+                                                                 display: 'flex',
+                                                                 flexDirection: 'column',
+                                                                 gap: '0.25rem',
+                                                                 cursor: 'pointer',
+                                                                 transition: 'all 0.2s',
+                                                                 position: 'relative'
+                                                             }}
+                                                             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
+                                                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                         >
+                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                     <FileText size={15} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                                                     <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#1E293B' }}>
+                                                                         {agreementId}
+                                                                     </span>
+                                                                     {inheritedFromParent && (
+                                                                         <span style={{ fontSize: '0.6rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                             Matriz
+                                                                         </span>
+                                                                     )}
+                                                                 </div>
+                                                                 <span style={{ fontSize: '0.55rem', fontWeight: '900', padding: '2px 6px', borderRadius: '10px', backgroundColor: status.type === 'expired' ? '#FEE2E2' : status.type === 'warning' ? '#FEF3C7' : '#D1FAE5', color: status.color, textTransform: 'uppercase' }}>
+                                                                     {status.label}
+                                                                 </span>
+                                                             </div>
+                                                             <div style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                                                                 <span>Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                                                                 <span style={{ fontSize: '0.6rem', color: '#0D7A57', fontWeight: '700', textDecoration: 'underline' }}>Ver Precios →</span>
                                                             </div>
                                                         </div>
                                                     );
@@ -5000,6 +5007,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 )}
                                             </div>
                                             <FormField label="Días de Pago" value={formData.payment_days} onChange={(v) => setFormData({...formData, payment_days: parseInt(v) || 0})} type="number" readOnly={isReadOnly} />
+                                            {!formData.is_corporate_parent && (
+                                                <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
+                                            )}
                                         </div>
 
                                         {/* WARNING DE ACUERDO VENCIDO O INEXISTENTE */}
@@ -5015,7 +5025,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 backgroundColor: '#FEF2F2', 
                                                 border: '1.5px solid #FCA5A5', 
                                                 color: '#B91C1C', 
-                                                marginTop: '1rem',
+                                                marginTop: '0.8rem',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '10px',
@@ -5027,9 +5037,131 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 </span>
                                             </div>
                                         ) : null}
+
+                                        {/* CONFIGURACIÓN DE OPERACIONES Y DOCUMENTO PARA SUCURSAL */}
                                         {!formData.is_corporate_parent && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                                <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
+                                            <div style={{ marginTop: '0.8rem', paddingTop: '1.2rem', borderTop: `1px dashed ${THEME.colors.border}`, display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+                                                {/* Columna Izquierda: Canastillas + Excepciones */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        Logística de Entrega
+                                                    </label>
+                                                    <div 
+                                                        onClick={() => {
+                                                            if (isReadOnly) return;
+                                                            setFormData({...formData, needs_crates: !formData.needs_crates});
+                                                        }}
+                                                        style={{ 
+                                                            height: '42px', padding: '0 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
+                                                            backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
+                                                            boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                            opacity: isReadOnly ? 0.9 : 1
+                                                        }}
+                                                    >
+                                                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            REQUIERE CANASTILLAS
+                                                        </span>
+                                                    </div>
+
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setIsExceptionsModalOpen(true)}
+                                                        style={{ 
+                                                            width: '100%',
+                                                            backgroundColor: 'white', 
+                                                            color: THEME.colors.textMain, 
+                                                            border: `1px solid ${THEME.colors.border}`, 
+                                                            padding: '0.65rem 1rem', 
+                                                            borderRadius: THEME.radius.md, 
+                                                            fontSize: '0.72rem', 
+                                                            fontWeight: '700', 
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '6px',
+                                                            fontFamily: THEME.typography.fontFamilySecondary,
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
+                                                    >
+                                                        <Sliders size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> EXCEPCIONES Y NOTAS (PICKING)
+                                                        {exceptionCount > 0 && (
+                                                            <span style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '2px 7px', borderRadius: '20px', fontSize: '0.68rem', marginLeft: '4px', fontWeight: '800' }}>
+                                                                {exceptionCount}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                </div>
+
+                                                {/* Columna Derecha: Tarjetas Tipo de Documento */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                       <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                         <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                             {formData.is_corporate_parent ? 'Configuración de Documento Base para Sucursales' : 'Configuración de Documento (Excluyente)'}
+                                         </label>
+                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
+                                             {[
+                                                 { id: 'invoice_digital', label: 'Factura Digital', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                 { id: 'invoice_printed', label: 'Factura Impresa', icon: Printer, doc: 'invoice', withPrices: true, print: true },
+                                                 { id: 'remission_prices', label: 'Remisión con Precios', icon: FileText, doc: 'remission', withPrices: true, print: true },
+                                                 { id: 'remission_no_prices', label: 'Remisión sin Precios', icon: FileText, doc: 'remission', withPrices: false, print: true },
+                                                 { id: 'remission_gift', label: 'Remisión Obsequio', icon: Gift, doc: 'gift_remission', withPrices: false, print: true }
+                                             ].map((opt) => {
+                                                 const isActive = opt.doc === 'gift_remission'
+                                                     ? formData.document_type === 'gift_remission'
+                                                     : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
+                                                 const IconComponent = opt.icon;
+                                                 
+                                                 return (
+                                                     <div 
+                                                         key={opt.id}
+                                                         onClick={() => {
+                                                             if (isReadOnly) return;
+                                                             if (opt.doc === 'gift_remission') {
+                                                                 setFormData({
+                                                                     ...formData,
+                                                                     document_type: 'gift_remission',
+                                                                     remission_with_prices: false,
+                                                                     print_invoice: true
+                                                                 });
+                                                             } else {
+                                                                 setFormData({
+                                                                     ...formData,
+                                                                     document_type: opt.doc,
+                                                                     remission_with_prices: opt.withPrices,
+                                                                     print_invoice: opt.print
+                                                                 });
+                                                             }
+                                                         }}
+                                                         style={{
+                                                             padding: '0.6rem 0.4rem',
+                                                             borderRadius: THEME.radius.md,
+                                                             border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
+                                                             backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
+                                                             cursor: isReadOnly ? 'default' : 'pointer',
+                                                             display: 'flex',
+                                                             flexDirection: 'column',
+                                                             alignItems: 'center',
+                                                             justifyContent: 'center',
+                                                             gap: '6px',
+                                                             transition: 'all 0.2s',
+                                                             boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                             opacity: isReadOnly ? 0.8 : 1,
+                                                             minHeight: '75px',
+                                                             fontFamily: THEME.typography.fontFamilySecondary
+                                                         }}
+                                                     >
+                                                         <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
+                                                         <div style={{ fontSize: '0.62rem', fontWeight: '700', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center', lineHeight: '1.1' }}>{opt.label}</div>
+                                                     </div>
+                                                 );
+                                             })}
+                                         </div>
+                                     </div>
+                                                </div>
                                             </div>
                                         )}
                                     </>
