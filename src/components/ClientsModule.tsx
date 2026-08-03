@@ -52,7 +52,8 @@ import {
     MessageSquare,
     Scale,
     DollarSign,
-    Calendar
+    Calendar,
+    Gift
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -3322,7 +3323,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                             ) : null}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
                             <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
+                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.document_type === 'gift_remission' ? 'REM-OBSEQUIO' : (client.remission_with_prices ? 'REM-$' : 'REM-S/S'))}
                             </span>
                         </div>
                     </>
@@ -5097,56 +5098,69 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                                                 {/* Columna Derecha: Tarjetas Tipo de Documento */}
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                        Configuración de Documento (Excluyente)
-                                                    </label>
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
-                                                        {[
-                                                            { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: Mail, doc: 'invoice', withPrices: true, print: false },
-                                                            { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: Printer, doc: 'invoice', withPrices: true, print: true },
-                                                            { id: 'remission_prices', label: 'REM. CON $', icon: FileText, doc: 'remission', withPrices: true, print: true },
-                                                            { id: 'remission_no_prices', label: 'REM. SIN $', icon: FileText, doc: 'remission', withPrices: false, print: true }
-                                                        ].map((opt) => {
-                                                            const isActive = formData.document_type === opt.doc && 
-                                                                           (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
-                                                            const IconComponent = opt.icon;
-                                                            
-                                                            return (
-                                                                <div 
-                                                                    key={opt.id}
-                                                                    onClick={() => {
-                                                                        if (isReadOnly) return;
-                                                                        setFormData({
-                                                                            ...formData,
-                                                                            document_type: opt.doc,
-                                                                            remission_with_prices: opt.withPrices,
-                                                                            print_invoice: opt.print
-                                                                        });
-                                                                    }}
-                                                                    style={{
-                                                                        padding: '0.6rem 0.5rem',
-                                                                        borderRadius: THEME.radius.md,
-                                                                        border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
-                                                                        backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
-                                                                        cursor: isReadOnly ? 'default' : 'pointer',
-                                                                        display: 'flex',
-                                                                        flexDirection: 'column',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        gap: '6px',
-                                                                        transition: 'all 0.2s',
-                                                                        boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
-                                                                        opacity: isReadOnly ? 0.8 : 1,
-                                                                        minHeight: '75px',
-                                                                        fontFamily: THEME.typography.fontFamilySecondary
-                                                                    }}
-                                                                >
-                                                                    <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
-                                                                    <div style={{ fontSize: '0.6rem', fontWeight: '600', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center' }}>{opt.label}</div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
+                                                       <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                         <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                             {formData.is_corporate_parent ? 'Configuración de Documento Base para Sucursales' : 'Configuración de Documento (Excluyente)'}
+                                         </label>
+                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
+                                             {[
+                                                 { id: 'invoice_digital', label: 'Factura Digital', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                 { id: 'invoice_printed', label: 'Factura Impresa', icon: Printer, doc: 'invoice', withPrices: true, print: true },
+                                                 { id: 'remission_prices', label: 'Remisión con Precios', icon: FileText, doc: 'remission', withPrices: true, print: true },
+                                                 { id: 'remission_no_prices', label: 'Remisión sin Precios', icon: FileText, doc: 'remission', withPrices: false, print: true },
+                                                 { id: 'remission_gift', label: 'Remisión Obsequio', icon: Gift, doc: 'gift_remission', withPrices: false, print: true }
+                                             ].map((opt) => {
+                                                 const isActive = opt.doc === 'gift_remission'
+                                                     ? formData.document_type === 'gift_remission'
+                                                     : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
+                                                 const IconComponent = opt.icon;
+                                                 
+                                                 return (
+                                                     <div 
+                                                         key={opt.id}
+                                                         onClick={() => {
+                                                             if (isReadOnly) return;
+                                                             if (opt.doc === 'gift_remission') {
+                                                                 setFormData({
+                                                                     ...formData,
+                                                                     document_type: 'gift_remission',
+                                                                     remission_with_prices: false,
+                                                                     print_invoice: true
+                                                                 });
+                                                             } else {
+                                                                 setFormData({
+                                                                     ...formData,
+                                                                     document_type: opt.doc,
+                                                                     remission_with_prices: opt.withPrices,
+                                                                     print_invoice: opt.print
+                                                                 });
+                                                             }
+                                                         }}
+                                                         style={{
+                                                             padding: '0.6rem 0.4rem',
+                                                             borderRadius: THEME.radius.md,
+                                                             border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
+                                                             backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
+                                                             cursor: isReadOnly ? 'default' : 'pointer',
+                                                             display: 'flex',
+                                                             flexDirection: 'column',
+                                                             alignItems: 'center',
+                                                             justifyContent: 'center',
+                                                             gap: '6px',
+                                                             transition: 'all 0.2s',
+                                                             boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                             opacity: isReadOnly ? 0.8 : 1,
+                                                             minHeight: '75px',
+                                                             fontFamily: THEME.typography.fontFamilySecondary
+                                                         }}
+                                                     >
+                                                         <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
+                                                         <div style={{ fontSize: '0.62rem', fontWeight: '700', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center', lineHeight: '1.1' }}>{opt.label}</div>
+                                                     </div>
+                                                 );
+                                             })}
+                                         </div>
+                                     </div>
                                                 </div>
                                             </div>
                                         )}
