@@ -55,6 +55,17 @@ type Message = {
     options?: string[]; // Para mostrar botones de respuesta rápida
 };
 
+const ALL_CATEGORIES = [
+  'Despensa',
+  'Hortalizas',
+  'Verduras',
+  'Lácteos',
+  'Frutas',
+  'Tubérculos',
+  'Congelados',
+  'Procesados'
+];
+
 type LeadData = {
     is_out_of_coverage: boolean;
     is_near_coverage?: boolean;
@@ -64,6 +75,7 @@ type LeadData = {
     nit: string;
     business_type: string;
     business_size: string; 
+    selected_categories?: string[];
     contact_name: string;
     phone: string;
     email: string;
@@ -84,12 +96,14 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     ]);
     const [currentStep, setCurrentStep] = useState<number>(0); 
     const [inputValue, setInputValue] = useState('');
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [leadData, setLeadData] = useState<LeadData>({ 
         is_out_of_coverage: false,
         is_near_coverage: false,
         distance_to_coverage: 0,
         wants_coverage_call: false,
         company_name: '', nit: '', business_type: '', business_size: '', 
+        selected_categories: [],
         contact_name: '', phone: '', email: '', 
         address: '', municipality: '', latitude: null, longitude: null 
     });
@@ -251,11 +265,13 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 sender: 'bot',
                 options: locale === 'en' ? ['Restaurant', 'Hotel', 'School', 'Casino/Catering', 'Other'] : ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
             }];
-        } else if (currentStep === 7) { // Captured Business Type
+        } else if (currentStep === 7) { // Captured Business Type -> Ask for Category Selection
             updatedLeadData.business_type = userText;
             nextBotMessages = [{ 
                 id: Date.now() + 1, 
-                text: t.b2b.bot.qNit, 
+                text: locale === 'en'
+                    ? `Great! What product categories do you need to quote for ${updatedLeadData.company_name}? (Select all options that apply below):`
+                    : `¡Excelente! ¿Qué categorías de productos necesitas cotizar para ${updatedLeadData.company_name}? (Puedes seleccionar varias de acuerdo a tu necesidad):`,
                 sender: 'bot'
             }];
         } else if (currentStep === 8) { // Captured NIT (final step!)
@@ -321,6 +337,38 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
         });
     };
     
+    const handleConfirmCategories = (catsOverride?: string[]) => {
+        const chosen = (catsOverride && catsOverride.length > 0)
+            ? catsOverride
+            : (selectedCategories.length > 0 ? selectedCategories : ALL_CATEGORIES);
+        const catsText = chosen.join(', ');
+
+        const updatedLeadData = {
+            ...leadDataRef.current,
+            selected_categories: chosen
+        };
+        leadDataRef.current = updatedLeadData;
+        setLeadData(updatedLeadData);
+
+        const newMsg: Message = {
+            id: Date.now(),
+            text: locale === 'en' ? `Categories to quote: ${catsText}` : `Categorías a cotizar: ${catsText}`,
+            sender: 'user'
+        };
+        setMessages(prev => [...prev, newMsg]);
+
+        setIsTyping(true);
+        setTimeout(() => {
+            setIsTyping(false);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: t.b2b.bot.qNit,
+                sender: 'bot'
+            }]);
+            setCurrentStep(8);
+        }, 1000);
+    };
+    
     const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
         try {
             console.log('--- 🛰️ REVERSE GEOCODING VÍA PROXY ---');
@@ -352,6 +400,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     ? ` | [ZONA PRÓXIMA - SOLICITA LLAMADA COBERTURA (a ${Math.round(finalData.distance_to_coverage || 0)}m)]` 
                     : ` | [ZONA SIN COBERTURA (a ${Math.round(finalData.distance_to_coverage || 0)}m)]`)
                 : '';
+            const catTag = finalData.selected_categories && finalData.selected_categories.length > 0
+                ? ` | CATS: [${finalData.selected_categories.join(', ')}]`
+                : '';
             const statusValue = finalData.is_out_of_coverage 
                 ? (isNearCall ? 'new' : 'rejected')
                 : 'new';
@@ -372,7 +423,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     address: finalData.address,
                     municipality: finalData.municipality || 'Desconocido',
                     status: statusValue,
-                    notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Desconocido'} | ORIG: ${finalData.address}${notesTag} | BOT_V2.2 🤖`
+                    notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Desconocido'}${catTag} | ORIG: ${finalData.address}${notesTag} | BOT_V2.2 🤖`
                 }])
                 .select('id')
                 .single();
@@ -390,7 +441,6 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 } else if (size.includes('Mediano') || size.includes('10M')) {
                     colorTag = 'amarillo';
                 }
-                const templateName = 'Lista Pequeña'; // Always use short list preform for pre-quotations
 
                 // Query model by color_tag
                 const { data: matchedModel } = await supabase
@@ -403,34 +453,37 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 const modelId = matchedModel?.id || 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
                 const modelName = matchedModel?.name || 'General Institucional';
 
-                // Fetch template ID
-                const { data: templateData } = await supabase
-                    .from('quote_templates')
-                    .select('id')
-                    .eq('name', templateName)
-                    .limit(1)
-                    .single();
-
                 let productsToQuote: any[] = [];
-                if (templateData) {
-                    // Fetch items for this template
-                    const { data: templateItems } = await supabase
-                        .from('quote_template_items')
-                        .select('product_id, products(id, name, base_price, iva_rate, sku)')
-                        .eq('template_id', templateData.id);
+                const chosenCats = (finalData.selected_categories && finalData.selected_categories.length > 0)
+                    ? finalData.selected_categories
+                    : ALL_CATEGORIES;
 
-                    if (templateItems && templateItems.length > 0) {
-                        productsToQuote = templateItems
-                            .map((ti: any) => ti.products)
-                            .filter((p: any) => p && Number(p.base_price) > 0);
-                    }
+                // Query products matching selected categories!
+                const { data: categoryProds } = await supabase
+                    .from('products')
+                    .select('id, name, base_price, iva_rate, sku, category')
+                    .eq('is_active', true)
+                    .gt('base_price', 0)
+                    .in('category', chosenCats)
+                    .limit(40);
+
+                if (categoryProds && categoryProds.length > 0) {
+                    const groupedByCat: Record<string, any[]> = {};
+                    categoryProds.forEach((p: any) => {
+                        const cat = p.category || 'General';
+                        if (!groupedByCat[cat]) groupedByCat[cat] = [];
+                        if (groupedByCat[cat].length < 4) {
+                            groupedByCat[cat].push(p);
+                        }
+                    });
+                    productsToQuote = Object.values(groupedByCat).flat();
                 }
 
-                // Fallback to active products if template not found or empty
+                // Fallback to active products if empty
                 if (productsToQuote.length === 0) {
                     const { data: activeProds } = await supabase
                         .from('products')
-                        .select('id, name, base_price, iva_rate, sku')
+                        .select('id, name, base_price, iva_rate, sku, category')
                         .eq('is_active', true)
                         .gt('base_price', 0)
                         .limit(15);
@@ -646,6 +699,96 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         )}
                     </div>
                 ))}
+
+                {currentStep === 7 && (
+                    <div style={{
+                        width: '100%',
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '1.25rem',
+                        border: '2px solid var(--primary)',
+                        boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.85rem',
+                        marginTop: '0.5rem',
+                        marginBottom: '0.5rem',
+                        flexShrink: 0
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                            <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                🛒 Categorías del Catálogo FruFresco:
+                            </p>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B' }}>
+                                (Selecciona varias de acuerdo a tu necesidad)
+                            </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {ALL_CATEGORIES.map((cat) => {
+                                const isSelected = selectedCategories.includes(cat);
+                                return (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedCategories(prev =>
+                                                prev.includes(cat)
+                                                    ? prev.filter(c => c !== cat)
+                                                    : [...prev, cat]
+                                            );
+                                        }}
+                                        className="btn-premium"
+                                        style={{
+                                            padding: '8px 16px',
+                                            borderRadius: 'var(--radius-full)',
+                                            border: isSelected ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                            backgroundColor: isSelected ? '#ECFDF5' : 'white',
+                                            color: isSelected ? 'var(--primary)' : '#334155',
+                                            fontWeight: isSelected ? '800' : '600',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: isSelected ? '0 4px 12px rgba(16, 185, 129, 0.25)' : '0 2px 6px rgba(0,0,0,0.03)'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '0.8rem' }}>{isSelected ? '✅' : '➕'}</span>
+                                        <span>{cat}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => handleConfirmCategories()}
+                            style={{
+                                marginTop: '4px',
+                                padding: '12px 20px',
+                                borderRadius: 'var(--radius-full)',
+                                border: 'none',
+                                backgroundColor: 'var(--primary)',
+                                color: 'white',
+                                fontWeight: '800',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 15px rgba(26, 77, 46, 0.25)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {selectedCategories.length > 0
+                                ? `✅ Confirmar ${selectedCategories.length} ${selectedCategories.length === 1 ? 'Categoría' : 'Categorías'}`
+                                : '✅ Confirmar Categorías (Todas)'}
+                        </button>
+                    </div>
+                )}
 
                 {currentStep === 5 && (
                     <div style={{ 
