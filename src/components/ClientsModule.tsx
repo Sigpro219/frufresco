@@ -4451,8 +4451,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             </div>
                         )}
 
-                        {/* BLOQUE: CONFIGURACIÓN DE DOCUMENTO (EXCLUYENTE / HEREDABLE PARA MATRIZ) */}
-                        {isB2B && (
+                        {/* BLOQUE: CONFIGURACIÓN DE DOCUMENTO MAESTRA (SOLO CASA MATRIZ) */}
+                        {isB2B && formData.is_corporate_parent && (
                             <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                                 {formData.is_corporate_parent && (
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', paddingBottom: '0.8rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -5034,9 +5034,121 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </div>
                                         ) : null}
                                         {!formData.is_corporate_parent && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                                <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
-                                            </div>
+                                             <>
+                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                                     <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
+                                                 </div>
+
+                                                 {/* CONFIGURACIÓN DE DOCUMENTO Y EXCEPCIONES INTEGRADO EN ESTRUCTURA COMERCIAL */}
+                                                 <div style={{ marginTop: '0.8rem', paddingTop: '1.2rem', borderTop: `1px dashed ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
+                                                         <div 
+                                                             onClick={() => {
+                                                                 if (isReadOnly) return;
+                                                                 setFormData({...formData, needs_crates: !formData.needs_crates});
+                                                             }}
+                                                             style={{ 
+                                                                 height: '42px', padding: '0 1.2rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
+                                                                 backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
+                                                                 boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                                 opacity: isReadOnly ? 0.9 : 1
+                                                             }}
+                                                         >
+                                                             <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
+                                                             <span style={{ fontSize: '0.75rem', fontWeight: '600', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                 REQUIERE CANASTILLAS
+                                                             </span>
+                                                         </div>
+
+                                                         <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                             <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                 Configuración de Documento (Excluyente)
+                                                             </label>
+                                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
+                                                                 {[
+                                                                     { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                                     { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: Printer, doc: 'invoice', withPrices: true, print: true },
+                                                                     { id: 'remission_prices', label: 'REM. CON $', icon: FileText, doc: 'remission', withPrices: true, print: true },
+                                                                     { id: 'remission_no_prices', label: 'REM. SIN $', icon: FileText, doc: 'remission', withPrices: false, print: true }
+                                                                 ].map((opt) => {
+                                                                     const isActive = formData.document_type === opt.doc && 
+                                                                                    (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
+                                                                     const IconComponent = opt.icon;
+                                                                     
+                                                                     return (
+                                                                         <div 
+                                                                             key={opt.id}
+                                                                             onClick={() => {
+                                                                                 if (isReadOnly) return;
+                                                                                 setFormData({
+                                                                                     ...formData,
+                                                                                     document_type: opt.doc,
+                                                                                     remission_with_prices: opt.withPrices,
+                                                                                     print_invoice: opt.print
+                                                                                 });
+                                                                             }}
+                                                                             style={{
+                                                                                 padding: '0.6rem 0.5rem',
+                                                                                 borderRadius: THEME.radius.md,
+                                                                                 border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
+                                                                                 backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
+                                                                                 cursor: isReadOnly ? 'default' : 'pointer',
+                                                                                 display: 'flex',
+                                                                                 flexDirection: 'column',
+                                                                                 alignItems: 'center',
+                                                                                 justifyContent: 'center',
+                                                                                 gap: '6px',
+                                                                                 transition: 'all 0.2s',
+                                                                                 boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                                                 opacity: isReadOnly ? 0.8 : 1,
+                                                                                 minHeight: '70px',
+                                                                                 fontFamily: THEME.typography.fontFamilySecondary
+                                                                             }}
+                                                                         >
+                                                                             <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
+                                                                             <div style={{ fontSize: '0.6rem', fontWeight: '600', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center' }}>{opt.label}</div>
+                                                                         </div>
+                                                                     );
+                                                                 })}
+                                                             </div>
+                                                         </div>
+                                                     </div>
+
+                                                     {/* BOTÓN DE EXCEPCIONES LOGÍSTICAS */}
+                                                     <div>
+                                                         <button 
+                                                             type="button"
+                                                             onClick={() => setIsExceptionsModalOpen(true)}
+                                                             style={{ 
+                                                                 width: '100%',
+                                                                 backgroundColor: 'white', 
+                                                                 color: THEME.colors.textMain, 
+                                                                 border: `1px solid ${THEME.colors.border}`, 
+                                                                 padding: '0.8rem 1.2rem', 
+                                                                 borderRadius: THEME.radius.md, 
+                                                                 fontSize: '0.75rem', 
+                                                                 fontWeight: '600', 
+                                                                 cursor: 'pointer',
+                                                                 display: 'flex',
+                                                                 alignItems: 'center',
+                                                                 justifyContent: 'center',
+                                                                 gap: '8px',
+                                                                 fontFamily: THEME.typography.fontFamilySecondary,
+                                                                 transition: 'all 0.2s'
+                                                             }}
+                                                             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                                             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
+                                                         >
+                                                             <Sliders size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
+                                                             {exceptionCount > 0 && (
+                                                                 <span style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', marginLeft: '4px', fontWeight: '600' }}>
+                                                                     {exceptionCount}
+                                                                 </span>
+                                                             )}
+                                                         </button>
+                                                     </div>
+                                                 </div>
+                                             </>
                                         )}
                                     </>
                                 )}
