@@ -29,6 +29,7 @@ import {
     Database,
     CheckCircle,
     AlertTriangle,
+    Filter,
     GitFork,
     Edit3,
     User,
@@ -66,6 +67,18 @@ export default function MasterProductsPage() {
     const canEdit = hasPermission('admin.products.master.edit');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
+    const [filterHierarchy, setFilterHierarchy] = useState<string>('all');
+    const [filterCategoryHeader, setFilterCategoryHeader] = useState<string>('all');
+    const [filterIvaHeader, setFilterIvaHeader] = useState<string>('all');
+    const [filterWebHeader, setFilterWebHeader] = useState<string>('all');
+    const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
+
+    useEffect(() => {
+        const handleClickOutside = () => setOpenHeaderDropdown(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
     const [conversions, setConversions] = useState<ProductConversion[]>([]);
     const [conversionProduct, setConversionProduct] = useState<Product | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
@@ -894,13 +907,43 @@ export default function MasterProductsPage() {
     };
 
     const filteredProducts = useMemo(() => {
+        let result = products;
+
+        // Filtros de Cabeceras de Columna
+        if (filterHierarchy === 'padre') {
+            result = result.filter(p => p.parent_id === p.id);
+        } else if (filterHierarchy === 'hijo') {
+            result = result.filter(p => p.parent_id !== null && p.parent_id !== p.id);
+        }
+
+        if (filterCategoryHeader !== 'all') {
+            result = result.filter(p => p.category === filterCategoryHeader);
+        }
+
+        if (filterIvaHeader !== 'all') {
+            const ivaVal = parseInt(filterIvaHeader);
+            result = result.filter(p => (p.iva_rate ?? 19) === ivaVal);
+        }
+
+        if (filterWebHeader === 'web') {
+            result = result.filter(p => p.show_on_web);
+        } else if (filterWebHeader === 'oculto') {
+            result = result.filter(p => !p.show_on_web);
+        }
+
+        if (filterStatusHeader === 'activo') {
+            result = result.filter(p => p.is_active);
+        } else if (filterStatusHeader === 'inactivo') {
+            result = result.filter(p => !p.is_active);
+        }
+
         const query = searchQuery.trim().toLowerCase();
-        if (!query) return products;
+        if (!query) return result;
 
         // Separar factores por comas
         const factors = query.split(',').map(f => f.trim()).filter(Boolean);
 
-        return products.filter(p => {
+        return result.filter(p => {
             return factors.every(factor => {
                 // 1. Lógica de IDs (#3, #15...)
                 if (factor.startsWith('#')) {
@@ -956,7 +999,7 @@ export default function MasterProductsPage() {
                 );
             });
         });
-    }, [products, searchQuery]);
+    }, [products, searchQuery, filterHierarchy, filterCategoryHeader, filterIvaHeader, filterWebHeader, filterStatusHeader]);
 
     const paginatedProducts = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -1363,8 +1406,9 @@ export default function MasterProductsPage() {
                         </span>
                     </div>
 
-                    {/* Botón Informativo Estándar (Hover) */}
+                    {/* Botón Informativo Estándar (Hover/Click) */}
                     <div 
+                        onClick={() => setShowHelpTooltip(prev => !prev)}
                         onMouseEnter={() => setShowHelpTooltip(true)}
                         onMouseLeave={() => setShowHelpTooltip(false)}
                         style={{ 
@@ -1377,7 +1421,7 @@ export default function MasterProductsPage() {
                             display: 'flex', 
                             alignItems: 'center', 
                             justifyContent: 'center',
-                            cursor: 'help',
+                            cursor: 'pointer',
                             border: `1px solid ${THEME.colors.border}`,
                             fontSize: '0.9rem',
                             fontWeight: '600',
@@ -1392,40 +1436,66 @@ export default function MasterProductsPage() {
                                 position: 'absolute',
                                 top: '44px',
                                 right: '0',
-                                width: '320px',
-                                backgroundColor: '#1A231E',
+                                width: '380px',
+                                backgroundColor: '#111827',
                                 color: 'white',
-                                padding: '1rem',
-                                borderRadius: THEME.radius.lg,
-                                boxShadow: THEME.shadow.lg,
+                                padding: '1.2rem',
+                                borderRadius: '16px',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
                                 zIndex: 1000,
-                                fontSize: '0.75rem',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                fontSize: '0.78rem',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
                                 lineHeight: '1.5',
-                                pointerEvents: 'none',
                                 animation: 'fadeInDown 0.2s ease-out'
                             }}>
-                                <div style={{ fontWeight: '750', color: '#10B981', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
-                                    <Dna size={12} strokeWidth={1.5} /> COMANDOS MAESTROS (@)
+                                <div style={{ fontWeight: '800', color: '#10B981', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Dna size={14} strokeWidth={2} /> COMANDOS MAESTROS (@)
+                                    </div>
+                                    <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'normal' }}>Clic para aplicar</span>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
                                     {[
-                                        { tag: '@web', desc: 'En Tienda' },
+                                        { tag: '@web', desc: 'En Tienda Web' },
                                         { tag: '@oculto', desc: 'No Web' },
                                         { tag: '@sindatos', desc: 'Faltan datos' },
-                                        { tag: '@padre', desc: 'Producto Base' },
-                                        { tag: '@19', desc: 'IVA 19%' },
-                                        { tag: '@0', desc: 'Exentos' },
                                         { tag: '@activo', desc: 'Habilitados' },
-                                        { tag: '@hijo', desc: 'Fraccionado' }
+                                        { tag: '@padre', desc: 'Producto Base' },
+                                        { tag: '@hijo', desc: 'Fraccionado' },
+                                        { tag: '@19', desc: 'IVA 19%' },
+                                        { tag: '@0', desc: 'Exentos IVA' },
+                                        { tag: '@frutas', desc: 'Cat. Frutas' },
+                                        { tag: '@verduras', desc: 'Cat. Verduras' },
+                                        { tag: '@despensa', desc: 'Cat. Despensa' },
+                                        { tag: '#ID', desc: 'ID Contable (#12)' }
                                     ].map((item, i) => (
-                                        <div key={i}>
+                                        <div 
+                                            key={i}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const cleanTag = item.tag === '#ID' ? '#' : item.tag;
+                                                setSearchQuery(prev => {
+                                                    if (!prev) return cleanTag;
+                                                    if (prev.toLowerCase().includes(cleanTag.toLowerCase())) return prev;
+                                                    return `${prev}, ${cleanTag}`;
+                                                });
+                                            }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                padding: '4px 6px',
+                                                borderRadius: '6px',
+                                                backgroundColor: 'rgba(255,255,255,0.05)',
+                                                transition: 'background 0.15s'
+                                            }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)')}
+                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)')}
+                                        >
                                             <b style={{ color: '#FCD34D' }}>{item.tag}</b>: {item.desc}
                                         </div>
                                     ))}
                                 </div>
-                                <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
-                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: Papa, @web, @activo
+                                <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+                                    💡 Tip: Filtra por campos combinados separando con comas (,). Ejemplo: <code>Papa, @web, @activo</code>
                                 </div>
                             </div>
                         )}
@@ -1445,16 +1515,138 @@ export default function MasterProductsPage() {
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>ID Contable</th>
+
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Categoría</th>
+
+                                {/* CATEGORÍA */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>CATEGORÍA</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'category' ? null : 'category'); }}
+                                            style={{ background: filterCategoryHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterCategoryHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar por categoría"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'category' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                            <div onClick={() => { setFilterCategoryHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterCategoryHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterCategoryHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todas las categorías
+                                            </div>
+                                            {[
+                                                { code: 'FR', label: '🍎 Frutas' },
+                                                { code: 'VE', label: '🥦 Verduras' },
+                                                { code: 'HO', label: '🌿 Hortalizas' },
+                                                { code: 'TU', label: '🥔 Tubérculos' },
+                                                { code: 'LA', label: '🥛 Lácteos' },
+                                                { code: 'DP', label: '🥫 Despensa' },
+                                                { code: 'CG', label: '❄️ Congelados' },
+                                                { code: 'PR', label: '⚙️ Procesados' }
+                                            ].map(cat => (
+                                                <div key={cat.code} onClick={() => { setFilterCategoryHeader(cat.code); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterCategoryHeader === cat.code ? 'bold' : 'normal', backgroundColor: filterCategoryHeader === cat.code ? '#F1F5F9' : 'transparent' }}>
+                                                    {cat.label}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </th>
+
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>IVA</th>
+
+                                {/* IVA */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                        <span>IVA</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'iva' ? null : 'iva'); }}
+                                            style={{ background: filterIvaHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterIvaHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar por IVA"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'iva' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '140px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none', textAlign: 'left' }}>
+                                            <div onClick={() => { setFilterIvaHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todos los IVA
+                                            </div>
+                                            <div onClick={() => { setFilterIvaHeader('19'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === '19' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === '19' ? '#F1F5F9' : 'transparent' }}>
+                                                🏷️ IVA 19%
+                                            </div>
+                                            <div onClick={() => { setFilterIvaHeader('5'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === '5' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === '5' ? '#F1F5F9' : 'transparent' }}>
+                                                🏷️ IVA 5%
+                                            </div>
+                                            <div onClick={() => { setFilterIvaHeader('0'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterIvaHeader === '0' ? 'bold' : 'normal', backgroundColor: filterIvaHeader === '0' ? '#F1F5F9' : 'transparent' }}>
+                                                🌱 Exento 0%
+                                            </div>
+                                        </div>
+                                    )}
+                                </th>
+
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Mínimo</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Configuración</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Descripción</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px', textAlign: 'center' }}>Web</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '100px' }}>Estado</th>
+
+                                {/* WEB */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '80px', textAlign: 'center', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                        <span>WEB</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'web' ? null : 'web'); }}
+                                            style={{ background: filterWebHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterWebHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar publicación web"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'web' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none', textAlign: 'left' }}>
+                                            <div onClick={() => { setFilterWebHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterWebHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterWebHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todos
+                                            </div>
+                                            <div onClick={() => { setFilterWebHeader('web'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterWebHeader === 'web' ? 'bold' : 'normal', backgroundColor: filterWebHeader === 'web' ? '#F1F5F9' : 'transparent' }}>
+                                                🌐 En Tienda Web
+                                            </div>
+                                            <div onClick={() => { setFilterWebHeader('oculto'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterWebHeader === 'oculto' ? 'bold' : 'normal', backgroundColor: filterWebHeader === 'oculto' ? '#F1F5F9' : 'transparent' }}>
+                                                🙈 Ocultos
+                                            </div>
+                                        </div>
+                                    )}
+                                </th>
+
+                                {/* ESTADO */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '120px', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>ESTADO</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'status' ? null : 'status'); }}
+                                            style={{ background: filterStatusHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterStatusHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar por estado"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'status' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '150px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                            <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todos
+                                            </div>
+                                            <div onClick={() => { setFilterStatusHeader('activo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'activo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'activo' ? '#F1F5F9' : 'transparent' }}>
+                                                ✅ Habilitados
+                                            </div>
+                                            <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
+                                                ❌ Deshabilitados
+                                            </div>
+                                        </div>
+                                    )}
+                                </th>
                             </tr>
                         </thead>
                         <tbody>

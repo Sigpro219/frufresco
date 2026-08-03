@@ -6,7 +6,7 @@ import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -78,6 +78,7 @@ export default function B2BDashboard() {
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
     const [selectedAgreementForModal, setSelectedAgreementForModal] = useState<any | null>(null);
     const [isAgreementModalOpen, setIsAgreementModalOpen] = useState<boolean>(false);
+    const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
     const [agreementSearchTerm, setAgreementSearchTerm] = useState<string>('');
     const [activeHoverPoint, setActiveHoverPoint] = useState<any | null>(null);
     const isMounted = useRef(true);
@@ -1476,7 +1477,6 @@ export default function B2BDashboard() {
                                     borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                        {/* Title + Lucide Help Info Icon */}
                                         {/* Title */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <h3 style={{ 
@@ -1493,27 +1493,51 @@ export default function B2BDashboard() {
                                             </h3>
                                         </div>
 
-                                        {/* Icon-only Trash Button (No text to stay on 1 line when collapsed) */}
-                                        {orderItems.length > 0 && (
+                                        {/* Right Header Action Controls: Info & Trash */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <button
-                                                onClick={handleClearOrder}
-                                                title="Borrar todo el pedido y empezar de cero"
+                                                onClick={() => setIsHelpModalOpen(true)}
+                                                title="¿Cómo funciona la autogestión de pedidos recurrentes?"
                                                 style={{
-                                                    padding: '0.35rem 0.45rem',
+                                                    padding: '0.35rem 0.55rem',
                                                     borderRadius: THEME.radius.md,
-                                                    border: '1px solid #FCA5A5',
-                                                    background: '#FEF2F2',
-                                                    color: '#DC2626',
+                                                    border: '1px solid #CBD5E1',
+                                                    background: '#F1F5F9',
+                                                    color: 'var(--primary)',
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    justifyContent: 'center',
+                                                    gap: '4px',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
                                                     transition: 'all 0.2s'
                                                 }}
                                             >
-                                                <Trash2 size={15} strokeWidth={2} />
+                                                <HelpCircle size={15} strokeWidth={2.2} />
+                                                <span>¿Cómo funciona?</span>
                                             </button>
-                                        )}
+
+                                            {orderItems.length > 0 && (
+                                                <button
+                                                    onClick={handleClearOrder}
+                                                    title="Borrar todo el pedido y empezar de cero"
+                                                    style={{
+                                                        padding: '0.35rem 0.45rem',
+                                                        borderRadius: THEME.radius.md,
+                                                        border: '1px solid #FCA5A5',
+                                                        background: '#FEF2F2',
+                                                        color: '#DC2626',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    <Trash2 size={15} strokeWidth={2} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Historical Orders Pills Bar with ONLY Lucide Clock Icon */}
@@ -3400,6 +3424,193 @@ export default function B2BDashboard() {
                     }
                 }
             `}</style>
+
+            {/* MODAL EDUCATIVO: Autogestión de Pedidos Recurrentes (A prueba de Dummies) */}
+            {isHelpModalOpen && (
+                <div 
+                    onClick={() => setIsHelpModalOpen(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 9999,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        backdropFilter: 'blur(6px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem',
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: '20px',
+                            width: '100%',
+                            maxWidth: '680px',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            border: '1px solid #E2E8F0',
+                            position: 'relative'
+                        }}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            backgroundColor: '#064E3B',
+                            backgroundImage: 'linear-gradient(135deg, #064E3B 0%, #047857 100%)',
+                            padding: '1.75rem 2rem',
+                            borderRadius: '20px 20px 0 0',
+                            color: 'white',
+                            position: 'relative'
+                        }}>
+                            <button
+                                onClick={() => setIsHelpModalOpen(false)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '1.25rem',
+                                    right: '1.25rem',
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    border: 'none',
+                                    color: 'white',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <X size={18} />
+                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                <span style={{ backgroundColor: '#10B981', color: 'white', fontSize: '0.7rem', fontWeight: '900', padding: '3px 10px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    Portal Institucional B2B
+                                </span>
+                            </div>
+                            <h2 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Sparkles size={22} style={{ color: '#34D399' }} /> Autogestión de Pedidos Recurrentes
+                            </h2>
+                            <p style={{ margin: '6px 0 0 0', fontSize: '0.88rem', color: '#A7F3D0', fontWeight: '500' }}>
+                                Guía rápida para programar tus entregas en segundos sin depender de llamadas ni mensajes.
+                            </p>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div style={{ padding: '1.75rem 2rem' }}>
+                            {/* Banner de Valor */}
+                            <div style={{
+                                backgroundColor: '#ECFDF5',
+                                border: '1px solid #A7F3D0',
+                                borderRadius: '12px',
+                                padding: '1rem 1.25rem',
+                                marginBottom: '1.5rem',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px'
+                            }}>
+                                <Zap size={22} style={{ color: '#059669', flexShrink: 0, marginTop: '2px' }} />
+                                <div style={{ fontSize: '0.85rem', color: '#065F46', lineHeight: '1.5', fontWeight: '600' }}>
+                                    <strong style={{ color: '#047857' }}>¡Ahorra hasta un 80% de tiempo diario!</strong> Tu portal recuerda tus productos y volúmenes habituales. No necesitas volver a buscar todo el catálogo desde cero para tus entregas de la semana.
+                                </div>
+                            </div>
+
+                            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                📋 ¿Cómo hacer tu pedido en 4 pasos sencillos?
+                            </h3>
+
+                            {/* Step 1 */}
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', fontWeight: '900', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    1
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Clock size={16} style={{ color: 'var(--primary)' }} /> Selecciona un Pedido Anterior
+                                    </h4>
+                                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: '1.45' }}>
+                                        En la barra superior <strong>"Repetir Pedido"</strong> verás tus últimos 5 despachos (ej: <code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px', color: '#1E293B' }}>#639 (24 jul)</code>). Haz clic en cualquiera de ellos y el sistema cargará instantáneamente tu lista completa de insumos con los precios vigentes de tu convenio.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Step 2 */}
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', fontWeight: '900', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    2
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Edit2 size={16} style={{ color: 'var(--primary)' }} /> Modifica Cantidades o Agrega/Quita SKUs
+                                    </h4>
+                                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: '1.45' }}>
+                                        Usa los botones <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>+</code></strong> y <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>-</code></strong> para ajustar los kilos o unidades requeridos para hoy. Si hoy no necesitas algún producto, elimina ese renglón con la papelera 🗑️. Si deseas añadir nuevos insumos, búscalos en el catálogo de la izquierda y haz clic en "Agregar".
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Step 3 */}
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', fontWeight: '900', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    3
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Calendar size={16} style={{ color: 'var(--primary)' }} /> Elige la Fecha de Entrega Futura
+                                    </h4>
+                                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: '1.45' }}>
+                                        ¡Puedes programar pedidos para días posteriores! Selecciona el día de entrega exacto (de lunes a viernes). Esto asegura la reserva de tu inventario fresco en bodega con suficiente anticipación.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Step 4 */}
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', fontWeight: '900', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    4
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <CheckCircle2 size={16} style={{ color: '#10B981' }} /> Confirma tu Pedido en 1 Clic
+                                    </h4>
+                                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: '1.45' }}>
+                                        Haz clic en el botón verde <strong>"Confirmar Pedido"</strong>. Tu orden entrará de inmediato a nuestro centro de alistamiento y logística, garantizando tu despacho a tiempo y con factura/remisión según tus acuerdos.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Bottom Action */}
+                            <div style={{ textAlign: 'center', paddingTop: '0.5rem' }}>
+                                <button
+                                    onClick={() => setIsHelpModalOpen(false)}
+                                    style={{
+                                        width: '100%',
+                                        backgroundColor: 'var(--primary)',
+                                        color: 'white',
+                                        border: 'none',
+                                        padding: '0.85rem 1.5rem',
+                                        borderRadius: '12px',
+                                        fontWeight: '800',
+                                        fontSize: '0.95rem',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    <CheckCircle2 size={18} /> ¡Entendido! Empezar a Pedir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
