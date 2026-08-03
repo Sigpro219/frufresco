@@ -668,16 +668,53 @@ export default function ClientsModule() {
     };
 
     const downloadClientsMaster = () => {
-        // Combinar b2b y b2c para exportación completa
-        const allClients = [...clientsB2B, ...clientsB2C];
-        
+        // Ordenamiento Jerárquico: Matriz primero, sucursales vinculadas inmediatamente abajo
+        const sortedClients: Profile[] = [];
+        const addedIds = new Set<string>();
+
+        // 1. Matrices y sus sucursales
+        const parents = clientsB2B.filter(c => c.is_corporate_parent);
+        parents.forEach(parent => {
+            sortedClients.push(parent);
+            addedIds.add(parent.id);
+            
+            const branches = clientsB2B.filter(c => c.parent_id === parent.id);
+            branches.forEach(b => {
+                sortedClients.push(b);
+                addedIds.add(b.id);
+            });
+        });
+
+        // 2. Clientes B2B independientes (sin matriz)
+        clientsB2B.forEach(c => {
+            if (!addedIds.has(c.id)) {
+                sortedClients.push(c);
+                addedIds.add(c.id);
+            }
+        });
+
+        // 3. Clientes B2C (Hogar)
+        clientsB2C.forEach(c => {
+            if (!addedIds.has(c.id)) {
+                sortedClients.push(c);
+                addedIds.add(c.id);
+            }
+        });
+
         // Tab 1: Clientes Base
-        const exportData = allClients.map(c => {
-            const parent = allClients.find(p => p.id === c.parent_id);
+        const exportData = sortedClients.map(c => {
+            const parent = clientsB2B.find(p => p.id === c.parent_id);
             const pModel = pricingModels.find(m => m.id === c.pricing_model_id);
+            const isBranch = !!c.parent_id && !c.is_corporate_parent;
+
+            let jerarquiaVisual = 'INDEPENDIENTE';
+            if (c.role === 'b2c_client') jerarquiaVisual = 'HOGAR';
+            else if (c.is_corporate_parent) jerarquiaVisual = '🏢 CASA MATRIZ';
+            else if (isBranch) jerarquiaVisual = '  ↳ SUCURSAL';
 
             return {
                 Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
+                Jerarquia_Visual: jerarquiaVisual,
                 ID_INTERNO: c.id,
                 NIT_CEDULA: c.nit || '',
                 Nombre_Comercial: c.company_name || c.contact_name || '',
@@ -685,12 +722,15 @@ export default function ClientsModule() {
                 Nombre_Contacto: c.contact_name || '',
                 Telefono: c.phone || c.contact_phone || '',
                 Email: c.email || '',
+                Email_Notificacion_2: (c as any).email_2 || '',
+                Email_Notificacion_3: (c as any).email_3 || '',
                 Direccion: c.address || '',
+                Complemento_Direccion: (c as any).address_complement || '',
                 Ciudad: c.city || 'Bogotá',
                 Municipio: c.municipality || c.city || 'Bogotá',
                 Departamento: c.department || 'Cundinamarca',
                 Tipo_Cliente: c.role === 'b2c_client' ? 'HOGAR' : 'INSTITUCIONAL',
-                Modelo_Precios_Nombre: pModel?.name || '',
+                Modelo_Precios_Nombre: pModel ? pModel.name : (isBranch ? 'HEREDADO_MATRIZ' : ''),
                 
                 // Jerarquía Comercial
                 Es_Matriz: c.is_corporate_parent ? 'SI' : 'NO',
@@ -991,7 +1031,7 @@ export default function ClientsModule() {
                 // Vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
                 const branches = rows.filter(r => (r.NIT_Matriz_Padre || '').toString().trim() !== '' && !cleanBool(r.Es_Matriz));
                 if (branches.length > 0) {
-                    const { data: allParents } = await supabase.from('profiles').select('id, nit').eq('is_corporate_parent', true);
+                    const { data: allParents } = await supabase.from('profiles').select('*').eq('is_corporate_parent', true);
                     
                     if (allParents) {
                         for (const row of branches) {
@@ -1001,8 +1041,24 @@ export default function ClientsModule() {
                             const parentProfile = allParents.find(p => p.nit === cleanParentNit) || insertedClients.find(c => c.nit === cleanParentNit);
                             
                             if (branchProfile && parentProfile) {
+                                const docVal = (row.Tipo_Documento || '').toString().trim().toUpperCase();
+                                const isInheritedDoc = docVal === 'HEREDADO' || docVal === 'HEREDADO_MATRIZ' || docVal === '';
+
+                                const branchUpdate: any = { parent_id: parentProfile.id };
+                                if (isInheritedDoc) {
+                                    branchUpdate.document_type = parentProfile.document_type || 'invoice';
+                                    branchUpdate.needs_crates = parentProfile.needs_crates || false;
+                                    branchUpdate.remission_with_prices = parentProfile.remission_with_prices !== undefined ? parentProfile.remission_with_prices : true;
+                                    branchUpdate.print_invoice = parentProfile.print_invoice || false;
+                                }
+
+                                const modelVal = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toUpperCase();
+                                if (modelVal === 'HEREDADO' || modelVal === 'HEREDADO_MATRIZ' || modelVal === '') {
+                                    branchUpdate.pricing_model_id = null; // Hereda lista de precios de la Casa Matriz
+                                }
+
                                 await supabase.from('profiles')
-                                    .update({ parent_id: parentProfile.id })
+                                    .update(branchUpdate)
                                     .eq('id', branchProfile.id);
                             }
                         }
