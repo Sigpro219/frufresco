@@ -143,14 +143,6 @@ export default function OrderLoadingPage() {
         fetchEmailCounts();
     }, [refreshTrigger]);
 
-    useEffect(() => {
-        const handleClickOutside = () => {
-            setOpenHeaderDropdown(null);
-        };
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
-    }, []);
-
     const [selectedDate, setSelectedDate] = useState(() => {
         try {
             const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -1669,6 +1661,14 @@ export default function OrderLoadingPage() {
                     </div>
                 )}
 
+                {/* Backdrop global para cerrar dropdowns de encabezado */}
+                {openHeaderDropdown && (
+                    <div 
+                        onClick={() => setOpenHeaderDropdown(null)} 
+                        style={{ position: 'fixed', inset: 0, zIndex: 90, backgroundColor: 'transparent' }} 
+                    />
+                )}
+
                 {/* List View (Conditional) */}
                 {!loading && filteredOrders.length > 0 && (
                     <>
@@ -1689,10 +1689,16 @@ export default function OrderLoadingPage() {
                                                     </button>
                                                 </div>
                                                 {openHeaderDropdown === 'type' && (
-                                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterClientType(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterClientType === '' ? 'bold' : 'normal', backgroundColor: filterClientType === '' ? '#F1F5F9' : 'transparent' }}>Todos los tipos</div>
-                                                        <div onClick={() => { setFilterClientType('b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterClientType === 'b2b' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2b' ? '#F1F5F9' : 'transparent' }}>🏢 Institucional (B2B)</div>
-                                                        <div onClick={() => { setFilterClientType('b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterClientType === 'b2c' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2c' ? '#F1F5F9' : 'transparent' }}>👤 Hogar (B2C)</div>
+                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterClientType(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === '' ? 'bold' : 'normal', backgroundColor: filterClientType === '' ? '#F1F5F9' : 'transparent' }}>
+                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos
+                                                        </div>
+                                                        <div onClick={() => { setFilterClientType('b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2b' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2b' ? '#F1F5F9' : 'transparent' }}>
+                                                            <Building2 size={13} style={{ color: THEME.colors.primary }} /> Institucional (B2B)
+                                                        </div>
+                                                        <div onClick={() => { setFilterClientType('b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2c' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2c' ? '#F1F5F9' : 'transparent' }}>
+                                                            <Home size={13} style={{ color: '#EC4899' }} /> Hogar (B2C)
+                                                        </div>
                                                     </div>
                                                 )}
                                             </th>
@@ -1709,10 +1715,16 @@ export default function OrderLoadingPage() {
                                                     </button>
                                                 </div>
                                                 {openHeaderDropdown === 'gps' && (
-                                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterGps(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterGps === '' ? 'bold' : 'normal', backgroundColor: filterGps === '' ? '#F1F5F9' : 'transparent' }}>Todas las ubicaciones</div>
-                                                        <div onClick={() => { setFilterGps('ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterGps === 'ok' ? 'bold' : 'normal', backgroundColor: filterGps === 'ok' ? '#F1F5F9' : 'transparent' }}>📍 GPS OK</div>
-                                                        <div onClick={() => { setFilterGps('missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', fontWeight: filterGps === 'missing' ? 'bold' : 'normal', backgroundColor: filterGps === 'missing' ? '#F1F5F9' : 'transparent' }}>⚠️ SIN GPS</div>
+                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterGps(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === '' ? 'bold' : 'normal', backgroundColor: filterGps === '' ? '#F1F5F9' : 'transparent' }}>
+                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
+                                                        </div>
+                                                        <div onClick={() => { setFilterGps('ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'ok' ? 'bold' : 'normal', backgroundColor: filterGps === 'ok' ? '#F1F5F9' : 'transparent' }}>
+                                                            <MapPin size={13} style={{ color: '#10B981' }} /> GPS OK
+                                                        </div>
+                                                        <div onClick={() => { setFilterGps('missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'missing' ? 'bold' : 'normal', backgroundColor: filterGps === 'missing' ? '#F1F5F9' : 'transparent' }}>
+                                                            <AlertTriangle size={13} style={{ color: '#F59E0B' }} /> SIN GPS
+                                                        </div>
                                                     </div>
                                                 )}
                                             </th>
@@ -1728,14 +1740,28 @@ export default function OrderLoadingPage() {
                                                     </button>
                                                 </div>
                                                 {openHeaderDropdown === 'channel' && (
-                                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterChannel(''); setSelectedChannel(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>Todos los canales</div>
-                                                        <div onClick={() => { setFilterChannel('web_b2c'); setSelectedChannel('web_b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>🏠 Web Hogar</div>
-                                                        <div onClick={() => { setFilterChannel('web_b2b'); setSelectedChannel('web_b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>🏢 Web Institucional</div>
-                                                        <div onClick={() => { setFilterChannel('email'); setSelectedChannel('email'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>📧 Correo</div>
-                                                        <div onClick={() => { setFilterChannel('whatsapp'); setSelectedChannel('whatsapp'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>💬 WhatsApp</div>
-                                                        <div onClick={() => { setFilterChannel('phone'); setSelectedChannel('phone'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>📞 Teléfono</div>
-                                                        <div onClick={() => { setFilterChannel('file_upload'); setSelectedChannel('file_upload'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>📁 Carga Masiva</div>
+                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterChannel(''); setSelectedChannel(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Globe size={13} style={{ color: '#64748B' }} /> Todos los canales
+                                                        </div>
+                                                        <div onClick={() => { setFilterChannel('web_b2c'); setSelectedChannel('web_b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Home size={13} style={{ color: '#9D174D' }} /> Web Hogar
+                                                        </div>
+                                                        <div onClick={() => { setFilterChannel('web_b2b'); setSelectedChannel('web_b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Building2 size={13} style={{ color: '#0369A1' }} /> Web Institucional
+                                                        </div>
+                                                        <div onClick={() => { setFilterChannel('email'); setSelectedChannel('email'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Mail size={13} style={{ color: '#6B21A8' }} /> Correo
+                                                        </div>
+                                                        <div onClick={() => { setFilterChannel('whatsapp'); setSelectedChannel('whatsapp'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <MessageSquare size={13} style={{ color: '#15803D' }} /> WhatsApp
+                                                        </div>
+                                                        <div onClick={() => { setFilterChannel('phone'); setSelectedChannel('phone'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Phone size={13} style={{ color: '#1D4ED8' }} /> Teléfono
+                                                        </div>
+                                                        <div onClick={() => { setFilterChannel('file_upload'); setSelectedChannel('file_upload'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <UploadCloud size={13} style={{ color: '#B45309' }} /> Carga Masiva
+                                                        </div>
                                                     </div>
                                                 )}
                                             </th>
@@ -1753,17 +1779,35 @@ export default function OrderLoadingPage() {
                                                     </button>
                                                 </div>
                                                 {openHeaderDropdown === 'status' && (
-                                                    <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', textAlign: 'left', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterStatus(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>Todos los estados</div>
-                                                        <div onClick={() => { setFilterStatus('para_compra'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>COMPRAS / QA</div>
-                                                        <div onClick={() => { setFilterStatus('pending_approval'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>POR APROBAR</div>
-                                                        <div onClick={() => { setFilterStatus('approved'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>APROBADO</div>
-                                                        <div onClick={() => { setFilterStatus('picking'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>EN PREPARACIÓN</div>
-                                                        <div onClick={() => { setFilterStatus('shipped'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>DESPACHADO</div>
-                                                        <div onClick={() => { setFilterStatus('delivered'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>ENTREGADO</div>
-                                                        <div onClick={() => { setFilterStatus('cancelled'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px' }}>CANCELADO</div>
+                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', textAlign: 'left', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterStatus(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('para_compra'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <CheckCircle2 size={13} style={{ color: '#10B981' }} /> COMPRAS / QA
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('pending_approval'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Clock size={13} style={{ color: '#F59E0B' }} /> POR APROBAR
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('approved'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <CheckCircle2 size={13} style={{ color: '#3B82F6' }} /> APROBADO
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('picking'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Package size={13} style={{ color: '#8B5CF6' }} /> EN PREPARACIÓN
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('shipped'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <Truck size={13} style={{ color: '#06B6D4' }} /> DESPACHADO
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('delivered'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <CheckCircle2 size={13} style={{ color: '#059669' }} /> ENTREGADO
+                                                        </div>
+                                                        <div onClick={() => { setFilterStatus('cancelled'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <AlertTriangle size={13} style={{ color: '#EF4444' }} /> CANCELADO
+                                                        </div>
                                                         <div style={{ borderTop: '1px solid #E2E8F0', margin: '4px 0' }}></div>
-                                                        <div onClick={() => { setFilterStatus('cobrar_puerta'); setOpenHeaderDropdown(null); }} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', color: '#D97706', fontWeight: 'bold' }}>🔑 Cobrar en puerta</div>
+                                                        <div onClick={() => { setFilterStatus('cobrar_puerta'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', color: '#D97706', fontWeight: 'bold' }}>
+                                                            <Coins size={13} style={{ color: '#D97706' }} /> Cobrar en puerta
+                                                        </div>
                                                     </div>
                                                 )}
                                             </th>
