@@ -432,10 +432,11 @@ export default function HRManagement() {
                 </header>
                 
                 {/* SUBTLE DASHBOARD */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                     {[
                         { label: 'Total Equipo', value: users.length, icon: <Users strokeWidth={1.5} size={18} style={{ color: THEME.colors.primary }} />, color: THEME.colors.textMain },
                         { label: 'Activos', value: users.filter(u => u.is_active !== false).length, icon: <CheckCircle2 strokeWidth={1.5} size={18} style={{ color: '#10B981' }} />, color: '#10B981' },
+                        { label: 'Con Acceso Digital', value: users.filter(u => profiles.some(p => p.collaborator_id === u.id || p.id === u.id || (p.email && u.email && p.email.trim().toLowerCase() === u.email.trim().toLowerCase())) || u.login_requested === true).length, icon: <User strokeWidth={1.5} size={18} style={{ color: '#2563EB' }} />, color: '#2563EB' },
                         { label: 'Temporales', value: users.filter(u => u.is_temporary).length, icon: <Clock strokeWidth={1.5} size={18} style={{ color: '#F59E0B' }} />, color: '#F59E0B' },
                         { label: 'Conductores', value: users.filter(u => u.role === 'CONDUCTOR').length, icon: <Truck strokeWidth={1.5} size={18} style={{ color: '#0891B2' }} />, color: '#0891B2' }
                     ].map((stat, i) => (
@@ -623,17 +624,51 @@ export default function HRManagement() {
                                     e.currentTarget.style.borderColor = THEME.colors.border;
                                 }}
                                 >
-                                    {/* Status Badge - Top Row */}
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
-                                        <span style={{ 
-                                            padding: '0.25rem 0.6rem', borderRadius: '8px', fontSize: '0.6rem', fontWeight: '900',
-                                            backgroundColor: user.is_active === false ? '#FEE2E2' : THEME.colors.primaryLight,
-                                            color: user.is_active === false ? '#B91C1C' : THEME.colors.primary,
-                                            letterSpacing: '0.05em'
-                                        }}>
-                                            {user.is_active === false ? 'ARCHIVADO' : 'ACTIVO'}
-                                        </span>
-                                    </div>
+                                    {/* Status & Auth Access Badges - Top Row */}
+                                    {(() => {
+                                        const hasAuthAccess = profiles.some(p => 
+                                            p.collaborator_id === user.id || 
+                                            p.id === user.id || 
+                                            (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+                                        ) || user.login_requested === true;
+
+                                        return (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                {hasAuthAccess ? (
+                                                    <span 
+                                                        title="Acceso Digital Autenticado Activo"
+                                                        style={{ 
+                                                            padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.62rem', fontWeight: '800',
+                                                            backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0',
+                                                            display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                                        }}
+                                                    >
+                                                        <CheckCircle2 size={11} strokeWidth={2.5} color="#166534" /> CON ACCESO
+                                                    </span>
+                                                ) : (
+                                                    <span 
+                                                        title="Sin credenciales de inicio de sesión de usuario"
+                                                        style={{ 
+                                                            padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.62rem', fontWeight: '700',
+                                                            backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0',
+                                                            display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                                        }}
+                                                    >
+                                                        SIN ACCESO
+                                                    </span>
+                                                )}
+
+                                                <span style={{ 
+                                                    padding: '0.25rem 0.6rem', borderRadius: '8px', fontSize: '0.6rem', fontWeight: '900',
+                                                    backgroundColor: user.is_active === false ? '#FEE2E2' : THEME.colors.primaryLight,
+                                                    color: user.is_active === false ? '#B91C1C' : THEME.colors.primary,
+                                                    letterSpacing: '0.05em'
+                                                }}>
+                                                    {user.is_active === false ? 'ARCHIVADO' : 'ACTIVO'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Avatar & Name - Second Row */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.2rem' }}>
@@ -784,11 +819,60 @@ export default function HRManagement() {
                                                         );
                                                     })()}
                                                     <div>
-                                                        <div style={{ fontWeight: '700', color: THEME.colors.textMain }}>{user.contact_name}</div>
+                                                        {(() => {
+                                                            const hasAuthAccess = profiles.some(p => 
+                                                                p.collaborator_id === user.id || 
+                                                                p.id === user.id || 
+                                                                (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+                                                            ) || user.login_requested === true;
+
+                                                            return (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                                                    <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{user.contact_name}</span>
+                                                                    {hasAuthAccess ? (
+                                                                        <span 
+                                                                            title="Acceso Digital Autenticado Activo (Cuenta de inicio de sesión creada)"
+                                                                            style={{ 
+                                                                                display: 'inline-flex', 
+                                                                                alignItems: 'center', 
+                                                                                gap: '3px', 
+                                                                                backgroundColor: '#DCFCE7', 
+                                                                                color: '#166534', 
+                                                                                padding: '1px 7px', 
+                                                                                borderRadius: '8px', 
+                                                                                fontSize: '0.65rem', 
+                                                                                fontWeight: '800',
+                                                                                border: '1px solid #BBF7D0'
+                                                                            }}
+                                                                        >
+                                                                            <CheckCircle2 size={12} strokeWidth={2.5} color="#166534" /> Con Acceso
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span 
+                                                                            title="Sin credenciales de inicio de sesión creadas"
+                                                                            style={{ 
+                                                                                display: 'inline-flex', 
+                                                                                alignItems: 'center', 
+                                                                                gap: '3px', 
+                                                                                backgroundColor: '#F1F5F9', 
+                                                                                color: '#64748B', 
+                                                                                padding: '1px 6px', 
+                                                                                borderRadius: '8px', 
+                                                                                fontSize: '0.62rem', 
+                                                                                fontWeight: '600',
+                                                                                border: '1px solid #E2E8F0'
+                                                                            }}
+                                                                        >
+                                                                            Sin Acceso
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                         <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                             ID: {user.document_id || '---'}
                                                             {user.is_temporary && (
-                                                                <span style={{ fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '1px 4px', borderRadius: '4px' }}>TEMP</span>
+                                                                <span style={{ fontSize: '0.6rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '1px 6px', borderRadius: '4px', letterSpacing: '0.02em' }}>Temporal</span>
                                                             )}
                                                         </div>
                                                     </div>
