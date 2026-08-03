@@ -17,6 +17,15 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
+  async redirects() {
+    return [
+      {
+        source: '/admin/orders',
+        destination: '/admin/orders/loading',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
