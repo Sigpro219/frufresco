@@ -78,8 +78,8 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
             transition: 'all 0.3s ease',
             boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
           }}>
-            <Bot size={22} strokeWidth={2.2} />
-            <span>Chatbot Cotizador HORECA</span>
+            <Building2 size={22} strokeWidth={2.2} />
+            <span>Cotizador Institucional HORECA</span>
             <Sparkles size={16} />
           </button>
         </Link>

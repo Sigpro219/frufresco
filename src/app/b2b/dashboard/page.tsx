@@ -3052,29 +3052,63 @@ export default function B2BDashboard() {
                 </div>
             )}            {/* SUMMARY CONFIRMATION MODAL — Ultra-Wide Premium Design */}
             {isSummaryModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 2000,
-                    backdropFilter: 'blur(8px)',
-                    padding: '1rem'
-                }}>
-                    <div id="printable-summary-modal" style={{
-                        backgroundColor: 'white',
-                        padding: '1.75rem 2rem',
-                        borderRadius: '24px',
-                        width: '100%',
-                        maxWidth: '720px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
-                        maxHeight: '92vh',
+                <div 
+                    onClick={() => setIsSummaryModalOpen(false)}
+                    style={{
+                        position: 'fixed',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
                         display: 'flex',
-                        flexDirection: 'column',
-                        border: '1px solid #CBD5E1'
-                    }}>
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 2000,
+                        backdropFilter: 'blur(8px)',
+                        padding: '1rem',
+                        cursor: 'pointer'
+                    }}
+                >
+                    <div 
+                        id="printable-summary-modal" 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            backgroundColor: 'white',
+                            padding: '1.75rem 2rem',
+                            borderRadius: '24px',
+                            width: '100%',
+                            maxWidth: '720px',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
+                            maxHeight: '92vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            border: '1px solid #CBD5E1',
+                            position: 'relative',
+                            cursor: 'default'
+                        }}
+                    >
+                        {/* Top Right Close Button X */}
+                        <button
+                            onClick={() => setIsSummaryModalOpen(false)}
+                            title="Cerrar ventana"
+                            style={{
+                                position: 'absolute',
+                                top: '1.25rem',
+                                right: '1.25rem',
+                                background: '#F1F5F9',
+                                border: '1px solid #CBD5E1',
+                                color: '#64748B',
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s',
+                                zIndex: 10
+                            }}
+                        >
+                            <X size={18} />
+                        </button>
                         {/* Header */}
                         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
                             <div style={{ 
