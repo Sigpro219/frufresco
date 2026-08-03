@@ -1502,76 +1502,6 @@ export default function MasterProductsPage() {
                     </div>
                 </div>
 
-                {/* Accesos Rápidos de Comandos Maestros (Chips) */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '1.25rem' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px' }}>
-                        Filtros Rápidos:
-                    </span>
-                    {[
-                        { tag: '@web', label: '🌐 @web' },
-                        { tag: '@oculto', label: '🙈 @oculto' },
-                        { tag: '@sindatos', label: '⚠️ @sindatos' },
-                        { tag: '@activo', label: '✅ @activo' },
-                        { tag: '@padre', label: '📦 @padre' },
-                        { tag: '@hijo', label: '🧩 @hijo' },
-                        { tag: '@19', label: '🏷️ @19' },
-                        { tag: '@0', label: '🌿 @0' },
-                        { tag: '@frutas', label: '🍎 @frutas' },
-                        { tag: '@verduras', label: '🥦 @verduras' },
-                        { tag: '@despensa', label: '🥫 @despensa' }
-                    ].map((btn) => {
-                        const isActive = searchQuery.toLowerCase().includes(btn.tag.toLowerCase());
-                        return (
-                            <button
-                                key={btn.tag}
-                                type="button"
-                                onClick={() => {
-                                    setSearchQuery(prev => {
-                                        if (!prev) return btn.tag;
-                                        if (prev.toLowerCase().includes(btn.tag.toLowerCase())) {
-                                            return prev.split(',').map(s => s.trim()).filter(s => s.toLowerCase() !== btn.tag.toLowerCase()).join(', ');
-                                        }
-                                        return `${prev}, ${btn.tag}`;
-                                    });
-                                }}
-                                style={{
-                                    padding: '4px 10px',
-                                    borderRadius: '99px',
-                                    border: isActive ? '1px solid #10B981' : `1px solid ${THEME.colors.border}`,
-                                    backgroundColor: isActive ? '#ECFDF5' : THEME.colors.surface,
-                                    color: isActive ? '#059669' : THEME.colors.textSecondary,
-                                    fontSize: '0.78rem',
-                                    fontWeight: isActive ? '800' : '600',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease',
-                                    boxShadow: isActive ? '0 2px 6px rgba(16, 185, 129, 0.15)' : 'none'
-                                }}
-                            >
-                                {btn.label}
-                            </button>
-                        );
-                    })}
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            style={{
-                                padding: '4px 10px',
-                                borderRadius: '99px',
-                                border: '1px solid #FECACA',
-                                backgroundColor: '#FEF2F2',
-                                color: '#DC2626',
-                                fontSize: '0.78rem',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                marginLeft: 'auto'
-                            }}
-                        >
-                            🧹 Limpiar Filtros
-                        </button>
-                    )}
-                </div>
-
                 <div style={{ 
                     backgroundColor: THEME.colors.surface, 
                     borderRadius: THEME.radius.lg, 
@@ -1584,34 +1514,7 @@ export default function MasterProductsPage() {
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
-                                
-                                {/* ID CONTABLE / JERARQUÍA */}
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '150px', position: 'relative' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <span>ID / JERARQUÍA</span>
-                                        <button 
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'hierarchy' ? null : 'hierarchy'); }}
-                                            style={{ background: filterHierarchy !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterHierarchy !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                            title="Filtrar jerarquía"
-                                        >
-                                            <ChevronDown size={12} />
-                                        </button>
-                                    </div>
-                                    {openHeaderDropdown === 'hierarchy' && (
-                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                            <div onClick={() => { setFilterHierarchy('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterHierarchy === 'all' ? 'bold' : 'normal', backgroundColor: filterHierarchy === 'all' ? '#F1F5F9' : 'transparent' }}>
-                                                <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos
-                                            </div>
-                                            <div onClick={() => { setFilterHierarchy('padre'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterHierarchy === 'padre' ? 'bold' : 'normal', backgroundColor: filterHierarchy === 'padre' ? '#F1F5F9' : 'transparent' }}>
-                                                📦 Productos Base (@padre)
-                                            </div>
-                                            <div onClick={() => { setFilterHierarchy('hijo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterHierarchy === 'hijo' ? 'bold' : 'normal', backgroundColor: filterHierarchy === 'hijo' ? '#F1F5F9' : 'transparent' }}>
-                                                🧩 Fraccionados (@hijo)
-                                            </div>
-                                        </div>
-                                    )}
-                                </th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>ID Contable</th>
 
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
 
