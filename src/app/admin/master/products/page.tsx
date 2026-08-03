@@ -66,6 +66,7 @@ export default function MasterProductsPage() {
     const canEdit = hasPermission('admin.products.master.edit');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [skuFilter, setSkuFilter] = useState('');
     const [conversions, setConversions] = useState<ProductConversion[]>([]);
     const [conversionProduct, setConversionProduct] = useState<Product | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
@@ -894,13 +895,20 @@ export default function MasterProductsPage() {
     };
 
     const filteredProducts = useMemo(() => {
+        let result = products;
+
+        if (skuFilter.trim()) {
+            const sf = skuFilter.trim().toLowerCase();
+            result = result.filter(p => p.sku?.toLowerCase().includes(sf));
+        }
+
         const query = searchQuery.trim().toLowerCase();
-        if (!query) return products;
+        if (!query) return result;
 
         // Separar factores por comas
         const factors = query.split(',').map(f => f.trim()).filter(Boolean);
 
-        return products.filter(p => {
+        return result.filter(p => {
             return factors.every(factor => {
                 // 1. Lógica de IDs (#3, #15...)
                 if (factor.startsWith('#')) {
@@ -1541,7 +1549,28 @@ export default function MasterProductsPage() {
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>ID Contable</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '150px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <span>SKU</span>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Filtrar..."
+                                            value={skuFilter}
+                                            onChange={(e) => setSkuFilter(e.target.value)}
+                                            style={{
+                                                padding: '4px',
+                                                fontSize: '0.75rem',
+                                                border: `1px solid ${THEME.colors.border}`,
+                                                borderRadius: '4px',
+                                                outline: 'none',
+                                                width: '100%',
+                                                backgroundColor: 'white'
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                </th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '120px' }}>ID Contable</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Categoría</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>
@@ -1623,33 +1652,31 @@ export default function MasterProductsPage() {
                                         onClick={() => setSelectedEditProduct(p)}
                                         title="Abrir panel de edición maestro"
                                     >
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <span style={{ 
-                                                    fontWeight: '700', 
-                                                    color: THEME.colors.primary, 
-                                                    fontSize: '0.8rem',
-                                                    display: 'block'
-                                                }}>
-                                                    {p.sku}
-                                                </span>
-                                                <Edit3 size={10} style={{ opacity: 0.5 }} strokeWidth={1.5} />
-                                            </div>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                {p.accounting_id && (
-                                                    <span style={{ 
-                                                        fontSize: '0.65rem', 
-                                                        fontWeight: '600', 
-                                                        color: THEME.colors.textSecondary,
-                                                        backgroundColor: '#F1F5F9',
-                                                        padding: '1px 4px',
-                                                        borderRadius: '4px'
-                                                    }}>
-                                                        ID: {formatNumber(p.accounting_id)}
-                                                    </span>
-                                                )}
-                                            </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ 
+                                                fontWeight: '700', 
+                                                color: THEME.colors.primary, 
+                                                fontSize: '0.8rem',
+                                                display: 'block'
+                                            }}>
+                                                {p.sku}
+                                            </span>
+                                            <Edit3 size={12} style={{ opacity: 0.5 }} strokeWidth={1.5} />
                                         </div>
+                                    </td>
+                                    <td style={{ padding: '0.75rem 1rem' }}>
+                                        {p.accounting_id && (
+                                            <span style={{ 
+                                                fontSize: '0.75rem', 
+                                                fontWeight: '600', 
+                                                color: THEME.colors.textSecondary,
+                                                backgroundColor: '#F1F5F9',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px'
+                                            }}>
+                                                ID: {formatNumber(p.accounting_id)}
+                                            </span>
+                                        )}
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                         <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.name}</div>
