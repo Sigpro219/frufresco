@@ -3757,7 +3757,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
     const [isExceptionsModalOpen, setIsExceptionsModalOpen] = useState(false);
     const [exceptionCount, setExceptionCount] = useState(0);
-    const [applyConfigToBranches, setApplyConfigToBranches] = useState(false);
+    const [applyConfigToBranches, setApplyConfigToBranches] = useState(true);
     const [syncingBranches, setSyncingBranches] = useState(false);
 
     const fetchExceptionCount = async () => {
@@ -4552,58 +4552,65 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     </div>
                                 )}
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', alignItems: 'flex-end' }}>
-                                    <div 
-                                        onClick={() => {
-                                            if (isReadOnly) return;
-                                            setFormData({...formData, needs_crates: !formData.needs_crates});
-                                        }}
-                                        style={{ 
-                                            height: '42px', padding: '0 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
-                                            backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
-                                            boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
-                                            opacity: isReadOnly ? 0.9 : 1
-                                        }}
-                                    >
-                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
-                                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                            CANASTILLAS
-                                        </span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                    {/* Row 1: Operations Toggles */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                                        {/* Canastillas */}
+                                        <div 
+                                            onClick={() => {
+                                                if (isReadOnly) return;
+                                                setFormData({...formData, needs_crates: !formData.needs_crates});
+                                            }}
+                                            style={{ 
+                                                padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
+                                                backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
+                                                boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                opacity: isReadOnly ? 0.9 : 1
+                                            }}
+                                        >
+                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                REQUIERE CANASTILLAS DE LOGÍSTICA
+                                            </span>
+                                        </div>
+
+                                        {/* Permite Compras Fuera de Convenio */}
+                                        <div 
+                                            onClick={() => {
+                                                if (isReadOnly) return;
+                                                setFormData({...formData, allow_off_agreement_purchases: !formData.allow_off_agreement_purchases});
+                                            }}
+                                            style={{ 
+                                                padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#CBD5E1'}`, 
+                                                backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryLight : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
+                                                boxShadow: formData.allow_off_agreement_purchases !== false ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                opacity: isReadOnly ? 0.9 : 1
+                                            }}
+                                            title="Permite o restringe que la casa matriz y sus sucursales compren productos fuera de su convenio comercial"
+                                        >
+                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#94A3B8' }}></div>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryDark : '#475569', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                PERMITE COMPRAS FUERA DE CONVENIO
+                                            </span>
+                                        </div>
                                     </div>
 
-                                    {/* NUEVO: Permite compras fuera de convenio (Casa Matriz) */}
-                                    <div 
-                                        onClick={() => {
-                                            if (isReadOnly) return;
-                                            setFormData({...formData, allow_off_agreement_purchases: !formData.allow_off_agreement_purchases});
-                                        }}
-                                        style={{ 
-                                            height: '42px', padding: '0 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#CBD5E1'}`, 
-                                            backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryLight : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
-                                            boxShadow: formData.allow_off_agreement_purchases !== false ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
-                                            opacity: isReadOnly ? 0.9 : 1
-                                        }}
-                                        title="Permite o restringe que la casa matriz y sus sucursales compren productos fuera de su convenio comercial"
-                                    >
-                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#94A3B8' }}></div>
-                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryDark : '#475569', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                            FUERA CONVENIO
-                                        </span>
-                                    </div>
-
-                                    <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                        <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                            {formData.is_corporate_parent ? 'Configuración de Documento Base para Sucursales' : 'Configuración de Documento (Excluyente)'}
+                                    {/* Row 2: 5 Base Document Selector Cards */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            CONFIGURACIÓN DE DOCUMENTO BASE PARA SUCURSALES (5 OPCIONES)
                                         </label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
                                             {[
-                                                { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: Mail, doc: 'invoice', withPrices: true, print: false },
-                                                { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: Printer, doc: 'invoice', withPrices: true, print: true },
-                                                { id: 'remission_prices', label: 'REM. CON $', icon: FileText, doc: 'remission', withPrices: true, print: true },
-                                                { id: 'remission_no_prices', label: 'REM. SIN $', icon: FileText, doc: 'remission', withPrices: false, print: true }
+                                                { id: 'invoice_digital', label: 'Factura Digital', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                { id: 'invoice_printed', label: 'Factura Impresa', icon: Printer, doc: 'invoice', withPrices: true, print: true },
+                                                { id: 'remission_prices', label: 'Remisión con Precios', icon: FileText, doc: 'remission', withPrices: true, print: true },
+                                                { id: 'remission_no_prices', label: 'Remisión sin Precios', icon: FileText, doc: 'remission', withPrices: false, print: true },
+                                                { id: 'remission_gift', label: 'Remisión Obsequio', icon: Gift, doc: 'gift_remission', withPrices: false, print: true }
                                             ].map((opt) => {
-                                                const isActive = formData.document_type === opt.doc && 
-                                                               (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
+                                                const isActive = opt.doc === 'gift_remission'
+                                                    ? formData.document_type === 'gift_remission'
+                                                    : (formData.document_type === opt.doc && (opt.doc === 'invoice' ? formData.print_invoice === opt.print : (formData.document_type !== 'gift_remission' && formData.remission_with_prices === opt.withPrices)));
                                                 const IconComponent = opt.icon;
                                                 
                                                 return (
@@ -4611,15 +4618,24 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         key={opt.id}
                                                         onClick={() => {
                                                             if (isReadOnly) return;
-                                                            setFormData({
-                                                                ...formData,
-                                                                document_type: opt.doc,
-                                                                remission_with_prices: opt.withPrices,
-                                                                print_invoice: opt.print
-                                                            });
+                                                            if (opt.doc === 'gift_remission') {
+                                                                setFormData({
+                                                                    ...formData,
+                                                                    document_type: 'gift_remission',
+                                                                    remission_with_prices: false,
+                                                                    print_invoice: true
+                                                                });
+                                                            } else {
+                                                                setFormData({
+                                                                    ...formData,
+                                                                    document_type: opt.doc,
+                                                                    remission_with_prices: opt.withPrices,
+                                                                    print_invoice: opt.print
+                                                                });
+                                                            }
                                                         }}
                                                         style={{
-                                                            padding: '0.6rem 0.5rem',
+                                                            padding: '0.65rem 0.4rem',
                                                             borderRadius: THEME.radius.md,
                                                             border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
                                                             backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
@@ -4628,16 +4644,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                             flexDirection: 'column',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            gap: '6px',
+                                                            gap: '5px',
+                                                            textAlign: 'center',
                                                             transition: 'all 0.2s',
                                                             boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
                                                             opacity: isReadOnly ? 0.8 : 1,
-                                                            minHeight: '70px',
-                                                            fontFamily: THEME.typography.fontFamilySecondary
+                                                            minHeight: '68px'
                                                         }}
                                                     >
                                                         <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
-                                                        <div style={{ fontSize: '0.6rem', fontWeight: '600', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center' }}>{opt.label}</div>
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: isActive ? '800' : '600', color: isActive ? THEME.colors.primaryDark : THEME.colors.textMain, lineHeight: '1.1' }}>
+                                                            {opt.label}
+                                                        </span>
                                                     </div>
                                                 );
                                             })}
