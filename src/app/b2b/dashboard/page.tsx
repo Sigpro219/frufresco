@@ -3519,7 +3519,7 @@ export default function B2BDashboard() {
                             </div>
 
                             <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                📋 ¿Cómo hacer tu pedido en 4 pasos sencillos?
+                                <FileText size={18} style={{ color: 'var(--primary)' }} /> ¿Cómo hacer tu pedido en 4 pasos sencillos?
                             </h3>
 
                             {/* Step 1 */}
@@ -3547,7 +3547,7 @@ export default function B2BDashboard() {
                                         <Edit2 size={16} style={{ color: 'var(--primary)' }} /> Modifica Cantidades o Agrega/Quita SKUs
                                     </h4>
                                     <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: '1.45' }}>
-                                        Usa los botones <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>+</code></strong> y <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>-</code></strong> para ajustar los kilos o unidades requeridos para hoy. Si hoy no necesitas algún producto, elimina ese renglón con la papelera 🗑️. Si deseas añadir nuevos insumos, búscalos en el catálogo de la izquierda y haz clic en "Agregar".
+                                        Usa los botones <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>+</code></strong> y <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>-</code></strong> para ajustar los kilos o unidades requeridos para hoy. Si hoy no necesitas algún producto, elimina ese renglón con la papelera <span style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#FEE2E2', padding: '2px 5px', borderRadius: '4px', border: '1px solid #FCA5A5' }}><Trash2 size={12} style={{ color: '#DC2626' }} /></span>. Si deseas añadir nuevos insumos, búscalos en el catálogo de la izquierda y haz clic en "Agregar".
                                     </p>
                                 </div>
                             </div>
