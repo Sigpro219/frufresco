@@ -3315,9 +3315,8 @@ export default function B2BDashboard() {
                     }
                     /* Columna 1 (Catálogo) con altura adaptativa al Viewport */
                     .b2b-catalog-container {
-                        height: calc(100vh - 170px);
-                        min-height: 650px;
-                        max-height: 920px;
+                        height: calc(100vh - 120px);
+                        min-height: 720px;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
@@ -3333,9 +3332,8 @@ export default function B2BDashboard() {
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
-                        height: calc(100vh - 170px);
-                        min-height: 650px;
-                        max-height: 920px;
+                        height: calc(100vh - 120px);
+                        min-height: 720px;
                         display: flex;
                         flex-direction: column;
                         justify-content: space-between;

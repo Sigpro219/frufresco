@@ -42,7 +42,17 @@ import {
     Grid,
     Lock,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    ExternalLink,
+    ArrowLeft,
+    Settings,
+    ClipboardList,
+    UserCheck,
+    CreditCard,
+    MessageSquare,
+    Scale,
+    DollarSign,
+    Calendar
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -236,8 +246,7 @@ export default function ClientsModule() {
             const { data: agreementData } = await supabase
                 .from('quotes')
                 .select('client_id, valid_until')
-                .eq('status', 'agreement')
-                .gte('valid_until', new Date().toISOString());
+                .eq('status', 'agreement');
             
             const normalizeProfile = (p: any) => ({
                 ...p,
@@ -259,7 +268,7 @@ export default function ClientsModule() {
 
     const [allAgreements, setAllAgreements] = useState<any[]>([]);
 
-    const getAgreementStatus = (clientId: string, parentId?: string) => {
+    const getAgreementStatus = (clientId: string, parentId?: string): 'active' | 'warning' | 'expired' | 'none' => {
         let clientAgreements = allAgreements.filter(a => a.client_id === clientId);
         if (clientAgreements.length === 0 && parentId) {
             clientAgreements = allAgreements.filter(a => a.client_id === parentId);
@@ -270,15 +279,29 @@ export default function ClientsModule() {
         const fifteenDaysFromNow = new Date();
         fifteenDaysFromNow.setDate(now.getDate() + 15);
         
-        // Prioridad: Green > Yellow > None
-        const hasActive = clientAgreements.some(a => new Date(a.valid_until) > fifteenDaysFromNow);
+        // 1. Si hay al menos un acuerdo activo vigente por más de 15 días o sin expiración fija -> active
+        const hasActive = clientAgreements.some(a => {
+            if (!a.valid_until) return true; // Abierto / sin vencimiento
+            const expiry = new Date(a.valid_until);
+            return expiry > fifteenDaysFromNow;
+        });
         if (hasActive) return 'active';
         
+        // 2. Si vence en los próximos 15 días -> warning (Por Vencer)
         const hasWarning = clientAgreements.some(a => {
+            if (!a.valid_until) return false;
             const expiry = new Date(a.valid_until);
             return expiry >= now && expiry <= fifteenDaysFromNow;
         });
         if (hasWarning) return 'warning';
+        
+        // 3. Si la fecha de vencimiento ya pasó en el pasado -> expired (Vencido)
+        const hasExpired = clientAgreements.some(a => {
+            if (!a.valid_until) return false;
+            const expiry = new Date(a.valid_until);
+            return expiry < now;
+        });
+        if (hasExpired) return 'expired';
         
         return 'none';
     };
@@ -645,16 +668,53 @@ export default function ClientsModule() {
     };
 
     const downloadClientsMaster = () => {
-        // Combinar b2b y b2c para exportación completa
-        const allClients = [...clientsB2B, ...clientsB2C];
-        
+        // Ordenamiento Jerárquico: Matriz primero, sucursales vinculadas inmediatamente abajo
+        const sortedClients: Profile[] = [];
+        const addedIds = new Set<string>();
+
+        // 1. Matrices y sus sucursales
+        const parents = clientsB2B.filter(c => c.is_corporate_parent);
+        parents.forEach(parent => {
+            sortedClients.push(parent);
+            addedIds.add(parent.id);
+            
+            const branches = clientsB2B.filter(c => c.parent_id === parent.id);
+            branches.forEach(b => {
+                sortedClients.push(b);
+                addedIds.add(b.id);
+            });
+        });
+
+        // 2. Clientes B2B independientes (sin matriz)
+        clientsB2B.forEach(c => {
+            if (!addedIds.has(c.id)) {
+                sortedClients.push(c);
+                addedIds.add(c.id);
+            }
+        });
+
+        // 3. Clientes B2C (Hogar)
+        clientsB2C.forEach(c => {
+            if (!addedIds.has(c.id)) {
+                sortedClients.push(c);
+                addedIds.add(c.id);
+            }
+        });
+
         // Tab 1: Clientes Base
-        const exportData = allClients.map(c => {
-            const parent = allClients.find(p => p.id === c.parent_id);
+        const exportData = sortedClients.map(c => {
+            const parent = clientsB2B.find(p => p.id === c.parent_id);
             const pModel = pricingModels.find(m => m.id === c.pricing_model_id);
+            const isBranch = !!c.parent_id && !c.is_corporate_parent;
+
+            let jerarquiaVisual = 'INDEPENDIENTE';
+            if (c.role === 'b2c_client') jerarquiaVisual = 'HOGAR';
+            else if (c.is_corporate_parent) jerarquiaVisual = '🏢 CASA MATRIZ';
+            else if (isBranch) jerarquiaVisual = '  ↳ SUCURSAL';
 
             return {
                 Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
+                Jerarquia_Visual: jerarquiaVisual,
                 ID_INTERNO: c.id,
                 NIT_CEDULA: c.nit || '',
                 Nombre_Comercial: c.company_name || c.contact_name || '',
@@ -662,12 +722,15 @@ export default function ClientsModule() {
                 Nombre_Contacto: c.contact_name || '',
                 Telefono: c.phone || c.contact_phone || '',
                 Email: c.email || '',
+                Email_Notificacion_2: (c as any).email_2 || '',
+                Email_Notificacion_3: (c as any).email_3 || '',
                 Direccion: c.address || '',
+                Complemento_Direccion: (c as any).address_complement || '',
                 Ciudad: c.city || 'Bogotá',
                 Municipio: c.municipality || c.city || 'Bogotá',
                 Departamento: c.department || 'Cundinamarca',
                 Tipo_Cliente: c.role === 'b2c_client' ? 'HOGAR' : 'INSTITUCIONAL',
-                Modelo_Precios_Nombre: pModel?.name || '',
+                Modelo_Precios_Nombre: pModel ? pModel.name : (isBranch ? 'HEREDADO_MATRIZ' : ''),
                 
                 // Jerarquía Comercial
                 Es_Matriz: c.is_corporate_parent ? 'SI' : 'NO',
@@ -968,7 +1031,7 @@ export default function ClientsModule() {
                 // Vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
                 const branches = rows.filter(r => (r.NIT_Matriz_Padre || '').toString().trim() !== '' && !cleanBool(r.Es_Matriz));
                 if (branches.length > 0) {
-                    const { data: allParents } = await supabase.from('profiles').select('id, nit').eq('is_corporate_parent', true);
+                    const { data: allParents } = await supabase.from('profiles').select('*').eq('is_corporate_parent', true);
                     
                     if (allParents) {
                         for (const row of branches) {
@@ -978,8 +1041,24 @@ export default function ClientsModule() {
                             const parentProfile = allParents.find(p => p.nit === cleanParentNit) || insertedClients.find(c => c.nit === cleanParentNit);
                             
                             if (branchProfile && parentProfile) {
+                                const docVal = (row.Tipo_Documento || '').toString().trim().toUpperCase();
+                                const isInheritedDoc = docVal === 'HEREDADO' || docVal === 'HEREDADO_MATRIZ' || docVal === '';
+
+                                const branchUpdate: any = { parent_id: parentProfile.id };
+                                if (isInheritedDoc) {
+                                    branchUpdate.document_type = parentProfile.document_type || 'invoice';
+                                    branchUpdate.needs_crates = parentProfile.needs_crates || false;
+                                    branchUpdate.remission_with_prices = parentProfile.remission_with_prices !== undefined ? parentProfile.remission_with_prices : true;
+                                    branchUpdate.print_invoice = parentProfile.print_invoice || false;
+                                }
+
+                                const modelVal = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toUpperCase();
+                                if (modelVal === 'HEREDADO' || modelVal === 'HEREDADO_MATRIZ' || modelVal === '') {
+                                    branchUpdate.pricing_model_id = null; // Hereda lista de precios de la Casa Matriz
+                                }
+
                                 await supabase.from('profiles')
-                                    .update({ parent_id: parentProfile.id })
+                                    .update(branchUpdate)
                                     .eq('id', branchProfile.id);
                             }
                         }
@@ -1009,70 +1088,97 @@ export default function ClientsModule() {
     ];
 
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
-        if (!searchTerm) return data;
+        let result = data;
+        if (searchTerm) {
+            const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
+            if (searchTerms.length > 0) {
+                result = data.filter(item => {
+                    const record = item as Record<string, unknown>;
+                    return searchTerms.every(term => {
+                        // Special command handlers starting with @
+                        if (term.startsWith('@')) {
+                            const cleanCmd = term.slice(1).trim().toLowerCase();
+                            if (!cleanCmd) return true;
 
-        const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
-        if (searchTerms.length === 0) return data;
+                            if (cleanCmd === 'branch' || cleanCmd === 'sucursal' || cleanCmd === 'sucursales') {
+                                return !!record.parent_id;
+                            }
+                            if (cleanCmd === 'matrix' || cleanCmd === 'matriz') {
+                                return record.is_corporate_parent === true || !record.parent_id;
+                            }
+                            if (cleanCmd === 'activo') {
+                                return record.is_active !== false;
+                            }
+                            if (cleanCmd === 'inactivo' || cleanCmd === 'archivado') {
+                                return record.is_active === false;
+                            }
+                            if (cleanCmd === 'acuerdo_activo' || cleanCmd === 'acuerdoactivo' || cleanCmd === 'acuerdo') {
+                                return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'active';
+                            }
+                            if (cleanCmd === 'por_vencer' || cleanCmd === 'porvencer') {
+                                return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'warning';
+                            }
+                            if (cleanCmd === 'vencido' || cleanCmd === 'expirado') {
+                                return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'expired';
+                            }
+                            if (cleanCmd === 'sin_acuerdo' || cleanCmd === 'sinacuerdo' || cleanCmd === 'sin acuerdo') {
+                                return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'none';
+                            }
+                            if (cleanCmd === 'nogps' || cleanCmd === 'singps') {
+                                return !record.latitude || !record.longitude;
+                            }
+                            if (cleanCmd === 'gps' || cleanCmd === 'congps') {
+                                return !!record.latitude && !!record.longitude;
+                            }
+                            if (cleanCmd.startsWith('nit')) {
+                                const valuePart = cleanCmd.replace('nit', '').replace(':', '').trim();
+                                if (!valuePart) {
+                                    return !!record.nit;
+                                }
+                                return String(record.nit || '').toLowerCase().includes(valuePart);
+                            }
 
-        return data.filter(item => {
-            const record = item as Record<string, unknown>;
-            return searchTerms.every(term => {
-                // Special command handlers starting with @
-                if (term.startsWith('@')) {
-                    const cleanCmd = term.slice(1).trim().toLowerCase();
-                    if (!cleanCmd) return true;
+                            // Dinámico para cualquier ciudad / ubicación
+                            const cityVal = String(record.city || '').toLowerCase();
+                            const muniVal = String(record.municipality || '').toLowerCase();
+                            const deptVal = String(record.department || '').toLowerCase();
+                            const addrVal = String(record.address || '').toLowerCase();
+                            const compVal = String(record.company_name || '').toLowerCase();
 
-                    if (cleanCmd === 'branch' || cleanCmd === 'sucursal' || cleanCmd === 'sucursales') {
-                        return !!record.parent_id;
-                    }
-                    if (cleanCmd === 'matrix' || cleanCmd === 'matriz') {
-                        return record.is_corporate_parent === true;
-                    }
-                    if (cleanCmd === 'activo') {
-                        return record.is_active !== false;
-                    }
-                    if (cleanCmd === 'inactivo' || cleanCmd === 'archivado') {
-                        return record.is_active === false;
-                    }
-                    if (cleanCmd === 'acuerdo_activo' || cleanCmd === 'acuerdoactivo' || cleanCmd === 'acuerdo') {
-                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'active';
-                    }
-                    if (cleanCmd === 'vencido' || cleanCmd === 'por_vencer' || cleanCmd === 'expirado') {
-                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'warning';
-                    }
-                    if (cleanCmd === 'sin_acuerdo' || cleanCmd === 'sinacuerdo' || cleanCmd === 'sin acuerdo') {
-                        return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'none';
-                    }
-                    if (cleanCmd === 'nogps' || cleanCmd === 'singps') {
-                        return !record.latitude || !record.longitude;
-                    }
-                    if (cleanCmd === 'gps' || cleanCmd === 'congps') {
-                        return !!record.latitude && !!record.longitude;
-                    }
-                    if (cleanCmd.startsWith('nit')) {
-                        const valuePart = cleanCmd.replace('nit', '').replace(':', '').trim();
-                        if (!valuePart) {
-                            return !!record.nit;
+                            return cityVal.includes(cleanCmd) || muniVal.includes(cleanCmd) || deptVal.includes(cleanCmd) || addrVal.includes(cleanCmd) || compVal.includes(cleanCmd);
                         }
-                        return String(record.nit || '').toLowerCase().includes(valuePart);
-                    }
 
-                    // Dinámico para cualquier ciudad / ubicación (ej: @villavicencio, @medellin, @cali, @bogota, @chia)
-                    const cityVal = String(record.city || '').toLowerCase();
-                    const muniVal = String(record.municipality || '').toLowerCase();
-                    const deptVal = String(record.department || '').toLowerCase();
-                    const addrVal = String(record.address || '').toLowerCase();
-                    const compVal = String(record.company_name || '').toLowerCase();
-
-                    return cityVal.includes(cleanCmd) || muniVal.includes(cleanCmd) || deptVal.includes(cleanCmd) || addrVal.includes(cleanCmd) || compVal.includes(cleanCmd);
-                }
-
-                // Default field searching
-                return fields.some(field => {
-                    const value = record[field];
-                    return String(value || '').toLowerCase().includes(term);
+                        // Default field searching
+                        return fields.some(field => {
+                            const value = record[field];
+                            return String(value || '').toLowerCase().includes(term);
+                        });
+                    });
                 });
-            });
+            }
+        }
+
+        // Identifica la Matriz principal en los resultados
+        const matrizProfile = result.find((item: any) => item.is_corporate_parent === true || item.classification === 'matriz' || !item.parent_id);
+        const matrizId = matrizProfile ? (matrizProfile as any).id : null;
+
+        // Orden de Jerarquía Visual:
+        // 1. Casa Matriz (Puesto #1)
+        // 2. Sucursales directas que pertenecen a la Matriz (#2)
+        // 3. Registros sin herencia directa de la Matriz (Enviados al fondo de la lista/galería #3)
+        return [...result].sort((a: any, b: any) => {
+            const aIsMatriz = a.is_corporate_parent === true || a.classification === 'matriz' || !a.parent_id;
+            const bIsMatriz = b.is_corporate_parent === true || b.classification === 'matriz' || !b.parent_id;
+
+            const aIsDirectBranch = matrizId ? a.parent_id === matrizId : false;
+            const bIsDirectBranch = matrizId ? b.parent_id === matrizId : false;
+
+            const aTier = aIsMatriz ? 0 : aIsDirectBranch ? 1 : 2;
+            const bTier = bIsMatriz ? 0 : bIsDirectBranch ? 1 : 2;
+
+            if (aTier !== bTier) return aTier - bTier;
+
+            return String(a.company_name || a.contact_name || '').localeCompare(String(b.company_name || b.contact_name || ''));
         });
     };
 
@@ -1099,6 +1205,7 @@ export default function ClientsModule() {
             {/* MODAL FORMULARIO (NUEVO / EDITAR) */}
             {isFormModalOpen && (
                 <ClientFormModal 
+                    key={editTarget?.id || 'new'}
                     onClose={() => setIsFormModalOpen(false)} 
                     onRefresh={fetchData}
                     pricingModels={pricingModels}
@@ -1106,6 +1213,10 @@ export default function ClientsModule() {
                     setNicknameClientId={setNicknameClientId}
                     setIsNicknameModalOpen={setIsNicknameModalOpen}
                     isReadOnly={isFormReadOnly}
+                    onSwitchClient={(client) => {
+                        setEditTarget(client);
+                        setIsFormReadOnly(true);
+                    }}
                 />
             )}
 
@@ -1760,6 +1871,8 @@ export default function ClientsModule() {
                                                 onViewDetails={() => handleViewDetails(client)}
                                                 onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                 agreementStatus={getAgreementStatus(client.id, client.parent_id)}
+                                                isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
+                                                branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
                                             />
                                         ))}
                                     </div>
@@ -1786,6 +1899,7 @@ export default function ClientsModule() {
                                                         onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                         agreementStatus={getAgreementStatus(client.id, client.parent_id)}
                                                         isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
+                                                        branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
                                                     />
                                                 ))}
                                             </tbody>
@@ -2538,7 +2652,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement }: { 
+function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement, branchCount }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
@@ -2548,8 +2662,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     onEdit?: () => void,
     onRegisterContact?: () => void,
     onScheduleTask?: (date: string) => void,
-    agreementStatus?: 'active' | 'warning' | 'none',
-    isInheritedAgreement?: boolean
+    agreementStatus?: 'active' | 'warning' | 'expired' | 'none',
+    isInheritedAgreement?: boolean,
+    branchCount?: number
 }) {
     const isB2B = type === 'b2b';
     const isB2C = type === 'b2c';
@@ -2568,6 +2683,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
         window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank');
     };
 
+    const isMatriz = isB2B && (data.is_corporate_parent === true || (data as any).classification === 'matriz' || !data.parent_id);
+    const isRealBranch = isB2B && !!data.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
+
     return (
         <div 
             onClick={onViewDetails}
@@ -2580,11 +2698,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 e.currentTarget.style.boxShadow = THEME.shadow.md;
             }}
             style={{ 
-                backgroundColor: 'white', 
+                backgroundColor: isMatriz ? '#F8FAFC' : 'white', 
                 borderRadius: THEME.radius.lg, 
                 padding: '2rem', 
                 boxShadow: THEME.shadow.md,
-                border: `1px solid ${THEME.colors.border}`,
+                border: isMatriz ? '2px solid #1E3A8A' : `1px solid ${THEME.colors.border}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1.5rem',
@@ -2608,16 +2726,28 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     zIndex: 2
                 }}
             >
-                <div style={{ 
-                    padding: '0.4rem 0.8rem',
-                    borderRadius: '8px',
-                    fontSize: '0.7rem',
-                    fontWeight: '900',
-                    backgroundColor: isB2B ? '#E0F2FE' : isB2C ? '#DCFCE7' : '#FEE2E2',
-                    color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
-                    textTransform: 'uppercase'
-                }}>
-                    {isB2B ? 'Institucional' : isB2C ? 'Hogar' : 'Prospecto'}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    {isMatriz && (
+                        <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(30,58,138,0.25)' }}>🏢 MATRIZ</span>
+                    )}
+                    {isMatriz && branchCount !== undefined && branchCount > 0 && (
+                        <span title="Sucursales vinculadas a esta Casa Matriz" style={{ fontSize: '0.62rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Building2 size={12} strokeWidth={2} /> {branchCount} {branchCount === 1 ? 'Sucursal' : 'Sucursales'}
+                        </span>
+                    )}
+                    {!isMatriz && (
+                        <div style={{ 
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '8px',
+                            fontSize: '0.7rem',
+                            fontWeight: '900',
+                            backgroundColor: isB2B ? '#E0F2FE' : isB2C ? '#DCFCE7' : '#FEE2E2',
+                            color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
+                            textTransform: 'uppercase'
+                        }}>
+                            {isB2B ? 'Institucional' : isB2C ? 'Hogar' : 'Prospecto'}
+                        </div>
+                    )}
                 </div>
 
                 {/* TRAFFIC LIGHT (Semáforo Comercial) */}
@@ -2647,7 +2777,13 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         border = '#FDE68A';
                         color = '#B45309';
                         dotColor = '#F59E0B';
-                        text = 'Por Vencer';
+                        text = isInheritedAgreement ? 'Heredado Por Vencer' : 'Por Vencer';
+                    } else if (agreementStatus === 'expired') {
+                        bg = '#FEF2F2';
+                        border = '#FCA5A5';
+                        color = '#991B1B';
+                        dotColor = '#EF4444';
+                        text = isInheritedAgreement ? 'Heredado Vencido' : 'Acuerdo Vencido';
                     }
 
                     return (
@@ -3085,14 +3221,15 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     );
 }
 
-function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, isInheritedAgreement, onRegisterContact }: { 
+function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, isInheritedAgreement, onRegisterContact, branchCount }: { 
     client: Profile, 
     pricingModels?: PricingModel[], 
     onViewDetails: () => void, 
     onEdit?: () => void, 
-    agreementStatus?: 'active' | 'warning' | 'none',
+    agreementStatus?: 'active' | 'warning' | 'expired' | 'none',
     isInheritedAgreement?: boolean,
-    onRegisterContact?: () => void
+    onRegisterContact?: () => void,
+    branchCount?: number
 }) {
     const isB2B = client.role === 'b2b_client';
     const isLead = (client as any).status !== undefined;
@@ -3121,15 +3258,26 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
         }
     }
 
+    const isMatriz = !isLead && (client.is_corporate_parent === true || (client as any).classification === 'matriz' || !client.parent_id);
+    const isRealBranch = !isLead && !!client.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
+
     return (
         <tr 
-            style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s', cursor: 'pointer' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAF9')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            style={{ 
+                borderBottom: `1px solid ${THEME.colors.border}`, 
+                borderLeft: isMatriz ? '4px solid #1E3A8A' : '4px solid transparent',
+                backgroundColor: isMatriz ? '#F8FAFC' : 'transparent',
+                transition: 'background 0.2s', 
+                cursor: 'pointer' 
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isMatriz ? '#F1F5F9' : '#F8FAF9')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isMatriz ? '#F8FAFC' : 'transparent')}
             onClick={onViewDetails}
         >
             <td style={{ padding: '0.65rem 1.25rem' }}>
-                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
+                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {client.company_name || client.contact_name}
+                </div>
                 {isLead ? (
                     <>
                         {client.nit && <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit}</div>}
@@ -3154,8 +3302,18 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                     <>
                         <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
                         <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                            {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
-                            {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
+                            {isMatriz ? (
+                                <>
+                                    <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '3px', boxShadow: '0 1px 3px rgba(30,58,138,0.25)' }}>🏢 MATRIZ</span>
+                                    {branchCount !== undefined && branchCount > 0 && (
+                                        <span title="Sucursales vinculadas a esta Casa Matriz" style={{ fontSize: '0.62rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                            <Building2 size={11} strokeWidth={2} /> {branchCount} {branchCount === 1 ? 'Sucursal' : 'Sucursales'}
+                                        </span>
+                                    )}
+                                </>
+                            ) : isRealBranch ? (
+                                <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>
+                            ) : null}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
                             <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
                                 <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
@@ -3279,7 +3437,13 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                                 border = '#FDE68A';
                                 color = '#B45309';
                                 dotColor = '#F59E0B';
-                                text = '⚠️ POR VENCER';
+                                text = isInheritedAgreement ? '⚠️ HEREDADO POR VENCER' : '⚠️ POR VENCER';
+                            } else if (agreementStatus === 'expired') {
+                                bg = '#FEF2F2';
+                                border = '#FCA5A5';
+                                color = '#991B1B';
+                                dotColor = '#EF4444';
+                                text = isInheritedAgreement ? '🚫 HEREDADO VENCIDO' : '🚫 VENCIDO';
                             }
 
                             return (
@@ -3508,7 +3672,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
     );
 }
 
-function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean }) {
+function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false, onSwitchClient }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean, onSwitchClient?: (client: Profile) => void }) {
     const isEdit = !!editData && !!editData.id;
     const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
@@ -3586,6 +3750,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
     const [isExceptionsModalOpen, setIsExceptionsModalOpen] = useState(false);
     const [exceptionCount, setExceptionCount] = useState(0);
+    const [applyConfigToBranches, setApplyConfigToBranches] = useState(false);
+    const [syncingBranches, setSyncingBranches] = useState(false);
 
     const fetchExceptionCount = async () => {
         if (!editData?.id) return;
@@ -3597,7 +3763,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     };
 
     useEffect(() => {
-        fetchExceptionCount();
+        if (editData?.id) {
+            fetchExceptionCount();
+        }
     }, [editData?.id]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
@@ -3644,9 +3812,45 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         if (!editData?.id || !formData.is_corporate_parent) return;
         const { data } = await supabase
             .from('profiles')
-            .select('id, company_name, contact_name, branch_id, phone, address, pricing_model_id')
+            .select('*')
             .eq('parent_id', editData.id);
-        if (data) setBranches(data);
+        if (data) setBranches(data as Profile[]);
+    };
+
+    const handleSwitchToBranch = async (branch: Profile) => {
+        let target = branch;
+        if (!branch.role || !branch.city) {
+            const { data } = await supabase.from('profiles').select('*').eq('id', branch.id).single();
+            if (data) target = data as Profile;
+        }
+        if (onSwitchClient) {
+            onSwitchClient(target);
+        }
+    };
+
+    const handleSyncBranchesConfig = async () => {
+        if (!editData?.id || !formData.is_corporate_parent) return;
+        setSyncingBranches(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    needs_crates: formData.needs_crates,
+                    document_type: formData.document_type,
+                    remission_with_prices: formData.remission_with_prices,
+                    print_invoice: formData.print_invoice
+                })
+                .eq('parent_id', editData.id);
+                
+            if (error) throw error;
+            window.showToast?.(`Configuración de documento replicada a ${branches.length} sucursales`, 'success');
+            fetchBranches();
+        } catch (err: any) {
+            console.error('Error al replicar configuración a sucursales:', err);
+            window.showToast?.('Error al replicar a sucursales', 'error');
+        } finally {
+            setSyncingBranches(false);
+        }
     };
 
     useEffect(() => {
@@ -3912,6 +4116,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     console.error('DETALLES SUPABASE:', fullError);
                     throw new Error(`DB Error [${error.code}]: ${error.message} (${fullError})`);
                 }
+
+                if (formData.is_corporate_parent && applyConfigToBranches && (editData as Profile).id) {
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            needs_crates: formData.needs_crates,
+                            document_type: formData.document_type,
+                            remission_with_prices: formData.remission_with_prices,
+                            print_invoice: formData.print_invoice
+                        })
+                        .eq('parent_id', (editData as Profile).id);
+                }
+
                 window.showToast?.('Base de datos actualizada', 'success');
             } else {
                 const targetRole = role;
@@ -4056,7 +4273,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                        <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🏢</div>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Building2 size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                         <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>DATOS DEL NEGOCIO</h4>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
@@ -4085,7 +4302,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                        <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>📞</div>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                         <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>INFORMACIÓN DE CONTACTO</h4>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
@@ -4107,7 +4324,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 {(editData as any)?.notes && (
                                     <section style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
-                                            <span style={{ fontSize: '1.2rem' }}>💬</span>
+                                            <MessageSquare size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                             <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#475569', margin: 0 }}>HISTORIAL / CONVERSACIÓN DEL CHATBOT</h4>
                                         </div>
                                         <div style={{ 
@@ -4132,7 +4349,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                        <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🗺️</div>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><MapPin size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                         <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>UBICACIÓN EN MAPA</h4>
                                     </div>
                                     {editData?.latitude && editData?.longitude ? (
@@ -4193,10 +4410,207 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem 2.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                         
+                        {/* BANNER NAVEGACIÓN DESDE SUCURSAL HACIA CASA MATRIZ */}
+                        {formData.parent_id && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '0.8rem 1.2rem', borderRadius: '16px', boxShadow: THEME.shadow.sm }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: '800', color: '#1E40AF' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2 size={15} style={{ color: '#1D4ED8' }} /> Esta es una sucursal vinculada a Casa Matriz</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const { data } = await supabase.from('profiles').select('*').eq('id', formData.parent_id).single();
+                                        if (data && onSwitchClient) onSwitchClient(data as Profile);
+                                    }}
+                                    style={{
+                                        padding: '0.4rem 0.9rem',
+                                        backgroundColor: '#1D4ED8',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(29,78,216,0.25)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E3A8A'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
+                                >
+                                    <ArrowLeft size={14} /> Volver a Casa Matriz
+                                </button>
+                            </div>
+                        )}
+
+                        {/* BLOQUE: CONFIGURACIÓN DE DOCUMENTO (EXCLUYENTE / HEREDABLE PARA MATRIZ) */}
+                        {isB2B && (
+                            <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                                {formData.is_corporate_parent && (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', paddingBottom: '0.8rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Settings size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                            <h4 style={{ fontSize: '0.82rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, textTransform: 'uppercase' }}>
+                                                CONFIGURACIÓN DE DOCUMENTO MAESTRA (CASA MATRIZ)
+                                            </h4>
+                                        </div>
+                                        {branches.length > 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '700', color: '#1D4ED8', backgroundColor: '#EFF6FF', padding: '4px 10px', borderRadius: '8px', border: '1px solid #BFDBFE', cursor: 'pointer' }}>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={applyConfigToBranches} 
+                                                        onChange={(e) => setApplyConfigToBranches(e.target.checked)} 
+                                                        disabled={isReadOnly}
+                                                        style={{ accentColor: '#1D4ED8', cursor: 'pointer' }}
+                                                    />
+                                                    Heredar automáticamente a sucursales ({branches.length})
+                                                </label>
+                                                {!isReadOnly && editData?.id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSyncBranchesConfig}
+                                                        disabled={syncingBranches}
+                                                        title="Replicar esta configuración de documento a todas las sucursales inmediatamente"
+                                                        style={{
+                                                            padding: '4px 10px',
+                                                            borderRadius: '8px',
+                                                            backgroundColor: '#1D4ED8',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '800',
+                                                            cursor: syncingBranches ? 'wait' : 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px'
+                                                        }}
+                                                    >
+                                                        {syncingBranches ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                                                        Replicar a Sucursales
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
+                                    <div 
+                                        onClick={() => {
+                                            if (isReadOnly) return;
+                                            setFormData({...formData, needs_crates: !formData.needs_crates});
+                                        }}
+                                        style={{ 
+                                            height: '42px', padding: '0 1.2rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
+                                            backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
+                                            boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                            opacity: isReadOnly ? 0.9 : 1
+                                        }}
+                                    >
+                                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: '600', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            REQUIERE CANASTILLAS
+                                        </span>
+                                    </div>
+
+                                    <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            {formData.is_corporate_parent ? 'Configuración de Documento Base para Sucursales' : 'Configuración de Documento (Excluyente)'}
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
+                                            {[
+                                                { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: Printer, doc: 'invoice', withPrices: true, print: true },
+                                                { id: 'remission_prices', label: 'REM. CON $', icon: FileText, doc: 'remission', withPrices: true, print: true },
+                                                { id: 'remission_no_prices', label: 'REM. SIN $', icon: FileText, doc: 'remission', withPrices: false, print: true }
+                                            ].map((opt) => {
+                                                const isActive = formData.document_type === opt.doc && 
+                                                               (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
+                                                const IconComponent = opt.icon;
+                                                
+                                                return (
+                                                    <div 
+                                                        key={opt.id}
+                                                        onClick={() => {
+                                                            if (isReadOnly) return;
+                                                            setFormData({
+                                                                ...formData,
+                                                                document_type: opt.doc,
+                                                                remission_with_prices: opt.withPrices,
+                                                                print_invoice: opt.print
+                                                            });
+                                                        }}
+                                                        style={{
+                                                            padding: '0.6rem 0.5rem',
+                                                            borderRadius: THEME.radius.md,
+                                                            border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
+                                                            backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
+                                                            cursor: isReadOnly ? 'default' : 'pointer',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '6px',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                                            opacity: isReadOnly ? 0.8 : 1,
+                                                            minHeight: '70px',
+                                                            fontFamily: THEME.typography.fontFamilySecondary
+                                                        }}
+                                                    >
+                                                        <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
+                                                        <div style={{ fontSize: '0.6rem', fontWeight: '600', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center' }}>{opt.label}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* BOTÓN DE EXCEPCIONES LOGÍSTICAS (SOLO SUCURSAL) */}
+                                {!formData.is_corporate_parent && (
+                                    <div style={{ marginTop: '1.2rem', paddingTop: '1.2rem', borderTop: `1px dashed ${THEME.colors.border}` }}>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsExceptionsModalOpen(true)}
+                                            style={{ 
+                                                width: '100%',
+                                                backgroundColor: 'white', 
+                                                color: THEME.colors.textMain, 
+                                                border: `1px solid ${THEME.colors.border}`, 
+                                                padding: '0.8rem 1.2rem', 
+                                                borderRadius: THEME.radius.md, 
+                                                fontSize: '0.75rem', 
+                                                fontWeight: '600', 
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '8px',
+                                                fontFamily: THEME.typography.fontFamilySecondary,
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
+                                        >
+                                            <Sliders size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
+                                            {exceptionCount > 0 && (
+                                                <span style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', marginLeft: '4px', fontWeight: '600' }}>
+                                                    {exceptionCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
                         {/* BLOQUE: IDENTIFICACIÓN (DINÁMICO) */}
                         <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🆔</div>
+                                <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><UserCheck size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                 <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>
                                     {isB2C ? 'IDENTIFICACIÓN Y DATOS BÁSICOS' : 'IDENTIFICACIÓN Y VÍNCULOS'}
                                 </h4>
@@ -4269,7 +4683,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             {!isB2C && (
                                 <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginTop: '1.5rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                        <span style={{ fontSize: '1rem' }}>📧</span>
+                                        <Mail size={15} strokeWidth={1.5} style={{ color: '#475569' }} />
                                         <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Configuración de Notificación de Factura</span>
                                     </div>
                                     
@@ -4301,6 +4715,75 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </div>
                             )}
                         </section>
+
+
+                        {/* BLOQUE: SUCURSALES VINCULADAS (UBICADO DE PRIMERAS EN LA PARTE SUPERIOR PARA MATRICES) */}
+                        {isB2B && formData.is_corporate_parent && editData?.id && (
+                            <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Building2 size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
+                                </div>
+                                {branches.length === 0 ? (
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', fontFamily: THEME.typography.fontFamilySecondary }}>No hay sucursales asociadas a esta Casa Matriz.</p>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '320px', overflowY: 'auto', marginTop: '0.5rem' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#64748B', fontWeight: '800' }}>
+                                                    <th style={{ padding: '0.6rem 0.4rem' }}>Sucursal</th>
+                                                    <th style={{ padding: '0.6rem 0.4rem' }}>Contacto</th>
+                                                    <th style={{ padding: '0.6rem 0.4rem' }}>ID Sucursal</th>
+                                                    <th style={{ padding: '0.6rem 0.4rem' }}>Dirección</th>
+                                                    <th style={{ padding: '0.6rem 0.4rem' }}>Modelo Precios</th>
+                                                    <th style={{ padding: '0.6rem 0.4rem', textAlign: 'center' }}>Acción</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {branches.map(branch => {
+                                                    const modelName = pricingModels?.find(m => m.id === branch.pricing_model_id)?.name || 'Heredado';
+                                                    return (
+                                                        <tr key={branch.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
+                                                            <td style={{ padding: '0.6rem 0.4rem', fontWeight: '700' }}>
+                                                                <span 
+                                                                    onClick={() => handleSwitchToBranch(branch)} 
+                                                                    title="Abrir ficha detallada de esta sucursal"
+                                                                    style={{ color: '#0369A1', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                                                                >
+                                                                    <ExternalLink size={12} /> {branch.company_name}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '0.6rem 0.4rem' }}>{branch.contact_name} {branch.phone && `(${branch.phone})`}</td>
+                                                            <td style={{ padding: '0.6rem 0.4rem', fontWeight: '600' }}>{branch.branch_id || '---'}</td>
+                                                            <td style={{ padding: '0.6rem 0.4rem' }}>{branch.address}</td>
+                                                            <td style={{ padding: '0.6rem 0.4rem' }}>
+                                                                <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: branch.pricing_model_id ? '#EFF6FF' : '#F1F5F9', color: branch.pricing_model_id ? '#1D4ED8' : '#475569', fontSize: '0.65rem', fontWeight: '700' }}>
+                                                                    {modelName}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '0.6rem 0.4rem', textAlign: 'center' }}>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => handleSwitchToBranch(branch)} 
+                                                                    title="Abrir tarjeta de esta sucursal"
+                                                                    style={{ padding: '4px 10px', borderRadius: '6px', backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', fontSize: '0.68rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', transition: 'all 0.2s' }}
+                                                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1D4ED8'; e.currentTarget.style.color = 'white'; }}
+                                                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#EFF6FF'; e.currentTarget.style.color = '#1D4ED8'; }}
+                                                                >
+                                                                    <ExternalLink size={11} /> Ver Ficha
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
                         {/* BLOQUE: SEGURIDAD Y ACCESO B2B */}
                         {isB2B && isReadOnly && isEdit && (
@@ -4376,7 +4859,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         {formData.is_corporate_parent && (
                             <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '24px', border: '1px solid #BAE6FD' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                    <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>⚖️</div>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Scale size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                     <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0369A1', margin: 0 }}>CARTERA, DOCUMENTACIÓN Y REFERENCIAS</h4>
                                 </div>
                                 
@@ -4416,7 +4899,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         {/* BLOQUE: CONFIGURACIÓN COMERCIAL (COMMON) */}
                         <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-                                <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
+                                <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CreditCard size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                 <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
                             </div>
 
@@ -4474,7 +4957,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         >
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                    <span style={{ fontSize: '0.9rem' }}>📜</span>
+                                                                    <FileText size={15} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                                                     <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#1E293B' }}>
                                                                         {agreementId}
                                                                     </span>
@@ -4932,9 +5415,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </section>
                             )}
 
-                            {/* BLOQUE CONDICIONAL: EXPEDIENTE (MATRIZ) VS OPERACIÓN (SUCURSAL) */}
-                            {formData.is_corporate_parent ? (
-                                <>
+                            {/* BLOQUE: EXPEDIENTE DIGITAL (SOLO MATRIZ) */}
+                            {formData.is_corporate_parent && (
                                 <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
                                         <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Folder size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
@@ -4952,160 +5434,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         />
                                     </div>
                                 </section>
-
-                                    {/* BLOQUE: SUCURSALES (ONLY FOR CORPORATE PARENT) */}
-                                    {isB2B && editData?.id && (
-                                        <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, marginTop: '1.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                                <div style={{ width: '32px', height: '32px', backgroundColor: '#F0FDF4', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🏢</div>
-                                                <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>SUCURSALES VINCULADAS ({branches.length})</h4>
-                                            </div>
-                                            {branches.length === 0 ? (
-                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', fontFamily: THEME.typography.fontFamilySecondary }}>No hay sucursales asociadas a esta Casa Matriz.</p>
-                                            ) : (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', marginTop: '1rem' }}>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                        <thead>
-                                                            <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#64748B', fontWeight: '800' }}>
-                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Sucursal</th>
-                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Contacto</th>
-                                                                <th style={{ padding: '0.6rem 0.4rem' }}>ID Sucursal</th>
-                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Dirección</th>
-                                                                <th style={{ padding: '0.6rem 0.4rem' }}>Modelo Precios</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {branches.map(branch => {
-                                                                const modelName = pricingModels?.find(m => m.id === branch.pricing_model_id)?.name || 'Heredado';
-                                                                return (
-                                                                    <tr key={branch.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
-                                                                        <td style={{ padding: '0.6rem 0.4rem', fontWeight: '700' }}>{branch.company_name}</td>
-                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>{branch.contact_name} {branch.phone && `(${branch.phone})`}</td>
-                                                                        <td style={{ padding: '0.6rem 0.4rem', fontWeight: '600' }}>{branch.branch_id || '---'}</td>
-                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>{branch.address}</td>
-                                                                        <td style={{ padding: '0.6rem 0.4rem' }}>
-                                                                            <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: branch.pricing_model_id ? '#EFF6FF' : '#F1F5F9', color: branch.pricing_model_id ? '#1D4ED8' : '#475569', fontSize: '0.65rem', fontWeight: '700' }}>
-                                                                                {modelName}
-                                                                            </span>
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                        </section>
-                                    )}
-                                </>
-                            ) : (
-                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
-                                        <div 
-                                            onClick={() => {
-                                                if (isReadOnly) return;
-                                                setFormData({...formData, needs_crates: !formData.needs_crates});
-                                            }}
-                                            style={{ 
-                                                height: '42px', padding: '0 1.2rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
-                                                backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
-                                                boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
-                                                opacity: isReadOnly ? 0.9 : 1
-                                            }}
-                                        >
-                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                REQUIERE CANASTILLAS
-                                            </span>
-                                        </div>
-
-                                        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                            <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>Configuración de Documento (Excluyente)</label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
-                                                {[
-                                                    { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: Mail, doc: 'invoice', withPrices: true, print: false },
-                                                    { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: Printer, doc: 'invoice', withPrices: true, print: true },
-                                                    { id: 'remission_prices', label: 'REM. CON $', icon: FileText, doc: 'remission', withPrices: true, print: true },
-                                                    { id: 'remission_no_prices', label: 'REM. SIN $', icon: FileText, doc: 'remission', withPrices: false, print: true }
-                                                ].map((opt) => {
-                                                    const isActive = formData.document_type === opt.doc && 
-                                                                   (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
-                                                    const IconComponent = opt.icon;
-                                                    
-                                                    return (
-                                                        <div 
-                                                            key={opt.id}
-                                                            onClick={() => {
-                                                                if (isReadOnly) return;
-                                                                setFormData({
-                                                                    ...formData,
-                                                                    document_type: opt.doc,
-                                                                    remission_with_prices: opt.withPrices,
-                                                                    print_invoice: opt.print
-                                                                });
-                                                            }}
-                                                            style={{
-                                                                padding: '0.6rem 0.5rem',
-                                                                borderRadius: THEME.radius.md,
-                                                                border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
-                                                                backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
-                                                                cursor: isReadOnly ? 'default' : 'pointer',
-                                                                display: 'flex',
-                                                                flexDirection: 'column',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: '6px',
-                                                                transition: 'all 0.2s',
-                                                                boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
-                                                                opacity: isReadOnly ? 0.8 : 1,
-                                                                minHeight: '70px',
-                                                                fontFamily: THEME.typography.fontFamilySecondary
-                                                            }}
-                                                        >
-                                                            <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
-                                                            <div style={{ fontSize: '0.6rem', fontWeight: '600', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center' }}>{opt.label}</div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* BOTÓN DE EXCEPCIONES LOGÍSTICAS (SOLO SUCURSAL) */}
-                                    <div style={{ marginTop: '1.2rem', paddingTop: '1.2rem', borderTop: `1px dashed ${THEME.colors.border}` }}>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setIsExceptionsModalOpen(true)}
-                                            style={{ 
-                                                width: '100%',
-                                                backgroundColor: 'white', 
-                                                color: THEME.colors.textMain, 
-                                                border: `1px solid ${THEME.colors.border}`, 
-                                                padding: '0.8rem 1.2rem', 
-                                                borderRadius: THEME.radius.md, 
-                                                fontSize: '0.75rem', 
-                                                fontWeight: '600', 
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px',
-                                                fontFamily: THEME.typography.fontFamilySecondary,
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
-                                        >
-                                            <Sliders size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
-                                            {exceptionCount > 0 && (
-                                                <span style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', marginLeft: '4px', fontWeight: '600' }}>
-                                                    {exceptionCount}
-                                                </span>
-                                            )}
-                                        </button>
-                                    </div>
-                                </section>
                             )}
+
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem', marginTop: '3rem' }}>
                         <button type="button" onClick={onClose} style={{ flex: 1, padding: '1.2rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', fontFamily: THEME.typography.fontFamilySecondary }}>{isReadOnly ? 'CERRAR' : 'CANCELAR'}</button>
