@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { isInsidePolygon, Point, getDistanceToPolygon } from '../lib/geoUtils';
 import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
-import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket, Sparkles, FileText, Bot } from 'lucide-react';
+import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket, Sparkles, FileText, Bot, Check, Plus, LayoutGrid, TrendingUp, Circle, ShoppingBag } from 'lucide-react';
 import { translations, Locale } from '../lib/translations';
 import { Polygon } from './admin/GeofencingManager';
 
@@ -99,7 +99,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
     const [currentStep, setCurrentStep] = useState<number>(1); // 1: Necesidad, 2: Cobertura, 3: Contacto
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: "👋 ¡Bienvenido! Pre-cotiza tu cuenta institucional en 3 simples pasos con precios de origen.", sender: 'bot' },
+        { id: 1, text: "¡Bienvenido! Pre-cotiza tu cuenta institucional en 3 simples pasos con precios de origen.", sender: 'bot' },
         { id: 2, text: "Paso 1 de 3: Configura el perfil y necesidades de tu operación:", sender: 'bot' }
     ]);
     
@@ -584,18 +584,17 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ 
-                        width: '46px', 
-                        height: '46px', 
+                        width: '44px', 
+                        height: '44px', 
                         backgroundColor: 'rgba(255,255,255,0.2)', 
-                        borderRadius: '50%', 
+                        borderRadius: '12px', 
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'center',
                         backdropFilter: 'blur(10px)',
-                        border: '2px solid rgba(255,255,255,0.4)',
-                        overflow: 'hidden'
+                        border: '1px solid rgba(255,255,255,0.3)',
                     }}>
-                        <img src="/assistant_avatar.png" alt="Asistente" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <Building2 size={24} color="white" />
                     </div>
                     <div>
                         <h3 style={{ 
@@ -604,10 +603,10 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             fontWeight: '900', 
                             fontFamily: 'var(--font-outfit), sans-serif',
                             letterSpacing: '-0.02em' 
-                        }}>Asistente Institucional HORECA</h3>
+                        }}>Cotizador Institucional HORECA</h3>
                         <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4ADE80', boxShadow: '0 0 10px #4ADE80' }}></div>
-                            Cotización en 3 Pasos Lógicos
+                            <Sparkles size={12} color="#4ADE80" />
+                            Pre-Cotización Guiada en 3 Pasos
                         </span>
                     </div>
                 </div>
@@ -621,7 +620,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         fontWeight: '800',
                         backgroundColor: currentStep >= 1 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
                         color: currentStep >= 1 ? '#064E3B' : 'white'
-                    }}>1</span>
+                    }}>1. Necesidad</span>
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>›</span>
                     <span style={{
                         padding: '4px 10px',
@@ -630,7 +629,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         fontWeight: '800',
                         backgroundColor: currentStep >= 2 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
                         color: currentStep >= 2 ? '#064E3B' : 'white'
-                    }}>2</span>
+                    }}>2. Cobertura</span>
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>›</span>
                     <span style={{
                         padding: '4px 10px',
@@ -639,7 +638,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         fontWeight: '800',
                         backgroundColor: currentStep >= 3 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
                         color: currentStep >= 3 ? '#064E3B' : 'white'
-                    }}>3</span>
+                    }}>3. Cotización</span>
                 </div>
             </div>
 
@@ -683,7 +682,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         flexShrink: 0
                     }}>
                         <div style={{ borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Rocket size={20} color="var(--primary)" />
+                            <Sparkles size={20} color="var(--primary)" />
                             <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                 Paso 1: Configura tu Necesidad de Compra
                             </h4>
@@ -691,8 +690,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
                         {/* 1. Tipo de Operacion */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                🏨 Tipo de Operación:
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                <Building2 size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <span>Tipo de Operación:</span>
                             </label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                 {BUSINESS_TYPES.map(type => (
@@ -720,8 +720,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
                         {/* 2. Categorias del Catalogo */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                🛒 Categorías a Cotizar (Selecciona varias):
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                <LayoutGrid size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <span>Categorías a Cotizar (Selecciona varias):</span>
                             </label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                 {ALL_CATEGORIES.map(cat => {
@@ -744,10 +745,18 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                                 fontWeight: isSel ? '800' : '600',
                                                 fontSize: '0.78rem',
                                                 cursor: 'pointer',
-                                                transition: 'all 0.2s'
+                                                transition: 'all 0.2s',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px'
                                             }}
                                         >
-                                            {isSel ? '✅ ' : '➕ '}{cat}
+                                            {isSel ? (
+                                                <CheckCircle2 size={14} style={{ color: 'var(--primary)' }} />
+                                            ) : (
+                                                <Plus size={14} style={{ color: '#94A3B8' }} />
+                                            )}
+                                            <span>{cat}</span>
                                         </button>
                                     );
                                 })}
@@ -756,8 +765,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
                         {/* 3. Volumen de Compras */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                📊 Volumen de Compras Mensual Estimado (COP):
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                <TrendingUp size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <span>Volumen de Compras Mensual Estimado (COP):</span>
                             </label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 {BUSINESS_SIZES.map(size => (
@@ -775,10 +785,18 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                             fontSize: '0.82rem',
                                             textAlign: 'left',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s'
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
                                         }}
                                     >
-                                        {selectedSize === size ? '🔘 ' : '⚪ '}{size}
+                                        {selectedSize === size ? (
+                                            <CheckCircle2 size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
+                                        ) : (
+                                            <Circle size={16} color="#CBD5E1" style={{ flexShrink: 0 }} />
+                                        )}
+                                        <span>{size}</span>
                                     </button>
                                 ))}
                             </div>
@@ -929,7 +947,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 gap: '8px'
                             }}
                         >
-                            <span>✅ Confirmar Ubicación y Cobertura (Paso 3/3)</span>
+                            <CheckCircle2 size={18} />
+                            <span>Confirmar Ubicación y Cobertura (Paso 3/3)</span>
                             <ArrowRight size={18} />
                         </button>
                     </div>
@@ -960,8 +979,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
 
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
-                                👤 Nombre o Razón Social de tu Empresa: *
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                                <User size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <span>Nombre o Razón Social de tu Empresa: *</span>
                             </label>
                             <input
                                 type="text"
@@ -981,8 +1001,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         </div>
 
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
-                                💬 WhatsApp Directo (para envío de propuesta PDF): *
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                                <Phone size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <span>WhatsApp Directo (para envío de propuesta PDF): *</span>
                             </label>
                             <input
                                 type="tel"
@@ -1002,8 +1023,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         </div>
 
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
-                                ✉️ Correo Electrónico (Opcional):
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                                <Mail size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                                <span>Correo Electrónico (Opcional):</span>
                             </label>
                             <input
                                 type="email"
@@ -1041,8 +1063,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 marginTop: '4px'
                             }}
                         >
-                            <Rocket size={20} />
-                            <span>🚀 Generar mi Pre-Cotización PDF al Instante</span>
+                            <FileText size={20} />
+                            <span>Generar mi Pre-Cotización PDF al Instante</span>
                         </button>
                     </form>
                 )}
