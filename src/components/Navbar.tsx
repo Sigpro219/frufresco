@@ -333,14 +333,6 @@ export default function Navbar() {
                         <>
                             <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navHome}</Link>
                             <Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navCatalog}</Link>
-                            {b2bEnabled && (
-                                <Link href="/b2b/register" className="premium-nav-link" style={{ 
-                                    fontWeight: '700', 
-                                    fontSize: '1.05rem',
-                                    color: 'var(--primary)',
-                                }}
-                                >{t.navInstitutional}</Link>
-                            )}
                         </>
                     )}
 
