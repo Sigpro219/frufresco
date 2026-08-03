@@ -3050,107 +3050,128 @@ export default function B2BDashboard() {
                         </div>
                     </div>
                 </div>
-            )}
-            {/* SUMMARY CONFIRMATION MODAL */}
+            )}            {/* SUMMARY CONFIRMATION MODAL — Ultra-Wide Premium Design */}
             {isSummaryModalOpen && (
                 <div style={{
                     position: 'fixed',
                     top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     zIndex: 2000,
-                    backdropFilter: 'blur(5px)',
+                    backdropFilter: 'blur(8px)',
                     padding: '1rem'
                 }}>
                     <div id="printable-summary-modal" style={{
                         backgroundColor: 'white',
-                        padding: '2.5rem',
+                        padding: '1.75rem 2rem',
                         borderRadius: '24px',
                         width: '100%',
-                        maxWidth: '500px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        maxHeight: '90vh',
+                        maxWidth: '720px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
+                        maxHeight: '92vh',
                         display: 'flex',
-                        flexDirection: 'column'
+                        flexDirection: 'column',
+                        border: '1px solid #CBD5E1'
                     }}>
-                        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                        {/* Header */}
+                        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
                             <div style={{ 
-                                background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)', 
+                                background: 'linear-gradient(135deg, var(--primary) 0%, #047857 100%)', 
                                 color: 'white', 
-                                width: '72px', 
-                                height: '72px', 
+                                width: '56px', 
+                                height: '56px', 
                                 borderRadius: '50%', 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center', 
-                                margin: '0 auto 1.5rem',
-                                boxShadow: '0 8px 16px rgba(26, 77, 46, 0.2)' 
+                                margin: '0 auto 0.75rem',
+                                boxShadow: '0 8px 16px rgba(16, 185, 129, 0.25)' 
                             }}>
-                                <ShoppingBag size={34} strokeWidth={2} />
+                                <ShoppingBag size={28} strokeWidth={2} />
                             </div>
                             <h2 style={{ 
                                 fontFamily: 'var(--font-outfit), sans-serif',
-                                fontSize: '1.6rem', 
+                                fontSize: '1.45rem', 
                                 fontWeight: '900', 
-                                color: 'var(--text-main)', 
+                                color: '#0F172A', 
                                 margin: 0,
-                                letterSpacing: '-0.04em'
+                                letterSpacing: '-0.03em'
                             }}>
                                 {t.b2b.dashboard.confirmTitle}
                             </h2>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                            <p style={{ color: '#64748B', fontSize: '0.88rem', marginTop: '0.25rem', fontWeight: '500' }}>
                                 {t.b2b.dashboard.confirmDesc}
                             </p>
                         </div>
 
-                        {/* Textual List (No Photos) */}
+                        {/* Rich Table with Product, Unit Price, Quantity and Subtotal */}
                         <div style={{
                             flex: 1,
                             overflowY: 'auto',
-                            marginBottom: '2rem',
-                            border: '1px solid #F3F4F6',
+                            marginBottom: '1rem',
+                            border: '1px solid #E2E8F0',
                             borderRadius: '16px',
-                            backgroundColor: '#F9FAFB'
+                            backgroundColor: '#F8FAFC'
                         }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
-                                <thead style={{ backgroundColor: 'white', position: 'sticky', top: 0 }}>
-                                    <tr>
-                                        <th style={{ textAlign: 'left', padding: '1rem', borderBottom: '1px solid #E5E7EB', color: '#6B7280', fontSize: '0.75rem', textTransform: 'uppercase' }}>{t.b2b.dashboard.product}</th>
-                                        <th style={{ textAlign: 'right', padding: '1rem', borderBottom: '1px solid #E5E7EB', color: '#6B7280', fontSize: '0.75rem', textTransform: 'uppercase' }}>{t.b2b.dashboard.quantity}</th>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                <thead style={{ backgroundColor: 'white', position: 'sticky', top: 0, zIndex: 5 }}>
+                                    <tr style={{ borderBottom: '1.5px solid #E2E8F0' }}>
+                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '45%' }}>{t.b2b.dashboard.product}</th>
+                                        <th style={{ textAlign: 'right', padding: '0.75rem 0.75rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '20%' }}>PRECIO VIGENTE</th>
+                                        <th style={{ textAlign: 'center', padding: '0.75rem 0.75rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '15%' }}>{t.b2b.dashboard.quantity}</th>
+                                        <th style={{ textAlign: 'right', padding: '0.75rem 1rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '20%' }}>SUBTOTAL</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {orderItems.filter(i => i.quantity > 0).map(item => (
-                                        <tr key={item.id}>
-                                            <td style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #E5E7EB' }}>
-                                                <p style={{ margin: 0, fontWeight: '800', color: 'var(--text-main)', fontSize: '1rem', letterSpacing: '-0.02em' }}>
-                                                    {locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
-                                                    {item.variant_label && <span style={{ fontWeight: '500', color: 'var(--text-muted)', marginLeft: '6px', fontSize: '0.9rem' }}>({item.variant_label})</span>}
-                                                </p>
-                                            </td>
-                                            <td style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #E5E7EB', textAlign: 'right', color: 'var(--primary-dark)', fontWeight: '800' }}>
-                                                {item.quantity} {item.unit}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {orderItems.filter(i => i.quantity > 0).map(item => {
+                                        const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                                        const lineSubtotal = item.quantity * price;
+                                        return (
+                                            <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: 'white' }}>
+                                                <td style={{ padding: '0.75rem 1rem' }}>
+                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>
+                                                        {locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                    </div>
+                                                    {item.variant_label && (
+                                                        <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>({item.variant_label})</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>
+                                                    ${formatPrice(price)} <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>/ {item.unit}</span>
+                                                </td>
+                                                <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center', fontWeight: '900', color: '#059669', backgroundColor: '#ECFDF5', borderRadius: '6px' }}>
+                                                    {item.quantity} {item.unit}
+                                                </td>
+                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#0F172A' }}>
+                                                    ${formatPrice(lineSubtotal)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
 
-                        {/* Footer Info */}
+                        {/* Order Summary Metrics & Delivery Date Selector Bar */}
                         <div style={{
-                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                            padding: '1.25rem',
+                            backgroundColor: '#F1F5F9',
+                            padding: '0.85rem 1.25rem',
                             borderRadius: '16px',
-                            marginBottom: '2rem',
-                            border: '1px solid rgba(59, 130, 246, 0.1)'
+                            marginBottom: '1.25rem',
+                            border: '1px solid #CBD5E1',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: '0.75rem'
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3B82F6', fontWeight: '800' }}>
-                                    <Truck size={18} /> {t.b2b.dashboard.deliveryDate}:
-                                </div>
+                            {/* Date Selector */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <Calendar size={16} style={{ color: '#2563EB' }} /> {t.b2b.dashboard.deliveryDate}:
+                                </span>
                                 <input
                                     type="date"
                                     value={deliveryDate}
@@ -3160,81 +3181,90 @@ export default function B2BDashboard() {
                                         fontWeight: '800',
                                         color: '#1E40AF',
                                         border: '1px solid #93C5FD',
-                                        borderRadius: '10px',
-                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '8px',
+                                        padding: '0.35rem 0.6rem',
                                         backgroundColor: 'white',
-                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '0.82rem',
                                         outline: 'none',
-                                        boxShadow: '0 2px 4px rgba(59, 130, 246, 0.1)'
+                                        cursor: 'pointer'
                                     }}
                                 />
                             </div>
+
+                            {/* Total Subtotal Display */}
+                            <div style={{ textAlign: 'right' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', display: 'block' }}>Total Estimado:</span>
+                                <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#10B981', letterSpacing: '-0.03em' }}>
+                                    ${formatPrice(orderItems.reduce((acc, i) => acc + (i.quantity * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? i.base_price ?? 0)), 0))}
+                                </span>
+                            </div>
                         </div>
 
-                        <div className="no-print" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                            {/* Print Button */}
+                        {/* Action Buttons */}
+                        <div className="no-print" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                             <button
                                 onClick={() => window.print()}
                                 className="btn-glass"
                                 style={{
-                                    flex: 0.4,
-                                    color: 'var(--text-main)',
+                                    padding: '0.75rem 1rem',
+                                    color: '#475569',
                                     fontWeight: '800',
-                                    borderRadius: 'var(--radius-lg)',
-                                    padding: '1rem',
+                                    borderRadius: '12px',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    border: '1px solid var(--border)'
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#F8FAFC'
                                 }}
                                 title={t.b2b.dashboard.printCopy}
                             >
-                                <Printer size={20} />
+                                <Printer size={18} />
                             </button>
 
                             <button
                                 onClick={() => setIsSummaryModalOpen(false)}
-                                className="btn"
                                 style={{
                                     flex: 1,
-                                    backgroundColor: '#F3F4F6',
-                                    color: '#4B5563',
+                                    backgroundColor: '#F1F5F9',
+                                    color: '#334155',
                                     fontWeight: '800',
-                                    borderRadius: 'var(--radius-lg)',
-                                    padding: '1rem',
-                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                    fontSize: '0.95rem'
+                                    borderRadius: '12px',
+                                    padding: '0.75rem 1rem',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '0.88rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px'
                                 }}
                             >
-                                {t.b2b.dashboard.adjustOrder}
+                                <Edit2 size={15} /> {t.b2b.dashboard.adjustOrder}
                             </button>
+
                             <button
                                 onClick={handleFinalSubmit}
                                 disabled={submitting}
-                                className="btn-premium"
                                 style={{
                                     flex: 1.5,
                                     backgroundColor: 'var(--primary)',
                                     color: 'white',
                                     fontWeight: '900',
-                                    fontSize: '1rem',
-                                    borderRadius: 'var(--radius-full)',
-                                    padding: '1rem',
+                                    fontSize: '0.95rem',
+                                    borderRadius: '12px',
+                                    padding: '0.75rem 1.25rem',
                                     border: 'none',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '10px',
-                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                    boxShadow: '0 12px 24px rgba(26, 77, 46, 0.2)'
+                                    gap: '8px',
+                                    cursor: submitting ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 8px 16px rgba(16, 185, 129, 0.25)',
+                                    opacity: submitting ? 0.7 : 1
                                 }}
                             >
-                                {submitting ? t.b2b.dashboard.sending : (
-                                    <>
-                                        <Rocket size={20} strokeWidth={2.5} /> {t.b2b.dashboard.sendNow}
-                                    </>
-                                )}
+                                <Rocket size={18} /> {submitting ? 'Enviando...' : 'Enviar Pedido Ahora'}
                             </button>
                         </div>
                     </div>
