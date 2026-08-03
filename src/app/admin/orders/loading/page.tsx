@@ -1860,9 +1860,13 @@ export default function OrderLoadingPage() {
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>{order.shipping_address?.slice(0, 35)}...</div>
                                                         {hasGPS ? (
-                                                            <span style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '900' }}>📍 GPS OK</span>
+                                                            <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <MapPin size={11} strokeWidth={2} /> GPS OK
+                                                            </span>
                                                         ) : (
-                                                            <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
+                                                            <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <AlertTriangle size={11} strokeWidth={2} /> SIN GPS
+                                                            </span>
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
