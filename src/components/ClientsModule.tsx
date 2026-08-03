@@ -4417,38 +4417,86 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem 2.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                         
-                        {/* BANNER NAVEGACIÓN DESDE SUCURSAL HACIA CASA MATRIZ */}
+                        {/* BANNER NAVEGACIÓN DESDE SUCURSAL HACIA CASA MATRIZ + EXCEPCIÓN DE CONVENIO */}
                         {formData.parent_id && (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '0.8rem 1.2rem', borderRadius: '16px', boxShadow: THEME.shadow.sm }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: '800', color: '#1E40AF' }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2 size={15} style={{ color: '#1D4ED8' }} /> Esta es una sucursal vinculada a Casa Matriz</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '1rem 1.25rem', borderRadius: '16px', boxShadow: THEME.shadow.sm }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: '800', color: '#1E40AF' }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2 size={15} style={{ color: '#1D4ED8' }} /> Sucursal vinculada a Casa Matriz</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const { data } = await supabase.from('profiles').select('*').eq('id', formData.parent_id).single();
+                                            if (data && onSwitchClient) onSwitchClient(data as Profile);
+                                        }}
+                                        style={{
+                                            padding: '0.4rem 0.9rem',
+                                            backgroundColor: '#1D4ED8',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 4px rgba(29,78,216,0.25)',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <ArrowLeft size={14} /> Volver a Casa Matriz
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={async () => {
-                                        const { data } = await supabase.from('profiles').select('*').eq('id', formData.parent_id).single();
-                                        if (data && onSwitchClient) onSwitchClient(data as Profile);
-                                    }}
-                                    style={{
-                                        padding: '0.4rem 0.9rem',
-                                        backgroundColor: '#1D4ED8',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '800',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        boxShadow: '0 2px 4px rgba(29,78,216,0.25)',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E3A8A'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
-                                >
-                                    <ArrowLeft size={14} /> Volver a Casa Matriz
-                                </button>
+
+                                {/* Override Toggle para la Sucursal */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid #DBEAFE' }}>
+                                    <div style={{ fontSize: '0.78rem', color: '#1E3A8A', fontWeight: '600' }}>
+                                        Regla Compras Fuera de Convenio: <strong style={{ color: formData.override_parent_off_agreement ? '#D97706' : '#1D4ED8' }}>
+                                            {formData.override_parent_off_agreement ? 'Excepción Autorizada para esta Sucursal' : 'Heredado de Casa Matriz'}
+                                        </strong>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '800', color: '#1E40AF', cursor: 'pointer' }}>
+                                            <input 
+                                                type="checkbox"
+                                                checked={formData.override_parent_off_agreement}
+                                                onChange={(e) => setFormData({
+                                                    ...formData, 
+                                                    override_parent_off_agreement: e.target.checked
+                                                })}
+                                                disabled={isReadOnly}
+                                                style={{ accentColor: '#D97706', cursor: 'pointer' }}
+                                            />
+                                            Autorizar Excepción para esta Sucursal
+                                        </label>
+                                        {formData.override_parent_off_agreement && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (isReadOnly) return;
+                                                    setFormData({
+                                                        ...formData, 
+                                                        allow_off_agreement_purchases: !formData.allow_off_agreement_purchases
+                                                    });
+                                                }}
+                                                style={{
+                                                    padding: '3px 8px',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #F59E0B',
+                                                    backgroundColor: formData.allow_off_agreement_purchases !== false ? '#FEF3C7' : '#F3F4F6',
+                                                    color: formData.allow_off_agreement_purchases !== false ? '#92400E' : '#4B5563',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                {formData.allow_off_agreement_purchases !== false ? 'Permitido (ON)' : 'Restringido (OFF)'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -4504,22 +4552,42 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     </div>
                                 )}
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', alignItems: 'flex-end' }}>
                                     <div 
                                         onClick={() => {
                                             if (isReadOnly) return;
                                             setFormData({...formData, needs_crates: !formData.needs_crates});
                                         }}
                                         style={{ 
-                                            height: '42px', padding: '0 1.2rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
-                                            backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
+                                            height: '42px', padding: '0 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
+                                            backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
                                             boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
                                             opacity: isReadOnly ? 0.9 : 1
                                         }}
                                     >
-                                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: '600', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                            REQUIERE CANASTILLAS
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
+                                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            CANASTILLAS
+                                        </span>
+                                    </div>
+
+                                    {/* NUEVO: Permite compras fuera de convenio (Casa Matriz) */}
+                                    <div 
+                                        onClick={() => {
+                                            if (isReadOnly) return;
+                                            setFormData({...formData, allow_off_agreement_purchases: !formData.allow_off_agreement_purchases});
+                                        }}
+                                        style={{ 
+                                            height: '42px', padding: '0 1rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#CBD5E1'}`, 
+                                            backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryLight : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s',
+                                            boxShadow: formData.allow_off_agreement_purchases !== false ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
+                                            opacity: isReadOnly ? 0.9 : 1
+                                        }}
+                                        title="Permite o restringe que la casa matriz y sus sucursales compren productos fuera de su convenio comercial"
+                                    >
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#94A3B8' }}></div>
+                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryDark : '#475569', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            FUERA CONVENIO
                                         </span>
                                     </div>
 
