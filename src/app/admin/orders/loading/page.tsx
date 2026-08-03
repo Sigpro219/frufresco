@@ -61,8 +61,12 @@ const getStatusLabel = (s: string) => {
     }
 };
 
-const getChannelBadge = (source: string) => {
-    switch (source) {
+const getChannelBadge = (source: string, isB2B?: boolean) => {
+    let activeSource = source;
+    if (isB2B && (source === 'web_b2c' || source === 'web' || !source)) {
+        activeSource = 'web_b2b';
+    }
+    switch (activeSource) {
         case 'whatsapp': 
             return <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MessageSquare size={10} strokeWidth={1.5} /> WhatsApp</span>;
         case 'phone': 
@@ -371,7 +375,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id, parent_id)')
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 
@@ -386,6 +390,8 @@ export default function OrderLoadingPage() {
                     const processedData = (data || []).map(order => {
                         let name = 'Cliente Desconocido';
                         let phone = 'Sin Teléfono';
+
+                        const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
 
                         if (order.profiles) {
                             // Unified Profile Logic
@@ -432,12 +438,31 @@ export default function OrderLoadingPage() {
                             paymentMethod = 'Tarjeta / Wompi';
                         }
 
+                        // Calculate total weight from order items if total_weight_kg is 0 or null
+                        const items = order.order_items || [];
+                        const calculatedWeight = items.reduce((sum: number, item: any) => {
+                            const unit = (item.unit || '').toLowerCase();
+                            const pWeight = item.products?.weight_kg || ((unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : 0.5);
+                            return sum + (pWeight * (parseFloat(item.quantity) || 0));
+                        }, 0);
+
+                        const totalWeight = (order.total_weight_kg && order.total_weight_kg > 0) ? order.total_weight_kg : calculatedWeight;
+
+                        // Align origin_source for B2B vs B2C
+                        let originSource = order.origin_source;
+                        if (isB2B && (originSource === 'web_b2c' || !originSource)) {
+                            originSource = 'web_b2b';
+                        }
+
                         return {
                             ...order,
                             customer_name: name,
                             customer_phone: phone,
                             customer_nit: nit,
                             paymentMethod: paymentMethod,
+                            total_weight_kg: totalWeight,
+                            item_count: items.length,
+                            origin_source: originSource,
                             isComplete: true
                         };
                     });
@@ -1870,10 +1895,17 @@ export default function OrderLoadingPage() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
-                                                        {getChannelBadge(order.origin_source)}
+                                                        {getChannelBadge(order.origin_source, isB2B)}
                                                     </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
-                                                        {formatNumber(order.total_weight_kg, 1)} kg
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem' }}>
+                                                            {formatNumber(order.total_weight_kg, 1)} kg
+                                                        </div>
+                                                        {order.item_count > 0 && (
+                                                            <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '600' }}>
+                                                                {order.item_count} {order.item_count === 1 ? 'item' : 'items'}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
                                                         {formatMoney(order.total)}
