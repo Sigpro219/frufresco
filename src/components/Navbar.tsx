@@ -328,12 +328,9 @@ export default function Navbar() {
                     alignItems: 'center',
                     fontFamily: 'var(--font-outfit), sans-serif'
                 }}>
-                    {/* B2C (Sin login) o Usuario Genérico */}
+                    {/* Visita (Sin login): Solo muestra Inicio */}
                     {mounted && !user && (
-                        <>
-                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navHome}</Link>
-                            <Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navCatalog}</Link>
-                        </>
+                        <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navHome}</Link>
                     )}
 
                     {/* B2B Cliente */}
@@ -832,15 +829,17 @@ export default function Navbar() {
                         </div>
                     )}
 
-                    {/* General navigation links (Visible to all users) */}
+                    {/* Enlaces de navegación general */}
                     {mounted && (
                         <>
                             <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                 <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
                             </Link>
-                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
-                            </Link>
+                            {user && (
+                                <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
+                                </Link>
+                            )}
                             {/* B2B Institutional link for all FruFresco colaboradores */}
                             {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                                 <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
