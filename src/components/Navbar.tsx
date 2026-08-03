@@ -362,11 +362,9 @@ export default function Navbar() {
                             <Link href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <ShoppingBag size={18} strokeWidth={2} /> {t.navCatalog || 'Catálogo'}
                             </Link>
-                            {hasPermission('commercial') && (
-                                <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Building2 size={18} strokeWidth={2} /> {t.navInstitutional}
-                                </Link>
-                            )}
+                            <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Building2 size={18} strokeWidth={2} /> {t.navInstitutional}
+                            </Link>
                             
                             {/* Dropdown Operaciones */}
                             {shouldShowOperations() && (
@@ -851,8 +849,8 @@ export default function Navbar() {
                             <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                 <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
                             </Link>
-                            {/* B2B Institutional link for staff with commercial permissions */}
-                            {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && hasPermission('commercial') && (
+                            {/* B2B Institutional link for all FruFresco colaboradores */}
+                            {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                                 <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                     <Building2 size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navInstitutional}
                                 </Link>
