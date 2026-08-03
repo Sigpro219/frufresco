@@ -328,9 +328,39 @@ export default function Navbar() {
                     alignItems: 'center',
                     fontFamily: 'var(--font-outfit), sans-serif'
                 }}>
-                    {/* Visita (Sin login): Solo muestra Inicio */}
-                    {mounted && !user && (
-                        <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navHome}</Link>
+                    {/* Visita (Sin login) o B2C Cliente: Restablecer Inicio y Catálogo */}
+                    {mounted && (!user || profile?.role === 'b2c_client') && (
+                        <>
+                            <Link 
+                                href={`/${locale === 'en' ? '?lang=en' : ''}`} 
+                                className="premium-nav-link" 
+                                style={{ fontWeight: '600', fontSize: '1.05rem' }}
+                                onClick={(e) => {
+                                    if (pathname === '/') {
+                                        e.preventDefault();
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }
+                                }}
+                            >
+                                {t.navHome}
+                            </Link>
+                            <Link 
+                                href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} 
+                                className="premium-nav-link" 
+                                style={{ fontWeight: '600', fontSize: '1.05rem' }}
+                                onClick={(e) => {
+                                    if (pathname === '/') {
+                                        e.preventDefault();
+                                        const catalogEl = document.getElementById('catalog');
+                                        if (catalogEl) {
+                                            catalogEl.scrollIntoView({ behavior: 'smooth' });
+                                        }
+                                    }
+                                }}
+                            >
+                                {t.navCatalog}
+                            </Link>
+                        </>
                     )}
 
                     {/* B2B Cliente */}
@@ -832,14 +862,35 @@ export default function Navbar() {
                     {/* Enlaces de navegación general */}
                     {mounted && (
                         <>
-                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                            <Link 
+                                href={`/${locale === 'en' ? '?lang=en' : ''}`} 
+                                className="mobile-nav-link" 
+                                onClick={(e) => {
+                                    setMobileOpen(false);
+                                    if (pathname === '/') {
+                                        e.preventDefault();
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }
+                                }}
+                            >
                                 <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
                             </Link>
-                            {user && (
-                                <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                    <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
-                                </Link>
-                            )}
+                            <Link 
+                                href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} 
+                                className="mobile-nav-link" 
+                                onClick={(e) => {
+                                    setMobileOpen(false);
+                                    if (pathname === '/') {
+                                        e.preventDefault();
+                                        const catalogEl = document.getElementById('catalog');
+                                        if (catalogEl) {
+                                            catalogEl.scrollIntoView({ behavior: 'smooth' });
+                                        }
+                                    }
+                                }}
+                            >
+                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
+                            </Link>
                             {/* B2B Institutional link for all FruFresco colaboradores */}
                             {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                                 <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
