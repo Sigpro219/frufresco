@@ -3945,6 +3945,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 email: parent.email || prev.email,
                 pricing_model_id: parent.pricing_model_id || prev.pricing_model_id,
                 document_type: parent.document_type || prev.document_type,
+                needs_crates: parent.needs_crates !== undefined ? parent.needs_crates : prev.needs_crates,
+                allow_off_agreement_purchases: (parent as any).allow_off_agreement_purchases !== undefined ? (parent as any).allow_off_agreement_purchases : prev.allow_off_agreement_purchases,
                 is_corporate_parent: false,
                 notify_email_1: true
             }));
