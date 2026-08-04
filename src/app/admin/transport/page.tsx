@@ -539,7 +539,7 @@ export default function TransportControlTower() {
                                 <div style={{ backgroundColor: '#FEF2F2', padding: '1rem', borderRadius: '16px', border: '1px solid #FCA5A5' }}>
                                     <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#991B1B', textTransform: 'uppercase' }}>SUCURSALES EN ALERTA</div>
                                     <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#7F1D1D', marginTop: '2px' }}>2 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>cuentas</span></div>
-                                    <div style={{ fontSize: '0.68rem', color: '#991B1B', marginTop: '2px', fontWeight: '600' }}>Superan retención > 40 canastillas</div>
+                                    <div style={{ fontSize: '0.68rem', color: '#991B1B', marginTop: '2px', fontWeight: '600' }}>Superan retención &gt; 40 canastillas</div>
                                 </div>
                             </div>
 
