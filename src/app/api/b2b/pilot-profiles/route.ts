@@ -48,9 +48,17 @@ export async function GET() {
                 ? parent.allow_off_agreement_purchases 
                 : p.allow_off_agreement_purchases;
 
+            const pilotBalances: Record<string, number> = {
+                'b7458b9c-f512-4063-847d-1c29991c15ff': 14, // CESNE Policía
+                'a9f31891-7278-49ea-8ee8-2252fdb44ec1': 26, // El Corral Gourmet Floresta
+                'dc3bd32e-32dd-4a35-934f-f5816ea576e0': 18  // Yanuba Cedritos 150
+            };
+
             return {
                 ...p,
                 company_name: p.company_name || p.contact_name || 'Cliente Piloto',
+                needs_crates: p.needs_crates !== undefined ? p.needs_crates : true,
+                crate_balance: p.crate_balance !== undefined ? p.crate_balance : (pilotBalances[p.id] || 14),
                 allow_off_agreement_purchases: effectiveAllow !== undefined ? effectiveAllow : true
             };
         });
