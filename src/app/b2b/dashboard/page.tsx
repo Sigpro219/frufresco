@@ -58,7 +58,7 @@ export default function B2BDashboard() {
     const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
     const [isLoadingCategory, setIsLoadingCategory] = useState(false);
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'order' | 'invoices' | 'consumption' | 'agreements'>('order');
+    const [activeTab, setActiveTab] = useState<'order' | 'invoices' | 'consumption' | 'agreements' | 'crates'>('order');
     const [invoices, setInvoices] = useState<any[]>([]);
     const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
     const [consumptionData, setConsumptionData] = useState<any[]>([]);
@@ -1013,6 +1013,7 @@ export default function B2BDashboard() {
                                 { key: 'invoices', icon: <FileText size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabInvoices },
                                 { key: 'consumption', icon: <BarChart3 size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabConsumption },
                                 { key: 'agreements', icon: <Rocket size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabAgreements },
+                                { key: 'crates', icon: <Package size={14} strokeWidth={2} />, label: 'Mis Canastillas' },
                             ].map(tab => (
                                 <button
                                     key={tab.key}
@@ -2936,6 +2937,156 @@ export default function B2BDashboard() {
                                 </a>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* CRATES (CANASTILLAS) TAB */}
+                {activeTab === 'crates' && (
+                    <div className="b2b-responsive-card" style={{
+                        backgroundColor: 'white',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '2rem',
+                        boxShadow: 'var(--shadow-lg)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+                            <div>
+                                <h2 style={{ 
+                                    margin: 0, 
+                                    fontSize: '1.5rem', 
+                                    fontWeight: '900', 
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    color: 'var(--text-main)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <Package size={26} color="var(--primary)" /> Mis Canastillas de Logística
+                                </h2>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.3rem 0 0', fontSize: '0.9rem', fontWeight: '500' }}>
+                                    Seguimiento de saldo vivo de canastillas plásticas prestadas e historial de entregas y devoluciones.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    window.showToast?.('Notificación enviada a Logística. Programaremos la recogida en tu próximo despacho.', 'success');
+                                }}
+                                className="btn-premium"
+                                style={{
+                                    padding: '0.65rem 1.25rem',
+                                    borderRadius: THEME.radius.md,
+                                    backgroundColor: '#0284C7',
+                                    color: 'white',
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    border: 'none',
+                                    boxShadow: '0 4px 10px rgba(2, 132, 199, 0.2)'
+                                }}
+                            >
+                                <Truck size={16} /> Solicitar Recogida de Vacías
+                            </button>
+                        </div>
+
+                        {/* Top KPI Cards */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                            <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase' }}>
+                                    CANASTILLAS PRESTADAS
+                                </div>
+                                <div style={{ fontSize: '2rem', fontWeight: '950', color: '#065F46', marginTop: '4px' }}>
+                                    {(activeProfile as any)?.crate_balance || 0} <span style={{ fontSize: '0.9rem', fontWeight: '700' }}>und</span>
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#047857', fontWeight: '700', marginTop: '4px' }}>
+                                    {((activeProfile as any)?.crate_balance || 0) > 40 ? '⚠️ Retención Alta (Supera 40 canastillas)' : '🟢 Saldo en rango normal'}
+                                </div>
+                            </div>
+
+                            <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
+                                    ESTADO DE PRÉSTAMO
+                                </div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1E293B', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {(activeProfile as any)?.needs_crates !== false ? (
+                                        <><CheckCircle2 size={18} color="#10B981" /> Habilitado</>
+                                    ) : (
+                                        <><AlertTriangle size={18} color="#F59E0B" /> No Autorizado</>
+                                    )}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
+                                    Configuración maestra asignada a tu cuenta
+                                </div>
+                            </div>
+
+                            {(activeProfile as any)?.is_corporate_parent && (
+                                <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>
+                                        TOTAL MATRIZ CONSOLIDADO
+                                    </div>
+                                    <div style={{ fontSize: '2rem', fontWeight: '950', color: '#1E40AF', marginTop: '4px' }}>
+                                        {(activeProfile as any)?.crate_balance || 0} <span style={{ fontSize: '0.9rem', fontWeight: '700' }}>und</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: '#1D4ED8', fontWeight: '700', marginTop: '4px' }}>
+                                        Suma total acumulada en todas las sucursales
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Kardex Movements Table */}
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                            <div style={{ padding: '1rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <FileText size={16} color="var(--primary)" /> Historial Kardex de Canastillas (Movimientos)
+                                </h4>
+                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Trazabilidad 360° en Tiempo Real</span>
+                            </div>
+
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>
+                                            <th style={{ padding: '0.75rem 1rem' }}>Fecha</th>
+                                            <th style={{ padding: '0.75rem 1rem' }}>Tipo de Movimiento</th>
+                                            <th style={{ padding: '0.75rem 1rem' }}>Referencia / Pedido</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Cantidad</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Evidencia</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontWeight: '600' }}>Hoy (Último Despacho)</td>
+                                            <td style={{ padding: '0.85rem 1rem' }}>
+                                                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF2F2', color: '#991B1B', fontWeight: '800', border: '1px solid #FCA5A5', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Package size={12} /> ENTREGADAS (PRESTADAS)
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '0.85rem 1rem', color: '#0F172A', fontWeight: '800' }}>Pedido #639</td>
+                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#EF4444', fontWeight: '900', fontSize: '0.95rem' }}>+14 und</td>
+                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>Planilla Firmada</span>
+                                            </td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
+                                            <td style={{ padding: '0.85rem 1rem', color: '#475569', fontWeight: '600' }}>24 de Jul 2026</td>
+                                            <td style={{ padding: '0.85rem 1rem' }}>
+                                                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <CheckCircle2 size={12} /> RECOGIDAS POR CONDUCTOR
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '0.85rem 1rem', color: '#0F172A', fontWeight: '800' }}>Ruta #WFW369</td>
+                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#10B981', fontWeight: '900', fontSize: '0.95rem' }}>-2 und</td>
+                                            <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                                                <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '700' }}>Verificada Patio</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
 </div> {/* Container End */}

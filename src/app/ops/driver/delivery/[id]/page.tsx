@@ -470,42 +470,61 @@ export default function DeliveryConfirmationPage() {
                 </div>
 
                 {/* Canastillas Control */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                    <div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS ENTREGADAS</div>
-                        <input 
-                            type="number" 
-                            className="input-op" 
-                            value={canastillasDelivered}
-                            onChange={(e) => setCanastillasDelivered(parseInt(e.target.value) || 0)}
-                            style={{ 
-                                width: '100%', 
-                                padding: '0.8rem', 
-                                borderRadius: '12px', 
-                                border: '1px solid rgba(255, 255, 255, 0.08)', 
-                                backgroundColor: 'rgba(9, 13, 22, 0.5)', 
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        />
+                <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', padding: '1.25rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.8rem', fontSize: '0.75rem', fontWeight: '800', color: stop?.orders?.profiles?.needs_crates !== false ? '#10B981' : '#F59E0B', backgroundColor: stop?.orders?.profiles?.needs_crates !== false ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', padding: '0.5rem 0.8rem', borderRadius: '8px', border: stop?.orders?.profiles?.needs_crates !== false ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(245, 158, 11, 0.2)' }}>
+                        {stop?.orders?.profiles?.needs_crates !== false ? (
+                            <><Package size={14} /> Cliente CON Préstamo Autorizado. Dejar canastillas prestadas.</>
+                        ) : (
+                            <><AlertTriangle size={14} /> Cliente SIN Préstamo. Conserve las canastillas vacías en el camión.</>
+                        )}
                     </div>
-                    <div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS RECIBIDAS</div>
-                        <input 
-                            type="number" 
-                            className="input-op" 
-                            value={canastillasReceived}
-                            onChange={(e) => setCanastillasReceived(parseInt(e.target.value) || 0)}
-                            style={{ 
-                                width: '100%', 
-                                padding: '0.8rem', 
-                                borderRadius: '12px', 
-                                border: '1px solid rgba(255, 255, 255, 0.08)', 
-                                backgroundColor: 'rgba(9, 13, 22, 0.5)', 
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS ENTREGADAS</div>
+                            <input 
+                                type="number" 
+                                className="input-op" 
+                                value={canastillasDelivered}
+                                onChange={(e) => setCanastillasDelivered(parseInt(e.target.value) || 0)}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0.8rem', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                    backgroundColor: 'rgba(9, 13, 22, 0.5)', 
+                                    color: 'white',
+                                    outline: 'none',
+                                    fontWeight: '900'
+                                }}
+                            />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS RECIBIDAS</div>
+                            <input 
+                                type="number" 
+                                className="input-op" 
+                                value={canastillasReceived}
+                                onChange={(e) => setCanastillasReceived(parseInt(e.target.value) || 0)}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0.8rem', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                    backgroundColor: 'rgba(9, 13, 22, 0.5)', 
+                                    color: 'white',
+                                    outline: 'none',
+                                    fontWeight: '900'
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ marginTop: '0.8rem', textAlign: 'right' }}>
+                        <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '800', color: '#F87171', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                            <Camera size={12} /> Reportar Canastilla Dañada / Perdida (Foto)
+                            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} style={{ display: 'none' }} />
+                        </label>
                     </div>
                 </div>
 
