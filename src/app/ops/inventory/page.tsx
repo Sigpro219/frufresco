@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
+import { Truck, Package, Plus, CheckCircle2, Building2, Camera, X } from 'lucide-react';
 
 interface InventoryTask {
     id: string;
@@ -272,10 +273,30 @@ export default function OpsInventoryPage() {
                     )
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {/* Direct Return Button for Walk-in Clients */}
+                        <div style={{ backgroundColor: 'var(--ops-surface)', padding: '1.25rem', borderRadius: '24px', border: '1px solid var(--ops-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div>
+                                <div style={{ fontSize: '1rem', fontWeight: '900', color: 'var(--ops-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Package size={20} style={{ color: '#10B981' }} /> Recepción Directa de Canastillas en Patio
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)', marginTop: '2px' }}>
+                                    Para clientes que entregan vacías directamente en planta sin camión de ruta
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    alert('Ingrese el nombre de la sucursal y la cantidad de canastillas recibidas físicamente en patio.');
+                                }}
+                                style={{ padding: '0.8rem 1.25rem', borderRadius: '14px', border: 'none', backgroundColor: '#10B981', color: 'white', fontWeight: '900', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)' }}
+                            >
+                                <Plus size={16} /> REGISTRAR DEVOLUCIÓN DIRECTA
+                            </button>
+                        </div>
+
                         {pendingReturns.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'var(--ops-surface)', borderRadius: '32px', border: '1px solid var(--ops-border)' }}>
-                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🚛</div>
-                                <div style={{ fontWeight: '800', color: 'var(--ops-text-muted)' }}>No hay productos regresando de ruta</div>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}><Truck size={48} style={{ color: 'var(--ops-text-muted)', margin: '0 auto' }} /></div>
+                                <div style={{ fontWeight: '800', color: 'var(--ops-text-muted)' }}>No hay camiones ni devoluciones de ruta pendientes por liquidar</div>
                             </div>
                         ) : (
                             pendingReturns.map(ret => (

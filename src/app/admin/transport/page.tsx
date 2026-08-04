@@ -60,7 +60,7 @@ const MAP_ID = 'bf725916f72f2fd';
 export default function TransportControlTower() {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
-    const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis'>('map');
+    const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates'>('map');
     const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
     const [loading, setLoading] = useState(true);
     const isMounted = useRef(true);
@@ -332,7 +332,8 @@ export default function TransportControlTower() {
                             { id: 'fleet', label: 'Flota', icon: <Truck size={14} strokeWidth={1.5} /> },
                             { id: 'drivers_panel', label: 'Conductores', icon: <Users size={14} strokeWidth={1.5} /> },
                             { id: 'maintenance', label: 'Mantenimiento', icon: <Wrench size={14} strokeWidth={1.5} /> },
-                            { id: 'kpis', label: 'Insights', icon: <TrendingUp size={14} strokeWidth={1.5} /> }
+                            { id: 'kpis', label: 'Insights', icon: <TrendingUp size={14} strokeWidth={1.5} /> },
+                            { id: 'crates', label: 'Canastillas', icon: <Package size={14} strokeWidth={1.5} /> }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -490,8 +491,99 @@ export default function TransportControlTower() {
                         <ConductorPanel readOnly={!canEdit} />
                     ) : activeTab === 'kpis' ? (
                         <ControlTowerKPIs />
-                    ) : (
+                    ) : activeTab === 'maintenance' ? (
                         <MaintenanceManagement readOnly={!canEdit} />
+                    ) : (
+                        /* CRATES CONTROL TOWER TAB */
+                        <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '1.5rem', overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <Package size={22} color="#0D9488" /> Torre de Control de Canastillas de Logística
+                                    </h2>
+                                    <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>
+                                        Consolidado maestro de inventario prestado a clientes, rutas en tránsito e historial de movimientos.
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        alert('Generando reporte administrativo de ajuste por pérdida ($25.000 COP / unidad)...');
+                                    }}
+                                    style={{ padding: '0.6rem 1.2rem', borderRadius: '12px', backgroundColor: '#EF4444', color: 'white', fontWeight: '800', fontSize: '0.8rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.2)' }}
+                                >
+                                    <AlertTriangle size={14} /> Ajuste por Pérdida / Cobro ($25.000 COP/unid)
+                                </button>
+                            </div>
+
+                            {/* Global KPI Cards */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '16px', border: '1px solid #A7F3D0' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase' }}>CANASTILLAS EN CALLE</div>
+                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#065F46', marginTop: '2px' }}>142 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
+                                    <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '2px', fontWeight: '600' }}>Prestadas a clientes institucionales</div>
+                                </div>
+
+                                <div style={{ backgroundColor: '#EFF6FF', padding: '1rem', borderRadius: '16px', border: '1px solid #BFDBFE' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>EN TRÁNSITO HOY</div>
+                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E40AF', marginTop: '2px' }}>35 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
+                                    <div style={{ fontSize: '0.68rem', color: '#1D4ED8', marginTop: '2px', fontWeight: '600' }}>A bordo de 3 camiones en ruta</div>
+                                </div>
+
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>DISPONIBLES PATIO</div>
+                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E293B', marginTop: '2px' }}>420 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
+                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px', fontWeight: '600' }}>Físicas listas para alistamiento</div>
+                                </div>
+
+                                <div style={{ backgroundColor: '#FEF2F2', padding: '1rem', borderRadius: '16px', border: '1px solid #FCA5A5' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#991B1B', textTransform: 'uppercase' }}>SUCURSALES EN ALERTA</div>
+                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#7F1D1D', marginTop: '2px' }}>2 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>cuentas</span></div>
+                                    <div style={{ fontSize: '0.68rem', color: '#991B1B', marginTop: '2px', fontWeight: '600' }}>Superan retención > 40 canastillas</div>
+                                </div>
+                            </div>
+
+                            {/* Main Matrix Breakdown Table */}
+                            <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                                <div style={{ padding: '0.8rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.82rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Package size={14} color="#0EA5E9" /> Consolidado de Canastillas por Casa Matriz y Sucursales
+                                </div>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.7rem', borderBottom: '1px solid #E2E8F0' }}>
+                                            <th style={{ padding: '0.75rem 1rem' }}>Cliente / Sucursal</th>
+                                            <th style={{ padding: '0.75rem 1rem' }}>NIT / Identificación</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Préstamo Habilitado</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Canastillas Retenidas</th>
+                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Estado Retención</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
+                                            <td style={{ padding: '0.75rem 1rem', fontWeight: '900', color: '#0F172A' }}>🏢 GRUPO ADR WORK SAS (CASA MATRIZ)</td>
+                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>900833821</td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ color: '#10B981', fontWeight: '800' }}>SI (Matriz)</span></td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#1E40AF', fontSize: '0.9rem' }}>40 und</td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>⚠️ Alerta Retención</span></td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '0.75rem 1rem 0.75rem 2.5rem', color: '#334155', fontWeight: '700' }}>└ Hotel Spot Centro</td>
+                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>900833821-1</td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ color: '#10B981', fontWeight: '700' }}>Heredado</span></td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>14 und</td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>🟢 Normal</span></td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                            <td style={{ padding: '0.75rem 1rem 0.75rem 2.5rem', color: '#334155', fontWeight: '700' }}>└ Hotel Spot Norte</td>
+                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>900833821-2</td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ color: '#10B981', fontWeight: '700' }}>Heredado</span></td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>26 und</td>
+                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>⚠️ Retención Alta</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
