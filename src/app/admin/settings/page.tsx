@@ -1071,6 +1071,54 @@ export default function AdminSettingsPage() {
                                                 ))}
                                             </div>
                                         </div>
+
+                                        {/* BLOQUE: ALERTAS E INTELIGENCIA DE PEDIDOS B2B */}
+                                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `1px dashed ${THEME.colors.border}` }}>
+                                            <h3 style={{ fontSize: '0.82rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Sparkles size={16} color={THEME.colors.primary} /> Alertas e Inteligencia de Pedidos B2B
+                                            </h3>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                                                <div>
+                                                    <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                        Multiplicador Alerta Cantidad Inusual (ej. 3.0x)
+                                                    </label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.5"
+                                                        defaultValue={b2bContent.unusual_qty_multiplier || 3.0} 
+                                                        style={{ width: '100%', padding: '8px 12px', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', color: THEME.colors.textMain, fontWeight: '700' }} 
+                                                        onBlur={(e) => {
+                                                            const current = JSON.parse(settings.find(s => s.key === 'b2b_page_content')?.value || '{}');
+                                                            current.unusual_qty_multiplier = parseFloat(e.target.value) || 3.0;
+                                                            handleUpdateSetting('b2b_page_content', JSON.stringify(current));
+                                                        }} 
+                                                    />
+                                                    <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '2px', display: 'block' }}>
+                                                        Genera advertencia si la cantidad pedida supera X veces el promedio del cliente
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    <label style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                        Alerta de Insumo Nuevo (Primera Compra)
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: 'white', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, cursor: 'pointer' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            defaultChecked={b2bContent.enable_new_item_alert !== false} 
+                                                            onChange={(e) => {
+                                                                const current = JSON.parse(settings.find(s => s.key === 'b2b_page_content')?.value || '{}');
+                                                                current.enable_new_item_alert = e.target.checked;
+                                                                handleUpdateSetting('b2b_page_content', JSON.stringify(current));
+                                                            }} 
+                                                        />
+                                                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: THEME.colors.textMain }}>
+                                                            Mostrar insignia "Insumo Nuevo" en la canasta
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 );
                             })()}
