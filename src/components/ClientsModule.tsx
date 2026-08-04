@@ -3707,6 +3707,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         longitude: editData?.longitude || '',
         geocoding_status: editData?.geocoding_status || 'manual',
         needs_crates: editData?.needs_crates || false,
+        allow_off_agreement_purchases: (editData as any)?.allow_off_agreement_purchases !== undefined ? (editData as any).allow_off_agreement_purchases : true,
+        override_parent_off_agreement: (editData as any)?.override_parent_off_agreement || false,
         document_type: editData?.document_type || 'invoice',
         remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true,
         print_invoice: (editData as any)?.print_invoice || false,
@@ -3843,6 +3845,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 .from('profiles')
                 .update({
                     needs_crates: formData.needs_crates,
+                    allow_off_agreement_purchases: formData.allow_off_agreement_purchases,
                     document_type: formData.document_type,
                     remission_with_prices: formData.remission_with_prices,
                     print_invoice: formData.print_invoice
@@ -4129,6 +4132,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         .from('profiles')
                         .update({
                             needs_crates: formData.needs_crates,
+                            allow_off_agreement_purchases: formData.allow_off_agreement_purchases,
                             document_type: formData.document_type,
                             remission_with_prices: formData.remission_with_prices,
                             print_invoice: formData.print_invoice
