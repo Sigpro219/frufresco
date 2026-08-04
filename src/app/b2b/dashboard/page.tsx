@@ -1600,6 +1600,14 @@ export default function B2BDashboard() {
                                             {orderItems.map((item) => {
                                                 const uPrice = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
                                                 const itemSubtotal = item.quantity * uPrice;
+
+                                                // Smart Order Intelligence calculations
+                                                const pastPurchases = historicalOrders.flatMap(o => o.order_items || o.items || []).filter((i: any) => (i.product_id && i.product_id === item.product_id) || (i.product_name && i.product_name === item.product_name));
+                                                const isNewItem = pastPurchases.length === 0;
+                                                const totalQtyBought = pastPurchases.reduce((acc: number, curr: any) => acc + Number(curr.quantity || 0), 0);
+                                                const avgQtyBought = pastPurchases.length > 0 ? (totalQtyBought / pastPurchases.length) : 0;
+                                                const isUnusualQty = pastPurchases.length > 0 && item.quantity > (avgQtyBought * 3.0);
+
                                                 return (
                                                     <div key={item.id} className="cart-item-row" style={{
                                                         display: 'flex',
@@ -1614,18 +1622,34 @@ export default function B2BDashboard() {
                                                         
                                                         <div style={{ flex: 1, minWidth: 0 }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                                                <h4 style={{ 
-                                                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                                                    fontWeight: '800', 
-                                                                    fontSize: '0.95rem',
-                                                                    margin: 0,
-                                                                    color: 'var(--text-main)',
-                                                                    letterSpacing: '-0.01em',
-                                                                    lineHeight: '1.25',
-                                                                    wordBreak: 'break-word'
-                                                                }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
-                                                                    {item.variant_label && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '0.15rem' }}>{item.variant_label}</span>}
-                                                                </h4>
+                                                                <div>
+                                                                    <h4 style={{ 
+                                                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                                                        fontWeight: '800', 
+                                                                        fontSize: '0.95rem',
+                                                                        margin: 0,
+                                                                        color: 'var(--text-main)',
+                                                                        letterSpacing: '-0.01em',
+                                                                        lineHeight: '1.25',
+                                                                        wordBreak: 'break-word'
+                                                                    }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                                        {item.variant_label && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '0.15rem' }}>{item.variant_label}</span>}
+                                                                    </h4>
+                                                                    
+                                                                    {/* Soft Warning Badges with Lucide React Icons */}
+                                                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                                                        {isNewItem && (
+                                                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#6D28D9', backgroundColor: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #DDD6FE', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <Sparkles size={11} strokeWidth={2} /> Insumo Nuevo
+                                                                            </span>
+                                                                        )}
+                                                                        {isUnusualQty && (
+                                                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#92400E', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '3px' }} title={`Promedio histórico: ~${avgQtyBought.toFixed(1)} ${item.unit}`}>
+                                                                                <AlertTriangle size={11} strokeWidth={2} /> Cantidad Inusual (Sueles pedir ~{Math.round(avgQtyBought)} {item.unit})
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                                 <button
                                                                     onClick={() => removeItem(item.id)}
                                                                     style={{
