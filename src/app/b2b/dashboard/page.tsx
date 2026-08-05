@@ -538,27 +538,35 @@ export default function B2BDashboard() {
                     return;
                 }
 
-                const { data, error } = await supabase
-                    .from('orders')
-                    .select(`
-                        *,
-                        profile:profiles(company_name, nit, address),
-                        order_items(
-                            id,
-                            product_id,
-                            quantity,
-                            unit_price,
-                            unit,
-                            nickname,
-                            products(id, name, name_en, unit_of_measure, sku, base_price)
-                        )
-                    `)
-                    .eq('profile_id', targetProfileId)
-                    .order('created_at', { ascending: false })
-                    .limit(5);
+                // 1. Intentar consumo por API backend (Service Role) para evitar bloqueos por RLS
+                const res = await fetch(`/api/b2b/invoices?clientId=${targetProfileId}`);
+                if (res.ok) {
+                    const json = await res.json();
+                    if (isMounted.current) setInvoices(json.invoices || []);
+                } else {
+                    // Fallback directo en cliente
+                    const { data, error } = await supabase
+                        .from('orders')
+                        .select(`
+                            *,
+                            profile:profiles(company_name, nit, address),
+                            order_items(
+                                id,
+                                product_id,
+                                quantity,
+                                unit_price,
+                                unit,
+                                nickname,
+                                products(id, name, name_en, unit_of_measure, sku, base_price)
+                            )
+                        `)
+                        .eq('profile_id', targetProfileId)
+                        .order('created_at', { ascending: false })
+                        .limit(20);
 
-                if (error) throw error;
-                if (isMounted.current) setInvoices(data || []);
+                    if (error) throw error;
+                    if (isMounted.current) setInvoices(data || []);
+                }
             } catch (err) {
                 console.error("Error fetching invoices:", err);
             } finally {
@@ -577,87 +585,44 @@ export default function B2BDashboard() {
         const fetchConsumption = async () => {
             setIsLoadingConsumption(true);
             try {
-                const clientIds = [targetProfileId];
-                if (activeProfile?.parent_id) {
-                    clientIds.push(activeProfile.parent_id);
+                // Consultar a través del API Backend con ServiceRole en Modo Sandbox
+                const res = await fetch(`/api/b2b/consumption?clientId=${targetProfileId}&timeRange=${consumptionTimeRange}`);
+                if (res.ok) {
+                    const json = await res.json();
+                    if (isMounted.current) {
+                        setConsumptionHistory(json.items || []);
+                        setConsumptionKpis(json.kpis || { totalCop: 0, totalKg: 0, totalSavingsCop: 0, avgPrice: 0 });
+                    }
+                } else {
+                    // Fallback directo en cliente si el endpoint responde con error
+                    const { data: ordersData } = await supabase
+                        .from('orders')
+                        .select('id, created_at, delivery_date, total, subtotal, status, profile_id')
+                        .eq('profile_id', targetProfileId)
+                        .neq('status', 'draft')
+                        .neq('status', 'cancelled');
+
+                    if (ordersData && ordersData.length > 0) {
+                        const orderIds = ordersData.map(o => o.id);
+                        const { data: itemsData } = await supabase
+                            .from('order_items')
+                            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, base_price, category)')
+                            .in('order_id', orderIds);
+
+                        if (isMounted.current) {
+                            setConsumptionHistory(itemsData || []);
+                        }
+                    }
                 }
+            } catch (err) {
+                console.error("Error fetching consumption:", err);
+            } finally {
+                if (isMounted.current) setIsLoadingConsumption(false);
+            }
+        };
 
-                // 1. Fetch Agreements to get agreement prices & base prices for exact savings calculation
-                const { data: quoteAgreements } = await supabase
-                    .from('quotes')
-                    .select(`
-                        id,
-                        quote_items(
-                            product_id,
-                            unit_price,
-                            products(id, base_price)
-                        )
-                    `)
-                    .in('client_id', clientIds)
-                    .eq('status', 'agreement');
-
-                const agreementMap: Record<string, number> = {};
-                const basePriceMap: Record<string, number> = {};
-
-                if (quoteAgreements && quoteAgreements.length > 0) {
-                    quoteAgreements.forEach((q: any) => {
-                        q.quote_items?.forEach((qi: any) => {
-                            if (qi.product_id) {
-                                if (qi.unit_price) agreementMap[qi.product_id] = Number(qi.unit_price);
-                                const p = Array.isArray(qi.products) ? qi.products[0] : qi.products;
-                                if (p?.base_price) basePriceMap[qi.product_id] = Number(p.base_price);
-                            }
-                        });
-                    });
-                }
-
-                // 2. Fetch all valid orders for active profile / client
-                const { data: ordersData, error: ordersError } = await supabase
-                    .from('orders')
-                    .select('id, created_at, delivery_date, total, subtotal, status, profile_id')
-                    .in('profile_id', clientIds)
-                    .neq('status', 'draft')
-                    .neq('status', 'cancelled')
-                    .order('delivery_date', { ascending: true });
-
-                if (ordersError) throw ordersError;
-                
-                if (ordersData && ordersData.length > 0) {
-                    const orderIds = ordersData.map(o => o.id);
-                    
-                    // Fetch items for those orders
-                    const { data: itemsData, error: itemsError } = await supabase
-                        .from('order_items')
-                        .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, base_price, category)')
-                        .in('order_id', orderIds);
-
-                    if (itemsError) throw itemsError;
-
-                    // Filter based on consumptionTimeRange (client-side)
-                    const now = new Date();
-                    const daysLimit = consumptionTimeRange === '30days' ? 30 : consumptionTimeRange === '3months' ? 90 : 99999;
-                    const cutoffDate = new Date(now.getTime() - daysLimit * 24 * 60 * 60 * 1000);
-
-                    const filteredOrders = (ordersData || []).filter(o => {
-                        if (consumptionTimeRange === 'all') return true;
-                        const dateVal = new Date(o.delivery_date || o.created_at);
-                        return dateVal >= cutoffDate;
-                    });
-
-                    const filteredOrderIds = new Set(filteredOrders.map(o => o.id));
-                    const filteredItems = (itemsData || []).filter(item => filteredOrderIds.has(item.order_id));
-
-                    // Compute KPIs
-                    let totalCop = 0;
-                    let totalKg = 0;
-                    let totalSavingsCop = 0;
-
-                    filteredOrders.forEach(o => {
-                        const orderItems = filteredItems.filter(it => it.order_id === o.id);
-                        let itemsSum = 0;
-                        orderItems.forEach(it => {
-                            const qty = Number(it.quantity || 0);
-                            const p = Array.isArray(it.products) ? it.products[0] : it.products;
+        fetchConsumption();
+    }, [activeTab, activeProfile?.id, user?.id, consumptionTimeRange]);
                             const basePrice = Number(basePriceMap[it.product_id] || p?.base_price || 0);
                             const uPrice = Number(it.unit_price || agreementMap[it.product_id] || basePrice || 0);
 
@@ -1115,6 +1080,52 @@ export default function B2BDashboard() {
                         )}
                     </div>
                 </div>
+
+                {/* SANDBOX MODE BANNER FOR EMPLOYEES */}
+                {!simulatedClientId && (profile?.profile_type === 'employee' || profile?.role === 'COORDINADOR ADMINISTRATIVO') && (
+                    <div style={{
+                        padding: '1rem 1.25rem',
+                        marginBottom: '1.25rem',
+                        borderRadius: '12px',
+                        backgroundColor: '#EFF6FF',
+                        border: '1px solid #93C5FD',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '1rem',
+                        boxShadow: '0 2px 8px rgba(30, 64, 175, 0.06)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                            <span style={{ fontSize: '1.4rem' }}>🧪</span>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: '800', color: '#1E40AF' }}>
+                                    Modo Sandbox (Fase de Construcción)
+                                </h4>
+                                <p style={{ margin: '2px 0 0 0', fontSize: '0.82rem', color: '#1E3A8A', lineHeight: '1.3' }}>
+                                    Para inspeccionar el consumo, las facturas y los acuerdos comerciales de una empresa en este ambiente de pruebas, por favor selecciona un cliente en el selector superior (ej: <strong>CENTRO SOCIAL DE SUBOFICIALES</strong>).
+                                </p>
+                            </div>
+                        </div>
+                        {simulatedProfiles.length > 0 && (
+                            <button
+                                onClick={() => setSimulatedClientId(simulatedProfiles[0].id)}
+                                style={{
+                                    padding: '0.45rem 0.85rem',
+                                    backgroundColor: '#2563EB',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: '800',
+                                    fontSize: '0.78rem',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Seleccionar Sucursal Piloto
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {/* TAB CONTENT */}
                 {activeTab === 'order' && (
