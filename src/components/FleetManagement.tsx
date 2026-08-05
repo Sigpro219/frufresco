@@ -2,6 +2,19 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { 
+    Search, 
+    X, 
+    RefreshCw, 
+    Plus, 
+    Edit3, 
+    AlertTriangle, 
+    Wrench, 
+    User, 
+    XCircle, 
+    Save, 
+    Truck
+} from 'lucide-react';
 
 interface Route {
     id: string;
@@ -345,7 +358,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {/* Search bar */}
                     <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', color: '#A0AEC0', pointerEvents: 'none' }}>🔍</span>
+                        <Search size={16} style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: '#A0AEC0', pointerEvents: 'none' }} />
                         <input
                             placeholder="Buscar placa, marca, conductor, estado..."
                             value={fleetSearch}
@@ -372,7 +385,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     cursor: 'pointer', fontSize: '0.65rem', fontWeight: 'bold', padding: 0
                                 }}
-                            >✕</button>
+                            ><X size={12} /></button>
                         )}
                     </div>
                     <button 
@@ -384,7 +397,8 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                             fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
                         }}
                     >
-                        {loading ? '🔄 Cargando...' : '🔃 Sincronizar'}
+                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                        {loading ? 'Cargando...' : 'Sincronizar'}
                     </button>
                     {!readOnly && (
                         <button 
@@ -392,10 +406,10 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                             style={{ 
                                 padding: '0.6rem 1.2rem', borderRadius: '12px', 
                                 backgroundColor: '#0891B2', color: 'white', border: 'none', 
-                                fontWeight: '700', cursor: 'pointer' 
+                                fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
                             }}
                         >
-                            {showAdd ? 'Cancelar' : '+ Registrar Vehículo'}
+                            {showAdd ? 'Cancelar' : <><Plus size={14} /> Registrar Vehículo</>}
                         </button>
                     )}
                 </div>
@@ -480,7 +494,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                         ) : filteredVehicles.length === 0 ? (
                             <tr>
                                 <td colSpan={7} style={{ padding: '4rem', textAlign: 'center' }}>
-                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔍</div>
+                                    <Search size={48} style={{ color: '#9CA3AF', margin: '0 auto 1rem' }} />
                                     <h3 style={{ color: '#6B7280', margin: 0 }}>Sin resultados para &quot;{fleetSearch}&quot;</h3>
                                     <p style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>Prueba con otro término. Puedes separar criterios por comas.</p>
                                 </td>
@@ -517,7 +531,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                                         onMouseOver={e => (e.currentTarget.style.color = '#0891B2')}
                                                         onMouseOut={e => (e.currentTarget.style.color = '#94A3B8')}
                                                     >
-                                                        ✏️
+                                                        <Edit3 size={14} />
                                                     </button>
                                                 )}
                                             </div>
@@ -540,8 +554,8 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                         <td style={{ padding: '1rem' }}>
                                             {nextMaint ? (
                                                 <div>
-                                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: isUrgent ? '#EF4444' : '#1E293B' }}>
-                                                        {isUrgent ? '🚨' : '🔧'} {nextMaint.task_name}
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: isUrgent ? '#EF4444' : '#1E293B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        {isUrgent ? <AlertTriangle size={14} color="#EF4444" /> : <Wrench size={14} color="#1E293B" />} {nextMaint.task_name}
                                                     </div>
                                                     <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>
                                                         {nextMaint.task_type === 'km' ? `En ${(nextMaint.next_due_km - v.current_odometer).toLocaleString()} km` : `Vence ${nextMaint.next_due_date}`}
@@ -567,7 +581,11 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                                 </div>
                                             ) : (
                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700' }}>
-                                                    {v.driver?.contact_name ? `👨🏻‍✈️ ${v.driver.contact_name}` : '❌ Sin conductor'}
+                                                    {v.driver?.contact_name ? (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><User size={14} /> {v.driver.contact_name}</span>
+                                                    ) : (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><XCircle size={14} /> Sin conductor</span>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
@@ -601,11 +619,11 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                     }}>
                         <button
                             onClick={() => { setEditingVehicle(null); setEditForm(null); }}
-                            style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' }}
-                        >✕</button>
+                            style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        ><X size={18} /></button>
 
-                        <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>
-                            ✏️ Editando: <span style={{ color: '#0891B2' }}>{editingVehicle.plate}</span>
+                        <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.4rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Edit3 size={20} color="#0891B2" /> Editando: <span style={{ color: '#0891B2' }}>{editingVehicle.plate}</span>
                         </h3>
                         <p style={{ margin: '0 0 2rem', color: '#64748B', fontSize: '0.85rem' }}>Modifica los datos del vehículo y guarda los cambios.</p>
 
@@ -649,8 +667,8 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                 <button type="button" onClick={() => { setEditingVehicle(null); setEditForm(null); }} style={{ padding: '0.9rem 2rem', borderRadius: '14px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '700', cursor: 'pointer', color: '#374151' }}>
                                     Cancelar
                                 </button>
-                                <button type="submit" style={{ padding: '0.9rem 2.5rem', borderRadius: '14px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '900', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.2)' }}>
-                                    💾 Guardar Cambios
+                                <button type="submit" style={{ padding: '0.9rem 2.5rem', borderRadius: '14px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '900', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.2)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                    <Save size={16} /> Guardar Cambios
                                 </button>
                             </div>
                         </form>
@@ -671,8 +689,8 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                     }}>
                         <button 
                             onClick={() => setSelectedVehicle(null)}
-                            style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}
-                        >✕</button>
+                            style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        ><X size={18} /></button>
 
                         <div style={{ padding: '2.5rem' }}>
                             <div style={{ display: 'flex', gap: '2rem', marginBottom: '2.5rem', alignItems: 'center' }}>
@@ -680,8 +698,8 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                     width: '100px', height: '100px', borderRadius: '24px', 
                                     background: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '2.5rem'
-                                }}>🚛</div>
+                                    color: 'white'
+                                }}><Truck size={48} /></div>
                                 <div>
                                     <h2 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>{selectedVehicle.plate}</h2>
                                     <p style={{ color: '#64748B', fontSize: '1.1rem', margin: '4px 0', fontWeight: '700' }}>{selectedVehicle.brand} {selectedVehicle.model} • {selectedVehicle.vehicle_type}</p>
@@ -703,8 +721,8 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                             style={{ width: '80px', padding: '0.2rem', borderRadius: '4px', border: '1px solid #0891B2' }}
                                         />
                                     ) : (
-                                        <span onClick={() => !readOnly && setEditingKm({id: selectedVehicle.id, value: selectedVehicle.current_odometer})} style={{ cursor: readOnly ? 'default' : 'pointer', fontWeight: '900', color: '#1E293B', fontSize: '0.85rem' }}>
-                                            {selectedVehicle.current_odometer.toLocaleString()} km {!readOnly && '📝'}
+                                        <span onClick={() => !readOnly && setEditingKm({id: selectedVehicle.id, value: selectedVehicle.current_odometer})} style={{ cursor: readOnly ? 'default' : 'pointer', fontWeight: '900', color: '#1E293B', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            {selectedVehicle.current_odometer.toLocaleString()} km {!readOnly && <Edit3 size={12} />}
                                         </span>
                                     )}
                                 </div>
@@ -744,7 +762,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                     <section>
                                         <h3 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            🛠️ MANTENIMIENTOS PROGRAMADOS
+                                            <Wrench size={16} color="#0891B2" /> MANTENIMIENTOS PROGRAMADOS
                                         </h3>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                             {selectedVehicle.maintenance_schedules?.map(s => (
@@ -770,7 +788,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                 {/* Right Column: Issues Gallery */}
                                 <div>
                                     <h3 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        🚨 BITÁCORA DE NOVEDADES Y DAÑOS
+                                        <AlertTriangle size={16} color="#EF4444" /> BITÁCORA DE NOVEDADES Y DAÑOS
                                     </h3>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         {loadingDetails ? (

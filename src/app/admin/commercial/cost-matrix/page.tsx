@@ -478,18 +478,18 @@ export default function CostMatrixPage() {
                     let processedCount = 0;
                     
                     for (const row of rawData as any[]) {
-                        const accIdRaw = row['accounting_id'];
-                        const newCostRaw = row['Nuevo Costo'];
+                        const accIdRaw = row['accounting_id'] ?? row['ACCOUNTING_ID'] ?? row['ID ERP'] ?? row['ID_ERP'] ?? row['CODIGO_CONTABLE'] ?? row['Codigo Contable'];
+                        const newCostRaw = row['Nuevo Costo'] ?? row['Nuevo_Costo'] ?? row['Costo'] ?? row['Nuevo costo'] ?? row['Costo Manual'] ?? row['costo_manual'];
                         
                         if (accIdRaw === undefined || accIdRaw === null) continue;
                         
-                        const accId = parseInt(accIdRaw);
+                        const accId = parseInt(accIdRaw.toString().trim());
                         if (isNaN(accId)) continue;
                         
                         if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
                         
-                        const newCost = parseFloat(newCostRaw);
-                        if (isNaN(newCost) || newCost <= 0) continue;
+                        const newCost = parseFloat(newCostRaw.toString().replace(',', '.').trim());
+                        if (isNaN(newCost) || newCost < 0) continue;
                         
                         const prod = productMap[accId];
                         if (prod) {
@@ -505,7 +505,7 @@ export default function CostMatrixPage() {
                     }
                     
                     if (upsertData.length === 0) {
-                        throw new Error('No se encontraron registros válidos para actualizar. Verifica el accounting_id y que la columna "Nuevo Costo" tenga números válidos.');
+                        throw new Error('No se encontraron registros válidos para actualizar. Verifica que las columnas "accounting_id" (o "ID ERP") y "Nuevo Costo" (o "Costo") contengan valores numéricos válidos.');
                     }
                     
                     const batchSize = 50;
