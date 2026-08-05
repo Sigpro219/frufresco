@@ -858,7 +858,7 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "Estado", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "ID_INTERNO", "Estado", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
             "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
@@ -871,7 +871,7 @@ export default function ClientsModule() {
         ];
 
         const sample1 = [
-            "ACTIVO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "", "ACTIVO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
             "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
@@ -884,7 +884,7 @@ export default function ClientsModule() {
         ];
 
         const sample2 = [
-            "ACTIVO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "", "ACTIVO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
             "unicentro@elgourmet.com", "", "", "Avenida Carrera 15 # 124-30", "Local 12 - Zona Comercial", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "HEREDADO_MATRIZ",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
@@ -897,7 +897,7 @@ export default function ClientsModule() {
         ];
 
         const sample3 = [
-            "ACTIVO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "", "ACTIVO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
             "marcela.rincon@gmail.com", "", "", "Carrera 7 # 150-10", "Apto 402 - Torre B", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
@@ -940,18 +940,36 @@ export default function ClientsModule() {
             try {
                 const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true || val === '1';
 
+                // 1. Cargar catálogo de clientes existentes en la BD para hacer mach automático por NIT/Email si ID_INTERNO no está
+                const { data: existingProfiles } = await supabase.from('profiles').select('id, nit, email');
+                const nitMap: Record<string, string> = {};
+                const emailMap: Record<string, string> = {};
+                existingProfiles?.forEach(p => {
+                    if (p.nit) nitMap[p.nit.trim().toLowerCase()] = p.id;
+                    if (p.email) emailMap[p.email.trim().toLowerCase()] = p.id;
+                });
+
                 // Mapearemos todos los clientes con sus 51 atributos
                 const clientsToInsert = rows.map(row => {
                     const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
                     const estadoVal = (row.Estado || row.Activo || row['Estado (ACTIVO/INACTIVO)'] || '').toString().trim().toUpperCase();
                     const is_active = estadoVal === 'INACTIVO' || estadoVal === 'NO' || estadoVal === 'FALSE' || estadoVal === '0' ? false : true;
 
+                    // Detección de ID UUID existente o resolución inteligente por NIT/Email
+                    const rawId = row.ID_INTERNO || row.id || row['ID Interno'] || row['id_interno'];
+                    const isUUID = rawId && typeof rawId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
+                    
+                    const cleanNit = (row.NIT_CEDULA || row.nit || '').toString().trim().toLowerCase();
+                    const cleanEmail = (row.Email || row.email || '').toString().trim().toLowerCase();
+
+                    const matchedId = isUUID ? rawId.trim() : (nitMap[cleanNit] || emailMap[cleanEmail] || undefined);
+
                     // Buscar id de modelo de precios si especificaron nombre
                     const modelName = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toLowerCase();
                     const matchedModel = pricingModels.find(m => m.name.toLowerCase() === modelName);
 
                     return {
-                        id: row.ID_INTERNO || undefined,
+                        id: matchedId,
                         is_active: is_active,
                         nit: (row.NIT_CEDULA || '').toString().trim(),
                         company_name: (row.Nombre_Comercial || '').toString().trim(),
@@ -978,9 +996,11 @@ export default function ClientsModule() {
                         branch_id: (row.Codigo_Sucursal || '').toString().trim() || null,
                         corporate_role: (row.Rol_Corporativo || '').toString().trim() || null,
                         
-                        // Financiera
-                        credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
-                        payment_terms: (row.Condicion_Pago || 'Contado').toString().trim(),
+                        // Financiera (Guardada en logistics_data JSON para preservar cupo y condición de pago sin error de esquema)
+                        logistics_data: {
+                            credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
+                            payment_terms: (row.Condicion_Pago || 'Contado').toString().trim()
+                        },
                         iva_responsible: cleanBool(row.Responsable_IVA),
                         is_gran_contribuyente: cleanBool(row.Gran_Contribuyente),
                         is_autorretenedor: cleanBool(row.Autorretenedor),
@@ -1222,7 +1242,7 @@ export default function ClientsModule() {
                     isReadOnly={isFormReadOnly}
                     onSwitchClient={(client) => {
                         setEditTarget(client);
-                        setIsFormReadOnly(true);
+                        // Preserve the active mode (edit vs view-only) when switching between parent and branch
                     }}
                 />
             )}
@@ -4214,7 +4234,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                            <span style={{ fontSize: '1.5rem' }}>{isLead ? '🔥' : isReadOnly ? '📋' : (isB2C ? '👤' : (formData.is_corporate_parent ? '🏢' : '📍'))}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '10px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
+                                {isLead ? <FileText size={20} /> : isReadOnly ? <ClipboardList size={20} /> : (isB2C ? <User size={20} /> : (formData.is_corporate_parent ? <Building2 size={20} /> : <MapPin size={20} />))}
+                            </div>
                             <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03rem' }}>
                                 {isLead ? 'Ficha de Prospecto (Lead)' : isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta Hogar' : 'Cuenta Institucional'}`)}
                             </h2>

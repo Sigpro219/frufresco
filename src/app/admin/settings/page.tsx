@@ -23,7 +23,8 @@ import {
     ArrowLeft,
     Building2,
     Save,
-    ShieldAlert
+    ShieldAlert,
+    Sparkles
 } from 'lucide-react';
 
 function ImageUpload({ 
@@ -1056,11 +1057,6 @@ export default function AdminSettingsPage() {
                                                 {b2bContent.benefits.map((b: any, i: number) => (
                                                     <div key={i} style={{ backgroundColor: THEME.colors.surface, padding: '0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                            <input type="text" defaultValue={b.icon} style={{ width: '100%', textAlign: 'center', fontSize: '1rem', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, padding: '4px', outline: 'none' }} onBlur={(e) => {
-                                                                const current = JSON.parse(settings.find(s => s.key === 'b2b_page_content')?.value || '{}');
-                                                                current.benefits[i].icon = e.target.value;
-                                                                handleUpdateSetting('b2b_page_content', JSON.stringify(current));
-                                                            }} />
                                                             <input type="text" defaultValue={b.title} style={{ width: '100%', fontSize: '0.75rem', fontWeight: '600', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, padding: '4px', outline: 'none', color: THEME.colors.textMain }} onBlur={(e) => {
                                                                 const current = JSON.parse(settings.find(s => s.key === 'b2b_page_content')?.value || '{}');
                                                                 current.benefits[i].title = e.target.value;
