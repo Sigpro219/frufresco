@@ -695,121 +695,160 @@ export default function MasterProductsPage() {
 
             setLoading(true);
             try {
+                // Pre-extraer los SKUs válidos del Excel subido
+                const validSkus = new Set(
+                    prodRows
+                        .map(r => (r.SKU || r.sku || '').toString().trim())
+                        .filter(s => s !== '')
+                );
+
                 if (wipeExistingData) {
+                    // Intento 1: Intento de borrado físico directo
                     const { error: purgeError } = await supabase.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
-                    if (purgeError) throw purgeError;
-                }
-
-                const productsToInsert = prodRows.map(row => {
-                    const cleanArrayStr = (val: any): string[] => {
-                        if (!val) return [];
-                        if (Array.isArray(val)) return val;
-                        return val.toString().split(',').map((t: string) => t.trim()).filter((t: string) => t !== '');
-                    };
-
-                    const sku = (row.SKU || row.sku || '').toString().trim();
                     
-                    // Reconstruir options_config y variants JSON a partir de la pestaña Variaciones
-                    let options_config = variationsMap[sku] || [];
-                    let variants: any[] = [];
-                    if (options_config.length > 0) {
-                        // Generar combinaciones de variantes
-                        let results: any[] = [{}];
-                        options_config.forEach(opt => {
-                            const temp: any[] = [];
-                            results.forEach(res => {
-                                opt.values.forEach((val: string) => {
-                                    temp.push({ ...res, [opt.name]: val });
-                                });
-                            });
-                            results = temp;
-                        });
-                        variants = results.map(combination => {
-                            const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
-                            return {
-                                id: `v-${Math.random().toString(36).substring(2, 11)}`,
-                                options: combination,
-                                sku: `${sku}.${attrValues}`
-                            };
-                        });
-                    }
-
-                    // Precios de canal
-                    const pricing_model_prices = pricesMap[sku] || [];
-
-                    // Detección flexible de ID UUID
-                    const rawId = row.ID_INTERNO || row.id || row['ID Interno'] || row['id_interno'];
-                    const isUUID = rawId && typeof rawId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
-                    const id = isUUID ? rawId.trim() : undefined;
-
-                    // Detección flexible de Unidad_Web y Factor_Web
-                    const web_unit = (row.Unidad_Web || row['Unidad Web'] || row.web_unit || row['unidad_web'] || row['unidad web'] || '').toString().trim() || null;
-                    
-                    const rawFactor = row.Factor_Web ?? row['Factor Web'] ?? row.web_conversion_factor ?? row['factor_web'] ?? row['factor web'];
-                    let web_conversion_factor = 1.0;
-                    if (rawFactor !== undefined && rawFactor !== null && rawFactor !== '') {
-                        const parsedFactor = parseFloat(rawFactor.toString().replace(',', '.'));
-                        if (!isNaN(parsedFactor) && parsedFactor > 0) {
-                            web_conversion_factor = parsedFactor;
+                    if (purgeError) {
+                        console.warn('⚠️ No se pudo realizar el borrado físico directo por restricciones de FK en la BD. Ejecutando deshabilitación inteligente de productos no presentes en el Excel...', purgeError.message);
+                        
+                        // Intento 2: Deshabilitación de productos descontinuados que no vienen en el nuevo Excel
+                        const { data: existingProds } = await supabase.from('products').select('id, sku');
+                        if (existingProds && existingProds.length > 0) {
+                            const obsoleteIds = existingProds
+                                .filter(p => p.sku && !validSkus.has(p.sku.trim()))
+                                .map(p => p.id);
+                            
+                            if (obsoleteIds.length > 0) {
+                                // Desactivar en lotes los productos obsoletos
+                                for (let i = 0; i < obsoleteIds.length; i += 100) {
+                                    const chunkIds = obsoleteIds.slice(i, i + 100);
+                                    await supabase.from('products').update({ is_active: false }).in('id', chunkIds);
+                                }
+                            }
                         }
                     }
+                }
 
-                    return {
-                        id,
-                        sku: sku,
-                        accounting_id: parseInt(row.ID_CONTABLE || row.accounting_id || '0'),
-                        name: (row.Nombre || row.name || '').toString(),
-                        name_en: (row.Nombre_EN || row.name_en || '').toString() || null,
-                        description: (row.Descripcion || row.description || '').toString(),
-                        description_en: (row.Descripcion_EN || row.description_en || '').toString() || null,
-                        category: (row.Categoria || row.category || 'DE').toString(),
-                        unit_of_measure: (row.Unidad || row.unit_of_measure || 'Kg').toString(),
-                        base_price: parseFloat(row.Costo_Base || row.base_price || '0'),
-                        iva_rate: parseInt(row.IVA || row.iva_rate || '19'),
-                        image_url: (row.URL_Imagen && row.URL_Imagen.toString() !== '0') ? row.URL_Imagen.toString() : null,
-                        buying_team: (row.Comprador || row.buying_team || '').toString() || null,
-                        procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString() || null,
-                        is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
-                        show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
-                        display_name: (row.Nombre_Web || row.display_name || '').toString() || null,
-                        web_unit,
-                        web_conversion_factor,
-                        min_inventory_level: parseInt(row.Min_Inventario || row.min_inventory_level || '0'),
-                        parent_id: row.ID_PADRE || row.parent_id || null,
-                        theoretical_shrinkage_pct: parseFloat(row.Merma_Teorica_Pct || row.theoretical_shrinkage_pct || '0'),
-                        allowed_waste_reasons: cleanArrayStr(row.Razones_Desperdicio || row.allowed_waste_reasons),
-                        inventory_group: (row.Grupo_Inventario || row.inventory_group || '').toString() || null,
-                        purchase_sublist: (row.Sublista_Compra || row.purchase_sublist || '').toString() || null,
-                        tags: cleanArrayStr(row.Tags || row.tags),
-                        keywords: (row.Keywords || row.keywords || '').toString() || null,
-                        utility_deviation_pct: parseFloat(row.Desviacion_Utilidad_Pct || row.utility_deviation_pct || '0'),
-                        inherit_price: (row.Heredar_Precio || row.inherit_price) === 'SI' || row.inherit_price === true,
+                const productsToInsert = prodRows
+                    .filter(row => (row.SKU || row.sku || '').toString().trim() !== '')
+                    .map(row => {
+                        const cleanArrayStr = (val: any): string[] => {
+                            if (!val) return [];
+                            if (Array.isArray(val)) return val;
+                            return val.toString().split(',').map((t: string) => t.trim()).filter((t: string) => t !== '');
+                        };
+
+                        const sku = (row.SKU || row.sku || '').toString().trim();
                         
-                        // JSON autogenerados sin requerir escritura manual del usuario
-                        options_config,
-                        variants,
-                        pricing_model_prices
-                    };
-                });
+                        // Reconstruir options_config y variants JSON a partir de la pestaña Variaciones
+                        let options_config = variationsMap[sku] || [];
+                        let variants: any[] = [];
+                        if (options_config.length > 0) {
+                            let results: any[] = [{}];
+                            options_config.forEach(opt => {
+                                const temp: any[] = [];
+                                results.forEach(res => {
+                                    opt.values.forEach((val: string) => {
+                                        temp.push({ ...res, [opt.name]: val });
+                                    });
+                                });
+                                results = temp;
+                            });
+                            variants = results.map(combination => {
+                                const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
+                                return {
+                                    id: `v-${Math.random().toString(36).substring(2, 11)}`,
+                                    options: combination,
+                                    sku: `${sku}.${attrValues}`
+                                };
+                            });
+                        }
+
+                        // Precios de canal
+                        const pricing_model_prices = pricesMap[sku] || [];
+
+                        // Detección flexible de ID UUID
+                        const rawId = row.ID_INTERNO || row.id || row['ID Interno'] || row['id_interno'];
+                        const isUUID = rawId && typeof rawId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
+                        const id = isUUID ? rawId.trim() : undefined;
+
+                        // Detección flexible de Unidad_Web y Factor_Web
+                        const web_unit = (row.Unidad_Web || row['Unidad Web'] || row.web_unit || row['unidad_web'] || row['unidad web'] || '').toString().trim() || null;
+                        
+                        const rawFactor = row.Factor_Web ?? row['Factor Web'] ?? row.web_conversion_factor ?? row['factor_web'] ?? row['factor web'];
+                        let web_conversion_factor = 1.0;
+                        if (rawFactor !== undefined && rawFactor !== null && rawFactor !== '') {
+                            const parsedFactor = parseFloat(rawFactor.toString().replace(',', '.'));
+                            if (!isNaN(parsedFactor) && parsedFactor > 0) {
+                                web_conversion_factor = parsedFactor;
+                            }
+                        }
+
+                        // Sanitización de números para prevenir NaN
+                        const parseNum = (val: any, fallback: number = 0): number => {
+                            if (val === undefined || val === null || val === '') return fallback;
+                            const n = parseFloat(val.toString().replace(',', '.'));
+                            return isNaN(n) ? fallback : n;
+                        };
+
+                        const parseIntNum = (val: any, fallback: number = 0): number => {
+                            if (val === undefined || val === null || val === '') return fallback;
+                            const n = parseInt(val.toString());
+                            return isNaN(n) ? fallback : n;
+                        };
+
+                        return {
+                            id,
+                            sku: sku,
+                            accounting_id: parseIntNum(row.ID_CONTABLE || row.accounting_id, 0),
+                            name: (row.Nombre || row.name || '').toString(),
+                            name_en: (row.Nombre_EN || row.name_en || '').toString() || null,
+                            description: (row.Descripcion || row.description || '').toString(),
+                            description_en: (row.Descripcion_EN || row.description_en || '').toString() || null,
+                            category: (row.Categoria || row.category || 'DE').toString(),
+                            unit_of_measure: (row.Unidad || row.unit_of_measure || 'Kg').toString(),
+                            base_price: parseNum(row.Costo_Base || row.base_price, 0),
+                            iva_rate: parseIntNum(row.IVA || row.iva_rate, 19),
+                            image_url: (row.URL_Imagen && row.URL_Imagen.toString() !== '0') ? row.URL_Imagen.toString() : null,
+                            buying_team: (row.Comprador || row.buying_team || '').toString() || null,
+                            procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString() || null,
+                            is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
+                            show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
+                            display_name: (row.Nombre_Web || row.display_name || '').toString() || null,
+                            web_unit,
+                            web_conversion_factor,
+                            min_inventory_level: parseIntNum(row.Min_Inventario || row.min_inventory_level, 0),
+                            parent_id: row.ID_PADRE || row.parent_id || null,
+                            theoretical_shrinkage_pct: parseNum(row.Merma_Teorica_Pct || row.theoretical_shrinkage_pct, 0),
+                            allowed_waste_reasons: cleanArrayStr(row.Razones_Desperdicio || row.allowed_waste_reasons),
+                            inventory_group: (row.Grupo_Inventario || row.inventory_group || '').toString() || null,
+                            purchase_sublist: (row.Sublista_Compra || row.purchase_sublist || '').toString() || null,
+                            tags: cleanArrayStr(row.Tags || row.tags),
+                            keywords: (row.Keywords || row.keywords || '').toString() || null,
+                            utility_deviation_pct: parseNum(row.Desviacion_Utilidad_Pct || row.utility_deviation_pct, 0),
+                            inherit_price: (row.Heredar_Precio || row.inherit_price) === 'SI' || row.inherit_price === true,
+                            
+                            options_config,
+                            variants,
+                            pricing_model_prices
+                        };
+                    });
 
                 // Cargar en bloques de 100 con manejo inteligente de onConflict
                 const chunkSize = 100;
                 for (let i = 0; i < productsToInsert.length; i += chunkSize) {
                     const chunk = productsToInsert.slice(i, i + chunkSize);
                     
-                    // Si el lote tiene id UUID definido, upsert directo por id; de lo contrario upsert por accounting_id o sku
+                    // Si el lote tiene id UUID definido en todos los ítems, upsert directo por id; de lo contrario upsert por SKU
                     const hasUUIDs = chunk.every(item => item.id);
                     if (hasUUIDs) {
                         const { error } = await supabase.from('products').upsert(chunk);
                         if (error) throw error;
                     } else {
-                        // Upsert resolviendo conflicto por SKU (clave única primaria comercial)
                         const { error } = await supabase.from('products').upsert(chunk, { onConflict: 'sku' });
                         if (error) throw error;
                     }
                 }
 
-                showToast(`Carga masiva completada: ${productsToInsert.length} productos actualizados.`, 'success');
+                showToast(`Carga masiva completada: ${productsToInsert.length} productos procesados exitosamente.`, 'success');
                 setIsBulkModalOpen(false);
                 setSelectedFile(null);
                 fetchProducts();

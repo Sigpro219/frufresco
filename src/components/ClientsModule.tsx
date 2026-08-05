@@ -996,9 +996,11 @@ export default function ClientsModule() {
                         branch_id: (row.Codigo_Sucursal || '').toString().trim() || null,
                         corporate_role: (row.Rol_Corporativo || '').toString().trim() || null,
                         
-                        // Financiera
-                        credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
-                        payment_terms: (row.Condicion_Pago || 'Contado').toString().trim(),
+                        // Financiera (Guardada en logistics_data JSON para preservar cupo y condición de pago sin error de esquema)
+                        logistics_data: {
+                            credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
+                            payment_terms: (row.Condicion_Pago || 'Contado').toString().trim()
+                        },
                         iva_responsible: cleanBool(row.Responsable_IVA),
                         is_gran_contribuyente: cleanBool(row.Gran_Contribuyente),
                         is_autorretenedor: cleanBool(row.Autorretenedor),
