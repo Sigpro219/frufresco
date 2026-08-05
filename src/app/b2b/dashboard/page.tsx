@@ -1841,8 +1841,9 @@ export default function B2BDashboard() {
                                     </p>
                                 </div>
                                 <a
-                                    href="https://wa.me/573001234567?text=Hola,%20necesito%20ayuda%20con%20mi%20pedido%20institucional"
+                                    href={`https://wa.me/573015421761?text=${encodeURIComponent(`Hola Servicio al Cliente (Investments Cortés SAS), requiero asistencia comercial para la cuenta ${activeProfile?.company_name || activeProfile?.contact_name || profile?.company_name || 'B2B'} en FruFresco.`)}`}
                                     target="_blank"
+                                    rel="noopener noreferrer"
                                     className="btn-premium"
                                     style={{
                                         backgroundColor: '#075e54',
@@ -3321,53 +3322,119 @@ export default function B2BDashboard() {
                             </p>
                         </div>
 
-                        {/* Rich Table with Product, Unit Price, Quantity and Subtotal */}
-                        <div style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            marginBottom: '1rem',
-                            border: '1px solid #E2E8F0',
-                            borderRadius: '16px',
-                            backgroundColor: '#F8FAFC'
-                        }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                                <thead style={{ backgroundColor: 'white', position: 'sticky', top: 0, zIndex: 5 }}>
-                                    <tr style={{ borderBottom: '1.5px solid #E2E8F0' }}>
-                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '45%' }}>{t.b2b.dashboard.product}</th>
-                                        <th style={{ textAlign: 'right', padding: '0.75rem 0.75rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '20%' }}>PRECIO VIGENTE</th>
-                                        <th style={{ textAlign: 'center', padding: '0.75rem 0.75rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '15%' }}>{t.b2b.dashboard.quantity}</th>
-                                        <th style={{ textAlign: 'right', padding: '0.75rem 1rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '20%' }}>SUBTOTAL</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {orderItems.filter(i => i.quantity > 0).map(item => {
-                                        const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
-                                        const lineSubtotal = item.quantity * price;
-                                        return (
-                                            <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: 'white' }}>
-                                                <td style={{ padding: '0.75rem 1rem' }}>
-                                                    <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>
-                                                        {locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
-                                                    </div>
-                                                    {item.variant_label && (
-                                                        <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>({item.variant_label})</span>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>
-                                                    ${formatPrice(price)} <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>/ {item.unit}</span>
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center', fontWeight: '900', color: '#059669', backgroundColor: '#ECFDF5', borderRadius: '6px' }}>
-                                                    {item.quantity} {item.unit}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#0F172A' }}>
-                                                    ${formatPrice(lineSubtotal)}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                        {/* Calculate Unusual Items for Modal Alert */}
+                        {(() => {
+                            const activeSubmitItems = orderItems.filter(i => i.quantity > 0);
+                            const unusualItems = activeSubmitItems.filter(item => {
+                                const pastPurchases = historicalOrders.flatMap(o => o.order_items || o.items || []).filter((i: any) => (i.product_id && i.product_id === item.product_id) || (i.product_name && i.product_name === item.product_name));
+                                const totalQtyBought = pastPurchases.reduce((acc: number, curr: any) => acc + Number(curr.quantity || 0), 0);
+                                const avgQtyBought = pastPurchases.length > 0 ? (totalQtyBought / pastPurchases.length) : 0;
+                                return pastPurchases.length > 0 && item.quantity > (avgQtyBought * 3.0);
+                            });
+
+                            return (
+                                <>
+                                    {/* Prominent Warning Banner if Unusual Quantities Exist */}
+                                    {unusualItems.length > 0 && (
+                                        <div style={{
+                                            backgroundColor: '#FEF3C7',
+                                            border: '1.5px solid #FCD34D',
+                                            borderRadius: '16px',
+                                            padding: '0.85rem 1.15rem',
+                                            marginBottom: '1rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            color: '#92400E'
+                                        }}>
+                                            <div style={{ backgroundColor: '#F59E0B', color: 'white', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <AlertTriangle size={20} strokeWidth={2.5} />
+                                            </div>
+                                            <div style={{ fontSize: '0.82rem', lineHeight: '1.4' }}>
+                                                <strong style={{ fontSize: '0.88rem', fontWeight: '900', color: '#78350F', display: 'block', marginBottom: '2px' }}>
+                                                    ⚠️ Verificación Requerida: Cantidad Inusual Detectada ({unusualItems.length} {unusualItems.length === 1 ? 'insumo' : 'insumos'})
+                                                </strong>
+                                                {unusualItems.map(i => {
+                                                    const pastPurchases = historicalOrders.flatMap(o => o.order_items || o.items || []).filter((h: any) => (h.product_id && h.product_id === i.product_id) || (h.product_name && h.product_name === i.product_name));
+                                                    const totalQty = pastPurchases.reduce((acc: number, curr: any) => acc + Number(curr.quantity || 0), 0);
+                                                    const avgQty = pastPurchases.length > 0 ? (totalQty / pastPurchases.length) : 0;
+                                                    return `${i.product_name} (${i.quantity} ${i.unit} vs habitual ~${Math.round(avgQty)} ${i.unit})`;
+                                                }).join(', ')}. ¿Deseas confirmar la solicitud?
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Rich Table with Product, Unit Price, Quantity and Subtotal */}
+                                    <div style={{
+                                        flex: 1,
+                                        overflowY: 'auto',
+                                        marginBottom: '1rem',
+                                        border: '1px solid #E2E8F0',
+                                        borderRadius: '16px',
+                                        backgroundColor: '#F8FAFC'
+                                    }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                            <thead style={{ backgroundColor: 'white', position: 'sticky', top: 0, zIndex: 5 }}>
+                                                <tr style={{ borderBottom: '1.5px solid #E2E8F0' }}>
+                                                    <th style={{ textAlign: 'left', padding: '0.75rem 1rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '45%' }}>{t.b2b.dashboard.product}</th>
+                                                    <th style={{ textAlign: 'right', padding: '0.75rem 0.75rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '20%' }}>PRECIO VIGENTE</th>
+                                                    <th style={{ textAlign: 'center', padding: '0.75rem 0.75rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '15%' }}>{t.b2b.dashboard.quantity}</th>
+                                                    <th style={{ textAlign: 'right', padding: '0.75rem 1rem', color: '#475569', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', width: '20%' }}>SUBTOTAL</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {activeSubmitItems.map(item => {
+                                                    const price = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
+                                                    const lineSubtotal = item.quantity * price;
+
+                                                    const pastPurchases = historicalOrders.flatMap(o => o.order_items || o.items || []).filter((i: any) => (i.product_id && i.product_id === item.product_id) || (i.product_name && i.product_name === item.product_name));
+                                                    const isNewItem = pastPurchases.length === 0;
+                                                    const totalQtyBought = pastPurchases.reduce((acc: number, curr: any) => acc + Number(curr.quantity || 0), 0);
+                                                    const avgQtyBought = pastPurchases.length > 0 ? (totalQtyBought / pastPurchases.length) : 0;
+                                                    const isUnusualQty = pastPurchases.length > 0 && item.quantity > (avgQtyBought * 3.0);
+
+                                                    return (
+                                                        <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: isUnusualQty ? '#FFFBEB' : 'white' }}>
+                                                            <td style={{ padding: '0.75rem 1rem' }}>
+                                                                <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>
+                                                                    {locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                                </div>
+                                                                {item.variant_label && (
+                                                                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>({item.variant_label})</span>
+                                                                )}
+
+                                                                {/* Soft Warning Badges in Modal Table */}
+                                                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '3px' }}>
+                                                                    {isNewItem && (
+                                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#6D28D9', backgroundColor: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #DDD6FE', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <Sparkles size={11} strokeWidth={2} /> Insumo Nuevo
+                                                                        </span>
+                                                                    )}
+                                                                    {isUnusualQty && (
+                                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#92400E', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <AlertTriangle size={11} strokeWidth={2} /> Cantidad Inusual (Sueles pedir ~{Math.round(avgQtyBought)} {item.unit})
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.75rem', textAlign: 'right', fontWeight: '700', color: '#475569' }}>
+                                                                ${formatPrice(price)} <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>/ {item.unit}</span>
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center', fontWeight: '900', color: isUnusualQty ? '#B45309' : '#059669', backgroundColor: isUnusualQty ? '#FEF3C7' : '#ECFDF5', borderRadius: '6px' }}>
+                                                                {item.quantity} {item.unit}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#0F172A' }}>
+                                                                ${formatPrice(lineSubtotal)}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            );
+                        })()}
 
                         {/* Order Summary Metrics & Delivery Date Selector Bar */}
                         <div style={{
