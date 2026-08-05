@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, ShieldAlert, Search, Calendar, User, Settings, Loader2, RefreshCw, Eye } from 'lucide-react';
+import { ArrowLeft, Download, ShieldAlert, AlertTriangle, Search, Calendar, User, Settings, Loader2, RefreshCw, Eye } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -79,6 +79,9 @@ const formatActionName = (log: any) => {
     const action = typeof log === 'string' ? log : log.action;
     if (!action) return '-';
     
+    if (action === 'LOGIN' || action === 'USER_LOGIN') return 'INGRESO AL SISTEMA';
+    if (action === 'LOGOUT' || action === 'USER_LOGOUT') return 'SALIDA DEL SISTEMA';
+
     // Check if it's a profile/user action but targeting a client
     if (typeof log === 'object' && action.endsWith('_profiles') && log.details) {
         const role = log.details.role || '';
@@ -139,6 +142,12 @@ const formatDetailsSummary = (log: any) => {
     const d = log.details;
     if (log.action === 'BULK_IMPORT_CLIENTS') {
         return `Clientes creados: ${d.parents_created || 0}, Sucursales creadas: ${d.children_created || 0}`;
+    }
+    if (log.action === 'LOGIN' || log.action === 'USER_LOGIN') {
+        return `Inicio de sesión exitoso${d.email ? ` (${d.email})` : ''}`;
+    }
+    if (log.action === 'LOGOUT' || log.action === 'USER_LOGOUT') {
+        return `Cierre de sesión realizado${d.email ? ` (${d.email})` : ''}`;
     }
     
     let parts = [];
@@ -281,7 +290,8 @@ export default function AuditLogPage() {
         query = query.gte('created_at', limitDate.toISOString());
 
         if (searchTerm.trim()) {
-            const term = `%${searchTerm.trim()}%`;
+            const sanitizedTerm = searchTerm.trim().replace(/[%_]/g, '\\$&');
+            const term = `%${sanitizedTerm}%`;
             query = query.or(`collaborator_name.ilike.${term},action.ilike.${term},module.ilike.${term}`);
         }
         
@@ -305,8 +315,12 @@ export default function AuditLogPage() {
             query = query.like('action', 'UPDATE_%');
         } else if (actionType === 'delete') {
             query = query.like('action', 'DELETE_%');
+        } else if (actionType === 'login') {
+            query = query.or('action.eq.LOGIN,action.eq.USER_LOGIN');
+        } else if (actionType === 'logout') {
+            query = query.or('action.eq.LOGOUT,action.eq.USER_LOGOUT');
         } else if (actionType === 'security') {
-            query = query.or('module.eq.SECURITY,action.ilike.%SECURITY%,action.ilike.%LOGIN%,action.ilike.%REGENERATE%,action.ilike.%PERMISSION%');
+            query = query.or('module.eq.SECURITY,action.ilike.%SECURITY%,action.ilike.%LOGIN%,action.ilike.%LOGOUT%,action.ilike.%REGENERATE%,action.ilike.%PERMISSION%');
         }
         
         return query;
@@ -416,6 +430,8 @@ export default function AuditLogPage() {
     };
 
     const getActionBadgeColor = (action: string) => {
+        if (action === 'LOGIN' || action === 'USER_LOGIN') return { bg: '#E0E7FF', text: '#3730A3' }; // High contrast Indigo
+        if (action === 'LOGOUT' || action === 'USER_LOGOUT') return { bg: '#F3F4F6', text: '#4B5563' }; // Neutral Slate
         if (action.startsWith('INSERT_')) return { bg: '#DEF7EC', text: '#03543F' };
         if (action.startsWith('UPDATE_')) return { bg: '#FEF08A', text: '#713F12' };
         if (action.startsWith('DELETE_')) return { bg: '#FDE8E8', text: '#9B1C1C' };
@@ -503,7 +519,7 @@ export default function AuditLogPage() {
                     backgroundColor: '#FDF8F2', border: '1px solid #F59E0B33', borderRadius: THEME.radius.lg, 
                     padding: '0.6rem 1rem', display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '1rem'
                 }}>
-                    <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                    <AlertTriangle size={18} color="#B45309" style={{ flexShrink: 0 }} />
                     <div>
                         <h4 style={{ margin: 0, fontWeight: '800', color: '#B45309', fontSize: '0.72rem', fontFamily: THEME.typography.fontFamilyMain }}>POLÍTICA DE OPTIMIZACIÓN (BÚSQUEDA LIMITADA A 3 MESES)</h4>
                         <p style={{ margin: '2px 0 0 0', fontSize: '0.68rem', color: '#B45309', fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
@@ -557,7 +573,9 @@ export default function AuditLogPage() {
                             <option value="create">Creación (INSERT)</option>
                             <option value="update">Modificación (UPDATE)</option>
                             <option value="delete">Eliminación (DELETE)</option>
-                            <option value="security">Seguridad/Login</option>
+                            <option value="login">Ingresos (LOGIN)</option>
+                            <option value="logout">Salidas (LOGOUT)</option>
+                            <option value="security">Seguridad / Autenticación</option>
                         </select>
                     </div>
                 </div>

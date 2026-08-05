@@ -2,6 +2,19 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { 
+    Users, 
+    Zap, 
+    Truck, 
+    Key, 
+    Search, 
+    AlertTriangle, 
+    XCircle, 
+    RefreshCw, 
+    Plus, 
+    X, 
+    User
+} from 'lucide-react';
 
 interface Conductor {
     id: string;
@@ -277,7 +290,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
     });
 
     const getInitials = (name: string) => {
-        if (!name) return '👤';
+        if (!name) return 'CD';
         return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
@@ -305,7 +318,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', alignItems: 'center' }}>
                     {/* Stat 1 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid #F1F5F9' }}>
-                        <div style={{ fontSize: '1.1rem' }}>👥</div>
+                        <Users size={16} color="#64748B" />
                         <div>
                             <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Total</div>
                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#111827' }}>{totalConductors}</div>
@@ -314,7 +327,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
 
                     {/* Stat 2 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid #F1F5F9' }}>
-                        <div style={{ color: '#059669', fontSize: '1.1rem' }}>⚡</div>
+                        <Zap size={16} color="#059669" />
                         <div>
                             <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Activos</div>
                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#111827' }}>{activeConductors}</div>
@@ -323,7 +336,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
 
                     {/* Stat 3 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid #F1F5F9' }}>
-                        <div style={{ color: '#0D9488', fontSize: '1.1rem' }}>🚛</div>
+                        <Truck size={16} color="#0D9488" />
                         <div>
                             <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Asignados</div>
                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#0F766E' }}>{withVehicle}</div>
@@ -332,7 +345,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
 
                     {/* Stat 4 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ color: '#D97706', fontSize: '1.1rem' }}>🔑</div>
+                        <Key size={16} color="#D97706" />
                         <div>
                             <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Célibes</div>
                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#D97706' }}>{availVehicles}</div>
@@ -354,7 +367,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
                         }}
                     />
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.1rem' }}>🔍</span>
+                    <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                     <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800' }}>
                         {filtered.length} RESULTADOS
                     </div>
@@ -412,12 +425,12 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                                 </td>
                                 <td style={{ padding: '1.2rem' }}>
                                     {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? (
-                                        <div style={{ fontWeight: '800', color: '#0891B2', backgroundColor: '#ECFEFF', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #BFEAF2' }}>
-                                            🚛 {c.fleet_vehicles[0].plate}
+                                        <div style={{ fontWeight: '800', color: '#0891B2', backgroundColor: '#ECFEFF', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #BFEAF2', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <Truck size={14} /> {c.fleet_vehicles[0].plate}
                                         </div>
                                     ) : (
-                                        <div style={{ fontWeight: '700', color: '#D97706', backgroundColor: '#FFFBEB', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px dashed #FEF3C7', fontSize: '0.8rem' }}>
-                                            ⚠️ Sin Vehículo
+                                        <div style={{ fontWeight: '700', color: '#D97706', backgroundColor: '#FFFBEB', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px dashed #FEF3C7', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <AlertTriangle size={14} /> Sin Vehículo
                                         </div>
                                     )}
                                 </td>
@@ -437,7 +450,7 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                                                     style={{ padding: '0.4rem', borderRadius: '8px', border: '2px solid #0891B2', fontWeight: '900', fontSize: '0.8rem' }}
                                                 >
                                                     <option value="">Seleccionar...</option>
-                                                    <option value="none">❌ Desvincular</option>
+                                                    <option value="none">Desvincular</option>
                                                     {availableVehicles.map(v => (
                                                         <option key={v.id} value={v.id}>{v.plate}</option>
                                                     ))}
@@ -445,9 +458,9 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                                             ) : (
                                                 <button 
                                                     onClick={() => setAssigningId(c.id)}
-                                                    style={{ padding: '0.4rem 1rem', borderRadius: '8px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
+                                                    style={{ padding: '0.4rem 1rem', borderRadius: '8px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                                 >
-                                                    {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? '🔄 CAMBIAR' : '➕ ASIGNAR'}
+                                                    {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? <><RefreshCw size={12} /> CAMBIAR</> : <><Plus size={12} /> ASIGNAR</>}
                                                 </button>
                                             )}
                                         </div>
@@ -463,7 +476,9 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
             {selectedDriver && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
                     <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '800px', borderRadius: '32px', overflow: 'hidden', position: 'relative', animation: 'slideUp 0.3s ease-out' }}>
-                        <button onClick={() => setSelectedDriver(null)} style={{ position: 'absolute', right: '2rem', top: '2rem', background: '#F1F5F9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
+                        <button onClick={() => setSelectedDriver(null)} style={{ position: 'absolute', right: '2rem', top: '2rem', background: '#F1F5F9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <X size={20} />
+                        </button>
                         <div style={{ padding: '3rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
                                 <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900', fontSize: '1.8rem' }}>

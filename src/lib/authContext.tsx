@@ -32,6 +32,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export async function logAuthEvent(action: 'LOGIN' | 'LOGOUT', userEmail?: string, userId?: string, profileName?: string) {
+    try {
+        const details: Record<string, any> = {};
+        if (userEmail) details.email = userEmail;
+        
+        const { error: rpcError } = await supabase.rpc('log_user_auth_event', {
+            p_action: action,
+            p_details: details
+        });
+
+        if (rpcError) {
+            console.warn('⚠️ Error al registrar evento de auditoría vía RPC:', rpcError.message);
+        }
+    } catch (err) {
+        console.warn('⚠️ No se pudo registrar la auditoría de autenticación:', err);
+    }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
@@ -164,13 +182,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signIn = async (email: string, password: string) => {
         console.log('🗝️ Iniciando sign-in para:', email);
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) console.error('❌ Error en supabase.auth.signIn:', error.message);
-        else console.log('✅ Sign-in de Supabase completado con éxito');
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+            console.error('❌ Error en supabase.auth.signIn:', error.message);
+        } else {
+            console.log('✅ Sign-in de Supabase completado con éxito');
+            const loggedUser = data?.user;
+            logAuthEvent('LOGIN', email, loggedUser?.id);
+        }
         return { error };
     };
 
     const signOut = async () => {
+        const currentEmail = user?.email;
+        const currentId = user?.id;
+        const currentName = profile?.contact_name || profile?.company_name;
+        await logAuthEvent('LOGOUT', currentEmail, currentId, currentName);
         await supabase.auth.signOut();
         setUser(null);
         setProfile(null);
