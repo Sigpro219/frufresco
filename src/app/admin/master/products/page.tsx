@@ -297,7 +297,7 @@ export default function MasterProductsPage() {
     };
 
     const downloadFullMaster = () => {
-        // Tab 1: Productos Base
+        // Tab 1: Productos Base (sin campos de precio estáticos, gestionados dinámicamente en Matriz de Costos)
         const exportData = products.map(p => {
             const parent = products.find(pr => pr.id === p.parent_id);
             return {
@@ -315,7 +315,6 @@ export default function MasterProductsPage() {
                 SKU_PADRE: parent?.sku || '',
                 Nombre_Padre: parent?.name || '',
                 Tipo_Jerarquia: p.parent_id ? (p.parent_id === p.id ? 'PADRE' : 'HIJO') : 'PRINCIPAL',
-                Costo_Base: p.base_price || 0,
                 IVA: p.iva_rate ?? 19,
                 URL_Imagen: p.image_url || '',
                 Comprador: p.buying_team || '',
@@ -356,23 +355,7 @@ export default function MasterProductsPage() {
             }
         });
 
-        // Tab 3: Precios Especiales por Lista/Canal Planos
-        const exportPrices: any[] = [];
-        products.forEach(p => {
-            if (Array.isArray(p.pricing_model_prices)) {
-                p.pricing_model_prices.forEach((pm: any) => {
-                    exportPrices.push({
-                        SKU_PRODUCTO: p.sku || '',
-                        ID_CONTABLE: p.accounting_id || '',
-                        Nombre_Producto: p.name || '',
-                        Canal_Cliente: pm.channel || pm.client_type || 'General',
-                        Precio_Especial: pm.price || 0
-                    });
-                });
-            }
-        });
-
-        // Tab 4: Guía de Datos / Diccionario
+        // Tab 3: Guía de Datos / Diccionario
         const guideHeaders = ["Hoja de Excel", "Campo Plantilla", "Requerido", "Tipo de Dato", "Descripción / Valores Permitidos"];
         const guideRows = [
             ["1. Productos", "ID_INTERNO", "NO (Autogenerado)", "UUID Texto", "ID único en base de datos. Dejar intacto para actualizar registros."],
@@ -384,7 +367,6 @@ export default function MasterProductsPage() {
             ["1. Productos", "Descripcion_EN", "NO", "Texto", "Descripción comercial en inglés"],
             ["1. Productos", "Categoria", "SÍ", "Texto", "Código de Categoría: FR (Frutas), VE (Verduras), HO (Hortalizas), TU (Tubérculos), DE (Despensa), LA (Lácteos)"],
             ["1. Productos", "Unidad", "SÍ", "Texto", "Unidad base física (ej: Kg, G, Lb, Lt, Un, Atado, Bulto)"],
-            ["1. Productos", "Costo_Base", "SÍ", "Número", "Costo de adquisición base sin IVA"],
             ["1. Productos", "IVA", "SÍ", "Número", "Porcentaje de IVA aplicable (0, 5, 19)"],
             ["1. Productos", "URL_Imagen", "NO", "Texto", "Enlace público HTTP de la foto principal"],
             ["1. Productos", "Comprador", "NO", "Texto", "Equipo de alistamiento asignado (ej: EQUIPO B FRUTAS Y OTROS)"],
@@ -409,33 +391,26 @@ export default function MasterProductsPage() {
             ["2. Variaciones", "ID_CONTABLE", "SÍ", "Número", "ID Contable comercial del producto base."],
             ["2. Variaciones", "Atributo", "SÍ", "Texto", "Nombre de la variación (ej: Madurez, Calidad, Presentación, Corte)"],
             ["2. Variaciones", "Valores_Permitidos", "SÍ", "Texto", "Valores posibles de la variación separados por comas (ej: Verde,Maduro,Pintón o Atado,Caja)"],
-            
-            ["3. Precios_Canal", "SKU_PRODUCTO", "SÍ", "Texto", "SKU del producto base."],
-            ["3. Precios_Canal", "ID_CONTABLE", "SÍ", "Número", "ID Contable comercial del producto base."],
-            ["3. Precios_Canal", "Canal_Cliente", "SÍ", "Texto", "Canal, Tipo de Cliente o Lista a aplicar el precio (ej: RESTAURANTES, HOTELES, General)"],
-            ["3. Precios_Canal", "Precio_Especial", "SÍ", "Número", "Precio de venta neto especial para este canal."]
+            ["Nota General", "PRECIOS", "DINÁMICOS", "N/A", "Los precios comerciales y costos se calculan dinámicamente desde el módulo Matriz de Costos."]
         ];
         const guideSheetData = [guideHeaders, ...guideRows];
 
         const workbook = XLSX.utils.book_new();
         const wsProducts = XLSX.utils.json_to_sheet(exportData);
         const wsVariations = XLSX.utils.json_to_sheet(exportVariations);
-        const wsPrices = XLSX.utils.json_to_sheet(exportPrices);
         const wsGuide = XLSX.utils.aoa_to_sheet(guideSheetData);
 
         // Ajustar anchos
         wsProducts['!cols'] = Object.keys(exportData[0] || {}).map(() => ({ wch: 18 }));
         wsVariations['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 35 }];
-        wsPrices['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 15 }];
         wsGuide['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 15 }, { wch: 60 }];
 
         XLSX.utils.book_append_sheet(workbook, wsProducts, "1. Productos");
         XLSX.utils.book_append_sheet(workbook, wsVariations, "2. Variaciones");
-        XLSX.utils.book_append_sheet(workbook, wsPrices, "3. Precios_Canal");
-        XLSX.utils.book_append_sheet(workbook, wsGuide, "4. Diccionario_Guia");
+        XLSX.utils.book_append_sheet(workbook, wsGuide, "3. Diccionario_Guia");
 
         XLSX.writeFile(workbook, `maestro_edicion_${new Date().toISOString().split('T')[0]}.xlsx`);
-        showToast('Maestro completo exportado con 4 pestañas limpias', 'success');
+        showToast('Maestro completo exportado (precios gestionados dinámicamente)', 'success');
     };
 
     const sanitizeMasterData = async () => {
@@ -720,95 +695,160 @@ export default function MasterProductsPage() {
 
             setLoading(true);
             try {
+                // Pre-extraer los SKUs válidos del Excel subido
+                const validSkus = new Set(
+                    prodRows
+                        .map(r => (r.SKU || r.sku || '').toString().trim())
+                        .filter(s => s !== '')
+                );
+
                 if (wipeExistingData) {
+                    // Intento 1: Intento de borrado físico directo
                     const { error: purgeError } = await supabase.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
-                    if (purgeError) throw purgeError;
+                    
+                    if (purgeError) {
+                        console.warn('⚠️ No se pudo realizar el borrado físico directo por restricciones de FK en la BD. Ejecutando deshabilitación inteligente de productos no presentes en el Excel...', purgeError.message);
+                        
+                        // Intento 2: Deshabilitación de productos descontinuados que no vienen en el nuevo Excel
+                        const { data: existingProds } = await supabase.from('products').select('id, sku');
+                        if (existingProds && existingProds.length > 0) {
+                            const obsoleteIds = existingProds
+                                .filter(p => p.sku && !validSkus.has(p.sku.trim()))
+                                .map(p => p.id);
+                            
+                            if (obsoleteIds.length > 0) {
+                                // Desactivar en lotes los productos obsoletos
+                                for (let i = 0; i < obsoleteIds.length; i += 100) {
+                                    const chunkIds = obsoleteIds.slice(i, i + 100);
+                                    await supabase.from('products').update({ is_active: false }).in('id', chunkIds);
+                                }
+                            }
+                        }
+                    }
                 }
 
-                const productsToInsert = prodRows.map(row => {
-                    const cleanArrayStr = (val: any): string[] => {
-                        if (!val) return [];
-                        if (Array.isArray(val)) return val;
-                        return val.toString().split(',').map((t: string) => t.trim()).filter((t: string) => t !== '');
-                    };
+                const productsToInsert = prodRows
+                    .filter(row => (row.SKU || row.sku || '').toString().trim() !== '')
+                    .map(row => {
+                        const cleanArrayStr = (val: any): string[] => {
+                            if (!val) return [];
+                            if (Array.isArray(val)) return val;
+                            return val.toString().split(',').map((t: string) => t.trim()).filter((t: string) => t !== '');
+                        };
 
-                    const sku = (row.SKU || row.sku || '').toString().trim();
-                    
-                    // Reconstruir options_config y variants JSON a partir de la pestaña Variaciones
-                    let options_config = variationsMap[sku] || [];
-                    let variants: any[] = [];
-                    if (options_config.length > 0) {
-                        // Generar combinaciones de variantes
-                        let results: any[] = [{}];
-                        options_config.forEach(opt => {
-                            const temp: any[] = [];
-                            results.forEach(res => {
-                                opt.values.forEach((val: string) => {
-                                    temp.push({ ...res, [opt.name]: val });
-                                });
-                            });
-                            results = temp;
-                        });
-                        variants = results.map(combination => {
-                            const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
-                            return {
-                                id: `v-${Math.random().toString(36).substring(2, 11)}`,
-                                options: combination,
-                                sku: `${sku}.${attrValues}`
-                            };
-                        });
-                    }
-
-                    // Precios de canal
-                    const pricing_model_prices = pricesMap[sku] || [];
-
-                    return {
-                        id: row.ID_INTERNO || row.id || undefined,
-                        sku: sku,
-                        accounting_id: parseInt(row.ID_CONTABLE || row.accounting_id || '0'),
-                        name: (row.Nombre || row.name || '').toString(),
-                        name_en: (row.Nombre_EN || row.name_en || '').toString() || null,
-                        description: (row.Descripcion || row.description || '').toString(),
-                        description_en: (row.Descripcion_EN || row.description_en || '').toString() || null,
-                        category: (row.Categoria || row.category || 'DE').toString(),
-                        unit_of_measure: (row.Unidad || row.unit_of_measure || 'Kg').toString(),
-                        base_price: parseFloat(row.Costo_Base || row.base_price || '0'),
-                        iva_rate: parseInt(row.IVA || row.iva_rate || '19'),
-                        image_url: (row.URL_Imagen && row.URL_Imagen.toString() !== '0') ? row.URL_Imagen.toString() : null,
-                        buying_team: (row.Comprador || row.buying_team || '').toString() || null,
-                        procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString() || null,
-                        is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
-                        show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
-                        display_name: (row.Nombre_Web || row.display_name || '').toString() || null,
-                        web_unit: (row.Unidad_Web || row.web_unit || '').toString() || null,
-                        web_conversion_factor: parseFloat(row.Factor_Web || row.web_conversion_factor || '1'),
-                        min_inventory_level: parseInt(row.Min_Inventario || row.min_inventory_level || '0'),
-                        parent_id: row.ID_PADRE || row.parent_id || null,
-                        theoretical_shrinkage_pct: parseFloat(row.Merma_Teorica_Pct || row.theoretical_shrinkage_pct || '0'),
-                        allowed_waste_reasons: cleanArrayStr(row.Razones_Desperdicio || row.allowed_waste_reasons),
-                        inventory_group: (row.Grupo_Inventario || row.inventory_group || '').toString() || null,
-                        purchase_sublist: (row.Sublista_Compra || row.purchase_sublist || '').toString() || null,
-                        tags: cleanArrayStr(row.Tags || row.tags),
-                        keywords: (row.Keywords || row.keywords || '').toString() || null,
-                        utility_deviation_pct: parseFloat(row.Desviacion_Utilidad_Pct || row.utility_deviation_pct || '0'),
-                        inherit_price: (row.Heredar_Precio || row.inherit_price) === 'SI' || row.inherit_price === true,
+                        const sku = (row.SKU || row.sku || '').toString().trim();
                         
-                        // JSON autogenerados sin requerir escritura manual del usuario
-                        options_config,
-                        variants,
-                        pricing_model_prices
-                    };
-                });
+                        // Reconstruir options_config y variants JSON a partir de la pestaña Variaciones
+                        let options_config = variationsMap[sku] || [];
+                        let variants: any[] = [];
+                        if (options_config.length > 0) {
+                            let results: any[] = [{}];
+                            options_config.forEach(opt => {
+                                const temp: any[] = [];
+                                results.forEach(res => {
+                                    opt.values.forEach((val: string) => {
+                                        temp.push({ ...res, [opt.name]: val });
+                                    });
+                                });
+                                results = temp;
+                            });
+                            variants = results.map(combination => {
+                                const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
+                                return {
+                                    id: `v-${Math.random().toString(36).substring(2, 11)}`,
+                                    options: combination,
+                                    sku: `${sku}.${attrValues}`
+                                };
+                            });
+                        }
 
-                // Cargar en bloques de 100
+                        // Precios de canal
+                        const pricing_model_prices = pricesMap[sku] || [];
+
+                        // Detección flexible de ID UUID
+                        const rawId = row.ID_INTERNO || row.id || row['ID Interno'] || row['id_interno'];
+                        const isUUID = rawId && typeof rawId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
+                        const id = isUUID ? rawId.trim() : undefined;
+
+                        // Detección flexible de Unidad_Web y Factor_Web
+                        const web_unit = (row.Unidad_Web || row['Unidad Web'] || row.web_unit || row['unidad_web'] || row['unidad web'] || '').toString().trim() || null;
+                        
+                        const rawFactor = row.Factor_Web ?? row['Factor Web'] ?? row.web_conversion_factor ?? row['factor_web'] ?? row['factor web'];
+                        let web_conversion_factor = 1.0;
+                        if (rawFactor !== undefined && rawFactor !== null && rawFactor !== '') {
+                            const parsedFactor = parseFloat(rawFactor.toString().replace(',', '.'));
+                            if (!isNaN(parsedFactor) && parsedFactor > 0) {
+                                web_conversion_factor = parsedFactor;
+                            }
+                        }
+
+                        // Sanitización de números para prevenir NaN
+                        const parseNum = (val: any, fallback: number = 0): number => {
+                            if (val === undefined || val === null || val === '') return fallback;
+                            const n = parseFloat(val.toString().replace(',', '.'));
+                            return isNaN(n) ? fallback : n;
+                        };
+
+                        const parseIntNum = (val: any, fallback: number = 0): number => {
+                            if (val === undefined || val === null || val === '') return fallback;
+                            const n = parseInt(val.toString());
+                            return isNaN(n) ? fallback : n;
+                        };
+
+                        return {
+                            id,
+                            sku: sku,
+                            accounting_id: parseIntNum(row.ID_CONTABLE || row.accounting_id, 0),
+                            name: (row.Nombre || row.name || '').toString(),
+                            name_en: (row.Nombre_EN || row.name_en || '').toString() || null,
+                            description: (row.Descripcion || row.description || '').toString(),
+                            description_en: (row.Descripcion_EN || row.description_en || '').toString() || null,
+                            category: (row.Categoria || row.category || 'DE').toString(),
+                            unit_of_measure: (row.Unidad || row.unit_of_measure || 'Kg').toString(),
+                            base_price: parseNum(row.Costo_Base || row.base_price, 0),
+                            iva_rate: parseIntNum(row.IVA || row.iva_rate, 19),
+                            image_url: (row.URL_Imagen && row.URL_Imagen.toString() !== '0') ? row.URL_Imagen.toString() : null,
+                            buying_team: (row.Comprador || row.buying_team || '').toString() || null,
+                            procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString() || null,
+                            is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
+                            show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
+                            display_name: (row.Nombre_Web || row.display_name || '').toString() || null,
+                            web_unit,
+                            web_conversion_factor,
+                            min_inventory_level: parseIntNum(row.Min_Inventario || row.min_inventory_level, 0),
+                            parent_id: row.ID_PADRE || row.parent_id || null,
+                            theoretical_shrinkage_pct: parseNum(row.Merma_Teorica_Pct || row.theoretical_shrinkage_pct, 0),
+                            allowed_waste_reasons: cleanArrayStr(row.Razones_Desperdicio || row.allowed_waste_reasons),
+                            inventory_group: (row.Grupo_Inventario || row.inventory_group || '').toString() || null,
+                            purchase_sublist: (row.Sublista_Compra || row.purchase_sublist || '').toString() || null,
+                            tags: cleanArrayStr(row.Tags || row.tags),
+                            keywords: (row.Keywords || row.keywords || '').toString() || null,
+                            utility_deviation_pct: parseNum(row.Desviacion_Utilidad_Pct || row.utility_deviation_pct, 0),
+                            inherit_price: (row.Heredar_Precio || row.inherit_price) === 'SI' || row.inherit_price === true,
+                            
+                            options_config,
+                            variants,
+                            pricing_model_prices
+                        };
+                    });
+
+                // Cargar en bloques de 100 con manejo inteligente de onConflict
                 const chunkSize = 100;
                 for (let i = 0; i < productsToInsert.length; i += chunkSize) {
                     const chunk = productsToInsert.slice(i, i + chunkSize);
-                    const { error } = await supabase.from('products').upsert(chunk);
-                    if (error) throw error;
+                    
+                    // Si el lote tiene id UUID definido en todos los ítems, upsert directo por id; de lo contrario upsert por SKU
+                    const hasUUIDs = chunk.every(item => item.id);
+                    if (hasUUIDs) {
+                        const { error } = await supabase.from('products').upsert(chunk);
+                        if (error) throw error;
+                    } else {
+                        const { error } = await supabase.from('products').upsert(chunk, { onConflict: 'sku' });
+                        if (error) throw error;
+                    }
                 }
 
-                showToast(`Carga masiva completada: ${productsToInsert.length} productos actualizados.`, 'success');
+                showToast(`Carga masiva completada: ${productsToInsert.length} productos procesados exitosamente.`, 'success');
                 setIsBulkModalOpen(false);
                 setSelectedFile(null);
                 fetchProducts();
@@ -823,32 +863,32 @@ export default function MasterProductsPage() {
     };
 
     const downloadTemplate = () => {
-        // Tab 1: Productos Base
+        // Tab 1: Productos Base (sin campos de precio estáticos)
         const headers = [
             "SKU", "ID_CONTABLE", "Nombre", "Nombre_EN", "Descripcion", "Descripcion_EN", 
-            "Categoria", "Unidad", "Costo_Base", "IVA", "URL_Imagen", "Comprador", 
+            "Categoria", "Unidad", "IVA", "URL_Imagen", "Comprador", 
             "Metodo_Compra", "Activo", "Web", "Nombre_Web", "Unidad_Web", "Factor_Web", 
             "Min_Inventario", "ID_PADRE", "Merma_Teorica_Pct", "Razones_Desperdicio", 
             "Grupo_Inventario", "Sublista_Compra", "Tags", "Keywords", "Desviacion_Utilidad_Pct", 
-            "Heredar_Precio", "Precios_Canal_JSON", "Config_Opciones", "Variantes_JSON"
+            "Heredar_Precio", "Config_Opciones", "Variantes_JSON"
         ];
         
         const sample1 = [
             "M-FR-MNZ-K", "101", "Manzana Roja", "Red Apple", "Manzana fresca seleccionada de alta calidad", "Fresh red apple selected...", 
-            "FR", "Kg", 5000, 0, "https://images.com/manzana.jpg", "EQUIPO B FRUTAS Y OTROS", 
+            "FR", "Kg", 0, "https://images.com/manzana.jpg", "EQUIPO B FRUTAS Y OTROS", 
             "Compras Generales", "SI", "SI", "Manzana Roja Web", "Kg", 1.0, 
             10, "", 2.5, "Daño por transporte,Madurez excesiva", 
             "INVENTARIO DE FRUTAS Y OTROS", "FRUTA SELECCIONADA", "frescos,fruta,roja", "manzana,apple,red", 0, 
-            "NO", "[]", "[]", "[]"
+            "NO", "[]", "[]"
         ];
 
         const sample2 = [
             "M-VE-CBL-K", "102", "Cebolla Cabezona", "White Onion", "Cebolla cabezona blanca seleccionada", "Fresh white onion...", 
-            "VE", "Kg", 2000, 0, "", "LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO", 
+            "VE", "Kg", 0, "", "LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO", 
             "Compras Generales", "SI", "SI", "Cebolla Cabezona Web", "Kg", 1.0, 
             20, "", 1.8, "Deshidratación", 
             "INVENTARIO DE VERDURAS", "VERDURAS", "verduras,cebolla", "cebolla,onion", 0, 
-            "NO", "[]", "[]", "[]"
+            "NO", "[]", "[]"
         ];
 
         const dataSheet = [headers, sample1, sample2];
@@ -864,7 +904,6 @@ export default function MasterProductsPage() {
             ["Descripcion_EN", "NO", "Texto", "Descripción comercial en inglés"],
             ["Categoria", "SÍ", "Texto", "Código de Categoría: FR (Frutas), VE (Verduras), HO (Hortalizas), TU (Tubérculos), DE (Despensa), LA (Lácteos)"],
             ["Unidad", "SÍ", "Texto", "Unidad base física (ej: Kg, G, Lb, Lt, Un, Atado, Bulto)"],
-            ["Costo_Base", "SÍ", "Número", "Costo de adquisición base sin IVA"],
             ["IVA", "SÍ", "Número", "Porcentaje de IVA aplicable (0, 5, 19)"],
             ["URL_Imagen", "NO", "Texto", "Enlace público HTTP de la foto principal"],
             ["Comprador", "NO", "Texto", "Equipo de alistamiento asignado (ej: EQUIPO B FRUTAS Y OTROS, HIERBAS Y HORTALIZAS)"],
@@ -884,9 +923,9 @@ export default function MasterProductsPage() {
             ["Keywords", "NO", "Texto", "Palabras alternativas de búsqueda separadas por comas"],
             ["Desviacion_Utilidad_Pct", "NO", "Número", "Porcentaje (%) máximo permitido de desviación respecto al costo heredado"],
             ["Heredar_Precio", "NO", "SI/NO", "Indica si hereda automáticamente precios y costos de su SKU padre"],
-            ["Precios_Canal_JSON", "NO", "JSON", "Estructura interna JSON de precios especiales por canal"],
             ["Config_Opciones", "NO", "JSON", "Configuración de atributos (opciones) del SKU"],
-            ["Variantes_JSON", "NO", "JSON", "Variaciones paramétricas generadas"]
+            ["Variantes_JSON", "NO", "JSON", "Variaciones paramétricas generadas"],
+            ["Nota General", "PRECIOS DINÁMICOS", "N/A", "Los precios comerciales se gestionan dinámicamente desde el módulo Matriz de Costos."]
         ];
         const guideSheetData = [guideHeaders, ...guideRows];
 
@@ -903,7 +942,7 @@ export default function MasterProductsPage() {
         XLSX.utils.book_append_sheet(workbook, worksheetGuide, "Diccionario_Datos_Guia");
         
         XLSX.writeFile(workbook, "plantilla_carga_masiva_frubana.xlsx");
-        showToast('Plantilla multi-pestaña descargada con diccionario de datos', 'success');
+        showToast('Plantilla descargada (sin precios estáticos)', 'success');
     };
 
     const filteredProducts = useMemo(() => {

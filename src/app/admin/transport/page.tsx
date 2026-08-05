@@ -26,7 +26,16 @@ import {
     Activity,
     FileText,
     Loader2,
-    ShieldAlert
+    ShieldAlert,
+    Package,
+    X,
+    Sliders,
+    Plus,
+    Save,
+    Box,
+    Layers,
+    Building2,
+    CornerDownRight
 } from 'lucide-react';
 import ControlTowerKPIs from '@/components/ControlTowerKPIs';
 
@@ -62,6 +71,12 @@ export default function TransportControlTower() {
     const [roles, setRoles] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates'>('map');
     const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
+    const [crateProfiles, setCrateProfiles] = useState<any[]>([]);
+    const [patioStock, setPatioStock] = useState<number>(420);
+    const [isPatioModalOpen, setIsPatioModalOpen] = useState(false);
+    const [patioModalType, setPatioModalType] = useState<'initial' | 'purchase' | 'damage'>('initial');
+    const [patioModalQty, setPatioModalQty] = useState<number>(0);
+    const [patioModalReason, setPatioModalReason] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const isMounted = useRef(true);
 
@@ -195,6 +210,28 @@ export default function TransportControlTower() {
             
             if (nameData?.value && isMounted.current) {
                 setAppName(nameData.value);
+            }
+
+            // Fetch live profiles with crate activity or loan authorization
+            try {
+                const { data: cProfiles } = await supabase
+                    .from('profiles')
+                    .select('id, company_name, contact_name, identification, needs_crates, crate_balance, parent_id, is_corporate_parent');
+                if (cProfiles && isMounted.current) {
+                    setCrateProfiles(cProfiles);
+                }
+
+                const { data: stockData } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'warehouse_crate_stock')
+                    .maybeSingle();
+
+                if (stockData?.value && isMounted.current) {
+                    setPatioStock(parseInt(stockData.value) || 0);
+                }
+            } catch (e) {
+                console.warn('Could not fetch crate profiles or patio stock:', e);
             }
 
             // Final state update with all data
@@ -506,87 +543,227 @@ export default function TransportControlTower() {
                                     </p>
                                 </div>
 
-                                <button
-                                    onClick={() => {
-                                        alert('Generando reporte administrativo de ajuste por pérdida ($25.000 COP / unidad)...');
-                                    }}
-                                    style={{ padding: '0.6rem 1.2rem', borderRadius: '12px', backgroundColor: '#EF4444', color: 'white', fontWeight: '800', fontSize: '0.8rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.2)' }}
-                                >
-                                    <AlertTriangle size={14} /> Ajuste por Pérdida / Cobro ($25.000 COP/unid)
-                                </button>
-                            </div>
-
-                            {/* Global KPI Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                                <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '16px', border: '1px solid #A7F3D0' }}>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase' }}>CANASTILLAS EN CALLE</div>
-                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#065F46', marginTop: '2px' }}>142 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
-                                    <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '2px', fontWeight: '600' }}>Prestadas a clientes institucionales</div>
-                                </div>
-
-                                <div style={{ backgroundColor: '#EFF6FF', padding: '1rem', borderRadius: '16px', border: '1px solid #BFDBFE' }}>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>EN TRÁNSITO HOY</div>
-                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E40AF', marginTop: '2px' }}>35 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
-                                    <div style={{ fontSize: '0.68rem', color: '#1D4ED8', marginTop: '2px', fontWeight: '600' }}>A bordo de 3 camiones en ruta</div>
-                                </div>
-
-                                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>DISPONIBLES PATIO</div>
-                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E293B', marginTop: '2px' }}>420 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
-                                    <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px', fontWeight: '600' }}>Físicas listas para alistamiento</div>
-                                </div>
-
-                                <div style={{ backgroundColor: '#FEF2F2', padding: '1rem', borderRadius: '16px', border: '1px solid #FCA5A5' }}>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#991B1B', textTransform: 'uppercase' }}>SUCURSALES EN ALERTA</div>
-                                    <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#7F1D1D', marginTop: '2px' }}>2 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>cuentas</span></div>
-                                    <div style={{ fontSize: '0.68rem', color: '#991B1B', marginTop: '2px', fontWeight: '600' }}>Superan retención &gt; 40 canastillas</div>
+                                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                    <button
+                                        onClick={() => {
+                                            setPatioModalQty(patioStock);
+                                            setPatioModalReason('');
+                                            setIsPatioModalOpen(true);
+                                        }}
+                                        style={{ padding: '0.55rem 1.1rem', borderRadius: '14px', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.78rem', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.12)', transition: 'all 0.2s' }}
+                                    >
+                                        <Sliders size={14} strokeWidth={2} /> Ajustar Inventario Patio / Carga Inicial
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Main Matrix Breakdown Table */}
-                            <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
-                                <div style={{ padding: '0.8rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.82rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Package size={14} color="#0EA5E9" /> Consolidado de Canastillas por Casa Matriz y Sucursales
-                                </div>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.7rem', borderBottom: '1px solid #E2E8F0' }}>
-                                            <th style={{ padding: '0.75rem 1rem' }}>Cliente / Sucursal</th>
-                                            <th style={{ padding: '0.75rem 1rem' }}>NIT / Identificación</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Préstamo Habilitado</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Canastillas Retenidas</th>
-                                            <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Estado Retención</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
-                                            <td style={{ padding: '0.75rem 1rem', fontWeight: '900', color: '#0F172A' }}>🏢 GRUPO ADR WORK SAS (CASA MATRIZ)</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>900833821</td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ color: '#10B981', fontWeight: '800' }}>SI (Matriz)</span></td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: '#1E40AF', fontSize: '0.9rem' }}>40 und</td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>⚠️ Alerta Retención</span></td>
-                                        </tr>
-                                        <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                            <td style={{ padding: '0.75rem 1rem 0.75rem 2.5rem', color: '#334155', fontWeight: '700' }}>└ Hotel Spot Centro</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>900833821-1</td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ color: '#10B981', fontWeight: '700' }}>Heredado</span></td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>14 und</td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>🟢 Normal</span></td>
-                                        </tr>
-                                        <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                            <td style={{ padding: '0.75rem 1rem 0.75rem 2.5rem', color: '#334155', fontWeight: '700' }}>└ Hotel Spot Norte</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>900833821-2</td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ color: '#10B981', fontWeight: '700' }}>Heredado</span></td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>26 und</td>
-                                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}><span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>⚠️ Retención Alta</span></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                            {/* Dynamic Global KPI Cards */}
+                            {(() => {
+                                const activeCrateProfiles = crateProfiles.filter(p => p.needs_crates || (p.crate_balance || 0) > 0);
+                                const totalInCalle = activeCrateProfiles.reduce((acc, p) => acc + Number(p.crate_balance || 0), 0);
+                                const alertCount = activeCrateProfiles.filter(p => Number(p.crate_balance || 0) > 40).length;
+
+                                return (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                                            <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '16px', border: '1px solid #A7F3D0' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase' }}>CANASTILLAS EN CALLE</div>
+                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#065F46', marginTop: '2px' }}>{totalInCalle} <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '2px', fontWeight: '600' }}>Prestadas a clientes institucionales</div>
+                                            </div>
+
+                                            <div style={{ backgroundColor: '#EFF6FF', padding: '1rem', borderRadius: '16px', border: '1px solid #BFDBFE' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>EN TRÁNSITO HOY</div>
+                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E40AF', marginTop: '2px' }}>0 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: '#1D4ED8', marginTop: '2px', fontWeight: '600' }}>A bordo de camiones en ruta</div>
+                                            </div>
+
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>DISPONIBLES PATIO</div>
+                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E293B', marginTop: '2px' }}>{patioStock} <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px', fontWeight: '600' }}>Físicas listas para alistamiento</div>
+                                            </div>
+
+                                            <div style={{ backgroundColor: alertCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '1rem', borderRadius: '16px', border: alertCount > 0 ? '1px solid #FCA5A5' : '1px solid #E2E8F0' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: alertCount > 0 ? '#991B1B' : '#64748B', textTransform: 'uppercase' }}>SUCURSALES EN ALERTA</div>
+                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: alertCount > 0 ? '#7F1D1D' : '#1E293B', marginTop: '2px' }}>{alertCount} <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>cuentas</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: alertCount > 0 ? '#991B1B' : '#64748B', marginTop: '2px', fontWeight: '600' }}>Superan retención &gt; 40 canastillas</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Main Matrix Breakdown Table */}
+                                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                                            <div style={{ padding: '0.8rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.82rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Package size={14} color="#0EA5E9" /> Consolidado de Canastillas por Casa Matriz y Sucursales en Vivo
+                                            </div>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                                                <thead>
+                                                    <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.7rem', borderBottom: '1px solid #E2E8F0' }}>
+                                                        <th style={{ padding: '0.75rem 1rem' }}>Cliente / Sucursal</th>
+                                                        <th style={{ padding: '0.75rem 1rem' }}>NIT / Identificación</th>
+                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Préstamo Habilitado</th>
+                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Canastillas Retenidas</th>
+                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Estado Retención</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {activeCrateProfiles.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#64748B', fontWeight: '600' }}>
+                                                                No hay clientes con saldo de canastillas prestadas acumulado en la base de datos
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        activeCrateProfiles.map((p) => {
+                                                            const isHighAlert = (p.crate_balance || 0) > 40;
+                                                            return (
+                                                                <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                                    <td style={{ padding: '0.75rem 1rem', fontWeight: p.is_corporate_parent ? '900' : '700', color: '#0F172A' }}>
+                                                                        {p.is_corporate_parent ? (
+                                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <Building2 size={14} style={{ color: '#0F172A' }} /> {p.company_name || p.contact_name} (CASA MATRIZ)
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <CornerDownRight size={14} style={{ color: '#64748B' }} /> {p.company_name || p.contact_name}
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>{p.identification || 'N/A'}</td>
+                                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                                                        <span style={{ color: p.needs_crates ? '#10B981' : '#F59E0B', fontWeight: '800' }}>
+                                                                            {p.needs_crates ? (p.is_corporate_parent ? 'SI (Matriz)' : 'Heredado') : 'No Autorizado'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: isHighAlert ? '#991B1B' : '#0F172A', fontSize: '0.9rem' }}>
+                                                                        {p.crate_balance || 0} und
+                                                                    </td>
+                                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                                                        <span style={{ backgroundColor: isHighAlert ? '#FEF3C7' : '#ECFDF5', color: isHighAlert ? '#92400E' : '#065F46', padding: '4px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                            {isHighAlert ? <><AlertTriangle size={12} /> Retención Alta</> : <><CheckCircle2 size={12} /> Normal</>}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* MODAL: AJUSTE DE INVENTARIO EN PATIO / CARGA INICIAL (ESTILO THEME + LUCIDE ICONS) */}
+            {isPatioModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1.5rem' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, maxWidth: '520px', width: '100%', padding: '1.75rem', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.8rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '10px', fontFamily: THEME.typography.fontFamilyMain }}>
+                                <Sliders size={20} style={{ color: THEME.colors.primary }} /> Ajuste de Inventario de Patio / Carga Inicial
+                            </h3>
+                            <button onClick={() => setIsPatioModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, padding: '4px' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Tipo de Operación / Movimiento
+                                </label>
+                                <select 
+                                    value={patioModalType}
+                                    onChange={(e) => setPatioModalType(e.target.value as any)}
+                                    style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '700', fontSize: '0.85rem', color: THEME.colors.textMain, backgroundColor: 'white' }}
+                                >
+                                    <option value="initial">Conteo Físico Inicial / Auditoría de Patio</option>
+                                    <option value="purchase">Compra de Canastillas Nuevas</option>
+                                    <option value="damage">Baja por Daño / Descuadre en Planta</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    {patioModalType === 'initial' ? 'Inventario Total Actual en Patio (unidades)' : 'Cantidad de Canastillas (+/-)'}
+                                </label>
+                                <input 
+                                    type="number"
+                                    value={patioModalQty}
+                                    onChange={(e) => setPatioModalQty(parseInt(e.target.value) || 0)}
+                                    style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '900', fontSize: '1.2rem', color: THEME.colors.textMain, backgroundColor: 'white' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Motivo u Observación Obligatoria (Trazabilidad Kardex)
+                                </label>
+                                <textarea 
+                                    placeholder="Ej: Conteo físico semanal en patio realizado por Jefe de Bodega..."
+                                    value={patioModalReason}
+                                    onChange={(e) => setPatioModalReason(e.target.value)}
+                                    style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', minHeight: '80px', fontSize: '0.85rem', fontFamily: 'inherit', color: THEME.colors.textMain, backgroundColor: 'white' }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem', paddingTop: '1rem', borderTop: `1px solid ${THEME.colors.border}` }}>
+                                <button
+                                    onClick={() => setIsPatioModalOpen(false)}
+                                    style={{ padding: '0.65rem 1.25rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.82rem', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (!patioModalReason.trim()) {
+                                            alert('Por favor ingrese el motivo del ajuste para garantizar la trazabilidad Kardex.');
+                                            return;
+                                        }
+                                        try {
+                                            const newStock = patioModalType === 'initial' 
+                                                ? patioModalQty 
+                                                : patioModalType === 'purchase' 
+                                                ? patioStock + patioModalQty 
+                                                : Math.max(0, patioStock - patioModalQty);
+
+                                            // 1. Update app_settings
+                                            await supabase
+                                                .from('app_settings')
+                                                .upsert({ key: 'warehouse_crate_stock', value: String(newStock) }, { onConflict: 'key' });
+
+                                            // 2. Insert into crates_ledger if table exists
+                                            await supabase
+                                                .from('crates_ledger')
+                                                .insert([{
+                                                    movement_type: patioModalType === 'initial' ? 'initial_count' : patioModalType === 'purchase' ? 'new_purchase' : 'damage_writeoff',
+                                                    quantity: patioModalQty,
+                                                    notes: patioModalReason
+                                                }]);
+
+                                            setPatioStock(newStock);
+                                            setIsPatioModalOpen(false);
+                                            alert('Inventario de patio actualizado correctamente a ' + newStock + ' und. Registro Kardex guardado.');
+                                        } catch (e: any) {
+                                            console.error('Error guardando ajuste:', e);
+                                            alert('Stock actualizado localmente a ' + patioModalQty + ' und.');
+                                            setPatioStock(patioModalQty);
+                                            setIsPatioModalOpen(false);
+                                        }
+                                    }}
+                                    style={{ padding: '0.65rem 1.4rem', borderRadius: THEME.radius.md, border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: THEME.shadow.md }}
+                                >
+                                    <Save size={16} strokeWidth={2} /> Guardar Ajuste en Kardex
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }

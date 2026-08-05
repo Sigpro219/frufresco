@@ -19,7 +19,11 @@ import {
     Activity,
     FileText,
     Users,
-    Banknote
+    Banknote,
+    Package,
+    Zap,
+    Bot,
+    ShoppingBag
 } from 'lucide-react';
 
 interface Order {
@@ -767,7 +771,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Scale size={12} strokeWidth={1.5} /> Carga:</span> {formatNumber(orders.reduce((acc, curr) => acc + curr.total_weight_kg, 0), 1)} kg
                                 </span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#E6FFFA', color: '#0D9488', padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #CCFBF1', fontWeight: '800' }}>
-                                    🧺 Canastillas: {orders.reduce((acc, curr) => acc + curr.crates, 0)} und
+                                    <Package size={12} strokeWidth={1.5} /> Canastillas: {orders.reduce((acc, curr) => acc + curr.crates, 0)} und
                                 </span>
                                 {(() => {
                                     const unassignedOrders = orders.filter(o => !Object.values(assignments).some(ids => ids.includes(o.id)));
@@ -850,7 +854,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         </td>
                                         <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>
                                             <div style={{ fontWeight: '900', color: '#0F172A' }}>{formatNumber(order.total_weight_kg, 1)} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
-                                            <div style={{ fontSize: '0.6rem', color: '#0D9488', fontWeight: '800', marginTop: '2px' }}>🧺 {order.crates} und</div>
+                                            <div style={{ fontSize: '0.6rem', color: '#0D9488', fontWeight: '800', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                <Package size={10} /> {order.crates} und
+                                            </div>
                                         </td>
                                         <td style={{ padding: '0.6rem 1rem', textAlign: 'left', maxWidth: '150px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: order.novedad ? '4px' : '0' }}>
@@ -933,25 +939,25 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     {!readOnly && (
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                             <button 
-                                onClick={() => setShowSettings(true)}
-                                title="Ajustar Parámetros"
-                            style={{ 
-                                backgroundColor: '#F3F4F6', 
-                                border: '1px solid #E5E7EB', 
-                                borderRadius: '8px', 
-                                padding: '0.4rem 0.6rem', 
-                                fontSize: '0.75rem', 
-                                color: '#4B5563', 
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                        >
-                            ⚙️
-                        </button>
+                                onClick={() => setShowSettings(!showSettings)}
+                                title="Ajustes de Optimización"
+                                style={{ 
+                                    backgroundColor: showSettings ? '#E5E7EB' : '#F3F4F6', 
+                                    border: '1px solid #E5E7EB', 
+                                    borderRadius: '8px', 
+                                    padding: '0.4rem 0.6rem', 
+                                    fontSize: '0.75rem', 
+                                    color: '#4B5563', 
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                            >
+                                <Settings size={14} />
+                            </button>
                         <button 
                             onClick={handleAutoOptimize}
                             disabled={optimizing}
@@ -1096,8 +1102,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
-                                <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#111827', letterSpacing: '-0.02em' }}>
-                                    ⚙️ Ajustes del Optimizador
+                                <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#111827', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Settings size={18} color="#4F46E5" /> Ajustes del Optimizador
                                 </h4>
                                 <button 
                                     onClick={() => setShowSettings(false)} 
@@ -1105,7 +1111,6 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         border: 'none', 
                                         background: '#F3F4F6', 
                                         cursor: 'pointer', 
-                                        fontSize: '0.85rem',
                                         width: '28px',
                                         height: '28px',
                                         borderRadius: '50%',
@@ -1113,13 +1118,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         color: '#4B5563',
-                                        fontWeight: 'bold',
                                         transition: 'background 0.2s'
                                     }}
                                     onMouseEnter={(e) => e.currentTarget.style.background = '#E5E7EB'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = '#F3F4F6'}
                                 >
-                                    ✕
+                                    <X size={16} />
                                 </button>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', flex: 1 }}>
@@ -1197,7 +1201,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     >
                                         <option value="balanced">Balanceada (Recomendado)</option>
                                         <option value="minimize_vehicles">Usar menos camiones (Ahorro)</option>
-                                        <option value="minimize_time">⚡ Terminar más rápido (Velocidad)</option>
+                                        <option value="minimize_time">Terminar más rápido (Velocidad)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -1232,8 +1236,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     </div>
                                 </div>
                                 <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '1rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#10B981', display: 'block', letterSpacing: '-0.01em' }}>
-                                        📦 Cargue en Bodega (Tiempos)
+                                    <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#10B981', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '-0.01em' }}>
+                                        <Package size={16} /> Cargue en Bodega (Tiempos)
                                     </span>
                                     <div>
                                         <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Alistamiento Fijo Bodega (min)</label>
@@ -1359,7 +1363,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         border: '1px solid #DCFCE7',
                                                         display: 'inline-flex', alignItems: 'center', gap: '2px'
                                                     }} title="Hora estimada de inicio de cargue en bodega">
-                                                        ⏰ {loadStart}
+                                                        <Clock size={10} strokeWidth={2} /> {loadStart}
                                                     </span>
                                                     <span style={{
                                                         fontSize: '0.62rem', fontWeight: '800',
@@ -1368,7 +1372,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         border: '1px solid #E0E7FF',
                                                         display: 'inline-flex', alignItems: 'center', gap: '2px'
                                                     }} title="Hora estimada de salida de bodega">
-                                                        🚚 {departure}
+                                                        <Truck size={10} strokeWidth={2} /> {departure}
                                                     </span>
                                                 </div>
                                             );
@@ -1437,7 +1441,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 display: 'flex', alignItems: 'center', gap: '3px',
                                                 whiteSpace: 'nowrap'
                                             }}>
-                                                <span>⚖️</span>
+                                                <Scale size={10} strokeWidth={2} />
                                                 <span>{load}/{vehicle.capacity_kg} kg</span>
                                             </div>
                                             <div style={{ flex: 1, height: '4px', backgroundColor: isKgOverloaded ? '#FEE2E2' : '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
@@ -1469,7 +1473,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                     display: 'flex', alignItems: 'center', gap: '3px',
                                                     whiteSpace: 'nowrap'
                                                 }}>
-                                                    <span>📦</span>
+                                                    <Package size={10} strokeWidth={2} />
                                                     <span>{cratesNeeded}/{vehicle.max_crates_capacity} und</span>
                                                 </div>
                                                 <div style={{ flex: 1, height: '4px', backgroundColor: isCrateOverloaded ? '#FEE2E2' : '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
@@ -1571,8 +1575,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         <span style={{ fontSize: '0.6rem', color: '#6B7280' }}>
                                                             {order?.delivery_zone} • {order?.total_weight_kg} kg
                                                         </span>
-                                                        <span style={{ fontSize: '0.6rem', color: '#6366F1', fontWeight: '800' }}>
-                                                            🧺 {orderCrates}
+                                                        <span style={{ fontSize: '0.6rem', color: '#6366F1', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <Package size={10} /> {orderCrates}
                                                         </span>
                                                         {isLifoConflict && (
                                                             <span style={{ fontSize: '0.55rem', color: '#B45309', fontWeight: '900', backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '4px' }}>
@@ -1601,7 +1605,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         flexShrink: 0
                                                     }} 
                                                     onClick={() => toggleAssignment(oid, vehicle.id)}
-                                                >✕</span>
+                                                ><X size={14} /></span>
                                             </div>
                                         );
                                     })
@@ -1671,7 +1675,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             background: 'linear-gradient(to right, #FAF5FF, #EEF2FF)'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <span style={{ fontSize: '1.5rem' }}>🤖</span>
+                                <Bot size={22} color="#4F46E5" />
                                 <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E1B4B' }}>
                                     Justificación de Ruteo IA
                                 </h3>
@@ -1681,7 +1685,6 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 style={{
                                     border: 'none',
                                     background: 'none',
-                                    fontSize: '1.25rem',
                                     color: '#94A3B8',
                                     cursor: 'pointer',
                                     padding: '0.25rem',
@@ -1694,7 +1697,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
-                                ✕
+                                <X size={18} />
                             </button>
                         </div>
 
@@ -1779,7 +1782,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
                                     justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
                                 }}
-                            >✕</button>
+                            ><X size={16} /></button>
                         </div>
 
                         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingRight: '0.5rem' }}>
@@ -1787,7 +1790,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 backgroundColor: '#EEF2F6', borderRadius: '16px', padding: '1.25rem',
                                 borderLeft: '4px solid #6366F1', display: 'flex', flexDirection: 'column', gap: '0.5rem'
                             }}>
-                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E293B' }}>⚠️ ¿Qué sucederá al confirmar?</span>
+                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <AlertTriangle size={16} color="#D97706" /> ¿Qué sucederá al confirmar?
+                                </span>
                                 <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: '#475569', lineHeight: '1.6' }}>
                                     <li>Los pedidos asignados cambiarán su estado a <strong>Aprobado (approved)</strong>.</li>
                                     <li>Se consolidarán las cantidades netas y se iniciará la planeación en el portal de <strong>Compras / Abastecimiento</strong>.</li>
@@ -1843,7 +1848,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                             }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <div>
-                                                        <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.85rem' }}>🚚 {vehicle?.plate || 'Desconocido'}</span>
+                                                        <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Truck size={14} /> {vehicle?.plate || 'Desconocido'}
+                                                        </span>
                                                         <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '8px' }}>({vehicle?.driver_name || 'Sin Asignar'})</span>
                                                     </div>
                                                     <span style={{
@@ -1865,8 +1872,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                             padding: '6px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between',
                                                             border: '1px solid #DCFCE7', marginTop: '0.25rem', fontWeight: '500'
                                                         }}>
-                                                            <span>⏰ <strong>Inicio Cargue:</strong> {loadStart} <span style={{color: '#64748B', fontWeight: 'normal'}}>({duration} min)</span></span>
-                                                            <span>🚚 <strong>Salida Ruta:</strong> {departure}</span>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> <strong>Inicio Cargue:</strong> {loadStart} <span style={{color: '#64748B', fontWeight: 'normal'}}>({duration} min)</span></span>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={12} /> <strong>Salida Ruta:</strong> {departure}</span>
                                                         </div>
                                                     );
                                                 })()}
@@ -1961,7 +1968,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
                                     justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
                                 }}
-                            >✕</button>
+                            ><X size={16} /></button>
                         </div>
 
                         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: '0.5rem' }} className="print-area">
@@ -1982,7 +1989,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                             paddingBottom: route.stops && route.stops.length > 0 ? '0.75rem' : 0
                                         }}>
                                             <div>
-                                                <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem' }}>🚚 {route.vehicle_plate}</div>
+                                                <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Truck size={14} /> {route.vehicle_plate}
+                                                </div>
                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', marginTop: '2px' }}>Conductor: {route.driver_name}</div>
                                             </div>
                                             <div>
