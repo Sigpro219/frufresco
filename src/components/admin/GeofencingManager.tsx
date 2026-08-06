@@ -59,13 +59,17 @@ export const Polygon = forwardRef((props: PolygonProps, ref) => {
         }
     }, [polygon, paths]);
 
-    // Options update
+    // Options & Visibility update
     useEffect(() => {
         if (!polygon) return;
         polygon.setOptions(options);
-    }, [polygon, options]);
+        const isVisible = options.visible !== false;
+        if (map) {
+            polygon.setMap(isVisible ? map : null);
+        }
+    }, [polygon, map, options.visible, options.fillColor, options.strokeColor, options.editable, options.draggable]);
 
-    // Sync from Google Maps -> React state
+    // Sync from Google Maps -> React state during editing
     useEffect(() => {
         if (!polygon || !onPathChange) return;
 
@@ -82,7 +86,7 @@ export const Polygon = forwardRef((props: PolygonProps, ref) => {
                     lastPathRef.current = pathJson;
                     onPathChange(newPath);
                 }
-            }, 150); // Debounce to allow smooth dragging
+            }, 150);
         };
 
         const path = polygon.getPath();
@@ -90,7 +94,6 @@ export const Polygon = forwardRef((props: PolygonProps, ref) => {
             path.addListener('set_at', syncPath),
             path.addListener('insert_at', syncPath),
             path.addListener('remove_at', syncPath),
-            // Support deleting vertices with right click
             polygon.addListener('rightclick', (e: any) => {
                 if (e.vertex !== undefined && options.editable) {
                     path.removeAt(e.vertex);
@@ -103,12 +106,6 @@ export const Polygon = forwardRef((props: PolygonProps, ref) => {
             if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
         };
     }, [polygon, onPathChange, options.editable]);
-
-    useEffect(() => {
-        if (!polygon || !map) return;
-        polygon.setMap(map);
-        return () => polygon.setMap(null);
-    }, [polygon, map]);
 
     return null;
 });
