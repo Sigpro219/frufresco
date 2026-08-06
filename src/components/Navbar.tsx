@@ -714,11 +714,6 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
-                                <Link href="/register">
-                                    <button className="btn" style={{ border: '1px solid rgba(0,0,0,0.06)', backgroundColor: 'transparent', fontWeight: '600', borderRadius: 'var(--radius-full)', padding: '0.6rem 1.2rem', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                        {t.navRegister}
-                                    </button>
-                                </Link>
                                 <Link href="/login">
                                     <button className="btn btn-primary" style={{ border: 'none', backgroundColor: 'var(--primary)', color: 'white', fontWeight: '700', borderRadius: 'var(--radius-full)', padding: '0.6rem 1.2rem', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {t.navLogin}
