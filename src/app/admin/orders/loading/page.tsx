@@ -53,7 +53,7 @@ const getStatusLabel = (s: string) => {
         case 'pending_approval': 
         case 'pending': 
         case 'recibido': 
-            return 'POR APROBAR';
+            return 'RECIBIDO';
         case 'para_compra': return 'COMPRAS / QA';
         case 'approved': return 'APROBADO';
         case 'picking': return 'EN PREPARACIÓN';
