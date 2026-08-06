@@ -937,7 +937,7 @@ export default function OrderLoadingPage() {
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         
         const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
-        const baseQty = parseFloat((qtyVal * selectedConversionFactor).toFixed(2));
+        const baseQty = parseFloat((qtyVal * selectedConversionFactor).toFixed(3));
         addOrUpdateItemInState(selectedProductForVariant, baseQty, variantLabel, selectedOptions);
         setSelectedProductForVariant(null);
     };

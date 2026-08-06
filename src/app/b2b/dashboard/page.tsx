@@ -737,17 +737,21 @@ export default function B2BDashboard() {
             }, 0);
 
             // Create new order
+            const targetProfile = activeProfile || profile;
+            const shippingAddr = targetProfile?.address || targetProfile?.address_main || 'Dirección registrada';
+
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
-                    profile_id: profile?.id,
+                    profile_id: targetProfile?.id,
                     type: 'b2b_credit',
                     status: 'pending_approval',
+                    origin_source: 'web_b2b',
                     delivery_date: deliveryDate,
-                    shipping_address: profile?.address_main || 'Dirección registrada',
+                    shipping_address: shippingAddr,
                     subtotal: calculatedSubtotal,
                     total: calculatedSubtotal,
-                    special_notes: '[ORIGIN: web]'
+                    special_notes: '[ORIGIN: web_b2b]'
                 })
                 .select()
                 .single();

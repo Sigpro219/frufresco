@@ -1044,7 +1044,7 @@ function CreateOrderContent() {
 
         const resolvedFactor = factor || 1;
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
-        const baseQty = parseFloat((qty * resolvedFactor).toFixed(2));
+        const baseQty = parseFloat((qty * resolvedFactor).toFixed(3));
 
         if (!bypassDuplicateCheck) {
             const existingIndex = cart.findIndex(item =>
@@ -1090,8 +1090,8 @@ function CreateOrderContent() {
             const newCart = [...prev];
             if (newCart[existingIndex]) {
                 const item = { ...newCart[existingIndex] };
-                item.originalQty = parseFloat(((item.originalQty || 0) + qty).toFixed(2));
-                item.qty = parseFloat((item.originalQty * (item.conversion_factor || resolvedFactor)).toFixed(2));
+                item.originalQty = parseFloat(((item.originalQty || 0) + qty).toFixed(3));
+                item.qty = parseFloat((item.originalQty * (item.conversion_factor || resolvedFactor)).toFixed(3));
                 newCart[existingIndex] = item;
             }
             return newCart;
@@ -1186,7 +1186,7 @@ function CreateOrderContent() {
         const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
         const resolvedFactor = modalFactor || 1;
         const resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
-        const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(2));
+        const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(3));
 
         if (editingStagedItemId !== null) {
             const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
@@ -1547,7 +1547,7 @@ function CreateOrderContent() {
                 return {
                     id: crypto.randomUUID(),
                     originalName: originalName,
-                    quantity: detectedUnit ? parseFloat((quantity * detectedUnit.factor).toFixed(2)) : quantity,
+                    quantity: detectedUnit ? parseFloat((quantity * detectedUnit.factor).toFixed(3)) : quantity,
                     originalQtyInFile: quantity,
                     originalQty: quantity,
                     originalUnit: detectedUnit ? detectedUnit.unit : (match?.unit_of_measure || 'Kg'),
@@ -3177,7 +3177,7 @@ function CreateOrderContent() {
                                                                          const val = parseFloat(e.target.value) || 0;
                                                                          if (item.originalQty !== undefined) {
                                                                              updateStagedItem(item.id, 'originalQty', val);
-                                                                             updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(2)));
+                                                                             updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
                                                                          } else {
                                                                              updateStagedItem(item.id, 'quantity', val);
                                                                          }
@@ -3564,7 +3564,7 @@ function CreateOrderContent() {
                                                                         type="button"
                                                                         onClick={() => {
                                                                             const factor = parseFloat(c.conversion_factor);
-                                                                            const calculatedQty = parseFloat(((item.originalQty || 1) * factor).toFixed(2));
+                                                                            const calculatedQty = parseFloat(((item.originalQty || 1) * factor).toFixed(3));
                                                                             setCart(prev => prev.map((itm, i) => i === idx ? {
                                                                                 ...itm,
                                                                                 originalUnit: c.from_unit,
@@ -3600,7 +3600,7 @@ function CreateOrderContent() {
                                                                     onChange={(e) => {
                                                                         const orig = parseFloat(e.target.value) || 0;
                                                                         const factor = item.conversion_factor || 1;
-                                                                        const calculatedQty = parseFloat((orig * factor).toFixed(2));
+                                                                        const calculatedQty = parseFloat((orig * factor).toFixed(3));
                                                                         setCart(prev => prev.map((itm, i) => i === idx ? {
                                                                             ...itm,
                                                                             originalQty: orig,

@@ -1078,7 +1078,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
     const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
-    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(3));
     
     const factor = newEdits[duplicateIndex].conversion_factor || 1;
     newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
@@ -5831,7 +5831,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                   const newEdits = [...editableItems];
                                                   newEdits[i].conversion_factor = factor;
                                                   const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].cant || newEdits[i].cantidad || 1);
-                                                  newEdits[i].quantity = parseFloat((origQty * factor).toFixed(2));
+                                                  newEdits[i].quantity = parseFloat((origQty * factor).toFixed(3));
                                                   setEditableItems(newEdits);
                                                 }}
                                                 onKeyDown={(e) => {
