@@ -605,13 +605,13 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '2rem'
+                    padding: '1.5rem'
                 }}>
                     <div style={{
                         backgroundColor: THEME.colors.surface,
                         borderRadius: THEME.radius.xl,
                         width: '100%',
-                        maxWidth: '960px',
+                        maxWidth: '1080px',
                         maxHeight: '85vh',
                         display: 'flex',
                         flexDirection: 'column',
@@ -621,7 +621,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     }}>
                         {/* Modal Header */}
                         <div style={{
-                            padding: '1.25rem 1.75rem',
+                            padding: '1.1rem 1.5rem',
                             borderBottom: `1px solid ${THEME.colors.border}`,
                             display: 'flex',
                             alignItems: 'center',
@@ -629,14 +629,14 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             backgroundColor: '#FAFAFA'
                         }}>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '10px', fontFamily: THEME.typography?.fontFamilyMain }}>
-                                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <ListFilter size={18} color={THEME.colors.primary} />
+                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '10px', fontFamily: THEME.typography?.fontFamilyMain }}>
+                                    <div style={{ width: '30px', height: '30px', borderRadius: '8px', backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <ListFilter size={17} color={THEME.colors.primary} />
                                     </div>
                                     Auditoría de Demandas Rechazadas fuera de Cobertura
                                 </h3>
-                                <p style={{ margin: '4px 0 0 42px', fontSize: '0.82rem', color: THEME.colors.textSecondary }}>
-                                    Registro de solicitudes de clientes e instituciones fuera de los polígonos de Bogotá
+                                <p style={{ margin: '3px 0 0 40px', fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
+                                    Registro de clientes e instituciones que cotizaron o pidieron fuera de las geocercas activas
                                 </p>
                             </div>
                             <button 
@@ -650,9 +650,9 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         </div>
 
                         {/* Modal Controls: Search & Tabs */}
-                        <div style={{ padding: '1rem 1.75rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: 'white' }}>
+                        <div style={{ padding: '0.85rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: 'white' }}>
                             <div style={{ position: 'relative', flex: 1 }}>
-                                <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                <Search size={15} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                                 <input 
                                     type="text" 
                                     placeholder="Buscar cliente, municipio o dirección..." 
@@ -660,10 +660,10 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     onChange={e => setModalSearch(e.target.value)}
                                     style={{
                                         width: '100%',
-                                        padding: '0.6rem 0.75rem 0.6rem 2.4rem',
+                                        padding: '0.55rem 0.75rem 0.55rem 2.3rem',
                                         borderRadius: THEME.radius.md,
                                         border: `1px solid ${THEME.colors.border}`,
-                                        fontSize: '0.85rem',
+                                        fontSize: '0.84rem',
                                         outline: 'none',
                                         fontFamily: THEME.typography?.fontFamilySecondary
                                     }}
@@ -674,7 +674,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 <button 
                                     onClick={() => setModalFilter('all')}
                                     style={{
-                                        padding: '0.45rem 0.9rem',
+                                        padding: '0.4rem 0.85rem',
                                         borderRadius: THEME.radius.sm,
                                         border: 'none',
                                         backgroundColor: modalFilter === 'all' ? 'white' : 'transparent',
@@ -690,7 +690,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 <button 
                                     onClick={() => setModalFilter('b2c')}
                                     style={{
-                                        padding: '0.45rem 0.9rem',
+                                        padding: '0.4rem 0.85rem',
                                         borderRadius: THEME.radius.sm,
                                         border: 'none',
                                         backgroundColor: modalFilter === 'b2c' ? '#FEF2F2' : 'transparent',
@@ -700,7 +700,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '6px'
+                                        gap: '5px'
                                     }}
                                 >
                                     <Home size={13} color="#DC2626" />
@@ -709,7 +709,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 <button 
                                     onClick={() => setModalFilter('b2b')}
                                     style={{
-                                        padding: '0.45rem 0.9rem',
+                                        padding: '0.4rem 0.85rem',
                                         borderRadius: THEME.radius.sm,
                                         border: 'none',
                                         backgroundColor: modalFilter === 'b2b' ? '#EFF6FF' : 'transparent',
@@ -719,7 +719,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '6px'
+                                        gap: '5px'
                                     }}
                                 >
                                     <Building2 size={13} color="#2563EB" />
@@ -729,16 +729,16 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         </div>
 
                         {/* Modal Table Content */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.75rem' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem', textAlign: 'left' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0.85rem 1.5rem' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem', textAlign: 'left' }}>
                                 <thead>
                                     <tr style={{ borderBottom: `2px solid ${THEME.colors.border}` }}>
-                                        <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Fecha y Hora</th>
-                                        <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Canal</th>
-                                        <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Cliente / Establecimiento</th>
-                                        <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Municipio / Detalle</th>
-                                        <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Dirección Solicitada</th>
-                                        <th style={{ padding: '0.75rem', textAlign: 'right', ...THEME.typography.tableHeader }}>Acción</th>
+                                        <th style={{ padding: '0.65rem 0.75rem', width: '115px', whiteSpace: 'nowrap', ...THEME.typography.tableHeader }}>Fecha</th>
+                                        <th style={{ padding: '0.65rem 0.75rem', width: '110px', whiteSpace: 'nowrap', ...THEME.typography.tableHeader }}>Canal</th>
+                                        <th style={{ padding: '0.65rem 0.75rem', ...THEME.typography.tableHeader }}>Cliente / Establecimiento</th>
+                                        <th style={{ padding: '0.65rem 0.75rem', ...THEME.typography.tableHeader }}>Municipio / Detalle</th>
+                                        <th style={{ padding: '0.65rem 0.75rem', ...THEME.typography.tableHeader }}>Dirección Solicitada</th>
+                                        <th style={{ padding: '0.65rem 0.75rem', width: '100px', textAlign: 'right', ...THEME.typography.tableHeader }}>Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -755,21 +755,22 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                         })
                                         .map((pt, idx) => {
                                             const isB2B = pt.channel === 'b2b';
-                                            const formattedDate = pt.created_at 
-                                                ? new Date(pt.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                            const d = pt.created_at ? new Date(pt.created_at) : null;
+                                            const compactDate = d 
+                                                ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
                                                 : 'Hoy';
                                             return (
                                                 <tr key={pt.id || idx} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }}>
-                                                    <td style={{ padding: '0.85rem 0.75rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', fontSize: '0.78rem', fontWeight: '500' }}>
+                                                    <td style={{ padding: '0.75rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', fontSize: '0.76rem', fontWeight: '600' }}>
                                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                             <Calendar size={12} color="#64748B" />
-                                                            {formattedDate}
+                                                            {compactDate}
                                                         </span>
                                                     </td>
-                                                    <td style={{ padding: '0.85rem 0.75rem' }}>
+                                                    <td style={{ padding: '0.75rem', whiteSpace: 'nowrap' }}>
                                                         <span style={{
-                                                            padding: '4px 10px',
-                                                            borderRadius: '12px',
+                                                            padding: '3px 8px',
+                                                            borderRadius: '10px',
                                                             fontSize: '0.72rem',
                                                             fontWeight: '800',
                                                             backgroundColor: isB2B ? '#EFF6FF' : '#FEF2F2',
@@ -777,44 +778,45 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                                             border: isB2B ? '1px solid #BFDBFE' : '1px solid #FECACA',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '5px'
+                                                            gap: '4px'
                                                         }}>
-                                                            {isB2B ? <Building2 size={12} /> : <Home size={12} />}
+                                                            {isB2B ? <Building2 size={11} /> : <Home size={11} />}
                                                             {isB2B ? 'HORECA B2B' : 'Hogar B2C'}
                                                         </span>
                                                     </td>
-                                                    <td style={{ padding: '0.85rem 0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>
+                                                    <td style={{ padding: '0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>
                                                         {pt.customer_name || 'Anónimo'}
-                                                        {pt.customer_phone && <div style={{ fontSize: '0.74rem', color: THEME.colors.primary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}><Phone size={11} /> {pt.customer_phone}</div>}
+                                                        {pt.customer_phone && <div style={{ fontSize: '0.73rem', color: THEME.colors.primary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}><Phone size={10} /> {pt.customer_phone}</div>}
                                                     </td>
-                                                    <td style={{ padding: '0.85rem 0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>
+                                                    <td style={{ padding: '0.75rem', color: THEME.colors.textMain, fontWeight: '600', fontSize: '0.8rem' }}>
                                                         {pt.municipality || 'Fuera de zona'}
                                                     </td>
-                                                    <td style={{ padding: '0.85rem 0.75rem', color: THEME.colors.textSecondary, maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} /> {pt.address}</span>
+                                                    <td style={{ padding: '0.75rem', color: THEME.colors.textSecondary, fontSize: '0.78rem' }}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={11} /> {pt.address}</span>
                                                     </td>
-                                                    <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                         <button 
                                                             onClick={() => focusPointOnMap(pt)}
                                                             style={{
-                                                                padding: '0.4rem 0.85rem',
+                                                                padding: '0.35rem 0.75rem',
                                                                 borderRadius: THEME.radius.sm,
                                                                 border: `1px solid ${THEME.colors.primary}`,
                                                                 backgroundColor: 'white',
                                                                 color: THEME.colors.primary,
                                                                 fontWeight: '700',
-                                                                fontSize: '0.78rem',
+                                                                fontSize: '0.76rem',
                                                                 cursor: 'pointer',
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '5px',
+                                                                gap: '4px',
+                                                                whiteSpace: 'nowrap',
                                                                 transition: 'all 0.2s'
                                                             }}
                                                             onMouseEnter={e => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
                                                             onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; }}
                                                         >
-                                                            <MapPin size={13} />
-                                                            <span>Centrar en Mapa</span>
+                                                            <MapPin size={12} />
+                                                            <span>Centrar</span>
                                                         </button>
                                                     </td>
                                                 </tr>
