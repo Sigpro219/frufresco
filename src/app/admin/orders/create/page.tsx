@@ -579,14 +579,14 @@ function CreateOrderContent() {
                     }
                 }
 
-                // 2. Fallback to Clientes B2C if no model or if expired
+                // 2. Fallback to Clientes Hogar / B2C if no model or if expired
                 if (!resolvedModel || expired) {
                     b2cFallback = true;
                     const { data: b2cModel } = await supabase
                         .from('pricing_models')
                         .select('*')
-                        .eq('name', 'Clientes B2C')
-                        .single();
+                        .in('name', ['Clientes Hogar', 'Clientes B2C'])
+                        .maybeSingle();
                     
                     if (b2cModel) {
                         resolvedModel = b2cModel;
@@ -603,14 +603,14 @@ function CreateOrderContent() {
                 const map: Record<string, number> = {};
                 const customIds = new Set<string>();
 
-                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback to Clientes B2C
+                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback to Clientes Hogar
                 let baselineModelId = modelId;
                 if (!baselineModelId) {
                     const { data: b2cModel } = await supabase
                         .from('pricing_models')
                         .select('id')
-                        .eq('name', 'Clientes B2C')
-                        .single();
+                        .in('name', ['Clientes Hogar', 'Clientes B2C'])
+                        .maybeSingle();
                     
                     if (b2cModel) {
                         baselineModelId = b2cModel.id;
@@ -725,7 +725,9 @@ function CreateOrderContent() {
     useEffect(() => {
         if (Object.keys(contractPrices).length > 0) {
             setCart(prev => prev.map(item => {
-                const resolvedPrice = contractPrices[item.product.id] || 0;
+                const resolvedPrice = (contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null && contractPrices[item.product.id] > 0)
+                    ? contractPrices[item.product.id]
+                    : (item.product.base_price || 0);
                 return {
                     ...item,
                     price: resolvedPrice
@@ -1066,7 +1068,9 @@ function CreateOrderContent() {
             }
         }
 
-        const resolvedPrice = contractPrices[product.id] || 0;
+        const resolvedPrice = (contractPrices[product.id] !== undefined && contractPrices[product.id] !== null && contractPrices[product.id] > 0)
+            ? contractPrices[product.id]
+            : (product.base_price || 0);
         setCart(prev => [{ 
             product, 
             qty: baseQty, 
@@ -1949,9 +1953,6 @@ function CreateOrderContent() {
             const itemsData = cart.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
                 const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
-                const rate = item.product.iva_rate !== null && item.product.iva_rate !== undefined ? Number(item.product.iva_rate) : 19;
-                const itemTotal = unitPrice * qtyNum;
-                const ivaAmount = itemTotal * (rate / (100 + rate));
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
@@ -1960,9 +1961,7 @@ function CreateOrderContent() {
                     nickname: item.nickname || item.variant_label || null,
                     variant_label: item.variant_label || null,
                     unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
-                    selected_options: item.selected_options || {},
-                    iva_rate: rate,
-                    iva_amount: ivaAmount
+                    selected_options: item.selected_options || {}
                 };
             });
 
