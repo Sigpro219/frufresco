@@ -218,6 +218,7 @@ function CreateOrderContent() {
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
     const [clientSearchB2C, setClientSearchB2C] = useState('');
     const [selectedClientB2C, setSelectedClientB2C] = useState('');
+    const [focusedClientIndexB2C, setFocusedClientIndexB2C] = useState<number>(-1);
     const [guestInfo, setGuestInfo] = useState({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); // For B2C New
 
     const [latitude, setLatitude] = useState<number | null>(null);
@@ -284,6 +285,15 @@ function CreateOrderContent() {
     const [editingStagedItemIdx, setEditingStagedItemIdx] = useState<number | null>(null);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        if (focusedClientIndexB2C >= 0) {
+            const el = document.getElementById(`b2c-client-item-${focusedClientIndexB2C}`);
+            if (el) {
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [focusedClientIndexB2C]);
 
     useEffect(() => {
         if (manageConversionsProduct) {
@@ -2456,68 +2466,151 @@ function CreateOrderContent() {
                                                                 </div>
                                                             ) : (
                                                                 <div style={{ color: '#B91C1C', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#FEE2E2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #FCA5A5' }}>
-                                                                    <AlertTriangle size={13} strokeWidth={2} color="#EF4444" /> Sin Georeferenciación
+                                                        <div style={{ 
+                                                            display: 'grid', 
+                                                            gridTemplateColumns: '1fr 1fr', 
+                                                            gap: '0.6rem 1rem', 
+                                                            paddingTop: '0.65rem', 
+                                                            borderTop: '1px solid #BFDBFE',
+                                                            fontSize: '0.82rem' 
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A' }}>
+                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                    <Phone size={13} strokeWidth={1.5} /> Tel:
                                                                 </div>
-                                                            )}
+                                                                <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
+                                                                    {getSelectedB2CDetails()?.contact_phone || 'N/A'}
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A' }}>
+                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                    <FileText size={13} strokeWidth={1.5} /> CC/NIT:
+                                                                </div>
+                                                                <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
+                                                                    {getSelectedB2CDetails()?.nit || 'N/A'}
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A', gridColumn: '1 / -1' }}>
+                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                    <Mail size={13} strokeWidth={1.5} /> Email:
+                                                                </div>
+                                                                <div style={{ fontWeight: '600', color: '#1E3A8A', wordBreak: 'break-all' }}>
+                                                                    {getSelectedB2CDetails()?.email || 'N/A'}
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A', gridColumn: '1 / -1', flexWrap: 'wrap' }}>
+                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                    <MapPin size={13} strokeWidth={1.5} /> Dir:
+                                                                </div>
+                                                                <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
+                                                                    {getSelectedB2CDetails()?.address || 'Sin dirección'}
+                                                                    <span style={{ fontWeight: '400', opacity: 0.8, marginLeft: '4px' }}>({getSelectedB2CDetails()?.city || 'Bogotá'})</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ gridColumn: '1 / -1', marginTop: '2px' }}>
+                                                                {(getSelectedB2CDetails()?.latitude && getSelectedB2CDetails()?.longitude) ? (
+                                                                    <div style={{ color: '#15803D', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#DCFCE7', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                                                                        <CheckCircle2 size={13} strokeWidth={2} color="#16A34A" /> Georeferenciado ({getSelectedB2CDetails()?.latitude?.toFixed(4)}, {getSelectedB2CDetails()?.longitude?.toFixed(4)})
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{ color: '#B91C1C', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#FEE2E2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #FCA5A5' }}>
+                                                                        <AlertTriangle size={13} strokeWidth={2} color="#EF4444" /> Sin Georeferenciación
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Ej: Juan Pérez o 300..."
-                                                            value={clientSearchB2C}
-                                                            onChange={(e) => setClientSearchB2C(e.target.value)}
-                                                            style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                        />
-                                                        <button 
-                                                            onClick={loadData}
-                                                            style={{ 
-                                                                padding: '0 1rem', 
-                                                                backgroundColor: 'white', 
-                                                                border: '1px solid #D1D5DB', 
-                                                                borderRadius: '8px', 
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                color: THEME.colors.primary
-                                                            }}
-                                                            title="Actualizar Lista de Clientes"
-                                                        >
-                                                            <RefreshCw size={16} strokeWidth={1.5} />
-                                                        </button>
-                                                    </div>
-                                                    {filteredClientsB2C.length > 0 && (
-                                                        <div style={{
-                                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
-                                                            backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto'
-                                                        }}>
-                                                            {filteredClientsB2C.map(c => (
-                                                                <div
-                                                                    key={c.id}
-                                                                    onClick={() => selectClientB2C(c)}
-                                                                    style={{
-                                                                        padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
-                                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                                                    }}
-                                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                                                >
-                                                                    <div>
-                                                                        <div style={{ fontWeight: '600', color: '#1F2937' }}>{c.contact_name || c.company_name}</div>
-                                                                        <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                                                            {c.contact_phone} • {c.address}
+                                                ) : (
+                                                    <>
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Ej: Juan Pérez o 300..."
+                                                                value={clientSearchB2C}
+                                                                onChange={(e) => {
+                                                                    setClientSearchB2C(e.target.value);
+                                                                    setFocusedClientIndexB2C(-1);
+                                                                }}
+                                                                onKeyDown={(e) => {
+                                                                    if (filteredClientsB2C.length === 0) return;
+                                                                    if (e.key === 'ArrowDown') {
+                                                                        e.preventDefault();
+                                                                        setFocusedClientIndexB2C(prev => Math.min(prev + 1, filteredClientsB2C.length - 1));
+                                                                    } else if (e.key === 'ArrowUp') {
+                                                                        e.preventDefault();
+                                                                        setFocusedClientIndexB2C(prev => Math.max(prev - 1, -1));
+                                                                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                                                        const targetIndex = focusedClientIndexB2C >= 0 ? focusedClientIndexB2C : 0;
+                                                                        if (filteredClientsB2C[targetIndex]) {
+                                                                            e.preventDefault();
+                                                                            selectClientB2C(filteredClientsB2C[targetIndex]);
+                                                                            setFocusedClientIndexB2C(-1);
+                                                                        }
+                                                                    } else if (e.key === 'Escape') {
+                                                                        setClientSearchB2C('');
+                                                                        setFocusedClientIndexB2C(-1);
+                                                                    }
+                                                                }}
+                                                                style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                            />
+                                                            <button 
+                                                                onClick={loadData}
+                                                                style={{ 
+                                                                    padding: '0 1rem', 
+                                                                    backgroundColor: 'white', 
+                                                                    border: '1px solid #D1D5DB', 
+                                                                    borderRadius: '8px', 
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    color: THEME.colors.primary
+                                                                }}
+                                                                title="Actualizar Lista de Clientes"
+                                                            >
+                                                                <RefreshCw size={16} strokeWidth={1.5} />
+                                                            </button>
+                                                        </div>
+                                                        {filteredClientsB2C.length > 0 && (
+                                                            <div style={{
+                                                                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                                                                backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
+                                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden', maxHeight: '220px', overflowY: 'auto'
+                                                            }}>
+                                                                {filteredClientsB2C.map((c, idx) => (
+                                                                    <div
+                                                                        key={c.id}
+                                                                        id={`b2c-client-item-${idx}`}
+                                                                        onClick={() => {
+                                                                            selectClientB2C(c);
+                                                                            setFocusedClientIndexB2C(-1);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '0.8rem 1rem', 
+                                                                            cursor: 'pointer', 
+                                                                            borderBottom: '1px solid #F3F4F6',
+                                                                            display: 'flex', 
+                                                                            justifyContent: 'space-between', 
+                                                                            alignItems: 'center',
+                                                                            backgroundColor: idx === focusedClientIndexB2C ? '#EFF6FF' : 'white',
+                                                                            transition: 'background-color 0.15s'
+                                                                        }}
+                                                                        onMouseEnter={() => setFocusedClientIndexB2C(idx)}
+                                                                        onMouseLeave={() => setFocusedClientIndexB2C(-1)}
+                                                                    >
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '700', color: idx === focusedClientIndexB2C ? '#1D4ED8' : '#1F2937' }}>
+                                                                                {c.contact_name || c.company_name}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.8rem', color: idx === focusedClientIndexB2C ? '#2563EB' : '#6B7280' }}>
+                                                                                {c.contact_phone} • {c.address}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </>
                                             )}
                                         </div>
                                     ) : (
