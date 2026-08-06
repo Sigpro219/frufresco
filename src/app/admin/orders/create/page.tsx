@@ -2466,64 +2466,12 @@ function CreateOrderContent() {
                                                                 </div>
                                                             ) : (
                                                                 <div style={{ color: '#B91C1C', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#FEE2E2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #FCA5A5' }}>
-                                                        <div style={{ 
-                                                            display: 'grid', 
-                                                            gridTemplateColumns: '1fr 1fr', 
-                                                            gap: '0.6rem 1rem', 
-                                                            paddingTop: '0.65rem', 
-                                                            borderTop: '1px solid #BFDBFE',
-                                                            fontSize: '0.82rem' 
-                                                        }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A' }}>
-                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                                                    <Phone size={13} strokeWidth={1.5} /> Tel:
+                                                                    <AlertTriangle size={13} strokeWidth={2} color="#EF4444" /> Sin Georeferenciación
                                                                 </div>
-                                                                <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
-                                                                    {getSelectedB2CDetails()?.contact_phone || 'N/A'}
-                                                                </div>
-                                                            </div>
-
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A' }}>
-                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                                                    <FileText size={13} strokeWidth={1.5} /> CC/NIT:
-                                                                </div>
-                                                                <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
-                                                                    {getSelectedB2CDetails()?.nit || 'N/A'}
-                                                                </div>
-                                                            </div>
-
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A', gridColumn: '1 / -1' }}>
-                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                                                    <Mail size={13} strokeWidth={1.5} /> Email:
-                                                                </div>
-                                                                <div style={{ fontWeight: '600', color: '#1E3A8A', wordBreak: 'break-all' }}>
-                                                                    {getSelectedB2CDetails()?.email || 'N/A'}
-                                                                </div>
-                                                            </div>
-
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A', gridColumn: '1 / -1', flexWrap: 'wrap' }}>
-                                                                <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                                                    <MapPin size={13} strokeWidth={1.5} /> Dir:
-                                                                </div>
-                                                                <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
-                                                                    {getSelectedB2CDetails()?.address || 'Sin dirección'}
-                                                                    <span style={{ fontWeight: '400', opacity: 0.8, marginLeft: '4px' }}>({getSelectedB2CDetails()?.city || 'Bogotá'})</span>
-                                                                </div>
-                                                            </div>
-
-                                                            <div style={{ gridColumn: '1 / -1', marginTop: '2px' }}>
-                                                                {(getSelectedB2CDetails()?.latitude && getSelectedB2CDetails()?.longitude) ? (
-                                                                    <div style={{ color: '#15803D', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#DCFCE7', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
-                                                                        <CheckCircle2 size={13} strokeWidth={2} color="#16A34A" /> Georeferenciado ({getSelectedB2CDetails()?.latitude?.toFixed(4)}, {getSelectedB2CDetails()?.longitude?.toFixed(4)})
-                                                                    </div>
-                                                                ) : (
-                                                                    <div style={{ color: '#B91C1C', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#FEE2E2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #FCA5A5' }}>
-                                                                        <AlertTriangle size={13} strokeWidth={2} color="#EF4444" /> Sin Georeferenciación
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     </div>
+                                                </div>
                                                 ) : (
                                                     <>
                                                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -2611,7 +2559,11 @@ function CreateOrderContent() {
                                                                             </div>
                                                                         </div>
                                                                     </div>
-                                            )}
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
                                         </div>
                                     ) : (
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
