@@ -375,6 +375,23 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 ? (isNearCall ? 'new' : 'rejected')
                 : 'new';
 
+            if (finalData.is_out_of_coverage && finalData.latitude && finalData.longitude) {
+                fetch('/api/coverage/out-of-bounds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: finalData.address || addressInput,
+                        latitude: finalData.latitude,
+                        longitude: finalData.longitude,
+                        customer_name: `${finalData.company_name} (${finalData.business_type})`,
+                        customer_phone: finalData.phone,
+                        customer_email: finalData.email,
+                        channel: 'b2b',
+                        municipality: `${finalData.municipality || 'Fuera de Zona'} · ${finalData.business_size}`
+                    })
+                }).catch(e => console.warn('Silent B2B log error:', e));
+            }
+
             // 1. Insert B2B Lead and select ID
             const { data: leadRows, error: leadError } = await supabase
                 .from('leads')

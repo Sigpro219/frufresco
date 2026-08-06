@@ -213,42 +213,60 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         <Marker key={`edit-${i}`} position={p} label={(i + 1).toString()} />
                     ))}
 
-                    {/* RED DOT HEATMAP MARKERS: Rejected Demand Out of Bounds */}
-                    {visibleOutOfBounds && outOfBoundsPoints.map((pt, idx) => (
-                        <Marker 
-                            key={`oob-${pt.id || idx}`} 
-                            position={{ lat: Number(pt.latitude), lng: Number(pt.longitude) }}
-                            title={`Demanda Rechazada: ${pt.municipality || pt.address}`}
-                            onClick={() => setSelectedPoint(pt)}
-                            icon={{
-                                path: google.maps.SymbolPath.CIRCLE,
-                                scale: 7,
-                                fillColor: '#DC2626',
-                                fillOpacity: 0.9,
-                                strokeColor: '#FFFFFF',
-                                strokeWeight: 2
-                            }}
-                        />
-                    ))}
+                    {/* RED/BLUE DOT HEATMAP MARKERS: Rejected Demand Out of Bounds (B2C & B2B) */}
+                    {visibleOutOfBounds && outOfBoundsPoints.map((pt, idx) => {
+                        const isB2B = pt.channel === 'b2b';
+                        return (
+                            <Marker 
+                                key={`oob-${pt.id || idx}`} 
+                                position={{ lat: Number(pt.latitude), lng: Number(pt.longitude) }}
+                                title={`Demanda Rechazada [${isB2B ? 'B2B HORECA' : 'B2C Hogares'}]: ${pt.municipality || pt.address}`}
+                                onClick={() => setSelectedPoint(pt)}
+                                icon={{
+                                    path: google.maps.SymbolPath.CIRCLE,
+                                    scale: isB2B ? 9 : 7,
+                                    fillColor: isB2B ? '#2563EB' : '#DC2626',
+                                    fillOpacity: 0.95,
+                                    strokeColor: '#FFFFFF',
+                                    strokeWeight: 2
+                                }}
+                            />
+                        );
+                    })}
 
                     {selectedPoint && (
                         <InfoWindow
                             position={{ lat: Number(selectedPoint.latitude), lng: Number(selectedPoint.longitude) }}
                             onCloseClick={() => setSelectedPoint(null)}
                         >
-                            <div style={{ padding: '4px', maxWidth: '240px' }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <AlertCircle size={12} /> Demanda Rechazada
+                            <div style={{ padding: '4px', maxWidth: '250px' }}>
+                                <div style={{ 
+                                    fontSize: '0.7rem', 
+                                    fontWeight: '900', 
+                                    color: selectedPoint.channel === 'b2b' ? '#1E40AF' : '#991B1B', 
+                                    backgroundColor: selectedPoint.channel === 'b2b' ? '#DBEAFE' : '#FEE2E2',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    textTransform: 'uppercase', 
+                                    letterSpacing: '0.05em', 
+                                    marginBottom: '6px', 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '4px' 
+                                }}>
+                                    <AlertCircle size={11} /> 
+                                    {selectedPoint.channel === 'b2b' ? '🔵 Rechazo B2B HORECA' : '🔴 Rechazo B2C Hogares'}
                                 </div>
                                 <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>
                                     {selectedPoint.municipality || 'Fuera de Cobertura'}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '2px' }}>
-                                    {selectedPoint.address}
+                                    📍 {selectedPoint.address}
                                 </div>
                                 {selectedPoint.customer_name && (
-                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '4px', fontWeight: '600' }}>
-                                        👤 {selectedPoint.customer_name} ({selectedPoint.customer_phone || 'Sin tel.'})
+                                    <div style={{ fontSize: '0.72rem', color: '#1E293B', marginTop: '6px', fontWeight: '700', borderTop: '1px solid #E2E8F0', paddingTop: '4px' }}>
+                                        👤 {selectedPoint.customer_name}
+                                        {selectedPoint.customer_phone && <div style={{ color: '#2563EB', fontWeight: '600' }}>📱 WA: {selectedPoint.customer_phone}</div>}
                                     </div>
                                 )}
                             </div>
@@ -459,7 +477,10 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.9rem', color: '#991B1B' }}>
-                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#DC2626', border: '2px solid white', boxShadow: '0 0 0 1px #DC2626' }} />
+                            <span style={{ display: 'flex', gap: '2px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#DC2626' }} />
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB' }} />
+                            </span>
                             <span>Demandas Rechazadas</span>
                         </span>
                         <button 
@@ -474,14 +495,27 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     </div>
 
                     <div style={{ fontSize: '0.76rem', color: '#7F1D1D', lineHeight: '1.45', marginTop: '4px' }}>
-                        Visualiza los puntos geográficos (Chía, Cajicá, Soacha, etc.) donde usuarios intentaron pedir pero fueron rechazados por estar fuera del polígono.
+                        Visualiza los puntos donde clientes B2C (🔴) e Instituciones HORECA (🔵) intentaron cotizar/pedir pero están fuera de la geocerca.
                     </div>
 
-                    <div style={{ marginTop: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #FCA5A5' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#991B1B' }}>Total Intentos Registrados:</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#DC2626', backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '12px' }}>
-                            {outOfBoundsPoints.length} Rechazos
-                        </span>
+                    <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.4rem 0.65rem', borderRadius: '6px', border: '1px solid #FECACA' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#991B1B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#DC2626' }} /> Hogares (B2C)
+                            </span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: '900', color: '#DC2626', backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '10px' }}>
+                                {outOfBoundsPoints.filter(p => p.channel !== 'b2b').length} Rechazos
+                            </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.4rem 0.65rem', borderRadius: '6px', border: '1px solid #BFDBFE' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB' }} /> HORECA (B2B)
+                            </span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: '900', color: '#2563EB', backgroundColor: '#DBEAFE', padding: '2px 8px', borderRadius: '10px' }}>
+                                {outOfBoundsPoints.filter(p => p.channel === 'b2b').length} Rechazos
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
