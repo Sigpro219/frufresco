@@ -129,6 +129,20 @@ export const Polygon = forwardRef((props: PolygonProps, ref) => {
 
 Polygon.displayName = 'Polygon';
 
+// Ray-casting algorithm to ensure points inside active geofences are excluded
+function isPointInPolygon(point: Point, vs: Point[]) {
+    if (!vs || vs.length < 3) return false;
+    const x = point.lat, y = point.lng;
+    let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        const xi = vs[i].lat, yi = vs[i].lng;
+        const xj = vs[j].lat, yj = vs[j].lng;
+        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
 export default function GeofencingManager({ settings, onSave, saving, canEdit }: GeofencingManagerProps) {
     const [editMode, setEditMode] = useState<'b2c' | 'b2b' | null>(null);
     const [tempPoly, setTempPoly] = useState<Point[]>([]);
@@ -173,6 +187,16 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         try { return b2bPolyString ? JSON.parse(b2bPolyString) : []; } catch { return []; }
     }, [b2bPolyString]);
 
+    // Filtrar estrictamente solo puntos que estén FUERA de los polígonos activos
+    const validOutOfBoundsPoints = useMemo(() => {
+        return outOfBoundsPoints.filter(pt => {
+            const p = { lat: Number(pt.latitude), lng: Number(pt.longitude) };
+            const insideB2C = b2cPoly.length >= 3 && isPointInPolygon(p, b2cPoly);
+            const insideB2B = b2bPoly.length >= 3 && isPointInPolygon(p, b2bPoly);
+            return !insideB2C && !insideB2B;
+        });
+    }, [outOfBoundsPoints, b2cPoly, b2bPoly]);
+
     const startEditing = (mode: 'b2c' | 'b2b') => {
         const initialPoints = mode === 'b2c' ? b2cPoly : b2bPoly;
         setTempPoly([...initialPoints]);
@@ -197,8 +221,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
     };
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
-            <div style={{ position: 'relative', height: '600px', borderRadius: THEME.radius.lg, overflow: 'hidden', border: `1px solid ${THEME.colors.border}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 230px', gap: '1.25rem', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
+            <div style={{ position: 'relative', height: '700px', borderRadius: THEME.radius.lg, overflow: 'hidden', border: `1px solid ${THEME.colors.border}` }}>
                 <Map
                     style={{ width: '100%', height: '100%' }}
                     defaultCenter={{ lat: 4.6097, lng: -74.0817 }}
@@ -239,8 +263,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         <Marker key={`edit-${i}`} position={p} label={(i + 1).toString()} />
                     ))}
 
-                    {/* RED/BLUE DOT HEATMAP MARKERS: Rejected Demand Out of Bounds (B2C & B2B) */}
-                    {visibleOutOfBounds && outOfBoundsPoints.map((pt, idx) => {
+                    {/* RED/BLUE DOT HEATMAP MARKERS: Rejected Demand Out of Bounds (B2C & B2B) - Strict point in polygon filtering */}
+                    {visibleOutOfBounds && validOutOfBoundsPoints.map((pt, idx) => {
                         const isB2B = pt.channel === 'b2b';
                         return (
                             <Marker 
@@ -527,7 +551,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 <Home size={14} color="#DC2626" /> Hogares (B2C)
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '10px' }}>
-                                {outOfBoundsPoints.filter(p => p.channel !== 'b2b').length} Rechazos
+                                {validOutOfBoundsPoints.filter(p => p.channel !== 'b2b').length} Rechazos
                             </span>
                         </div>
 
@@ -536,7 +560,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 <Building2 size={14} color="#2563EB" /> HORECA (B2B)
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', backgroundColor: '#DBEAFE', padding: '2px 8px', borderRadius: '10px' }}>
-                                {outOfBoundsPoints.filter(p => p.channel === 'b2b').length} Rechazos
+                                {validOutOfBoundsPoints.filter(p => p.channel === 'b2b').length} Rechazos
                             </span>
                         </div>
 
@@ -564,7 +588,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                         >
                             <ListFilter size={15} />
-                            <span>Ver Tabla de Rechazos ({outOfBoundsPoints.length})</span>
+                            <span>Ver Tabla de Rechazos ({validOutOfBoundsPoints.length})</span>
                         </button>
                     </div>
                 </div>
@@ -587,7 +611,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         backgroundColor: THEME.colors.surface,
                         borderRadius: THEME.radius.xl,
                         width: '100%',
-                        maxWidth: '940px',
+                        maxWidth: '960px',
                         maxHeight: '85vh',
                         display: 'flex',
                         flexDirection: 'column',
@@ -661,7 +685,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                         boxShadow: modalFilter === 'all' ? THEME.shadow.sm : 'none'
                                     }}
                                 >
-                                    Todos ({outOfBoundsPoints.length})
+                                    Todos ({validOutOfBoundsPoints.length})
                                 </button>
                                 <button 
                                     onClick={() => setModalFilter('b2c')}
@@ -680,7 +704,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     }}
                                 >
                                     <Home size={13} color="#DC2626" />
-                                    <span>Hogares ({outOfBoundsPoints.filter(p => p.channel !== 'b2b').length})</span>
+                                    <span>Hogares ({validOutOfBoundsPoints.filter(p => p.channel !== 'b2b').length})</span>
                                 </button>
                                 <button 
                                     onClick={() => setModalFilter('b2b')}
@@ -699,7 +723,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     }}
                                 >
                                     <Building2 size={13} color="#2563EB" />
-                                    <span>HORECA ({outOfBoundsPoints.filter(p => p.channel === 'b2b').length})</span>
+                                    <span>HORECA ({validOutOfBoundsPoints.filter(p => p.channel === 'b2b').length})</span>
                                 </button>
                             </div>
                         </div>
@@ -709,6 +733,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem', textAlign: 'left' }}>
                                 <thead>
                                     <tr style={{ borderBottom: `2px solid ${THEME.colors.border}` }}>
+                                        <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Fecha y Hora</th>
                                         <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Canal</th>
                                         <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Cliente / Establecimiento</th>
                                         <th style={{ padding: '0.75rem', ...THEME.typography.tableHeader }}>Municipio / Detalle</th>
@@ -717,7 +742,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {outOfBoundsPoints
+                                    {validOutOfBoundsPoints
                                         .filter(pt => {
                                             if (modalFilter === 'b2c' && pt.channel === 'b2b') return false;
                                             if (modalFilter === 'b2b' && pt.channel !== 'b2b') return false;
@@ -730,8 +755,17 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                         })
                                         .map((pt, idx) => {
                                             const isB2B = pt.channel === 'b2b';
+                                            const formattedDate = pt.created_at 
+                                                ? new Date(pt.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                : 'Hoy';
                                             return (
                                                 <tr key={pt.id || idx} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }}>
+                                                    <td style={{ padding: '0.85rem 0.75rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', fontSize: '0.78rem', fontWeight: '500' }}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Calendar size={12} color="#64748B" />
+                                                            {formattedDate}
+                                                        </span>
+                                                    </td>
                                                     <td style={{ padding: '0.85rem 0.75rem' }}>
                                                         <span style={{
                                                             padding: '4px 10px',
