@@ -1353,8 +1353,21 @@ function CreateOrderContent() {
     const calculateTotalWeight = () => {
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-            const w = item.product.weight_kg || (item.product.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
-            return acc + (qtyNum * w);
+            const unit = (item.originalUnit || item.product.unit_of_measure || '').toLowerCase().trim();
+            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+            
+            let weightFactor = 1.0;
+            if (isKgUnit) {
+                weightFactor = 1.0;
+            } else if (isLibraUnit) {
+                weightFactor = 0.5;
+            } else if (item.product.weight_kg && Number(item.product.weight_kg) > 0) {
+                weightFactor = Number(item.product.weight_kg);
+            } else {
+                weightFactor = 1.0;
+            }
+            return acc + (qtyNum * weightFactor);
         }, 0);
     };
 

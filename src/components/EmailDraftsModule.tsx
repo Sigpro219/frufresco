@@ -3006,7 +3006,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
                 const resolvedPrice = getResolvedPriceForDraft(selectedDraft, prod.id);
                 totalAmount += resolvedPrice * qtyNum;
-                const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+                const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
+                const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+                const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+                let w = 1.0;
+                if (isKgUnit) {
+                  w = 1.0;
+                } else if (isLibraUnit) {
+                  w = 0.5;
+                } else if (prod.weight_kg && Number(prod.weight_kg) > 0) {
+                  w = Number(prod.weight_kg);
+                }
                 totalWeight += qtyNum * w;
 
                 itemsData.push({
@@ -3456,7 +3466,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             totalAmount += resolvedPrice * qtyNum;
-            const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+            const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
+            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+            let w = 1.0;
+            if (isKgUnit) {
+              w = 1.0;
+            } else if (isLibraUnit) {
+              w = 0.5;
+            } else if (prod.weight_kg && Number(prod.weight_kg) > 0) {
+              w = Number(prod.weight_kg);
+            }
             totalWeight += qtyNum * w;
 
             itemsData.push({

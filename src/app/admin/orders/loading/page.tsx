@@ -53,7 +53,7 @@ const getStatusLabel = (s: string) => {
         case 'pending_approval': 
         case 'pending': 
         case 'recibido': 
-            return 'RECIBIDO';
+            return 'POR PROCESAR';
         case 'para_compra': return 'COMPRAS / QA';
         case 'approved': return 'APROBADO';
         case 'picking': return 'EN PREPARACIÓN';
@@ -62,6 +62,20 @@ const getStatusLabel = (s: string) => {
         case 'cancelled': return 'CANCELADO';
         default: return s?.replace('_', ' ').toUpperCase() || '';
     }
+};
+
+const formatCreatedAt = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    
+    const day = String(d.getDate()).padStart(2, '0');
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const monthStr = months[d.getMonth()];
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    return `${day} ${monthStr} · ${hours}:${minutes}`;
 };
 
 const getChannelBadge = (source: string, isB2B?: boolean) => {
@@ -441,15 +455,27 @@ export default function OrderLoadingPage() {
                             paymentMethod = 'Tarjeta / Wompi';
                         }
 
-                        // Calculate total weight from order items if total_weight_kg is 0 or null
+                        // Calculate total weight from order items
                         const items = order.order_items || [];
                         const calculatedWeight = items.reduce((sum: number, item: any) => {
-                            const unit = (item.unit || '').toLowerCase();
-                            const pWeight = item.products?.weight_kg || ((unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : 0.5);
-                            return sum + (pWeight * (parseFloat(item.quantity) || 0));
+                            const unit = (item.unit || item.products?.unit_of_measure || '').toLowerCase().trim();
+                            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+                            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+                            
+                            let weightFactor = 1.0;
+                            if (isKgUnit) {
+                                weightFactor = 1.0;
+                            } else if (isLibraUnit) {
+                                weightFactor = 0.5;
+                            } else if (item.products?.weight_kg && Number(item.products.weight_kg) > 0) {
+                                weightFactor = Number(item.products.weight_kg);
+                            } else {
+                                weightFactor = 1.0;
+                            }
+                            return sum + (weightFactor * (parseFloat(item.quantity) || 0));
                         }, 0);
 
-                        const totalWeight = (order.total_weight_kg && order.total_weight_kg > 0) ? order.total_weight_kg : calculatedWeight;
+                        const totalWeight = calculatedWeight > 0 ? calculatedWeight : (order.total_weight_kg || 0);
 
                         // Align origin_source for B2B vs B2C
                         let originSource = order.origin_source;
@@ -681,9 +707,20 @@ export default function OrderLoadingPage() {
     }, 0);
     const currentSubtotal = currentTotal - currentTax;
     const currentWeight = orderItems.reduce((acc, item) => {
-        const unit = (item.products?.unit_of_measure || '').toLowerCase();
-        // Consistente con el creador de pedidos y base de datos: usa weight_kg si está definido, de lo contrario cae a 1 si la unidad es kg
-        const weightFactor = item.products?.weight_kg || ((unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : 0);
+        const unit = (item.products?.unit_of_measure || '').toLowerCase().trim();
+        const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+        const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+        
+        let weightFactor = 1.0;
+        if (isKgUnit) {
+            weightFactor = 1.0;
+        } else if (isLibraUnit) {
+            weightFactor = 0.5;
+        } else if (item.products?.weight_kg && Number(item.products.weight_kg) > 0) {
+            weightFactor = Number(item.products.weight_kg);
+        } else {
+            weightFactor = 1.0;
+        }
         return acc + (weightFactor * item.quantity);
     }, 0);
 
@@ -1867,16 +1904,23 @@ export default function OrderLoadingPage() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFF1F2' : 'transparent'}
                                                 >
-                                                    <td style={{ padding: '0.8rem 1rem' }}>
-                                                        <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>{friendlyId}</div>
-                                                        <div>
+                                                    <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                                                        <div style={{ fontWeight: '900', fontSize: '0.9rem', color: '#0F172A', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                            {friendlyId}
+                                                        </div>
+                                                        {order.created_at && (
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                                                {formatCreatedAt(order.created_at)}
+                                                            </div>
+                                                        )}
+                                                        <div style={{ marginTop: '4px' }}>
                                                             {isB2B ? (
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.68rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '6px' }}>
-                                                                    <Building2 size={11} strokeWidth={2} /> Institucional
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#4F46E5', backgroundColor: '#EEF2FF', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                    <Building2 size={10} strokeWidth={2} /> Institucional
                                                                 </span>
                                                             ) : (
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.68rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', padding: '1px 6px', borderRadius: '6px' }}>
-                                                                    <Home size={11} strokeWidth={2} /> Hogar
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.65rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                    <Home size={10} strokeWidth={2} /> Hogar
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2463,8 +2507,11 @@ export default function OrderLoadingPage() {
                                                                                  Entr: {exc.delivery_note}
                                                                              </div>
                                                                          )}
-                                                                         {/* Pricing Source Badge */}
-                                                                         {contractPrices[item.product_id] !== undefined && contractPrices[item.product_id] !== null ? (
+                                                                         {!(item.unit_price) || parseFloat(item.unit_price.toString()) <= 0 ? (
+                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                 ⚠️ Sin Precio
+                                                                             </span>
+                                                                         ) : contractPrices[item.product_id] !== undefined && contractPrices[item.product_id] !== null ? (
                                                                              customPriceIds.has(item.product_id) ? (
                                                                                  <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                                      Tarifa Contrato
@@ -2475,8 +2522,8 @@ export default function OrderLoadingPage() {
                                                                                  </span>
                                                                              )
                                                                          ) : (
-                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                 ⚠️ Sin Precio
+                                                                             <span style={{ fontSize: '0.75rem', backgroundColor: '#ECFDF5', color: '#047857', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                 Tarifa Asignada
                                                                              </span>
                                                                          )}
                                                                      </>
@@ -3122,8 +3169,15 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <div>
-                    <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>{friendlyId}</div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '2px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>{friendlyId}</div>
+                        {order.created_at && (
+                            <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '5px', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+                                {formatCreatedAt(order.created_at)}
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <span>{isB2B ? 'CORPORATIVO' : 'CONSUMIDOR'}</span>
                         {getChannelBadge(order.origin_source)}
                     </div>
