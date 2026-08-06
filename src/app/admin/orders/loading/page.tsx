@@ -1057,7 +1057,12 @@ export default function OrderLoadingPage() {
         console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
         
         try {
-            // 1. Actualizar cabecera del pedido
+            // 1. Actualizar cabecera del pedido con nota de auditoría en admin_notes
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const userTag = profile?.contact_name || profile?.email || 'Mesa de Control';
+            const auditStamp = ` [Audit ${nowTimeStr}: Edición por ${userTag}]`;
+            const updatedAdminNotes = `${selectedOrder.admin_notes || ''}${auditStamp}`.trim();
+
             const { error: orderError } = await supabase
                 .from('orders')
                 .update({
@@ -1066,7 +1071,8 @@ export default function OrderLoadingPage() {
                     total: currentTotal,
                     total_weight_kg: currentWeight,
                     subtotal: currentSubtotal,
-                    tax: currentTax
+                    tax: currentTax,
+                    admin_notes: updatedAdminNotes
                 })
                 .eq('id', selectedOrder.id);
 
