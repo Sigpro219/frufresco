@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallb
 import { Map, Marker, InfoWindow, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
 import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle, ListFilter, Search, X, MapPin, Building2, Phone, User, Calendar, ExternalLink, Layers, ArrowUpRight, Home, Download } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
+import * as XLSX from 'xlsx';
 
 function MapController({ center, zoom }: { center: { lat: number; lng: number } | null; zoom: number }) {
     const map = useMap();
@@ -197,7 +198,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         });
     }, [outOfBoundsPoints, b2cPoly, b2bPoly]);
 
-    const exportToCSV = () => {
+    const exportToExcel = () => {
         const filteredPoints = validOutOfBoundsPoints.filter(pt => {
             if (modalFilter === 'b2c' && pt.channel === 'b2b') return false;
             if (modalFilter === 'b2b' && pt.channel !== 'b2b') return false;
@@ -214,27 +215,37 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
             return;
         }
 
-        const headers = ['Fecha y Hora', 'Canal', 'Cliente / Empresa', 'Telefono', 'Correo', 'Municipio / Detalle', 'Direccion', 'Latitud', 'Longitud'];
-        const rows = filteredPoints.map(pt => [
-            pt.created_at ? `"${new Date(pt.created_at).toLocaleString('es-CO')}"` : '"Hoy"',
-            pt.channel === 'b2b' ? '"HORECA B2B"' : '"Hogar B2C"',
-            `"${(pt.customer_name || 'Anonimo').replace(/"/g, '""')}"`,
-            `"${(pt.customer_phone || '').replace(/"/g, '""')}"`,
-            `"${(pt.customer_email || '').replace(/"/g, '""')}"`,
-            `"${(pt.municipality || 'Fuera de zona').replace(/"/g, '""')}"`,
-            `"${(pt.address || '').replace(/"/g, '""')}"`,
-            pt.latitude || '',
-            pt.longitude || ''
-        ]);
+        const excelRows = filteredPoints.map(pt => ({
+            'Fecha y Hora': pt.created_at ? new Date(pt.created_at).toLocaleString('es-CO') : 'Hoy',
+            'Canal': pt.channel === 'b2b' ? 'HORECA B2B' : 'Hogar B2C',
+            'Cliente / Empresa': pt.customer_name || 'Anónimo',
+            'Teléfono': pt.customer_phone || '',
+            'Correo Electrónico': pt.customer_email || '',
+            'Municipio / Detalle': pt.municipality || 'Fuera de zona',
+            'Dirección Solicitada': pt.address || '',
+            'Latitud': pt.latitude || '',
+            'Longitud': pt.longitude || ''
+        }));
 
-        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `frufresco_rechazos_${modalFilter}_${new Date().toISOString().slice(0, 10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const worksheet = XLSX.utils.json_to_sheet(excelRows);
+
+        // Configurar anchos óptimos de columna
+        worksheet['!cols'] = [
+            { wch: 18 }, // Fecha
+            { wch: 14 }, // Canal
+            { wch: 32 }, // Cliente
+            { wch: 14 }, // Telefono
+            { wch: 25 }, // Correo
+            { wch: 28 }, // Municipio
+            { wch: 35 }, // Direccion
+            { wch: 12 }, // Latitud
+            { wch: 12 }  // Longitud
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Demandas Rechazadas');
+
+        XLSX.writeFile(workbook, `frufresco_rechazos_${modalFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     const startEditing = (mode: 'b2c' | 'b2b') => {
@@ -681,7 +692,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <button 
-                                    onClick={exportToCSV}
+                                    onClick={exportToExcel}
                                     style={{
                                         padding: '0.45rem 0.9rem',
                                         borderRadius: THEME.radius.sm,
@@ -698,10 +709,10 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     }}
                                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1E0D9'}
                                     onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
-                                    title="Exportar datos filtrados a archivo CSV/Excel"
+                                    title="Exportar datos filtrados a libro de Microsoft Excel (.xlsx)"
                                 >
                                     <Download size={14} />
-                                    <span>Exportar a CSV</span>
+                                    <span>Exportar a Excel</span>
                                 </button>
                                 <button 
                                     onClick={() => setIsTableModalOpen(false)}
