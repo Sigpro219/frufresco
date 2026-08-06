@@ -1078,7 +1078,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
     const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
-    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(2));
+    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(3));
     
     const factor = newEdits[duplicateIndex].conversion_factor || 1;
     newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
@@ -3006,7 +3006,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
                 const resolvedPrice = getResolvedPriceForDraft(selectedDraft, prod.id);
                 totalAmount += resolvedPrice * qtyNum;
-                const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+                const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
+                const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+                const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+                let w = 1.0;
+                if (isKgUnit) {
+                  w = 1.0;
+                } else if (isLibraUnit) {
+                  w = 0.5;
+                } else if (prod.weight_kg && Number(prod.weight_kg) > 0) {
+                  w = Number(prod.weight_kg);
+                }
                 totalWeight += qtyNum * w;
 
                 itemsData.push({
@@ -3456,7 +3466,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             totalAmount += resolvedPrice * qtyNum;
-            const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+            const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
+            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+            let w = 1.0;
+            if (isKgUnit) {
+              w = 1.0;
+            } else if (isLibraUnit) {
+              w = 0.5;
+            } else if (prod.weight_kg && Number(prod.weight_kg) > 0) {
+              w = Number(prod.weight_kg);
+            }
             totalWeight += qtyNum * w;
 
             itemsData.push({
@@ -5831,7 +5851,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                   const newEdits = [...editableItems];
                                                   newEdits[i].conversion_factor = factor;
                                                   const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].cant || newEdits[i].cantidad || 1);
-                                                  newEdits[i].quantity = parseFloat((origQty * factor).toFixed(2));
+                                                  newEdits[i].quantity = parseFloat((origQty * factor).toFixed(3));
                                                   setEditableItems(newEdits);
                                                 }}
                                                 onKeyDown={(e) => {

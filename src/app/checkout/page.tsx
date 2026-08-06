@@ -559,6 +559,7 @@ export default function CheckoutPage() {
 
             const orderDataToInsert = {
                 type: isB2B ? 'b2b_client' : 'b2c_client',
+                status: 'pending_approval',
                 delivery_date: date,
                 shipping_address: address,
                 subtotal: totalPrice - taxAmount,
