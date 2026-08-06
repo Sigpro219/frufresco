@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react';
 import { Map, Marker, InfoWindow, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
-import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle, ListFilter, Search, X, MapPin, Building2, Phone, User, Calendar, ExternalLink, Layers, ArrowUpRight, Home } from 'lucide-react';
+import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle, ListFilter, Search, X, MapPin, Building2, Phone, User, Calendar, ExternalLink, Layers, ArrowUpRight, Home, Download } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 
 function MapController({ center, zoom }: { center: { lat: number; lng: number } | null; zoom: number }) {
@@ -196,6 +196,46 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
             return !insideB2C && !insideB2B;
         });
     }, [outOfBoundsPoints, b2cPoly, b2bPoly]);
+
+    const exportToCSV = () => {
+        const filteredPoints = validOutOfBoundsPoints.filter(pt => {
+            if (modalFilter === 'b2c' && pt.channel === 'b2b') return false;
+            if (modalFilter === 'b2b' && pt.channel !== 'b2b') return false;
+            if (modalSearch.trim()) {
+                const q = modalSearch.toLowerCase();
+                const text = `${pt.customer_name} ${pt.municipality} ${pt.address} ${pt.customer_phone}`.toLowerCase();
+                return text.includes(q);
+            }
+            return true;
+        });
+
+        if (filteredPoints.length === 0) {
+            alert('No hay registros para exportar con los filtros actuales.');
+            return;
+        }
+
+        const headers = ['Fecha y Hora', 'Canal', 'Cliente / Empresa', 'Telefono', 'Correo', 'Municipio / Detalle', 'Direccion', 'Latitud', 'Longitud'];
+        const rows = filteredPoints.map(pt => [
+            pt.created_at ? `"${new Date(pt.created_at).toLocaleString('es-CO')}"` : '"Hoy"',
+            pt.channel === 'b2b' ? '"HORECA B2B"' : '"Hogar B2C"',
+            `"${(pt.customer_name || 'Anonimo').replace(/"/g, '""')}"`,
+            `"${(pt.customer_phone || '').replace(/"/g, '""')}"`,
+            `"${(pt.customer_email || '').replace(/"/g, '""')}"`,
+            `"${(pt.municipality || 'Fuera de zona').replace(/"/g, '""')}"`,
+            `"${(pt.address || '').replace(/"/g, '""')}"`,
+            pt.latitude || '',
+            pt.longitude || ''
+        ]);
+
+        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `frufresco_rechazos_${modalFilter}_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const startEditing = (mode: 'b2c' | 'b2b') => {
         const initialPoints = mode === 'b2c' ? b2cPoly : b2bPoly;
@@ -639,14 +679,39 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     Registro de clientes e instituciones que cotizaron o pidieron fuera de las geocercas activas
                                 </p>
                             </div>
-                            <button 
-                                onClick={() => setIsTableModalOpen(false)}
-                                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '8px', borderRadius: '50%', color: THEME.colors.textSecondary, transition: 'all 0.2s' }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >
-                                <X size={20} />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <button 
+                                    onClick={exportToCSV}
+                                    style={{
+                                        padding: '0.45rem 0.9rem',
+                                        borderRadius: THEME.radius.sm,
+                                        border: `1px solid ${THEME.colors.primary}`,
+                                        backgroundColor: THEME.colors.primaryLight,
+                                        color: THEME.colors.primary,
+                                        fontWeight: '700',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#D1E0D9'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                                    title="Exportar datos filtrados a archivo CSV/Excel"
+                                >
+                                    <Download size={14} />
+                                    <span>Exportar a CSV</span>
+                                </button>
+                                <button 
+                                    onClick={() => setIsTableModalOpen(false)}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '8px', borderRadius: '50%', color: THEME.colors.textSecondary, transition: 'all 0.2s' }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Modal Controls: Search & Tabs */}

@@ -1275,23 +1275,40 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     )}
 
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                        <a 
-                            href={`https://wa.me/57${leadData.phone.replace(/[^0-9]/g, '')}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            style={{
-                                backgroundColor: '#25D366',
-                                color: 'white',
-                                textDecoration: 'none',
-                                fontWeight: '700',
-                                padding: '10px 20px',
-                                borderRadius: '99px',
-                                fontSize: '0.85rem',
-                                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.25)'
-                            }}
-                        >
-                            💬 Chatear por WhatsApp
-                        </a>
+                        {(() => {
+                            const waText = encodeURIComponent(
+                                `Hola FruFresco 👋, soy ${leadData.contact_name || nameInput || 'Cliente B2B'} de ${leadData.company_name || nameInput || 'nuestra empresa'}.\n\n` +
+                                `Acabo de generar la Pre-Cotización HORECA en su portal web.\n` +
+                                `📌 Operación: ${selectedType || 'HORECA'}\n` +
+                                `📍 Ubicación: ${leadData.address || addressInput}\n` +
+                                `📦 Volumen Estimado: ${selectedSize || 'Por definir'}\n\n` +
+                                `Me gustaría coordinar con un Asesor Comercial la activación de mi cuenta y condiciones de despacho.`
+                            );
+                            const cleanPhone = (phoneInput || leadData.phone || '').replace(/[^0-9]/g, '');
+                            const waTarget = cleanPhone.length === 10 ? `57${cleanPhone}` : '573101234567';
+                            return (
+                                <a 
+                                    href={`https://wa.me/${waTarget}?text=${waText}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    style={{
+                                        backgroundColor: '#25D366',
+                                        color: 'white',
+                                        textDecoration: 'none',
+                                        fontWeight: '800',
+                                        padding: '11px 22px',
+                                        borderRadius: '99px',
+                                        fontSize: '0.88rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)'
+                                    }}
+                                >
+                                    💬 Coordinar con Asesor por WhatsApp
+                                </a>
+                            );
+                        })()}
                         <Link 
                             href="/" 
                             style={{
