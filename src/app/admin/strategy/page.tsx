@@ -227,46 +227,7 @@ export default function AdminStrategyPage() {
                     </div>
                 </header>
 
-                {/* Top Executive KPI Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
-                    <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geocerca B2C</span>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
-                        </div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: THEME.colors.textMain }}>Activa (Bogotá)</div>
-                        <div style={{ fontSize: '0.76rem', color: THEME.colors.textSecondary }}>1 Polígono Redireccionado</div>
-                    </div>
-
-                    <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geocerca B2B</span>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#7C3AED' }} />
-                        </div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: THEME.colors.textMain }}>Activa (HORECA)</div>
-                        <div style={{ fontSize: '0.76rem', color: THEME.colors.textSecondary }}>1 Polígono Institucional</div>
-                    </div>
-
-                    <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#991B1B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rechazos Hogares</span>
-                            <Home size={14} color="#DC2626" />
-                        </div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#DC2626' }}>10 Puntos</div>
-                        <div style={{ fontSize: '0.76rem', color: '#991B1B' }}>Demanda Residencial Capturada</div>
-                    </div>
-
-                    <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#1E40AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rechazos HORECA</span>
-                            <Building2 size={14} color="#2563EB" />
-                        </div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#2563EB' }}>10 Oportunidades</div>
-                        <div style={{ fontSize: '0.76rem', color: '#1E40AF' }}>Lead Mayorista Registrado</div>
-                    </div>
-                </div>
-
-                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '16px', border: `1px solid ${THEME.colors.border}`, padding: '2rem', minHeight: '600px', boxShadow: THEME.shadow.sm }}>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '16px', border: `1px solid ${THEME.colors.border}`, padding: '1.5rem', minHeight: '600px', boxShadow: THEME.shadow.sm }}>
                     {activeTab === 'geofencing' && (
                         <APIProvider apiKey={MAPS_KEY}>
                             <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />

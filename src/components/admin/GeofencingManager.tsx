@@ -493,26 +493,23 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     )}
                 </div>
 
-                {/* Rejected Demand Heatmap Card */}
+                {/* Demandas Rechazadas Card (Sleek & Minimal) */}
                 <div style={{ 
-                    padding: '1.25rem', 
+                    padding: '1rem', 
                     borderRadius: THEME.radius.lg, 
-                    border: '1px solid #FCA5A5', 
-                    backgroundColor: '#FEF2F2',
+                    border: `1px solid ${THEME.colors.border}`, 
+                    backgroundColor: THEME.colors.surface,
                     boxShadow: THEME.shadow.sm
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.9rem', color: '#991B1B' }}>
-                            <span style={{ display: 'flex', gap: '2px' }}>
-                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#DC2626' }} />
-                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB' }} />
-                            </span>
-                            <span>Demandas Rechazadas</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.88rem', color: THEME.colors.textMain }}>
+                            <MapPin size={16} color={THEME.colors.primary} />
+                            <span>Mapa de Demandas (Rechazos)</span>
                         </span>
                         <button 
                             onClick={() => setVisibleOutOfBounds(!visibleOutOfBounds)} 
-                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#991B1B', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
-                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
+                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
                             onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
                             title={visibleOutOfBounds ? 'Ocultar mapa de calor' : 'Mostrar mapa de calor'}
                         >
@@ -520,8 +517,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         </button>
                     </div>
 
-                    <div style={{ fontSize: '0.76rem', color: '#7F1D1D', lineHeight: '1.45', marginTop: '4px' }}>
-                        Visualiza los puntos donde clientes B2C (🔴) e Instituciones HORECA (🔵) intentaron cotizar/pedir pero están fuera de la geocerca.
+                    <div style={{ fontSize: '0.76rem', color: THEME.colors.textSecondary, lineHeight: '1.4', marginTop: '2px' }}>
+                        Ubicaciones fuera de la geocerca capturadas en B2C (Hogares) y B2B (HORECA).
                     </div>
 
                     <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
