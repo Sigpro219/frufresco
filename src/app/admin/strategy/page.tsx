@@ -16,7 +16,8 @@ import {
     Building2, 
     Wrench, 
     ArrowRight,
-    Cpu
+    Cpu,
+    Home
 } from 'lucide-react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 
