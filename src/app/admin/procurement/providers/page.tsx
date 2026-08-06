@@ -626,15 +626,18 @@ export default function ProvidersPage() {
         }
     };
 
-    const toggleArchiveStatus = async (e: React.MouseEvent, id: string, currentStatus: boolean) => {
+    const toggleArchiveStatus = async (e: React.MouseEvent, provider: any) => {
         e.stopPropagation();
         if (!canEdit) {
             alert('No tienes permisos de edición en este módulo.');
             return;
         }
-        const actionText = currentStatus ? 'restaurar' : 'archivar';
-        if (!confirm(`¿Seguro que deseas ${actionText} este proveedor?`)) return;
+        const isInactive = provider.is_archived || provider.is_active === false;
+        const actionText = isInactive ? 'reactivar' : 'inhabilitar';
+        if (!confirm(`¿Seguro que deseas ${actionText} el proveedor "${provider.name || ''}"?`)) return;
         try {
+            const targetArchived = isInactive ? false : true;
+            const targetActive = isInactive ? true : false;
             let saved = false;
             try {
                 const apiRes = await fetch('/api/providers', {
@@ -642,20 +645,21 @@ export default function ProvidersPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'toggle-archive',
-                        providerId: id,
-                        is_archived: !currentStatus
+                        providerId: provider.id,
+                        is_archived: targetArchived,
+                        is_active: targetActive
                     })
                 });
                 if (apiRes.ok) saved = true;
-            } catch (e) {
-                console.warn('API toggle archive failed:', e);
+            } catch (err) {
+                console.warn('API toggle archive failed:', err);
             }
 
             if (!saved) {
                 const { error } = await supabase
                     .from('providers')
-                    .update({ is_archived: !currentStatus, is_active: currentStatus ? true : false })
-                    .eq('id', id);
+                    .update({ is_archived: targetArchived, is_active: targetActive })
+                    .eq('id', provider.id);
                 if (error) throw error;
             }
             fetchProviders();
@@ -1203,21 +1207,27 @@ export default function ProvidersPage() {
                                         </td>
                                         <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                                             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                                                <button 
-                                                    onClick={(e) => toggleArchiveStatus(e, p.id, p.is_archived)} 
-                                                    disabled={!canEdit}
-                                                    style={{ 
-                                                        backgroundColor: '#F8FAFC', 
-                                                        border: '1px solid #E2E8F0', 
-                                                        borderRadius: '8px', 
-                                                        padding: '0.4rem', 
-                                                        color: p.is_archived ? '#10B981' : '#EF4444', 
-                                                        cursor: canEdit ? 'pointer' : 'not-allowed',
-                                                        opacity: canEdit ? 1 : 0.5
-                                                    }}
-                                                >
-                                                    {p.is_archived ? <RotateCcw size={14} strokeWidth={1.5} /> : <Archive size={14} strokeWidth={1.5} />}
-                                                </button>
+                                                {(() => {
+                                                    const isInactive = p.is_archived || p.is_active === false;
+                                                    return (
+                                                        <button 
+                                                            onClick={(e) => toggleArchiveStatus(e, p)} 
+                                                            disabled={!canEdit}
+                                                            title={isInactive ? "Reactivar proveedor" : "Inhabilitar / Archivar proveedor"}
+                                                            style={{ 
+                                                                backgroundColor: isInactive ? '#ECFDF5' : '#FEF2F2', 
+                                                                border: `1px solid ${isInactive ? '#A7F3D0' : '#FECACA'}`, 
+                                                                borderRadius: '8px', 
+                                                                padding: '0.4rem', 
+                                                                color: isInactive ? '#059669' : '#EF4444', 
+                                                                cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                                opacity: canEdit ? 1 : 0.5
+                                                            }}
+                                                        >
+                                                            {isInactive ? <RotateCcw size={14} strokeWidth={1.5} /> : <Archive size={14} strokeWidth={1.5} />}
+                                                        </button>
+                                                    );
+                                                })()}
                                             </div>
                                         </td>
                                     </tr>
@@ -1309,26 +1319,32 @@ export default function ProvidersPage() {
                                             }}>
                                                 {p.type?.toUpperCase()}
                                             </span>
-                                            <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleArchiveStatus(e, p.id, p.is_archived);
-                                                }} 
-                                                disabled={!canEdit}
-                                                style={{ 
-                                                    backgroundColor: '#F8FAFC', 
-                                                    border: '1px solid #E2E8F0', 
-                                                    borderRadius: '6px', 
-                                                    padding: '0.25rem', 
-                                                    color: p.is_archived ? '#10B981' : '#EF4444',
-                                                    cursor: canEdit ? 'pointer' : 'not-allowed',
-                                                    opacity: canEdit ? 1 : 0.5,
-                                                    display: 'flex',
-                                                    alignItems: 'center'
-                                                }}
-                                            >
-                                                {p.is_archived ? <RotateCcw size={12} strokeWidth={1.5} /> : <Archive size={12} strokeWidth={1.5} />}
-                                            </button>
+                                            {(() => {
+                                                const isInactive = p.is_archived || p.is_active === false;
+                                                return (
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleArchiveStatus(e, p);
+                                                        }} 
+                                                        disabled={!canEdit}
+                                                        title={isInactive ? "Reactivar proveedor" : "Inhabilitar / Archivar proveedor"}
+                                                        style={{ 
+                                                            backgroundColor: isInactive ? '#ECFDF5' : '#FEF2F2', 
+                                                            border: `1px solid ${isInactive ? '#A7F3D0' : '#FECACA'}`, 
+                                                            borderRadius: '6px', 
+                                                            padding: '0.25rem', 
+                                                            color: isInactive ? '#059669' : '#EF4444',
+                                                            cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                            opacity: canEdit ? 1 : 0.5,
+                                                            display: 'flex',
+                                                            alignItems: 'center'
+                                                        }}
+                                                    >
+                                                        {isInactive ? <RotateCcw size={12} strokeWidth={1.5} /> : <Archive size={12} strokeWidth={1.5} />}
+                                                    </button>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
 

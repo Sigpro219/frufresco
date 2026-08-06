@@ -50,7 +50,10 @@ import {
 
 const getStatusLabel = (s: string) => {
     switch (s) {
-        case 'pending_approval': return 'POR APROBAR';
+        case 'pending_approval': 
+        case 'pending': 
+        case 'recibido': 
+            return 'POR APROBAR';
         case 'para_compra': return 'COMPRAS / QA';
         case 'approved': return 'APROBADO';
         case 'picking': return 'EN PREPARACIÓN';
@@ -1918,7 +1921,7 @@ export default function OrderLoadingPage() {
                                                         }}>
                                                             {getStatusLabel(order.status)}
                                                         </div>
-                                                        {order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
+                                                        {!isB2B && (order.payment_method === 'contra_entrega' || order.paymentMethod?.toLowerCase().includes('contra') || order.paymentMethod?.toLowerCase().includes('puerta')) && order.payment_status !== 'Pagado' && (
                                                             <div style={{
                                                                 marginTop: '4px',
                                                                 padding: '1px 6px',
