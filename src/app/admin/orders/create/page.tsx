@@ -2346,64 +2346,121 @@ function CreateOrderContent() {
                                             
                                             {selectedClientB2C ? (
                                                 <div style={{
-                                                    padding: '0.8rem', backgroundColor: '#EFF6FF', border: '1px solid #3B82F6', borderRadius: '8px',
-                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                    padding: '1rem 1.2rem', 
+                                                    backgroundColor: '#EFF6FF', 
+                                                    border: '1px solid #93C5FD', 
+                                                    borderRadius: '14px',
+                                                    display: 'flex', 
+                                                    flexDirection: 'column',
+                                                    gap: '0.75rem',
+                                                    boxShadow: '0 2px 8px rgba(30, 64, 175, 0.05)'
                                                 }}>
-                                                    <div style={{ flex: 1 }}>
-                                                        <div style={{ fontWeight: '700', color: '#1E40AF', fontSize: '1.1rem' }}>
-                                                            {getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}
+                                                    {/* Top Row: Name, Badge and Close Button */}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontWeight: '800', color: '#1E40AF', fontSize: '1.15rem', lineHeight: '1.2' }}>
+                                                                {getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}
+                                                            </div>
                                                             {activePricingModel && (
                                                                 <div style={{
-                                                                    marginTop: '0.25rem',
-                                                                    padding: '0.2rem 0.5rem',
+                                                                    marginTop: '0.35rem',
+                                                                    padding: '0.2rem 0.55rem',
                                                                     borderRadius: '6px',
                                                                     backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE',
                                                                     border: `1px solid ${isB2CDefault ? '#FED7AA' : '#BAE6FD'}`,
                                                                     color: isB2CDefault ? '#C2410C' : '#0369A1',
                                                                     fontSize: '0.75rem',
                                                                     fontWeight: 'bold',
-                                                                    display: 'flex',
+                                                                    display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: '4px',
-                                                                    width: 'fit-content'
+                                                                    gap: '4px'
                                                                 }}>
                                                                     <span>🏷️ {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
                                                                     {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                                                            <div style={{ color: '#1E3A8A' }}>
-                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} strokeWidth={1.5} /> Tel:</span> {getSelectedB2CDetails()?.contact_phone || 'N/A'}
+                                                        <button
+                                                            onClick={() => { setSelectedClientB2C(''); setGuestInfo({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); }}
+                                                            style={{ 
+                                                                background: '#DBEAFE', 
+                                                                border: 'none', 
+                                                                color: '#1D4ED8', 
+                                                                width: '26px', 
+                                                                height: '26px', 
+                                                                borderRadius: '50%', 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                justifyContent: 'center', 
+                                                                cursor: 'pointer',
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: '800',
+                                                                flexShrink: 0
+                                                            }}
+                                                            title="Cambiar Cliente"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Data Grid with Perfect Y-Axis Alignment */}
+                                                    <div style={{ 
+                                                        display: 'grid', 
+                                                        gridTemplateColumns: '1fr 1fr', 
+                                                        gap: '0.6rem 1rem', 
+                                                        paddingTop: '0.65rem', 
+                                                        borderTop: '1px solid #BFDBFE',
+                                                        fontSize: '0.82rem' 
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A' }}>
+                                                            <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                <Phone size={13} strokeWidth={1.5} /> Tel:
                                                             </div>
-                                                            <div style={{ color: '#1E3A8A' }}>
-                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><FileText size={12} strokeWidth={1.5} /> CC/NIT:</span> {getSelectedB2CDetails()?.nit || 'N/A'}
-                                                            </div>
-                                                            <div style={{ color: '#1E3A8A', gridColumn: '1 / -1' }}>
-                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Mail size={12} strokeWidth={1.5} /> Email:</span> {getSelectedB2CDetails()?.email || 'N/A'}
-                                                            </div>
-                                                            <div style={{ color: '#1E3A8A', gridColumn: '1 / -1' }}>
-                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} strokeWidth={1.5} /> Dir:</span> {getSelectedB2CDetails()?.address || 'Sin dirección'} ({getSelectedB2CDetails()?.city || '?'})
-                                                            </div>
-                                                            <div style={{ gridColumn: '1 / -1', marginTop: '4px' }}>
-                                                                {(getSelectedB2CDetails()?.latitude && getSelectedB2CDetails()?.longitude) ? (
-                                                                    <div style={{ color: '#059669', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16A34A' }}><CheckCircle2 size={12} strokeWidth={1.5} /> Georeferenciado ({getSelectedB2CDetails()?.latitude?.toFixed(4)}, {getSelectedB2CDetails()?.longitude?.toFixed(4)})</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div style={{ color: '#DC2626', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={12} strokeWidth={1.5} /> Sin Georeferenciación</span>
-                                                                    </div>
-                                                                )}
+                                                            <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
+                                                                {getSelectedB2CDetails()?.contact_phone || 'N/A'}
                                                             </div>
                                                         </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A' }}>
+                                                            <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                <FileText size={13} strokeWidth={1.5} /> CC/NIT:
+                                                            </div>
+                                                            <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
+                                                                {getSelectedB2CDetails()?.nit || 'N/A'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A', gridColumn: '1 / -1' }}>
+                                                            <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                <Mail size={13} strokeWidth={1.5} /> Email:
+                                                            </div>
+                                                            <div style={{ fontWeight: '600', color: '#1E3A8A', wordBreak: 'break-all' }}>
+                                                                {getSelectedB2CDetails()?.email || 'N/A'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E3A8A', gridColumn: '1 / -1', flexWrap: 'wrap' }}>
+                                                            <div style={{ fontWeight: '700', color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                <MapPin size={13} strokeWidth={1.5} /> Dir:
+                                                            </div>
+                                                            <div style={{ fontWeight: '600', color: '#1E3A8A' }}>
+                                                                {getSelectedB2CDetails()?.address || 'Sin dirección'}
+                                                                <span style={{ fontWeight: '400', opacity: 0.8, marginLeft: '4px' }}>({getSelectedB2CDetails()?.city || 'Bogotá'})</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ gridColumn: '1 / -1', marginTop: '2px' }}>
+                                                            {(getSelectedB2CDetails()?.latitude && getSelectedB2CDetails()?.longitude) ? (
+                                                                <div style={{ color: '#15803D', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#DCFCE7', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                                                                    <CheckCircle2 size={13} strokeWidth={2} color="#16A34A" /> Georeferenciado ({getSelectedB2CDetails()?.latitude?.toFixed(4)}, {getSelectedB2CDetails()?.longitude?.toFixed(4)})
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ color: '#B91C1C', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#FEE2E2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid #FCA5A5' }}>
+                                                                    <AlertTriangle size={13} strokeWidth={2} color="#EF4444" /> Sin Georeferenciación
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <button
-                                                        onClick={() => { setSelectedClientB2C(''); setGuestInfo({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); }}
-                                                        style={{ background: 'transparent', border: 'none', color: '#2563EB', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.2rem' }}
-                                                    >
-                                                        ✕
-                                                    </button>
                                                 </div>
                                             ) : (
                                                 <>
