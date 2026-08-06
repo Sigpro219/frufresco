@@ -374,6 +374,15 @@ export default function CheckoutPage() {
             if (data) setB2cGeofence(JSON.parse(data.value));
         }
         fetchGeofence();
+
+        const testCoordsHandler = (e: any) => {
+            if (e.detail?.lat && e.detail?.lng) {
+                setLatitude(e.detail.lat);
+                setLongitude(e.detail.lng);
+            }
+        };
+        window.addEventListener('set_test_coords', testCoordsHandler);
+        return () => window.removeEventListener('set_test_coords', testCoordsHandler);
     }, []);
 
     // Monitor changes to delivery address to invalidate coordinates if address changes
