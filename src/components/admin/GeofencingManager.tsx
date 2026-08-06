@@ -59,15 +59,22 @@ export const Polygon = forwardRef((props: PolygonProps, ref) => {
         }
     }, [polygon, paths]);
 
+    // Ensure polygon is properly attached to map on mount and detached on unmount
+    useEffect(() => {
+        if (!polygon || !map) return;
+        polygon.setMap(map);
+        polygon.setVisible(true);
+        return () => {
+            polygon.setVisible(false);
+            polygon.setMap(null);
+        };
+    }, [polygon, map]);
+
     // Options & Visibility update
     useEffect(() => {
         if (!polygon) return;
         polygon.setOptions(options);
-        const isVisible = options.visible !== false;
-        if (map) {
-            polygon.setMap(isVisible ? map : null);
-        }
-    }, [polygon, map, options.visible, options.fillColor, options.strokeColor, options.editable, options.draggable]);
+    }, [polygon, options.fillColor, options.strokeColor, options.editable, options.draggable]);
 
     // Sync from Google Maps -> React state during editing
     useEffect(() => {
@@ -175,29 +182,31 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     disableDefaultUI={false}
                     onClick={handleMapClick}
                 >
-                    <Polygon 
-                        paths={editMode === 'b2c' ? tempPoly : b2cPoly} 
-                        onPathChange={editMode === 'b2c' ? handlePathChange : undefined}
-                        visible={visibleB2C}
-                        editable={editMode === 'b2c'}
-                        draggable={editMode === 'b2c'}
-                        fillColor="#EF4444"
-                        fillOpacity={0.2}
-                        strokeColor="#EF4444"
-                        strokeWeight={2}
-                    />
+                    {visibleB2C && (
+                        <Polygon 
+                            paths={editMode === 'b2c' ? tempPoly : b2cPoly} 
+                            onPathChange={editMode === 'b2c' ? handlePathChange : undefined}
+                            editable={editMode === 'b2c'}
+                            draggable={editMode === 'b2c'}
+                            fillColor="#EF4444"
+                            fillOpacity={0.2}
+                            strokeColor="#EF4444"
+                            strokeWeight={2}
+                        />
+                    )}
 
-                    <Polygon 
-                        paths={editMode === 'b2b' ? tempPoly : b2bPoly} 
-                        onPathChange={editMode === 'b2b' ? handlePathChange : undefined}
-                        visible={visibleB2B}
-                        editable={editMode === 'b2b'}
-                        draggable={editMode === 'b2b'}
-                        fillColor="#7C3AED"
-                        fillOpacity={0.2}
-                        strokeColor="#7C3AED"
-                        strokeWeight={2}
-                    />
+                    {visibleB2B && (
+                        <Polygon 
+                            paths={editMode === 'b2b' ? tempPoly : b2bPoly} 
+                            onPathChange={editMode === 'b2b' ? handlePathChange : undefined}
+                            editable={editMode === 'b2b'}
+                            draggable={editMode === 'b2b'}
+                            fillColor="#7C3AED"
+                            fillOpacity={0.2}
+                            strokeColor="#7C3AED"
+                            strokeWeight={2}
+                        />
+                    )}
 
                     {/* Markers only for fresh drawing (less than 3 points) */}
                     {editMode && tempPoly.length < 3 && tempPoly.map((p, i) => (
