@@ -101,9 +101,16 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Falta el providerId' }, { status: 400 });
             }
 
+            const updatePayload: any = { is_archived };
+            if (typeof body.is_active === 'boolean') {
+                updatePayload.is_active = body.is_active;
+            } else {
+                updatePayload.is_active = !is_archived;
+            }
+
             const { data, error } = await adminSupabase
                 .from('providers')
-                .update({ is_archived })
+                .update(updatePayload)
                 .eq('id', providerId)
                 .select()
                 .single();
