@@ -579,103 +579,215 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
     return (
         <div style={{
-            backgroundColor: 'white',
+            backgroundColor: '#FAFAFA',
             borderRadius: '24px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05)',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            height: '620px',
-            maxHeight: '85vh'
+            height: '660px',
+            maxHeight: '88vh'
         }}>
             {/* Header */}
             <div style={{ 
-                backgroundColor: 'var(--primary)', 
-                padding: '18px 24px', 
+                background: 'linear-gradient(135deg, #064E3B 0%, #047857 50%, #065F46 100%)',
+                padding: '20px 24px', 
                 display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
+                flexDirection: 'column',
+                gap: '16px',
                 color: 'white',
-                boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
+                boxShadow: '0 8px 32px rgba(6, 78, 59, 0.3)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
+                backdropFilter: 'blur(12px)',
+                position: 'relative',
+                overflow: 'hidden',
                 zIndex: 10
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ 
-                        width: '44px', 
-                        height: '44px', 
-                        backgroundColor: 'rgba(255,255,255,0.2)', 
-                        borderRadius: '12px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        backdropFilter: 'blur(10px)',
-                        border: '1px solid rgba(255,255,255,0.3)',
-                    }}>
-                        <Building2 size={24} color="white" />
-                    </div>
-                    <div>
-                        <h3 style={{ 
-                            margin: 0, 
-                            fontSize: '1.1rem', 
-                            fontWeight: '900', 
-                            fontFamily: 'var(--font-outfit), sans-serif',
-                            letterSpacing: '-0.02em' 
-                        }}>Cotizador Institucional HORECA</h3>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Sparkles size={12} color="#4ADE80" />
-                            Pre-Cotización Guiada en 3 Pasos
-                        </span>
+                {/* Subtle Inner Glow Overlay */}
+                <div style={{
+                    position: 'absolute',
+                    top: '-50%',
+                    right: '-20%',
+                    width: '300px',
+                    height: '300px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(74, 222, 128, 0.2) 0%, rgba(0, 0, 0, 0) 70%)',
+                    pointerEvents: 'none'
+                }} />
+
+                {/* Top Row: Icon, Title & Subtitle */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ 
+                            width: '46px', 
+                            height: '46px', 
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 100%)', 
+                            borderRadius: '14px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)'
+                        }}>
+                            <Building2 size={24} color="#4ADE80" />
+                        </div>
+                        <div>
+                            <h3 style={{ 
+                                margin: 0, 
+                                fontSize: '1.15rem', 
+                                fontWeight: '800', 
+                                fontFamily: 'var(--font-outfit), sans-serif',
+                                letterSpacing: '-0.02em',
+                                color: '#FFFFFF',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}>Cotizador Institucional HORECA</h3>
+                            <span style={{ fontSize: '0.78rem', fontWeight: '600', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                                <Sparkles size={13} color="#4ADE80" />
+                                Pre-Cotización Guiada en 3 Pasos
+                            </span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Step Indicator Badges */}
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '99px',
-                        fontSize: '0.75rem',
+                {/* Bottom Row: Spacious 3-Step Progress Bar */}
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    gap: '8px', 
+                    padding: '8px 12px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+                    borderRadius: '16px',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    backdropFilter: 'blur(10px)',
+                    zIndex: 1
+                }}>
+                    {/* Step 1 Pill */}
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '12px',
+                        fontSize: '0.78rem',
                         fontWeight: '800',
-                        backgroundColor: currentStep >= 1 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
-                        color: currentStep >= 1 ? '#064E3B' : 'white'
-                    }}>1. Necesidad</span>
-                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>›</span>
-                    <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '99px',
-                        fontSize: '0.75rem',
+                        backgroundColor: currentStep === 1 ? '#4ADE80' : currentStep > 1 ? 'rgba(74, 222, 128, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+                        color: currentStep === 1 ? '#064E3B' : currentStep > 1 ? '#4ADE80' : 'rgba(255, 255, 255, 0.65)',
+                        boxShadow: currentStep === 1 ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
+                        border: currentStep === 1 ? '1px solid #86EFAC' : currentStep > 1 ? '1px solid rgba(74, 222, 128, 0.3)' : '1px solid transparent',
+                        transition: 'all 0.3s ease'
+                    }}>
+                        <div style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: currentStep === 1 ? '#064E3B' : currentStep > 1 ? '#4ADE80' : 'rgba(255, 255, 255, 0.2)',
+                            color: currentStep === 1 ? '#4ADE80' : currentStep > 1 ? '#064E3B' : 'rgba(255, 255, 255, 0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.72rem',
+                            fontWeight: '900'
+                        }}>
+                            {currentStep > 1 ? <Check size={13} strokeWidth={3} /> : '1'}
+                        </div>
+                        <span>1. Necesidad</span>
+                    </div>
+
+                    <div style={{ width: '20px', height: '2px', backgroundColor: currentStep > 1 ? '#4ADE80' : 'rgba(255, 255, 255, 0.2)', borderRadius: '2px' }} />
+
+                    {/* Step 2 Pill */}
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '12px',
+                        fontSize: '0.78rem',
                         fontWeight: '800',
-                        backgroundColor: currentStep >= 2 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
-                        color: currentStep >= 2 ? '#064E3B' : 'white'
-                    }}>2. Cobertura</span>
-                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>›</span>
-                    <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '99px',
-                        fontSize: '0.75rem',
+                        backgroundColor: currentStep === 2 ? '#4ADE80' : currentStep > 2 ? 'rgba(74, 222, 128, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+                        color: currentStep === 2 ? '#064E3B' : currentStep > 2 ? '#4ADE80' : 'rgba(255, 255, 255, 0.65)',
+                        boxShadow: currentStep === 2 ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
+                        border: currentStep === 2 ? '1px solid #86EFAC' : currentStep > 2 ? '1px solid rgba(74, 222, 128, 0.3)' : '1px solid transparent',
+                        transition: 'all 0.3s ease'
+                    }}>
+                        <div style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: currentStep === 2 ? '#064E3B' : currentStep > 2 ? '#4ADE80' : 'rgba(255, 255, 255, 0.2)',
+                            color: currentStep === 2 ? '#4ADE80' : currentStep > 2 ? '#064E3B' : 'rgba(255, 255, 255, 0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.72rem',
+                            fontWeight: '900'
+                        }}>
+                            {currentStep > 2 ? <Check size={13} strokeWidth={3} /> : '2'}
+                        </div>
+                        <span>2. Cobertura</span>
+                    </div>
+
+                    <div style={{ width: '20px', height: '2px', backgroundColor: currentStep > 2 ? '#4ADE80' : 'rgba(255, 255, 255, 0.2)', borderRadius: '2px' }} />
+
+                    {/* Step 3 Pill */}
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '12px',
+                        fontSize: '0.78rem',
                         fontWeight: '800',
-                        backgroundColor: currentStep >= 3 ? '#4ADE80' : 'rgba(255,255,255,0.2)',
-                        color: currentStep >= 3 ? '#064E3B' : 'white'
-                    }}>3. Cotización</span>
+                        backgroundColor: currentStep === 3 ? '#4ADE80' : 'rgba(255, 255, 255, 0.08)',
+                        color: currentStep === 3 ? '#064E3B' : 'rgba(255, 255, 255, 0.65)',
+                        boxShadow: currentStep === 3 ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
+                        border: currentStep === 3 ? '1px solid #86EFAC' : '1px solid transparent',
+                        transition: 'all 0.3s ease'
+                    }}>
+                        <div style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: currentStep === 3 ? '#064E3B' : 'rgba(255, 255, 255, 0.2)',
+                            color: currentStep === 3 ? '#4ADE80' : 'rgba(255, 255, 255, 0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.72rem',
+                            fontWeight: '900'
+                        }}>
+                            3
+                        </div>
+                        <span>3. Cotización</span>
+                    </div>
                 </div>
             </div>
 
             {/* Messages Area */}
             <div 
                 ref={messagesContainerRef}
-                style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', backgroundColor: '#F9FAFB' }}
+                style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.1rem', backgroundColor: '#F8FAFC' }}
             >
                 {messages.map((msg) => (
                     <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
                         <div style={{
-                            backgroundColor: msg.sender === 'user' ? 'var(--primary)' : 'white',
-                            color: msg.sender === 'user' ? 'white' : 'var(--text-main)',
-                            padding: '0.9rem 1.25rem',
-                            borderRadius: msg.sender === 'user' ? '20px 20px 4px 20px' : '4px 20px 20px 20px',
-                            boxShadow: msg.sender === 'user' ? '0 8px 18px rgba(26, 77, 46, 0.2)' : '0 4px 12px rgba(0,0,0,0.03)',
+                            background: msg.sender === 'user' ? 'linear-gradient(135deg, #064E3B 0%, #047857 100%)' : '#FFFFFF',
+                            color: msg.sender === 'user' ? '#FFFFFF' : '#1E293B',
+                            padding: '0.95rem 1.3rem',
+                            borderRadius: msg.sender === 'user' ? '22px 22px 4px 22px' : '4px 22px 22px 22px',
+                            boxShadow: msg.sender === 'user' ? '0 6px 18px rgba(6, 78, 59, 0.25)' : '0 4px 15px rgba(0, 0, 0, 0.04)',
                             fontSize: '0.9rem',
                             fontWeight: '500',
-                            lineHeight: '1.5',
-                            border: msg.sender === 'user' ? 'none' : '1px solid var(--border)',
+                            lineHeight: '1.55',
+                            border: msg.sender === 'user' ? 'none' : '1px solid #E2E8F0',
                             fontFamily: 'var(--font-inter), sans-serif'
                         }}>
                             {msg.text}
@@ -687,48 +799,55 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 {!isCompleted && currentStep === 1 && (
                     <div style={{
                         width: '100%',
-                        backgroundColor: 'white',
+                        backgroundColor: '#FFFFFF',
                         borderRadius: '20px',
-                        padding: '1.25rem',
-                        border: '2px solid var(--primary)',
-                        boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
+                        padding: '1.4rem',
+                        border: '1.5px solid #10B981',
+                        boxShadow: '0 10px 30px rgba(16, 185, 129, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '1rem',
+                        gap: '1.1rem',
                         margin: '0.5rem 0',
                         flexShrink: 0
                     }}>
-                        <div style={{ borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Sparkles size={20} color="var(--primary)" />
-                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                        <div style={{ borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Sparkles size={18} color="#10B981" />
+                            </div>
+                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#064E3B', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                 Paso 1: Configura tu Necesidad de Compra
                             </h4>
                         </div>
 
                         {/* 1. Tipo de Operacion */}
                         <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                <Building2 size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '8px' }}>
+                                <Building2 size={16} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>Tipo de Operación:</span>
                             </label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                 {BUSINESS_TYPES.map(type => (
                                     <button
                                         key={type}
                                         type="button"
                                         onClick={() => setSelectedType(type)}
                                         style={{
-                                            padding: '6px 14px',
+                                            padding: '8px 16px',
                                             borderRadius: '99px',
-                                            border: selectedType === type ? '2px solid var(--primary)' : '1px solid #CBD5E1',
+                                            border: selectedType === type ? '1.5px solid #10B981' : '1.5px solid #E2E8F0',
                                             backgroundColor: selectedType === type ? '#ECFDF5' : '#F8FAFC',
-                                            color: selectedType === type ? 'var(--primary)' : '#334155',
+                                            color: selectedType === type ? '#065F46' : '#475569',
                                             fontWeight: selectedType === type ? '800' : '600',
-                                            fontSize: '0.8rem',
+                                            fontSize: '0.82rem',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s'
+                                            boxShadow: selectedType === type ? '0 2px 8px rgba(16, 185, 129, 0.15)' : 'none',
+                                            transition: 'all 0.2s ease',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
                                         }}
                                     >
+                                        {selectedType === type && <Check size={14} color="#10B981" strokeWidth={3} />}
                                         {type}
                                     </button>
                                 ))}
@@ -737,11 +856,11 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
                         {/* 2. Categorias del Catalogo */}
                         <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                <LayoutGrid size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '8px' }}>
+                                <LayoutGrid size={16} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>Categorías a Cotizar (Selecciona varias):</span>
                             </label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                 {ALL_CATEGORIES.map(cat => {
                                     const isSel = selectedCategories.includes(cat);
                                     return (
@@ -754,24 +873,25 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                                 );
                                             }}
                                             style={{
-                                                padding: '6px 12px',
+                                                padding: '7px 14px',
                                                 borderRadius: '99px',
-                                                border: isSel ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                                backgroundColor: isSel ? '#ECFDF5' : 'white',
-                                                color: isSel ? 'var(--primary)' : '#475569',
+                                                border: isSel ? '1.5px solid #10B981' : '1.5px solid #E2E8F0',
+                                                backgroundColor: isSel ? '#ECFDF5' : '#FFFFFF',
+                                                color: isSel ? '#065F46' : '#64748B',
                                                 fontWeight: isSel ? '800' : '600',
-                                                fontSize: '0.78rem',
+                                                fontSize: '0.8rem',
                                                 cursor: 'pointer',
-                                                transition: 'all 0.2s',
+                                                boxShadow: isSel ? '0 2px 8px rgba(16, 185, 129, 0.15)' : 'none',
+                                                transition: 'all 0.2s ease',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
-                                                gap: '5px'
+                                                gap: '6px'
                                             }}
                                         >
                                             {isSel ? (
-                                                <CheckCircle2 size={14} style={{ color: 'var(--primary)' }} />
+                                                <CheckCircle2 size={15} style={{ color: '#10B981' }} />
                                             ) : (
-                                                <Plus size={14} style={{ color: '#94A3B8' }} />
+                                                <Plus size={15} style={{ color: '#94A3B8' }} />
                                             )}
                                             <span>{cat}</span>
                                         </button>
@@ -782,36 +902,37 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
                         {/* 3. Volumen de Compras */}
                         <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                <TrendingUp size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '8px' }}>
+                                <TrendingUp size={16} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>Volumen de Compras Mensual Estimado (COP):</span>
                             </label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {BUSINESS_SIZES.map(size => (
                                     <button
                                         key={size}
                                         type="button"
                                         onClick={() => setSelectedSize(size)}
                                         style={{
-                                            padding: '8px 14px',
-                                            borderRadius: '12px',
-                                            border: selectedSize === size ? '2px solid var(--primary)' : '1px solid #CBD5E1',
-                                            backgroundColor: selectedSize === size ? '#ECFDF5' : '#F8FAFC',
-                                            color: selectedSize === size ? 'var(--primary)' : '#334155',
+                                            padding: '10px 16px',
+                                            borderRadius: '14px',
+                                            border: selectedSize === size ? '1.5px solid #10B981' : '1.5px solid #E2E8F0',
+                                            backgroundColor: selectedSize === size ? '#ECFDF5' : '#FFFFFF',
+                                            color: selectedSize === size ? '#065F46' : '#334155',
                                             fontWeight: selectedSize === size ? '800' : '600',
-                                            fontSize: '0.82rem',
+                                            fontSize: '0.84rem',
                                             textAlign: 'left',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s',
+                                            boxShadow: selectedSize === size ? '0 3px 10px rgba(16, 185, 129, 0.12)' : 'none',
+                                            transition: 'all 0.2s ease',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '8px'
+                                            gap: '10px'
                                         }}
                                     >
                                         {selectedSize === size ? (
-                                            <CheckCircle2 size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
+                                            <CheckCircle2 size={18} color="#10B981" style={{ flexShrink: 0 }} />
                                         ) : (
-                                            <Circle size={16} color="#CBD5E1" style={{ flexShrink: 0 }} />
+                                            <Circle size={18} color="#CBD5E1" style={{ flexShrink: 0 }} />
                                         )}
                                         <span>{size}</span>
                                     </button>
@@ -823,20 +944,22 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             type="button"
                             onClick={handleStep1Submit}
                             style={{
-                                padding: '12px',
+                                padding: '14px 20px',
                                 borderRadius: '99px',
                                 border: 'none',
-                                backgroundColor: 'var(--primary)',
+                                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                                 color: 'white',
                                 fontWeight: '800',
-                                fontSize: '0.9rem',
+                                fontSize: '0.92rem',
+                                letterSpacing: '-0.01em',
                                 cursor: 'pointer',
-                                boxShadow: '0 4px 15px rgba(26, 77, 46, 0.25)',
+                                boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '8px',
-                                marginTop: '4px'
+                                marginTop: '6px',
+                                transition: 'all 0.2s ease'
                             }}
                         >
                             <span>Siguiente: Validar Cobertura (Paso 2/3)</span>
@@ -849,20 +972,22 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 {!isCompleted && currentStep === 2 && (
                     <div style={{
                         width: '100%',
-                        backgroundColor: 'white',
+                        backgroundColor: '#FFFFFF',
                         borderRadius: '20px',
-                        padding: '1.25rem',
-                        border: '2px solid var(--primary)',
-                        boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
+                        padding: '1.4rem',
+                        border: '1.5px solid #10B981',
+                        boxShadow: '0 10px 30px rgba(16, 185, 129, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.9rem',
+                        gap: '1.1rem',
                         margin: '0.5rem 0',
                         flexShrink: 0
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <MapPin size={20} color="var(--primary)" />
-                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                        <div style={{ borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <MapPin size={18} color="#10B981" />
+                            </div>
+                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#064E3B', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                 Paso 2: Ubicación & Cobertura Logística
                             </h4>
                         </div>
@@ -875,40 +1000,44 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 placeholder="Ej: Calle 93 # 12-45, Bogotá"
                                 style={{
                                     flex: 1,
-                                    padding: '10px 14px',
-                                    borderRadius: '12px',
-                                    border: '1px solid #CBD5E1',
+                                    padding: '11px 16px',
+                                    borderRadius: '14px',
+                                    border: '1.5px solid #CBD5E1',
                                     fontSize: '0.88rem',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    backgroundColor: '#F8FAFC',
+                                    transition: 'border-color 0.2s'
                                 }}
                             />
                             <button
                                 type="button"
                                 onClick={handleGeocodeAddress}
                                 style={{
-                                    padding: '10px 16px',
+                                    padding: '11px 18px',
                                     backgroundColor: '#0F172A',
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '12px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '700',
-                                    cursor: 'pointer'
+                                    borderRadius: '14px',
+                                    fontSize: '0.82rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)'
                                 }}
                             >
                                 Ubicar
                             </button>
                         </div>
 
-                        {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
+                        {error && <p style={{ color: '#DC2626', fontSize: '0.78rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
 
                         {/* Interactive Google Map */}
                         <div style={{
                             width: '100%',
                             height: '240px',
-                            borderRadius: '14px',
+                            borderRadius: '16px',
                             overflow: 'hidden',
-                            border: '2px solid #E2E8F0',
+                            border: '1.5px solid #E2E8F0',
+                            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.05)',
                             position: 'relative'
                         }}>
                             <Map
@@ -949,19 +1078,21 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             type="button"
                             onClick={handleConfirmLocation}
                             style={{
-                                padding: '12px',
+                                padding: '14px 20px',
                                 borderRadius: '99px',
                                 border: 'none',
-                                backgroundColor: '#10B981',
+                                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                                 color: 'white',
                                 fontWeight: '800',
-                                fontSize: '0.9rem',
+                                fontSize: '0.92rem',
+                                letterSpacing: '-0.01em',
                                 cursor: 'pointer',
-                                boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
+                                boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '8px'
+                                gap: '8px',
+                                transition: 'all 0.2s ease'
                             }}
                         >
                             <CheckCircle2 size={18} />
@@ -975,29 +1106,31 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 {!isCompleted && currentStep === 3 && (
                     <form onSubmit={handleStep3Submit} style={{
                         width: '100%',
-                        backgroundColor: 'white',
+                        backgroundColor: '#FFFFFF',
                         borderRadius: '20px',
-                        padding: '1.25rem',
-                        border: '2px solid var(--primary)',
-                        boxShadow: '0 8px 25px rgba(26, 77, 46, 0.12)',
+                        padding: '1.4rem',
+                        border: '1.5px solid #10B981',
+                        boxShadow: '0 10px 30px rgba(16, 185, 129, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.9rem',
+                        gap: '1.1rem',
                         margin: '0.5rem 0',
                         flexShrink: 0
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <FileText size={20} color="var(--primary)" />
-                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                        <div style={{ borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <FileText size={18} color="#10B981" />
+                            </div>
+                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#064E3B', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                 Paso 3: Datos de Contacto y Envío de Pre-Cotización
                             </h4>
                         </div>
 
-                        {error && <p style={{ color: '#DC2626', fontSize: '0.75rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
+                        {error && <p style={{ color: '#DC2626', fontSize: '0.78rem', margin: 0, fontWeight: 'bold' }}>{error}</p>}
 
                         <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
-                                <User size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                                <User size={15} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>Nombre o Razón Social de tu Empresa: *</span>
                             </label>
                             <input
@@ -1008,18 +1141,19 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 required
                                 style={{
                                     width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '12px',
-                                    border: '1px solid #CBD5E1',
+                                    padding: '11px 16px',
+                                    borderRadius: '14px',
+                                    border: '1.5px solid #CBD5E1',
                                     fontSize: '0.88rem',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    backgroundColor: '#F8FAFC'
                                 }}
                             />
                         </div>
 
                         <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
-                                <Phone size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                                <Phone size={15} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>WhatsApp Directo (para envío de propuesta PDF): *</span>
                             </label>
                             <input
@@ -1030,18 +1164,19 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 required
                                 style={{
                                     width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '12px',
-                                    border: '1px solid #CBD5E1',
+                                    padding: '11px 16px',
+                                    borderRadius: '14px',
+                                    border: '1.5px solid #CBD5E1',
                                     fontSize: '0.88rem',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    backgroundColor: '#F8FAFC'
                                 }}
                             />
                         </div>
 
                         <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
-                                <Mail size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                                <Mail size={15} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>Correo Electrónico (Opcional):</span>
                             </label>
                             <input
@@ -1051,11 +1186,12 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 placeholder="ejemplo@empresa.com"
                                 style={{
                                     width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '12px',
-                                    border: '1px solid #CBD5E1',
+                                    padding: '11px 16px',
+                                    borderRadius: '14px',
+                                    border: '1.5px solid #CBD5E1',
                                     fontSize: '0.88rem',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    backgroundColor: '#F8FAFC'
                                 }}
                             />
                         </div>
@@ -1064,20 +1200,22 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             type="submit"
                             disabled={isSubmitting}
                             style={{
-                                padding: '14px',
+                                padding: '15px 20px',
                                 borderRadius: '99px',
                                 border: 'none',
-                                backgroundColor: 'var(--primary)',
+                                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                                 color: 'white',
                                 fontWeight: '900',
                                 fontSize: '0.95rem',
+                                letterSpacing: '-0.01em',
                                 cursor: 'pointer',
-                                boxShadow: '0 4px 15px rgba(26, 77, 46, 0.3)',
+                                boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '8px',
-                                marginTop: '4px'
+                                marginTop: '6px',
+                                transition: 'all 0.2s ease'
                             }}
                         >
                             <FileText size={20} />
@@ -1087,8 +1225,9 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 )}
 
                 {isTyping && (
-                    <div style={{ alignSelf: 'flex-start', backgroundColor: '#E5E7EB', padding: '0.6rem 1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.8rem', color: '#4B5563', fontWeight: '500' }}>
-                        FruFresco está verificando tarifas...
+                    <div style={{ alignSelf: 'flex-start', backgroundColor: '#E2E8F0', padding: '0.7rem 1.1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.82rem', color: '#334155', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Sparkles size={14} className="animate-spin" color="#10B981" />
+                        <span>FruFresco está verificando tarifas...</span>
                     </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -1096,17 +1235,17 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
             {/* Success & PDF Download Screen */}
             {isCompleted && (
-                <div style={{ padding: '1.5rem', backgroundColor: '#F0FDF4', borderTop: '2px solid #BBF7D0', textAlign: 'center', flexShrink: 0 }}>
-                    <p style={{ color: '#166534', fontWeight: '900', marginBottom: '0.5rem', fontSize: '1.2rem' }}>
+                <div style={{ padding: '1.5rem', backgroundColor: '#ECFDF5', borderTop: '2px solid #A7F3D0', textAlign: 'center', flexShrink: 0 }}>
+                    <p style={{ color: '#065F46', fontWeight: '900', marginBottom: '0.5rem', fontSize: '1.25rem' }}>
                         🎉 ¡Pre-Cotización Generada con Éxito!
                     </p>
-                    <p style={{ color: '#166534', fontSize: '0.88rem', marginBottom: '1.2rem', lineHeight: '1.4' }}>
+                    <p style={{ color: '#047857', fontSize: '0.88rem', marginBottom: '1.2rem', lineHeight: '1.45' }}>
                         Hola <strong>{leadData.contact_name}</strong>, hemos procesado la pre-cotización institucional para <strong>{leadData.company_name}</strong> con tarifas ajustadas a tu consumo.
                     </p>
 
                     {quoteId && (
-                        <div style={{ marginBottom: '1.2rem', padding: '1rem', backgroundColor: 'white', borderRadius: '16px', border: '1.5px solid #BBF7D0', boxShadow: '0 4px 12px rgba(22, 101, 52, 0.08)' }}>
-                            <p style={{ color: '#166534', fontWeight: '800', fontSize: '0.9rem', marginBottom: '0.8rem' }}>
+                        <div style={{ marginBottom: '1.2rem', padding: '1.1rem', backgroundColor: '#FFFFFF', borderRadius: '18px', border: '1.5px solid #A7F3D0', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.1)' }}>
+                            <p style={{ color: '#065F46', fontWeight: '800', fontSize: '0.9rem', marginBottom: '0.8rem' }}>
                                 📄 Tu Documento Oficial de Pre-Cotización está listo:
                             </p>
                             <a 
@@ -1114,7 +1253,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 style={{
-                                    backgroundColor: 'var(--primary)',
+                                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                                     color: 'white',
                                     textDecoration: 'none',
                                     fontWeight: '800',
@@ -1124,7 +1263,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    boxShadow: '0 4px 12px rgba(21, 128, 61, 0.25)',
+                                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -1146,7 +1285,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 padding: '10px 20px',
                                 borderRadius: '99px',
                                 fontSize: '0.85rem',
-                                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.2)'
+                                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.25)'
                             }}
                         >
                             💬 Chatear por WhatsApp
@@ -1155,8 +1294,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             href="/" 
                             style={{
                                 backgroundColor: 'white',
-                                color: 'var(--text-main)',
-                                border: '1px solid #CBD5E1',
+                                color: '#334155',
+                                border: '1.5px solid #CBD5E1',
                                 textDecoration: 'none',
                                 fontWeight: '700',
                                 padding: '10px 20px',

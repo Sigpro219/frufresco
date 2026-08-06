@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react';
 import { Map, Marker, InfoWindow, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
-import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle } from 'lucide-react';
+import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle, ListFilter, Search, X, MapPin, Building2, Phone, User, Calendar, ExternalLink, Layers, ArrowUpRight } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 
 
@@ -128,6 +128,13 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
     const [outOfBoundsPoints, setOutOfBoundsPoints] = useState<any[]>([]);
     const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
 
+    // Modal Auditoría de Rechazos
+    const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+    const [modalFilter, setModalFilter] = useState<'all' | 'b2c' | 'b2b'>('all');
+    const [modalSearch, setModalSearch] = useState('');
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 4.6097, lng: -74.0817 });
+    const [mapZoom, setMapZoom] = useState<number>(11);
+
     useEffect(() => {
         fetch('/api/coverage/out-of-bounds')
             .then(res => res.json())
@@ -136,6 +143,14 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
             })
             .catch(err => console.warn('Error cargando mapa de calor de rechazos:', err));
     }, []);
+
+    const focusPointOnMap = (pt: any) => {
+        setSelectedPoint(pt);
+        setVisibleOutOfBounds(true);
+        setMapCenter({ lat: Number(pt.latitude), lng: Number(pt.longitude) });
+        setMapZoom(14);
+        setIsTableModalOpen(false);
+    };
 
     const b2cPolyString = settings.find(s => s.key === 'geofence_b2c_poly')?.value;
     const b2bPolyString = settings.find(s => s.key === 'geofence_b2b_poly')?.value;
@@ -177,6 +192,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                 <Map
                     style={{ width: '100%', height: '100%' }}
                     defaultCenter={{ lat: 4.6097, lng: -74.0817 }}
+                    center={mapCenter}
+                    zoom={mapZoom}
                     defaultZoom={11}
                     gestureHandling={'greedy'}
                     disableDefaultUI={false}
@@ -516,9 +533,246 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 {outOfBoundsPoints.filter(p => p.channel === 'b2b').length} Rechazos
                             </span>
                         </div>
+
+                        <button 
+                            onClick={() => setIsTableModalOpen(true)}
+                            style={{ 
+                                marginTop: '6px',
+                                width: '100%',
+                                padding: '0.6rem',
+                                borderRadius: THEME.radius.sm,
+                                backgroundColor: '#991B1B',
+                                color: 'white',
+                                border: 'none',
+                                fontWeight: '700',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: THEME.shadow.sm,
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#7F1D1D'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#991B1B'}
+                        >
+                            <ListFilter size={14} />
+                            <span>Ver Tabla de Rechazos ({outOfBoundsPoints.length})</span>
+                        </button>
                     </div>
                 </div>
             </div>
+
+            {/* MODAL AUDITORÍA Y TABLA DE DEMANDAS RECHAZADAS */}
+            {isTableModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(6px)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '2rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '900px',
+                        maxHeight: '85vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: `1px solid ${THEME.colors.border}`
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '1.25rem 1.5rem',
+                            borderBottom: `1px solid ${THEME.colors.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <ListFilter size={20} color="#DC2626" />
+                                    Auditoría de Demandas Rechazadas fuera de Cobertura
+                                </h3>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
+                                    Registro de clientes e instituciones que intentaron pedir desde ubicaciones fuera de las geocercas
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setIsTableModalOpen(false)}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '6px', borderRadius: '50%', color: '#64748B' }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Modal Controls: Search & Tabs */}
+                        <div style={{ padding: '1rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar por cliente, municipio o dirección..." 
+                                    value={modalSearch}
+                                    onChange={e => setModalSearch(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.55rem 0.75rem 0.55rem 2.25rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.85rem',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '8px' }}>
+                                <button 
+                                    onClick={() => setModalFilter('all')}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: modalFilter === 'all' ? 'white' : 'transparent',
+                                        color: modalFilter === 'all' ? '#0F172A' : '#64748B',
+                                        fontWeight: '700',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        boxShadow: modalFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >
+                                    Todos ({outOfBoundsPoints.length})
+                                </button>
+                                <button 
+                                    onClick={() => setModalFilter('b2c')}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: modalFilter === 'b2c' ? '#FEF2F2' : 'transparent',
+                                        color: modalFilter === 'b2c' ? '#DC2626' : '#64748B',
+                                        fontWeight: '700',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    🔴 Hogares ({outOfBoundsPoints.filter(p => p.channel !== 'b2b').length})
+                                </button>
+                                <button 
+                                    onClick={() => setModalFilter('b2b')}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        backgroundColor: modalFilter === 'b2b' ? '#EFF6FF' : 'transparent',
+                                        color: modalFilter === 'b2b' ? '#2563EB' : '#64748B',
+                                        fontWeight: '700',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    🔵 HORECA ({outOfBoundsPoints.filter(p => p.channel === 'b2b').length})
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Table Content */}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem', textAlign: 'left' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th style={{ padding: '0.75rem' }}>Canal</th>
+                                        <th style={{ padding: '0.75rem' }}>Cliente / Establecimiento</th>
+                                        <th style={{ padding: '0.75rem' }}>Municipio / Detalle</th>
+                                        <th style={{ padding: '0.75rem' }}>Dirección Solicitada</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'right' }}>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {outOfBoundsPoints
+                                        .filter(pt => {
+                                            if (modalFilter === 'b2c' && pt.channel === 'b2b') return false;
+                                            if (modalFilter === 'b2b' && pt.channel !== 'b2b') return false;
+                                            if (modalSearch.trim()) {
+                                                const q = modalSearch.toLowerCase();
+                                                const text = `${pt.customer_name} ${pt.municipality} ${pt.address} ${pt.customer_phone}`.toLowerCase();
+                                                return text.includes(q);
+                                            }
+                                            return true;
+                                        })
+                                        .map((pt, idx) => {
+                                            const isB2B = pt.channel === 'b2b';
+                                            return (
+                                                <tr key={pt.id || idx} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background-color 0.15s' }}>
+                                                    <td style={{ padding: '0.75rem' }}>
+                                                        <span style={{
+                                                            padding: '3px 8px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: '800',
+                                                            backgroundColor: isB2B ? '#DBEAFE' : '#FEE2E2',
+                                                            color: isB2B ? '#1E40AF' : '#991B1B',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}>
+                                                            {isB2B ? '🔵 HORECA B2B' : '🔴 Hogar B2C'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontWeight: '700', color: '#0F172A' }}>
+                                                        {pt.customer_name || 'Anónimo'}
+                                                        {pt.customer_phone && <div style={{ fontSize: '0.72rem', color: '#2563EB', fontWeight: '500' }}>📱 {pt.customer_phone}</div>}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', color: '#334155', fontWeight: '600' }}>
+                                                        {pt.municipality || 'Fuera de zona'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', color: '#64748B', maxWidth: '220px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        📍 {pt.address}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                                        <button 
+                                                            onClick={() => focusPointOnMap(pt)}
+                                                            style={{
+                                                                padding: '0.35rem 0.75rem',
+                                                                borderRadius: '6px',
+                                                                border: '1px solid #CBD5E1',
+                                                                backgroundColor: 'white',
+                                                                color: '#0F172A',
+                                                                fontWeight: '700',
+                                                                fontSize: '0.75rem',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#94A3B8'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+                                                        >
+                                                            <MapPin size={12} color="#DC2626" />
+                                                            <span>Centrar en Mapa</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

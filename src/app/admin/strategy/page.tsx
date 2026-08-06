@@ -145,53 +145,83 @@ export default function AdminStrategyPage() {
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <Toast />
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Inteligencia & Estrategia</h1>
-                    </div>
-                    {/* Segmented Control (Tabs) per design_manual.md */}
-                    <div style={{ backgroundColor: '#E5E7EB', padding: '0.25rem', borderRadius: THEME.radius.md, display: 'flex', gap: '4px' }}>
-                        {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => {
-                            const isActive = activeTab === t;
-                            const isHovered = hoveredTab === t;
-                            return (
-                                <button 
-                                    key={t}
-                                    onClick={() => setActiveTab(t)}
-                                    onMouseEnter={() => setHoveredTab(t)}
-                                    onMouseLeave={() => setHoveredTab(null)}
-                                    style={{
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: THEME.radius.sm,
-                                        border: 'none',
-                                        backgroundColor: isActive 
-                                            ? THEME.colors.primary 
-                                            : (isHovered ? THEME.colors.primaryLight : 'transparent'),
-                                        boxShadow: isActive ? THEME.shadow.sm : 'none',
-                                        color: isActive 
-                                            ? '#FFFFFF' 
-                                            : (isHovered ? THEME.colors.textMain : THEME.colors.textSecondary),
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.4rem',
-                                        fontSize: '0.85rem',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                >
-                                    {t === 'geofencing' && <MapPin size={14} strokeWidth={1.5} />}
-                                    {t === 'seo' && <TrendingUp size={14} strokeWidth={1.5} />}
-                                    {t === 'it' && <ShieldCheck size={14} strokeWidth={1.5} />}
-                                    {t === 'hierarchy' && <Layers size={14} strokeWidth={1.5} />}
-                                    {t === 'geofencing' ? 'Geocercas' : t === 'seo' ? 'SEO' : t === 'it' ? 'IT' : 'Jerarquía'}
-                                </button>
-                            );
-                        })}
+                <header style={{ 
+                    marginBottom: '2rem',
+                    backgroundColor: 'white',
+                    padding: '1.5rem 2rem',
+                    borderRadius: '16px',
+                    border: `1px solid ${THEME.colors.border}`,
+                    boxShadow: THEME.shadow.sm,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1.25rem'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <span style={{ 
+                                fontSize: '0.72rem', 
+                                fontWeight: '800', 
+                                color: THEME.colors.primary, 
+                                backgroundColor: THEME.colors.primaryLight,
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}>
+                                Control & Expansión Comercial
+                            </span>
+                            <h1 style={{ fontSize: '2.1rem', fontWeight: '900', color: THEME.colors.textMain, margin: '6px 0 0 0', letterSpacing: '-0.03em', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+                                Centro de Inteligencia & Estrategia
+                            </h1>
+                            <p style={{ margin: '4px 0 0 0', fontSize: '0.88rem', color: THEME.colors.textSecondary }}>
+                                Gestión en tiempo real de cobertura logística, mapa de calor de demandas rechazadas y optimización SEO.
+                            </p>
+                        </div>
+
+                        {/* Segmented Control (Tabs) per design_manual.md */}
+                        <div style={{ backgroundColor: '#F1F5F9', padding: '5px', borderRadius: '12px', display: 'flex', gap: '6px', border: '1px solid #E2E8F0' }}>
+                            {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => {
+                                const isActive = activeTab === t;
+                                const isHovered = hoveredTab === t;
+                                return (
+                                    <button 
+                                        key={t}
+                                        onClick={() => setActiveTab(t)}
+                                        onMouseEnter={() => setHoveredTab(t)}
+                                        onMouseLeave={() => setHoveredTab(null)}
+                                        style={{
+                                            padding: '0.6rem 1.25rem',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            backgroundColor: isActive 
+                                                ? THEME.colors.primary 
+                                                : (isHovered ? 'white' : 'transparent'),
+                                            boxShadow: isActive ? '0 4px 12px rgba(16, 185, 129, 0.25)' : 'none',
+                                            color: isActive 
+                                                ? '#FFFFFF' 
+                                                : (isHovered ? THEME.colors.textMain : THEME.colors.textSecondary),
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            fontSize: '0.88rem',
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                    >
+                                        {t === 'geofencing' && <MapPin size={16} strokeWidth={2} />}
+                                        {t === 'seo' && <TrendingUp size={16} strokeWidth={2} />}
+                                        {t === 'it' && <ShieldCheck size={16} strokeWidth={2} />}
+                                        {t === 'hierarchy' && <Layers size={16} strokeWidth={2} />}
+                                        {t === 'geofencing' ? 'Geocercas & Cobertura' : t === 'seo' ? 'SEO' : t === 'it' ? 'IT' : 'Jerarquía'}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </header>
 
-                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '2rem', minHeight: '600px', boxShadow: THEME.shadow.sm }}>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '16px', border: `1px solid ${THEME.colors.border}`, padding: '2rem', minHeight: '600px', boxShadow: THEME.shadow.sm }}>
                     {activeTab === 'geofencing' && (
                         <APIProvider apiKey={MAPS_KEY}>
                             <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />
