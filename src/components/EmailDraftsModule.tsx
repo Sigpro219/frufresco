@@ -1472,6 +1472,71 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
   };
 
+  const handleApproveDraft = async () => {
+    if (!selectedDraft) return;
+    if (!overrideClientId) {
+      showToast('Por favor selecciona un cliente antes de aprobar la orden.', 'error');
+      return;
+    }
+    if (hasUnmatchedItems) {
+      showToast('Debe mapear todos los productos antes de aprobar la orden.', 'error');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const validItems = editableItems
+        .filter(itm => !itm.isDeleted && itm.matched_product_id)
+        .map(itm => {
+          const mProd = products.find(p => p.id === itm.matched_product_id);
+          const resolvedPrice = getResolvedPriceForItem(itm, mProd);
+          return {
+            productId: itm.matched_product_id,
+            productName: mProd?.name || itm.searchQuery || itm.originalName,
+            quantity: itm.quantity,
+            unit: itm.unit || mProd?.unit_of_measure || 'Kg',
+            unitPrice: resolvedPrice,
+            observations: itm.observations || null,
+            deliveryDate: itm.deliveryDate || null
+          };
+        });
+
+      const payload = {
+        draftId: selectedDraft.id,
+        clientId: overrideClientId,
+        clientType: isB2C ? 'b2c_client' : 'b2b_client',
+        deliveryDate: deliveryDate,
+        deliverySlot: deliverySlot,
+        address: customAddress || selectedDraft.address || 'Bogotá',
+        notes: notes,
+        items: validItems,
+        channel: 'email',
+        originSource: 'email'
+      };
+
+      const res = await fetch('/api/orders/email-drafts/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Error al aprobar borrador');
+      }
+
+      showToast(`¡Pedido #${data.orderNumber || data.orderId} aprobado y procesado exitosamente! 🎉`, 'success');
+      setSelectedDraft(null);
+      fetchDrafts(true);
+
+    } catch (err: any) {
+      console.error('Error al aprobar el borrador de correo:', err);
+      showToast(`Error al aprobar borrador: ${err.message || 'Error desconocido'}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const fetchProducts = async () => {
     try {
       const { data } = await supabase.from('products').select('*').eq('is_active', true);
@@ -6044,7 +6109,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 {selectedDraft.status === 'pending' && (
                   <button 
                     id="btn-approve-draft"
-                    onClick={handleSendManualReceipt}
+                    onClick={handleApproveDraft}
                     disabled={saving || hasUnmatchedItems}
                     style={{
                       padding: '0.75rem 1.5rem',
