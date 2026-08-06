@@ -1245,17 +1245,20 @@ export async function POST(req: Request) {
       }
     }
 
-    // Only if we haven't found any profiles by NIT or Phone, search by sender email address (skip if it is the test email)
-    if (candidateProfiles.length === 0 && senderEmail !== 'higuera200@gmail.com') {
-      console.log(`[Email Ingest] Searching client by sender email: ${senderEmail}`);
+    // Only if we haven't found any profiles by NIT or Phone, search by sender email address across primary email and logistics_data
+    if (candidateProfiles.length === 0 && senderEmail) {
+      console.log(`[Email Ingest] Searching client by sender email (primary & logistics): ${senderEmail}`);
+      
+      // Query profiles by primary email or inside logistics_data JSONB
       const { data: profilesByEmail, error: emailError } = await supabaseAdmin
         .from('profiles')
-        .select('id, company_name, contact_name, role, is_active, address, phone, nit')
-        .eq('email', senderEmail);
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit, email, logistics_data')
+        .or(`email.ilike.${senderEmail},logistics_data->>billing_email.ilike.${senderEmail},logistics_data->>contact_email.ilike.${senderEmail}`);
 
       if (emailError) {
         console.error('[Email Ingest] Error querying profiles by email:', emailError);
       } else if (profilesByEmail && profilesByEmail.length > 0) {
+        console.log(`[Email Ingest] Found ${profilesByEmail.length} profile(s) matching sender email.`);
         candidateProfiles = profilesByEmail;
       }
     }
