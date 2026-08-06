@@ -241,10 +241,23 @@ export default function OrderDetailPage() {
 
     const recalculateWeight = (currentItems: OrderItem[]) => {
         const total = currentItems.reduce((acc, item) => {
-            const w = item.product?.weight_kg || 0;
-            return acc + (item.quantity * w);
+            const unit = ((item as any).unit || item.product?.unit_of_measure || '').toLowerCase().trim();
+            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
+            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
+            
+            let weightFactor = 1.0;
+            if (isKgUnit) {
+                weightFactor = 1.0;
+            } else if (isLibraUnit) {
+                weightFactor = 0.5;
+            } else if (item.product?.weight_kg && Number(item.product.weight_kg) > 0) {
+                weightFactor = Number(item.product.weight_kg);
+            } else {
+                weightFactor = 1.0;
+            }
+            return acc + (item.quantity * weightFactor);
         }, 0);
-        setEditForm(prev => ({ ...prev, total_weight_kg: Number(total.toFixed(2)) }));
+        setEditForm(prev => ({ ...prev, total_weight_kg: Number(total.toFixed(3)) }));
     };
 
     // --- PRODUCT SEARCH & VARIANT LOGIC ---
