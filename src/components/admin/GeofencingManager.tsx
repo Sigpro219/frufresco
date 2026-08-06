@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react';
-import { Map, Marker, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
-import { Save, Trash2, Eye, EyeOff, Edit2 } from 'lucide-react';
+import { Map, Marker, InfoWindow, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
+import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 
 
@@ -120,6 +120,18 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
     const [tempPoly, setTempPoly] = useState<Point[]>([]);
     const [visibleB2C, setVisibleB2C] = useState(true);
     const [visibleB2B, setVisibleB2B] = useState(true);
+    const [visibleOutOfBounds, setVisibleOutOfBounds] = useState(true);
+    const [outOfBoundsPoints, setOutOfBoundsPoints] = useState<any[]>([]);
+    const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
+
+    useEffect(() => {
+        fetch('/api/coverage/out-of-bounds')
+            .then(res => res.json())
+            .then(data => {
+                if (data.requests) setOutOfBoundsPoints(data.requests);
+            })
+            .catch(err => console.warn('Error cargando mapa de calor de rechazos:', err));
+    }, []);
 
     const b2cPolyString = settings.find(s => s.key === 'geofence_b2c_poly')?.value;
     const b2bPolyString = settings.find(s => s.key === 'geofence_b2b_poly')?.value;
@@ -194,6 +206,48 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     {editMode && tempPoly.length < 3 && tempPoly.map((p, i) => (
                         <Marker key={`edit-${i}`} position={p} label={(i + 1).toString()} />
                     ))}
+
+                    {/* RED DOT HEATMAP MARKERS: Rejected Demand Out of Bounds */}
+                    {visibleOutOfBounds && outOfBoundsPoints.map((pt, idx) => (
+                        <Marker 
+                            key={`oob-${pt.id || idx}`} 
+                            position={{ lat: Number(pt.latitude), lng: Number(pt.longitude) }}
+                            title={`Demanda Rechazada: ${pt.municipality || pt.address}`}
+                            onClick={() => setSelectedPoint(pt)}
+                            icon={{
+                                path: google.maps.SymbolPath.CIRCLE,
+                                scale: 7,
+                                fillColor: '#DC2626',
+                                fillOpacity: 0.9,
+                                strokeColor: '#FFFFFF',
+                                strokeWeight: 2
+                            }}
+                        />
+                    ))}
+
+                    {selectedPoint && (
+                        <InfoWindow
+                            position={{ lat: Number(selectedPoint.latitude), lng: Number(selectedPoint.longitude) }}
+                            onCloseClick={() => setSelectedPoint(null)}
+                        >
+                            <div style={{ padding: '4px', maxWidth: '240px' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <AlertCircle size={12} /> Demanda Rechazada
+                                </div>
+                                <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>
+                                    {selectedPoint.municipality || 'Fuera de Cobertura'}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '2px' }}>
+                                    {selectedPoint.address}
+                                </div>
+                                {selectedPoint.customer_name && (
+                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '4px', fontWeight: '600' }}>
+                                        👤 {selectedPoint.customer_name} ({selectedPoint.customer_phone || 'Sin tel.'})
+                                    </div>
+                                )}
+                            </div>
+                        </InfoWindow>
+                    )}
                 </Map>
 
                 {editMode && (
@@ -387,6 +441,42 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             <span>Editar Polígono</span>
                         </button>
                     )}
+                </div>
+
+                {/* Rejected Demand Heatmap Card */}
+                <div style={{ 
+                    padding: '1.25rem', 
+                    borderRadius: THEME.radius.lg, 
+                    border: '1px solid #FCA5A5', 
+                    backgroundColor: '#FEF2F2',
+                    boxShadow: THEME.shadow.sm
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.9rem', color: '#991B1B' }}>
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#DC2626', border: '2px solid white', boxShadow: '0 0 0 1px #DC2626' }} />
+                            <span>Demandas Rechazadas</span>
+                        </span>
+                        <button 
+                            onClick={() => setVisibleOutOfBounds(!visibleOutOfBounds)} 
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#991B1B', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
+                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                            onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            title={visibleOutOfBounds ? 'Ocultar mapa de calor' : 'Mostrar mapa de calor'}
+                        >
+                            {visibleOutOfBounds ? <Eye size={16} strokeWidth={1.5} /> : <EyeOff size={16} strokeWidth={1.5} />}
+                        </button>
+                    </div>
+
+                    <div style={{ fontSize: '0.76rem', color: '#7F1D1D', lineHeight: '1.45', marginTop: '4px' }}>
+                        Visualiza los puntos geográficos (Chía, Cajicá, Soacha, etc.) donde usuarios intentaron pedir pero fueron rechazados por estar fuera del polígono.
+                    </div>
+
+                    <div style={{ marginTop: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #FCA5A5' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#991B1B' }}>Total Intentos Registrados:</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#DC2626', backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '12px' }}>
+                            {outOfBoundsPoints.length} Rechazos
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

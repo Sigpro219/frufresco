@@ -533,7 +533,22 @@ export default function CheckoutPage() {
         if (!email) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
         if (!address) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
         if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
-        if (outOfZone) return alert(t.outOfZoneMsg);
+        if (outOfZone) {
+            fetch('/api/coverage/out-of-bounds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address,
+                    latitude,
+                    longitude,
+                    customer_name: name,
+                    customer_phone: phone,
+                    customer_email: email,
+                    channel: isB2B ? 'b2b' : 'b2c'
+                })
+            }).catch(e => console.warn('Silent log error:', e));
+            return alert(t.outOfZoneMsg);
+        }
         if (date < minDeliveryDate) {
             return alert(locale === 'es' 
                 ? `La fecha de entrega seleccionada no es válida. La fecha mínima de entrega permitida es ${minDeliveryDate}.`
