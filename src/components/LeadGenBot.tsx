@@ -561,12 +561,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                 }]);
                 setIsSubmitting(false);
 
-                if (isSuccess) {
-                    setIsCompleted(true);
-                    setQuoteShown(true);
-                } else {
-                    setIsTerminated(true);
-                }
+                setIsCompleted(true);
+                setQuoteShown(true);
             }, 1000);
 
         } catch (error) {
@@ -997,7 +993,13 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 type="text"
                                 value={addressInput}
                                 onChange={(e) => setAddressInput(e.target.value)}
-                                placeholder="Ej: Calle 93 # 12-45, Bogotá"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleGeocodeAddress();
+                                    }
+                                }}
+                                placeholder="Ej: Carrera 7 # 12-50, Ibagué / Villavicencio / Bogotá..."
                                 style={{
                                     flex: 1,
                                     padding: '11px 16px',

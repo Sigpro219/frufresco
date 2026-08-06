@@ -141,6 +141,11 @@ export default function AdminStrategyPage() {
 
     const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
+    const handleITModalSubmit = async (data: any) => {
+        await handleITRequest(itModal.type, data);
+        setItModal({ open: false, type: '' });
+    };
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <Toast />
@@ -232,7 +237,13 @@ export default function AdminStrategyPage() {
                     {activeTab === 'hierarchy' && <HierarchyView products={products} onFix={fetchData} />}
                 </div>
             </div>
-            {itModal.open && <ITRequestModal type={itModal.type} onClose={() => setItModal({ open: false, type: '' })} onSubmit={async (d) => { await handleITRequest(itModal.type, d); setItModal({ open: false, type: '' }); }} />}
+            {itModal.open && (
+                <ITRequestModal 
+                    type={itModal.type} 
+                    onClose={() => setItModal({ open: false, type: '' })} 
+                    onSubmit={handleITModalSubmit} 
+                />
+            )}
         </main>
     );
 }
