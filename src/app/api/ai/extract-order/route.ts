@@ -110,25 +110,34 @@ export async function POST(req: Request) {
     }
 
     // Modelos alternativos activos en caso de indisponibilidad por alta demanda
-    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
+    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
     let result = null;
     let lastError = null;
 
     for (const modelName of modelsToTry) {
-      try {
-        console.log(`[AI Extract] Intentando procesar orden con modelo: ${modelName}`);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        
-        result = await model.generateContent(requestContents);
-        
-        if (result) {
-          console.log(`[AI Extract] Procesado exitosamente con modelo: ${modelName}`);
-          break;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          console.log(`[AI Extract] Intentando procesar orden con modelo: ${modelName} (intento ${attempt + 1})`);
+          const model = genAI.getGenerativeModel({ model: modelName });
+          
+          result = await model.generateContent(requestContents);
+          
+          if (result) {
+            console.log(`[AI Extract] Procesado exitosamente con modelo: ${modelName}`);
+            break;
+          }
+        } catch (err: any) {
+          console.error(`[AI Extract] Error con modelo ${modelName} (intento ${attempt + 1}):`, err.message);
+          lastError = err;
+          if (err.message?.includes('429') || err.status === 429) {
+            console.log('⏳ Rate limit 429 alcanzado. Esperando 10 segundos antes de reintentar...');
+            await new Promise(r => setTimeout(r, 10000));
+          } else {
+            break; // Switch to next model for non-429 errors
+          }
         }
-      } catch (err: any) {
-        console.error(`[AI Extract] Error con modelo ${modelName}:`, err.message);
-        lastError = err;
       }
+      if (result) break;
     }
 
     if (!result) {

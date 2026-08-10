@@ -150,6 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (isMounted) {
                     const currentUser = session?.user ?? null;
                     setUser(currentUser);
+                    if (currentUser) {
+                        await fetchProfile(currentUser.id);
+                    }
                     setLoading(false);
                 }
 

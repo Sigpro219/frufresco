@@ -346,11 +346,7 @@ export default function LoginPage() {
                                                     />
                                                     <button
                                                         type="button"
-                                                        onMouseDown={() => setShowConfirmPassword(true)}
-                                                        onMouseUp={() => setShowConfirmPassword(false)}
-                                                        onMouseLeave={() => setShowConfirmPassword(false)}
-                                                        onTouchStart={() => setShowConfirmPassword(true)}
-                                                        onTouchEnd={() => setShowConfirmPassword(false)}
+                                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                                         style={{
                                                             position: 'absolute',
                                                             right: '12px',
@@ -359,14 +355,13 @@ export default function LoginPage() {
                                                             background: 'none',
                                                             border: 'none',
                                                             cursor: 'pointer',
-                                                            color: showConfirmPassword ? '#10B981' : 'rgba(255,255,255,0.4)',
+                                                            color: showConfirmPassword ? '#10B981' : '#475569',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            padding: '0.2rem',
-                                                            userSelect: 'none',
-                                                            touchAction: 'none'
+                                                            padding: '0.4rem',
+                                                            zIndex: 5
                                                         }}
-                                                        title="Mantén presionado para ver la contraseña"
+                                                        title={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                                                     >
                                                         {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                                                     </button>
@@ -454,11 +449,11 @@ export default function LoginPage() {
                                     )}
 
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             Correo Electrónico
                                         </label>
                                         <div style={{ position: 'relative' }}>
-                                            <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                            <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
                                                 <Mail size={18} />
                                             </div>
                                             <input
@@ -469,12 +464,13 @@ export default function LoginPage() {
                                                 placeholder="socio@frubana.com"
                                                 style={{ 
                                                     width: '100%', 
-                                                    padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                    padding: '0.75rem 1rem 0.75rem 2.8rem', 
                                                     borderRadius: '14px', 
-                                                    border: '1px solid rgba(255,255,255,0.1)',
-                                                    backgroundColor: 'rgba(255,255,255,0.05)',
-                                                    color: 'white',
+                                                    border: '1.5px solid #CBD5E1',
+                                                    backgroundColor: '#FFFFFF',
+                                                    color: '#0F172A',
                                                     fontSize: '1rem',
+                                                    fontWeight: '600',
                                                     outline: 'none',
                                                     transition: 'all 0.2s'
                                                 }}
@@ -484,11 +480,11 @@ export default function LoginPage() {
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             Contraseña
                                         </label>
                                         <div style={{ position: 'relative' }}>
-                                            <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                            <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', zIndex: 2, pointerEvents: 'none' }}>
                                                 <Key size={18} />
                                             </div>
                                             <input
@@ -499,12 +495,13 @@ export default function LoginPage() {
                                                 placeholder="••••••••"
                                                 style={{ 
                                                     width: '100%', 
-                                                    padding: '0.7rem 3rem 0.7rem 2.8rem', 
+                                                    padding: '0.75rem 3rem 0.75rem 2.8rem', 
                                                     borderRadius: '14px', 
-                                                    border: '1px solid rgba(255,255,255,0.1)',
-                                                    backgroundColor: 'rgba(255,255,255,0.05)',
-                                                    color: 'white',
+                                                    border: '1.5px solid #CBD5E1',
+                                                    backgroundColor: '#FFFFFF',
+                                                    color: '#0F172A',
                                                     fontSize: '1rem',
+                                                    fontWeight: '600',
                                                     outline: 'none',
                                                     transition: 'all 0.2s'
                                                 }}
@@ -512,11 +509,7 @@ export default function LoginPage() {
                                             />
                                             <button
                                                 type="button"
-                                                onMouseDown={() => setShowPassword(true)}
-                                                onMouseUp={() => setShowPassword(false)}
-                                                onMouseLeave={() => setShowPassword(false)}
-                                                onTouchStart={() => setShowPassword(true)}
-                                                onTouchEnd={() => setShowPassword(false)}
+                                                onClick={() => setShowPassword(!showPassword)}
                                                 style={{
                                                     position: 'absolute',
                                                     right: '12px',
@@ -525,14 +518,13 @@ export default function LoginPage() {
                                                     background: 'none',
                                                     border: 'none',
                                                     cursor: 'pointer',
-                                                    color: showPassword ? '#10B981' : 'rgba(255,255,255,0.4)',
+                                                    color: showPassword ? '#10B981' : '#475569',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    padding: '0.2rem',
-                                                    userSelect: 'none',
-                                                    touchAction: 'none'
+                                                    padding: '0.4rem',
+                                                    zIndex: 5
                                                 }}
-                                                title="Mantén presionado para ver la contraseña"
+                                                title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                                             >
                                                 {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                                             </button>

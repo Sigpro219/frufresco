@@ -1718,7 +1718,8 @@ function CreateOrderContent() {
                     selected_options: item.selected_options,
                     originalQty: item.originalQty !== undefined ? item.originalQty : item.quantity,
                     originalUnit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
-                    conversion_factor: item.conversion_factor || 1
+                    conversion_factor: item.conversion_factor || 1,
+                    price: item.price || item.suggestedProduct?.base_price || 1000
                 };
             });
 
