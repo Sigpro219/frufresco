@@ -1710,7 +1710,7 @@ function CreateOrderContent() {
             .filter(item => item.suggestedProduct)
             .map(item => {
                 const optionValues = item.selected_options ? Object.values(item.selected_options).filter(v => v) : [];
-                const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : undefined);
+                const variantLabel = item.variant_label || (optionValues.length > 0 ? optionValues.join(', ') : (item.observations || undefined));
                 return {
                     product: item.suggestedProduct,
                     qty: item.quantity,
