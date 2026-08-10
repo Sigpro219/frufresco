@@ -741,6 +741,7 @@ export default function ClientsModule() {
 
             return {
                 Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
+                Revisado_Dev: (c.is_verified_dev || (c.tags && c.tags.includes('verified_dev'))) ? 'SI' : 'NO',
                 Jerarquia_Visual: jerarquiaVisual,
                 ID_INTERNO: c.id,
                 NIT_CEDULA: c.nit || '',
@@ -814,6 +815,7 @@ export default function ClientsModule() {
         const guideHeaders = ["Campo Excel", "Requerido", "Aplica A", "Descripción y Valores Permitidos"];
         const guideRows = [
             ["Estado", "NO", "Todos", "ACTIVO = Cuenta habilitada para ventas. INACTIVO = Cuenta archivada/deshabilitada."],
+            ["Revisado_Dev", "NO", "Todos", "SI / NO. Estado de revisión técnica dev del cliente."],
             ["ID_INTERNO", "NO", "Todos", "ID único de Supabase. Dejar intacto para actualizar cliente existente. Dejar vacío si es nuevo."],
             ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa o Cédula de Ciudadanía."],
             ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del negocio."],
@@ -884,7 +886,7 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "ID_INTERNO", "Estado", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "ID_INTERNO", "Estado", "Revisado_Dev", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
             "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
@@ -897,7 +899,7 @@ export default function ClientsModule() {
         ];
 
         const sample1 = [
-            "", "ACTIVO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "", "ACTIVO", "SI", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
             "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
@@ -910,7 +912,7 @@ export default function ClientsModule() {
         ];
 
         const sample2 = [
-            "", "ACTIVO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "", "ACTIVO", "NO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
             "unicentro@elgourmet.com", "", "", "Avenida Carrera 15 # 124-30", "Local 12 - Zona Comercial", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "HEREDADO_MATRIZ",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
@@ -923,7 +925,7 @@ export default function ClientsModule() {
         ];
 
         const sample3 = [
-            "", "ACTIVO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "", "ACTIVO", "SI", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
             "marcela.rincon@gmail.com", "", "", "Carrera 7 # 150-10", "Apto 402 - Torre B", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
@@ -975,11 +977,12 @@ export default function ClientsModule() {
                     if (p.email) emailMap[p.email.trim().toLowerCase()] = p.id;
                 });
 
-                // Mapearemos todos los clientes con sus 51 atributos
+                // Mapearemos todos los clientes con sus 52 atributos
                 const clientsToInsert = rows.map(row => {
                     const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
                     const estadoVal = (row.Estado || row.Activo || row['Estado (ACTIVO/INACTIVO)'] || '').toString().trim().toUpperCase();
                     const is_active = estadoVal === 'INACTIVO' || estadoVal === 'NO' || estadoVal === 'FALSE' || estadoVal === '0' ? false : true;
+                    const is_verified_dev = cleanBool(row.Revisado_Dev || row.is_verified_dev || row.REVISADO_DEV);
 
                     // Detección de ID UUID existente o resolución inteligente por NIT/Email
                     const rawId = row.ID_INTERNO || row.id || row['ID Interno'] || row['id_interno'];
@@ -997,6 +1000,8 @@ export default function ClientsModule() {
                     return {
                         id: matchedId,
                         is_active: is_active,
+                        is_verified_dev: is_verified_dev,
+                        tags: is_verified_dev ? ['verified_dev'] : [],
                         nit: (row.NIT_CEDULA || '').toString().trim(),
                         company_name: (row.Nombre_Comercial || '').toString().trim(),
                         razon_social: (row.Razon_Social || row.Nombre_Comercial || '').toString().trim(),
