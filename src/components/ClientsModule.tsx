@@ -1270,6 +1270,7 @@ export default function ClientsModule() {
                         setEditTarget(client);
                         // Preserve the active mode (edit vs view-only) when switching between parent and branch
                     }}
+                    onUpdateDevVerified={handleUpdateDevVerified}
                 />
             )}
 
@@ -3791,7 +3792,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
     );
 }
 
-function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false, onSwitchClient }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean, onSwitchClient?: (client: Profile) => void }) {
+function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false, onSwitchClient, onUpdateDevVerified }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean, onSwitchClient?: (client: Profile) => void, onUpdateDevVerified?: (id: string, verified: boolean) => void }) {
     const isEdit = !!editData && !!editData.id;
     const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
