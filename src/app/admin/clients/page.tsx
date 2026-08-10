@@ -256,6 +256,30 @@ export default function AdminClientsPage() {
         }
     };
 
+    const handleUpdateDevVerified = async (clientId: string, isVerified: boolean) => {
+        const client = clientsB2B.find(c => c.id === clientId) || clientsB2C.find(c => c.id === clientId);
+        const updatedTags = isVerified 
+            ? Array.from(new Set([...(client?.tags || []), 'verified_dev']))
+            : (client?.tags || []).filter(t => t !== 'verified_dev');
+
+        setClientsB2B(prev => prev.map(c => c.id === clientId ? { ...c, is_verified_dev: isVerified, tags: updatedTags } : c));
+        setClientsB2C(prev => prev.map(c => c.id === clientId ? { ...c, is_verified_dev: isVerified, tags: updatedTags } : c));
+
+        let { error } = await supabase
+            .from('profiles')
+            .update({ is_verified_dev: isVerified, tags: updatedTags })
+            .eq('id', clientId);
+
+        if (error && error.message?.includes('column "is_verified_dev" does not exist')) {
+            await supabase
+                .from('profiles')
+                .update({ tags: updatedTags })
+                .eq('id', clientId);
+        }
+
+        window.showToast?.(isVerified ? '✓ Cliente marcado como REVISADO (Dev)' : '⏳ Cliente marcado como PENDIENTE (Dev)', 'success');
+    };
+
     const handleUpdateLeadContact = async (id: string, contactMade: boolean = true) => {
         if (!canEdit) {
             window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
@@ -450,6 +474,7 @@ export default function AdminClientsPage() {
                     client={selectedClient} 
                     onClose={() => setIsModalOpen(false)} 
                     pricingModels={pricingModels}
+                    onUpdateDevVerified={handleUpdateDevVerified}
                 />
             )}
 
@@ -728,6 +753,7 @@ export default function AdminClientsPage() {
                                 onEdit={handleEditClient}
                                 onViewDetails={handleViewDetails}
                                 onUpdatePricingModel={handleUpdatePricingModel}
+                                onUpdateDevVerified={handleUpdateDevVerified}
                                 canEdit={canEdit}
                             />
                         )}
@@ -740,6 +766,7 @@ export default function AdminClientsPage() {
                                 viewMode={viewMode}
                                 onEdit={handleEditClient}
                                 onViewDetails={handleViewDetails}
+                                onUpdateDevVerified={handleUpdateDevVerified}
                                 canEdit={canEdit}
                             />
                         )}
@@ -754,6 +781,7 @@ export default function AdminClientsPage() {
                                 availableParents={clientsB2B.filter(c => c.is_corporate_parent)}
                                 onEdit={handleEditClient}
                                 onViewDetails={handleViewDetails}
+                                onUpdateDevVerified={handleUpdateDevVerified}
                                 canEdit={canEdit}
                             />
                         )}
@@ -991,13 +1019,14 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, availableParents, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, canEdit = true }: { 
+function ClientCard({ type, data, pricingModels, availableParents, onUpdatePricingModel, onUpdateStatus, onUpdateDevVerified, onViewDetails, onEdit, onRegisterContact, onScheduleTask, canEdit = true }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
     availableParents?: Profile[],
     onUpdatePricingModel?: (id: string, modelId: string) => void,
     onUpdateStatus?: (id: string, status: string) => void,
+    onUpdateDevVerified?: (id: string, verified: boolean) => void,
     onViewDetails?: () => void,
     onEdit?: () => void,
     onRegisterContact?: () => void,
@@ -1010,6 +1039,8 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
 
     const profileData = (isB2B || isB2C) ? (data as Profile) : null;
     const leadData = isLead ? (data as Lead) : null;
+
+    const isVerifiedDev = profileData?.is_verified_dev || (profileData?.tags && profileData?.tags.includes('verified_dev'));
 
     const selectedModel = isB2B ? pricingModels?.find((m: PricingModel) => m.id === profileData?.pricing_model_id) : null;
 
@@ -1046,22 +1077,58 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.boxShadow = THEME.shadow.md;
         }}>
-            {/* Tag / Status */}
+            {/* Tag / Status Area */}
             <div style={{ 
                 position: 'absolute', 
                 top: '1.2rem', 
                 right: '1.2rem',
-                padding: '0.4rem 0.8rem',
-                borderRadius: THEME.radius.sm,
-                fontSize: '0.65rem',
-                fontWeight: '700',
-                backgroundColor: isB2B ? (profileData?.is_corporate_parent ? '#FAE8FF' : '#E0F2FE') : isB2C ? '#DCFCE7' : '#FEE2E2',
-                color: isB2B ? (profileData?.is_corporate_parent ? '#7E22CE' : '#0369A1') : isB2C ? '#15803D' : '#991B1B',
-                textTransform: 'uppercase',
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '8px',
+                zIndex: 5
             }}>
+                {/* DEV REVISIÓN TOGGLE */}
+                {profileData && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onUpdateDevVerified) onUpdateDevVerified(profileData.id, !isVerifiedDev);
+                        }}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            borderRadius: '20px',
+                            border: `1px solid ${isVerifiedDev ? '#A7F3D0' : '#FDE68A'}`,
+                            backgroundColor: isVerifiedDev ? '#ECFDF5' : '#FFFBEB',
+                            color: isVerifiedDev ? '#065F46' : '#92400E',
+                            fontSize: '0.65rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}
+                        title="Etapa Dev: Click para cambiar estado de revisión del cliente"
+                    >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
+                        <span>{isVerifiedDev ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                    </button>
+                )}
+
+                <div style={{
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: THEME.radius.sm,
+                    fontSize: '0.65rem',
+                    fontWeight: '700',
+                    backgroundColor: isB2B ? (profileData?.is_corporate_parent ? '#FAE8FF' : '#E0F2FE') : isB2C ? '#DCFCE7' : '#FEE2E2',
+                    color: isB2B ? (profileData?.is_corporate_parent ? '#7E22CE' : '#0369A1') : isB2C ? '#15803D' : '#991B1B',
+                    textTransform: 'uppercase',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                }}>
                 {isB2B ? (
                     profileData?.is_corporate_parent ? (
                         <>
@@ -1085,6 +1152,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                         <span>Prospecto</span>
                     </>
                 )}
+                </div>
             </div>
 
             {/* Header */}
@@ -1479,7 +1547,7 @@ function EmptyState({ text }: { text: string }) {
         </div>
     );
 }
-function ListView({ data, type, viewMode, pricingModels, availableParents, onEdit, onViewDetails, onUpdatePricingModel, onUpdateStatus, onRegisterContact, canEdit = true }: any) {
+function ListView({ data, type, viewMode, pricingModels, availableParents, onEdit, onViewDetails, onUpdatePricingModel, onUpdateStatus, onUpdateDevVerified, onRegisterContact, canEdit = true }: any) {
     if (data.length === 0) return <EmptyState text={`No se encontraron ${type === 'lead' ? 'prospectos' : 'clientes'} en este momento.`} />;
 
     if (viewMode === 'table') {
@@ -1492,6 +1560,7 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                             <th style={{ padding: '0.65rem 1.25rem', textAlign: 'left', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.65rem', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: `1px solid ${THEME.colors.border}` }}>Contacto Principal</th>
                             <th style={{ padding: '0.65rem 1.25rem', textAlign: 'left', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.65rem', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: `1px solid ${THEME.colors.border}` }}>Ubicación</th>
                             {type !== 'b2c' && <th style={{ padding: '0.65rem 1.25rem', textAlign: 'left', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.65rem', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: `1px solid ${THEME.colors.border}` }}>Modelo / Estado</th>}
+                            <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.65rem', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: `1px solid ${THEME.colors.border}` }}>DEV (REVISADO)</th>
                             <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.65rem', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: `1px solid ${THEME.colors.border}` }}>Acciones</th>
                         </tr>
                     </thead>
@@ -1500,6 +1569,7 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                             const isLeads = type === 'lead';
                             const title = isLeads ? (item.company_name || item.contact_name) : (type === 'b2c' ? item.contact_name : item.company_name);
                             const subtitle = type === 'b2b' && item.is_corporate_parent ? 'GRUPO PADRE' : '';
+                            const isVerified = item.is_verified_dev || (item.tags && item.tags.includes('verified_dev'));
                             
                             return (
                                 <tr key={item.id || i} style={{ borderTop: `1px solid ${THEME.colors.border}`, transition: 'all 0.1s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
@@ -1541,6 +1611,33 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                                             )}
                                         </td>
                                     )}
+                                    <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
+                                        {!isLeads && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onUpdateDevVerified && onUpdateDevVerified(item.id, !isVerified)}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    padding: '4px 9px',
+                                                    borderRadius: '20px',
+                                                    border: `1px solid ${isVerified ? '#A7F3D0' : '#FDE68A'}`,
+                                                    backgroundColor: isVerified ? '#ECFDF5' : '#FFFBEB',
+                                                    color: isVerified ? '#065F46' : '#92400E',
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                }}
+                                                title="Etapa Dev: Click para cambiar estado de revisión del cliente"
+                                            >
+                                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }} />
+                                                <span>{isVerified ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                                            </button>
+                                        )}
+                                    </td>
                                     <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
                                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                                             <button 
@@ -1631,6 +1728,7 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                     availableParents={availableParents}
                     onUpdatePricingModel={onUpdatePricingModel}
                     onUpdateStatus={onUpdateStatus}
+                    onUpdateDevVerified={onUpdateDevVerified}
                     onViewDetails={() => onViewDetails(item)}
                     onEdit={() => onEdit(item)}
                     onRegisterContact={() => onRegisterContact && onRegisterContact(item.id)}
@@ -1640,8 +1738,9 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
     );
 }
 
-function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profile, onClose: () => void, pricingModels: PricingModel[] }) {
+function ClientDetailsModal({ client, onClose, pricingModels, onUpdateDevVerified }: { client: Profile, onClose: () => void, pricingModels: PricingModel[], onUpdateDevVerified?: (id: string, verified: boolean) => void }) {
     const selectedModel = pricingModels.find((m: PricingModel) => m.id === client.pricing_model_id);
+    const isVerifiedDev = client.is_verified_dev || (client.tags && client.tags.includes('verified_dev'));
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
@@ -1649,14 +1748,46 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                 <button onClick={onClose} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: '#F3F4F6', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary }}><X size={18} strokeWidth={1.5} /></button>
                 
                 <div style={{ padding: '2.5rem' }}>
-                    <header style={{ marginBottom: '2rem' }}>
-                        <span style={{ color: THEME.colors.primary, fontWeight: '700', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {client.role === 'b2c_client' ? 'Ficha de Consumidor Final' : (client as unknown as Lead).status ? 'Ficha de Prospecto (Lead)' : 'Ficha de Cliente Institucional'}
-                        </span>
-                        <h2 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0.5rem 0', fontFamily: THEME.typography.fontFamilyMain }}>
-                            {client.role === 'b2c_client' ? client.contact_name : (client.company_name || client.contact_name)}
-                        </h2>
-                        {client.role !== 'b2c_client' && client.razon_social && <p style={{ color: THEME.colors.textSecondary, fontSize: '1rem', margin: 0 }}>{client.razon_social}</p>}
+                    <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                            <span style={{ color: THEME.colors.primary, fontWeight: '700', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                {client.role === 'b2c_client' ? 'Ficha de Consumidor Final' : (client as unknown as Lead).status ? 'Ficha de Prospecto (Lead)' : 'Ficha de Cliente Institucional'}
+                            </span>
+                            <h2 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0.5rem 0', fontFamily: THEME.typography.fontFamilyMain }}>
+                                {client.role === 'b2c_client' ? client.contact_name : (client.company_name || client.contact_name)}
+                            </h2>
+                            {client.role !== 'b2c_client' && client.razon_social && <p style={{ color: THEME.colors.textSecondary, fontSize: '1rem', margin: 0 }}>{client.razon_social}</p>}
+                        </div>
+
+                        {/* DEV REVISIÓN TOGGLE EN EXPEDIENTE DE CLIENTE */}
+                        {client.role !== 'lead' && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onUpdateDevVerified) onUpdateDevVerified(client.id, !isVerifiedDev);
+                                }}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '0.4rem 0.9rem',
+                                    borderRadius: '20px',
+                                    border: `1px solid ${isVerifiedDev ? '#A7F3D0' : '#FDE68A'}`,
+                                    backgroundColor: isVerifiedDev ? '#ECFDF5' : '#FFFBEB',
+                                    color: isVerifiedDev ? '#065F46' : '#92400E',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    marginRight: '3.5rem',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                                    transition: 'all 0.2s'
+                                }}
+                                title="Etapa Dev: Click para cambiar estado de revisión del cliente"
+                            >
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
+                                <span>{isVerifiedDev ? '🔍 REVISADO (DEV)' : '⏳ PENDIENTE (DEV)'}</span>
+                            </button>
+                        )}
                     </header>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>

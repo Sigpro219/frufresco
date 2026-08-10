@@ -4340,37 +4340,74 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginLeft: 'auto', marginRight: '1.5rem' }}>
                         {!isLead && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: formData.is_active ? '#F0FDF4' : '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '16px', border: '1px solid', borderColor: formData.is_active ? '#BBF7D0' : '#FCA5A5' }}>
-                                <div style={{ textAlign: 'right' }}>
-                                    <span style={{ fontSize: '0.6rem', fontWeight: '900', color: formData.is_active ? '#166534' : '#991B1B', textTransform: 'uppercase', letterSpacing: '0.02rem', display: 'block' }}>
-                                        Estado de la Cuenta
-                                    </span>
-                                    <span style={{ fontSize: '0.7rem', color: formData.is_active ? '#15803D' : '#B91C1C', fontWeight: '600' }}>
-                                        {formData.is_active ? 'Ventas Habilitadas' : 'Ventas Bloqueadas'}
-                                    </span>
-                                </div>
-                                <select
-                                    value={formData.is_active ? 'active' : 'inactive'}
-                                    onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
-                                    disabled={isReadOnly}
-                                    style={{
-                                        padding: '0.45rem 0.9rem',
-                                        borderRadius: '12px',
-                                        border: '1px solid',
-                                        borderColor: formData.is_active ? '#16A34A' : '#DC2626',
-                                        fontWeight: '900',
-                                        fontSize: '0.82rem',
-                                        color: formData.is_active ? '#15803D' : '#B91C1C',
-                                        backgroundColor: 'white',
-                                        cursor: isReadOnly ? 'default' : 'pointer',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                        outline: 'none'
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const isVerified = (formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev');
+                                        const nextVal = !isVerified;
+                                        const currentTags: string[] = (formData as any).tags || [];
+                                        const updatedTags = nextVal 
+                                            ? Array.from(new Set([...currentTags, 'verified_dev']))
+                                            : currentTags.filter(t => t !== 'verified_dev');
+                                        setFormData((prev: any) => ({ ...prev, is_verified_dev: nextVal, tags: updatedTags }));
+                                        if (editData?.id && handleUpdateDevVerified) {
+                                            handleUpdateDevVerified(editData.id, nextVal);
+                                        }
                                     }}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '0.45rem 0.95rem',
+                                        borderRadius: '16px',
+                                        border: `1px solid ${((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#A7F3D0' : '#FDE68A'}`,
+                                        backgroundColor: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#ECFDF5' : '#FFFBEB',
+                                        color: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#065F46' : '#92400E',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '900',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                                 >
-                                    <option value="active">🟢 ACTIVO</option>
-                                    <option value="inactive">🔴 INACTIVO / ARCHIVADO</option>
-                                </select>
-                            </div>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#10B981' : '#F59E0B' }} />
+                                    <span>{((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '🔍 REVISADO (DEV)' : '⏳ PENDIENTE (DEV)'}</span>
+                                </button>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: formData.is_active ? '#F0FDF4' : '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '16px', border: '1px solid', borderColor: formData.is_active ? '#BBF7D0' : '#FCA5A5' }}>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: '900', color: formData.is_active ? '#166534' : '#991B1B', textTransform: 'uppercase', letterSpacing: '0.02rem', display: 'block' }}>
+                                            Estado de la Cuenta
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', color: formData.is_active ? '#15803D' : '#B91C1C', fontWeight: '600' }}>
+                                            {formData.is_active ? 'Ventas Habilitadas' : 'Ventas Bloqueadas'}
+                                        </span>
+                                    </div>
+                                    <select
+                                        value={formData.is_active ? 'active' : 'inactive'}
+                                        onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
+                                        disabled={isReadOnly}
+                                        style={{
+                                            padding: '0.45rem 0.9rem',
+                                            borderRadius: '12px',
+                                            border: '1px solid',
+                                            borderColor: formData.is_active ? '#16A34A' : '#DC2626',
+                                            fontWeight: '900',
+                                            fontSize: '0.82rem',
+                                            color: formData.is_active ? '#15803D' : '#B91C1C',
+                                            backgroundColor: 'white',
+                                            cursor: isReadOnly ? 'default' : 'pointer',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value="active">🟢 ACTIVO</option>
+                                        <option value="inactive">🔴 INACTIVO / ARCHIVADO</option>
+                                    </select>
+                                </div>
+                            </>
                         )}
                     </div>
                     <button 
