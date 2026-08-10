@@ -1540,6 +1540,72 @@ function CreateOrderContent() {
                 return null;
             };
 
+            // Helper para sanitizar texto de OCR/PDF (homóglifos, espacios en blanco por kerning, tildes)
+            const sanitizeDocText = (text: string) => {
+                if (!text) return '';
+                let str = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+                // Normalizar la Beta griega 'Β' (914) y 'β' (946) a 'B' / 'b' latina
+                str = str.replace(/\u0392/g, 'B').replace(/\u03B2/g, 'b');
+                let lower = str.toLowerCase().trim();
+                lower = lower.replace(/\ba\s+gua\s+cates?\b/gi, 'aguacate');
+                lower = lower.replace(/\barra\s+cacha\b/gi, 'arracacha');
+                return lower.replace(/\s+/g, ' ');
+            };
+
+            // Algoritmo mejorado de coincidencia inteligente de producto (Fuzzy Match + Sanitización)
+            const findBestMatch = (rawName: string) => {
+                const cleanInput = sanitizeDocText(rawName);
+                if (!cleanInput) return null;
+
+                // 1. Coincidencia exacta o contención directa
+                let match = products.find(p => {
+                    const cleanPName = sanitizeDocText(p.name);
+                    return cleanInput === cleanPName || cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
+                });
+                if (match) return match;
+
+                // 2. Coincidencia por tokens / palabras individuales (Manejo de plurales: Bananos -> Banano, Ajos -> Ajo)
+                const tokens = cleanInput.split(' ').filter(t => t.length > 2);
+                if (tokens.length > 0) {
+                    const firstToken = tokens[0];
+                    const stemToken = firstToken.endsWith('s') ? firstToken.slice(0, -1) : firstToken;
+                    match = products.find(p => {
+                        const cleanPName = sanitizeDocText(p.name);
+                        return cleanPName.includes(firstToken) || cleanPName.includes(stemToken);
+                    });
+                }
+                return match || null;
+            };
+
+            // Auto-Vinculación Automática del Cliente por NIT o Razón Social (Mejora 3)
+            const nitInDoc = (data.nitInDocument || '').replace(/[^0-9]/g, '');
+            const clientNameInDoc = sanitizeDocText(data.clientInDocument || '');
+            let autoMatchedProfile: any = null;
+
+            if (clientType === 'B2B' && clients && clients.length > 0) {
+                if (nitInDoc && nitInDoc.length >= 6) {
+                    autoMatchedProfile = clients.find(c => {
+                        const cleanClientNit = (c.nit || '').replace(/[^0-9]/g, '');
+                        return cleanClientNit && (cleanClientNit.includes(nitInDoc) || nitInDoc.includes(cleanClientNit));
+                    });
+                }
+
+                if (!autoMatchedProfile && clientNameInDoc.length >= 3) {
+                    autoMatchedProfile = clients.find(c => {
+                        const cleanCompName = sanitizeDocText(c.company_name || '');
+                        const cleanContact = sanitizeDocText(c.contact_name || '');
+                        return (cleanCompName && (cleanCompName.includes(clientNameInDoc) || clientNameInDoc.includes(cleanCompName.split(' ')[0]))) ||
+                               (cleanContact && cleanContact.includes(clientNameInDoc));
+                    });
+                }
+
+                if (autoMatchedProfile) {
+                    setSelectedClient(autoMatchedProfile.id);
+                    setClientSearch(autoMatchedProfile.company_name || autoMatchedProfile.contact_name || '');
+                    showToast(`🎯 Cliente detectado y seleccionado automáticamente: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
+                }
+            }
+
             // Ensure data is structured correctly
             if (!data) {
                 throw new Error('La respuesta de la API está vacía');
@@ -1552,11 +1618,7 @@ function CreateOrderContent() {
                 const originalName = item.originalName || 'Producto Desconocido';
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
-                // Algoritmo de Fuzzy Match simple
-                const match = products.find(p => 
-                    originalName.toLowerCase().includes(p.name.toLowerCase()) ||
-                    p.name.toLowerCase().includes(originalName.toLowerCase().split(' ')[0])
-                );
+                const match = findBestMatch(originalName);
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
                 const detectedUnit = match ? detectUnitFromName(originalName, match, productConversions) : null;
@@ -1588,17 +1650,17 @@ function CreateOrderContent() {
             }).filter(Boolean);
 
             // Lógica de Validación de Cliente (Auditoría)
-            const selectedDetails = clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails();
+            const selectedDetails = autoMatchedProfile || (clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails());
             const clientInFile = data.clientInDocument || 'Cliente Desconocido';
             
             // Verificamos si hay coincidencia entre el documento y el sistema
             const selectedName = (selectedDetails?.company_name || selectedDetails?.contact_name || '').toUpperCase();
             const detectedName = clientInFile.toUpperCase();
             
-            const isMatch = selectedName && detectedName && (
+            const isMatch = !!autoMatchedProfile || (selectedName && detectedName && (
                 selectedName.includes(detectedName.split(' ')[0]) || 
                 detectedName.includes(selectedName.split(' ')[0])
-            );
+            ));
 
             setImportValidation({
                 clientInDocument: clientInFile,

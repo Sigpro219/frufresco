@@ -1059,7 +1059,7 @@ export default function OrderLoadingPage() {
         try {
             // 1. Actualizar cabecera del pedido con nota de auditoría en admin_notes
             const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const userTag = profile?.contact_name || profile?.email || 'Mesa de Control';
+            const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
             const auditStamp = ` [Audit ${nowTimeStr}: Edición por ${userTag}]`;
             const updatedAdminNotes = `${selectedOrder.admin_notes || ''}${auditStamp}`.trim();
 
