@@ -1552,30 +1552,7 @@ function CreateOrderContent() {
                 return lower.replace(/\s+/g, ' ');
             };
 
-            // Algoritmo mejorado de coincidencia inteligente de producto (Fuzzy Match + Sanitización)
-            const findBestMatch = (rawName: string) => {
-                const cleanInput = sanitizeDocText(rawName);
-                if (!cleanInput) return null;
 
-                // 1. Coincidencia exacta o contención directa
-                let match = products.find(p => {
-                    const cleanPName = sanitizeDocText(p.name);
-                    return cleanInput === cleanPName || cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
-                });
-                if (match) return match;
-
-                // 2. Coincidencia por tokens / palabras individuales (Manejo de plurales: Bananos -> Banano, Ajos -> Ajo)
-                const tokens = cleanInput.split(' ').filter(t => t.length > 2);
-                if (tokens.length > 0) {
-                    const firstToken = tokens[0];
-                    const stemToken = firstToken.endsWith('s') ? firstToken.slice(0, -1) : firstToken;
-                    match = products.find(p => {
-                        const cleanPName = sanitizeDocText(p.name);
-                        return cleanPName.includes(firstToken) || cleanPName.includes(stemToken);
-                    });
-                }
-                return match || null;
-            };
 
             // Auto-Vinculación Automática del Cliente por NIT o Razón Social (Mejora 3)
             const nitInDoc = (data.nitInDocument || '').replace(/[^0-9]/g, '');
@@ -1605,6 +1582,55 @@ function CreateOrderContent() {
                     showToast(`🎯 Cliente detectado y seleccionado automáticamente: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
                 }
             }
+
+            // 1. Cargar Memoria Histórica de Aprendizaje del cliente (document_learning_memory)
+            let learnedMemory: any[] = [];
+            const targetClientId = autoMatchedProfile?.id || selectedClient;
+            if (targetClientId) {
+                try {
+                    const { data: memData } = await supabase
+                        .from('document_learning_memory')
+                        .select('*')
+                        .eq('client_id', targetClientId);
+                    if (memData) learnedMemory = memData;
+                } catch (e) {
+                    console.log('document_learning_memory not ready yet');
+                }
+            }
+
+            // Algoritmo mejorado de coincidencia inteligente de producto (Memoria + Fuzzy Match + Sanitización)
+            const findBestMatch = (rawName: string) => {
+                const cleanInput = sanitizeDocText(rawName);
+                if (!cleanInput) return null;
+
+                // A) Prioridad 1: Coincidencia en Memoria Aprendida Histórica de este Cliente
+                if (learnedMemory.length > 0) {
+                    const memMatch = learnedMemory.find(m => m.normalized_text === cleanInput || cleanInput.includes(m.normalized_text));
+                    if (memMatch) {
+                        const prod = products.find(p => p.id === memMatch.matched_product_id);
+                        if (prod) return prod;
+                    }
+                }
+
+                // B) Prioridad 2: Coincidencia exacta o contención directa en catálogo
+                let match = products.find(p => {
+                    const cleanPName = sanitizeDocText(p.name);
+                    return cleanInput === cleanPName || cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
+                });
+                if (match) return match;
+
+                // C) Prioridad 3: Coincidencia por tokens / palabras individuales (Manejo de plurales: Bananos -> Banano, Ajos -> Ajo)
+                const tokens = cleanInput.split(' ').filter(t => t.length > 2);
+                if (tokens.length > 0) {
+                    const firstToken = tokens[0];
+                    const stemToken = firstToken.endsWith('s') ? firstToken.slice(0, -1) : firstToken;
+                    match = products.find(p => {
+                        const cleanPName = sanitizeDocText(p.name);
+                        return cleanPName.includes(firstToken) || cleanPName.includes(stemToken);
+                    });
+                }
+                return match || null;
+            };
 
             // Ensure data is structured correctly
             if (!data) {
@@ -1678,7 +1704,7 @@ function CreateOrderContent() {
         }
     };
 
-    const handleConfirmImport = () => {
+    const handleConfirmImport = async () => {
         // Inyectamos los items validados al carrito real
         const itemsToInject = stagedItems
             .filter(item => item.suggestedProduct)
@@ -1695,6 +1721,30 @@ function CreateOrderContent() {
                     conversion_factor: item.conversion_factor || 1
                 };
             });
+
+        // Guardar/Actualizar la memoria de aprendizaje del cliente en document_learning_memory
+        const activeClientId = selectedClient;
+        if (activeClientId && stagedItems.length > 0) {
+            try {
+                for (const item of stagedItems) {
+                    if (item.suggestedProduct && item.originalName) {
+                        const normText = item.originalName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+                        if (normText) {
+                            await supabase.from('document_learning_memory').upsert({
+                                client_id: activeClientId,
+                                raw_pdf_text: item.originalName,
+                                normalized_text: normText,
+                                matched_product_id: item.suggestedProduct.id,
+                                matched_unit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
+                                last_confirmed_at: new Date().toISOString()
+                            }, { onConflict: 'client_id,normalized_text' });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Could not save learning memory:', e);
+            }
+        }
 
         setCart(prev => [...itemsToInject, ...prev]);
         setIsStaging(false);
