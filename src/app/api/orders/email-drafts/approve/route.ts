@@ -44,14 +44,10 @@ export async function POST(req: Request) {
 
       return {
         product_id: item.productId || item.product_id || item.id,
-        product_name: item.productName || item.product_name || item.name || 'Producto',
         quantity: qty,
         unit: item.unit || item.unit_of_measure || 'Kg',
         unit_price: unitPrice,
-        price: unitPrice,
-        total_price: totalItemPrice,
-        notes: item.observations || item.notes || null,
-        delivery_date: item.deliveryDate || deliveryDate || null
+        variant_label: item.observations || item.notes || item.variant_label || null
       };
     });
 
@@ -61,21 +57,16 @@ export async function POST(req: Request) {
 
     // 2. Insert order header into 'orders' table
     const orderData: any = {
-      customer_id: clientId,
-      user_id: clientId,
-      client_type: clientType || profile.client_type || 'b2b_client',
-      order_type: (clientType === 'b2c_client' || profile.role === 'b2c') ? 'b2c' : 'b2b',
+      profile_id: clientId,
+      type: (clientType === 'b2c_client' || profile.role === 'b2c') ? 'b2c' : 'b2b',
       status: 'pending_approval',
       subtotal: subtotal,
-      taxes: taxes,
-      shipping_fee: shippingFee,
-      total_amount: totalAmount,
+      tax: taxes,
       total: totalAmount,
       delivery_date: deliveryDate || new Date().toISOString().split('T')[0],
       delivery_slot: deliverySlot || 'AM',
-      delivery_address: address || profile.address || 'Bogotá',
-      notes: notes || `Pedido ingresado desde Borrador de Correo ID: ${draftId || 'N/A'}`,
-      channel: channel || 'email',
+      shipping_address: address || profile.address || 'Bogotá',
+      admin_notes: notes || `Pedido ingresado desde Borrador de Correo ID: ${draftId || 'N/A'}`,
       origin_source: originSource || 'email'
     };
 

@@ -122,6 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     ...data,
                     pricing_model_id: data.parent_id ? data.parent?.pricing_model_id : data.pricing_model_id
                 };
+                try {
+                    localStorage.setItem(`frufresco_cached_profile_${userId}`, JSON.stringify(profileData));
+                } catch (e) {}
                 setProfile(profileData as Profile);
             } else {
                 console.warn('⚠️ Perfil no encontrado en la tabla profiles.');
@@ -151,21 +154,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const currentUser = session?.user ?? null;
                     setUser(currentUser);
                     if (currentUser) {
+                        // Instant hydration from local storage to prevent 0ms flicker evictions
+                        try {
+                            const cached = localStorage.getItem(`frufresco_cached_profile_${currentUser.id}`);
+                            if (cached) {
+                                setProfile(JSON.parse(cached));
+                            }
+                        } catch (e) {}
                         await fetchProfile(currentUser.id);
+                    } else {
+                        setProfile(null);
                     }
                     setLoading(false);
                 }
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
-                    if (isMounted) {
-                        const newUser = session?.user ?? null;
+                    if (!isMounted) return;
+                    
+                    const newUser = session?.user ?? null;
+                    if (newUser) {
                         setUser(newUser);
-                        if (newUser) {
-                            fetchProfile(newUser.id);
-                        } else {
-                            setProfile(null);
-                        }
+                        fetchProfile(newUser.id);
                         setLoading(false);
+                    } else if (event === 'SIGNED_OUT') {
+                        // Confirmed sign out action
+                        setUser(null);
+                        setProfile(null);
+                        setLoading(false);
+                    } else {
+                        // Transient session refresh event: verify with getSession before evicting
+                        const { data: checkData } = await supabase.auth.getSession();
+                        if (isMounted) {
+                            if (checkData.session?.user) {
+                                setUser(checkData.session.user);
+                                fetchProfile(checkData.session.user.id);
+                            } else {
+                                setUser(null);
+                                setProfile(null);
+                            }
+                            setLoading(false);
+                        }
                     }
                 });
                 return subscription;

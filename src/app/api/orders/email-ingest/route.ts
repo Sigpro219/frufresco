@@ -841,14 +841,14 @@ export async function POST(req: Request) {
             attExtractedData = JSON.parse(text);
             const filterExcelItems = (items: any[], clientName: string) => {
               if (!items || items.length === 0) return [];
+              const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
               return items.filter((itm: any) => {
-                if (itm.quantity > 5000) return false;
-                if (clientName) {
-                  const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-                  const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-                  if (cleanClient === cleanProd || cleanProd.includes(cleanClient) || cleanClient.includes(cleanProd)) {
-                    return false;
-                  }
+                if (itm.quantity > 50000) return false;
+                const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                if (!cleanProd || cleanProd.length < 2) return false;
+                // Filtrar solo si el nombre del producto es EXACTAMENTE idéntico al nombre del cliente
+                if (cleanClient && cleanClient.length > 5 && cleanProd === cleanClient) {
+                  return false;
                 }
                 return true;
               });
@@ -872,13 +872,12 @@ export async function POST(req: Request) {
             if (attProgrammaticExcelItems.length > 0) {
               const filterExcelItems = (items: any[], clientName: string) => {
                 if (!items || items.length === 0) return [];
+                const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                 return items.filter((itm: any) => {
-                  if (itm.quantity > 5000) return false;
-                  if (clientName) {
-                    const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-                    const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-                    if (cleanClient === cleanProd || cleanProd.includes(cleanClient) || cleanClient.includes(cleanProd)) return false;
-                  }
+                  if (itm.quantity > 50000) return false;
+                  const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  if (!cleanProd || cleanProd.length < 2) return false;
+                  if (cleanClient && cleanClient.length > 5 && cleanProd === cleanClient) return false;
                   return true;
                 });
               };

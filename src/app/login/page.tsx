@@ -118,8 +118,10 @@ export default function LoginPage() {
         }, 10000);
 
         try {
-            console.log('🔑 Intentando ingresar con:', email);
-            const { error: signInError } = await signIn(email, password);
+            const cleanEmail = email.trim().toLowerCase();
+            const cleanPassword = password.trim();
+            console.log('🔑 Intentando ingresar con:', cleanEmail);
+            const { error: signInError } = await signIn(cleanEmail, cleanPassword);
 
             if (signInError) {
                 clearTimeout(safetyTimeout);
@@ -489,6 +491,7 @@ export default function LoginPage() {
                                             </div>
                                             <input
                                                 required
+                                                autoComplete="current-password"
                                                 type={showPassword ? "text" : "password"}
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
