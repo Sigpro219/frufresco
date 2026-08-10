@@ -12,66 +12,16 @@ const getSupabaseAdmin = () => {
   return createClient(url, key);
 };
 
+import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory } from '@/lib/orders/order-parser-engine';
+
 async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
-  const models = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-1.5-flash-latest'];
-  let lastError: any = null;
-  for (const model of models) {
-    try {
-      return await new Promise<string>((resolve, reject) => {
-        const data = JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: base64Image ? [
-                { inlineData: { data: base64Image, mimeType: mimeType } },
-                { text: prompt }
-              ] : [
-                { text: prompt }
-              ]
-            }
-          ],
-          generationConfig: { responseMimeType: "application/json" }
-        });
-
-        const options = {
-          hostname: 'generativelanguage.googleapis.com',
-          port: 443,
-          path: `/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(data)
-          }
-        };
-
-        const req = https.request(options, (res) => {
-          let body = '';
-          res.on('data', (chunk) => body += chunk);
-          res.on('end', () => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              try {
-                const parsed = JSON.parse(body);
-                const text = parsed.candidates[0].content.parts[0].text;
-                resolve(text);
-              } catch (e) {
-                reject(new Error("Invalid JSON response from Gemini: " + body));
-              }
-            } else {
-              reject(new Error(`Gemini API Error: ${res.statusCode} ${body}`));
-            }
-          });
-        });
-
-        req.on('error', (e) => reject(e));
-        req.write(data);
-        req.end();
-      });
-    } catch (err: any) {
-      console.warn(`[Gemini Inbound Ingest] Model ${model} failed, trying fallback. Error:`, err.message);
-      lastError = err;
-    }
+  try {
+    const res = await fetchGeminiExtraction(apiKey, prompt, base64Image, mimeType || 'application/pdf');
+    return typeof res === 'string' ? res : JSON.stringify(res);
+  } catch (err: any) {
+    console.error('[Gemini Inbound Ingest] Error con motor unificado:', err.message);
+    throw err;
   }
-  throw lastError || new Error("All Gemini models failed");
 }
 
 export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
@@ -1525,36 +1475,13 @@ export async function POST(req: Request) {
                 }
               }
 
-              // In-memory SKU match against active products database
+              // In-memory SKU match usando el Motor Unificado (Memoria + Catálogo + Tokens)
               let matchedProductId = itm.matched_product_id || null;
               let resolvedUnitPrice = itm.unit_price || 0;
 
               if (!matchedProductId && originalName) {
-                const cleanText = (txt: string) => txt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
-                const targetClean = cleanText(originalName);
-                const targetWords = targetClean.split(/\s+/).filter(w => w.length > 2);
-
-                let bestMatch: any = null;
-                let highestScore = -999;
-
-                for (const p of (parsedAttachments.length > 0 ? (globalDbProducts || []) : (globalDbProducts || []))) {
-                  const pClean = cleanText(p.name);
-                  if (pClean === targetClean) {
-                    bestMatch = p;
-                    highestScore = 9999;
-                    break;
-                  }
-                  const pWords = pClean.split(/\s+/).filter(w => w.length > 2);
-                  const shared = targetWords.filter(w => pWords.includes(w));
-                  if (shared.length > 0) {
-                    const score = shared.length * 10 - Math.abs(pWords.length - shared.length);
-                    if (score > highestScore) {
-                      highestScore = score;
-                      bestMatch = p;
-                    }
-                  }
-                }
-                if (bestMatch && (highestScore >= 8 || highestScore === 9999)) {
+                const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
+                if (bestMatch) {
                   matchedProductId = bestMatch.id;
                   resolvedUnitPrice = bestMatch.base_price || 0;
                   if (!assignedUnit) assignedUnit = bestMatch.unit_of_measure || 'Kg';

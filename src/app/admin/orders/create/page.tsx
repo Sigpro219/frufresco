@@ -5,6 +5,7 @@ import { isInsidePolygon, Point } from '@/lib/geoUtils';
 import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sanitizeDocText, resolveClientProfile, findBestProductMatch, recordLearningMemory } from '@/lib/orders/order-parser-engine';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
 import { Map, Marker } from '@vis.gl/react-google-maps';
@@ -1554,27 +1555,13 @@ function CreateOrderContent() {
 
 
 
-            // Auto-Vinculación Automática del Cliente por NIT o Razón Social (Mejora 3)
-            const nitInDoc = (data.nitInDocument || '').replace(/[^0-9]/g, '');
-            const clientNameInDoc = sanitizeDocText(data.clientInDocument || '');
+            // Resolutor Multicanal de Perfil de Cliente usando el Motor Unificado
             let autoMatchedProfile: any = null;
-
             if (clientType === 'B2B' && clients && clients.length > 0) {
-                if (nitInDoc && nitInDoc.length >= 6) {
-                    autoMatchedProfile = clients.find(c => {
-                        const cleanClientNit = (c.nit || '').replace(/[^0-9]/g, '');
-                        return cleanClientNit && (cleanClientNit.includes(nitInDoc) || nitInDoc.includes(cleanClientNit));
-                    });
-                }
-
-                if (!autoMatchedProfile && clientNameInDoc.length >= 3) {
-                    autoMatchedProfile = clients.find(c => {
-                        const cleanCompName = sanitizeDocText(c.company_name || '');
-                        const cleanContact = sanitizeDocText(c.contact_name || '');
-                        return (cleanCompName && (cleanCompName.includes(clientNameInDoc) || clientNameInDoc.includes(cleanCompName.split(' ')[0]))) ||
-                               (cleanContact && cleanContact.includes(clientNameInDoc));
-                    });
-                }
+                autoMatchedProfile = resolveClientProfile({
+                    nit: data.nitInDocument,
+                    name: data.clientInDocument
+                }, clients);
 
                 if (autoMatchedProfile) {
                     setSelectedClient(autoMatchedProfile.id);
@@ -1583,7 +1570,7 @@ function CreateOrderContent() {
                 }
             }
 
-            // 1. Cargar Memoria Histórica de Aprendizaje del cliente (document_learning_memory)
+            // 1. Cargar Memoria Histórica de Aprendizaje del cliente
             let learnedMemory: any[] = [];
             const targetClientId = autoMatchedProfile?.id || selectedClient;
             if (targetClientId) {
@@ -1598,53 +1585,19 @@ function CreateOrderContent() {
                 }
             }
 
-            // Algoritmo mejorado de coincidencia inteligente de producto (Memoria + Fuzzy Match + Sanitización)
-            const findBestMatch = (rawName: string) => {
-                const cleanInput = sanitizeDocText(rawName);
-                if (!cleanInput) return null;
-
-                // A) Prioridad 1: Coincidencia en Memoria Aprendida Histórica de este Cliente
-                if (learnedMemory.length > 0) {
-                    const memMatch = learnedMemory.find(m => m.normalized_text === cleanInput || cleanInput.includes(m.normalized_text));
-                    if (memMatch) {
-                        const prod = products.find(p => p.id === memMatch.matched_product_id);
-                        if (prod) return prod;
-                    }
-                }
-
-                // B) Prioridad 2: Coincidencia exacta o contención directa en catálogo
-                let match = products.find(p => {
-                    const cleanPName = sanitizeDocText(p.name);
-                    return cleanInput === cleanPName || cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
-                });
-                if (match) return match;
-
-                // C) Prioridad 3: Coincidencia por tokens / palabras individuales (Manejo de plurales: Bananos -> Banano, Ajos -> Ajo)
-                const tokens = cleanInput.split(' ').filter(t => t.length > 2);
-                if (tokens.length > 0) {
-                    const firstToken = tokens[0];
-                    const stemToken = firstToken.endsWith('s') ? firstToken.slice(0, -1) : firstToken;
-                    match = products.find(p => {
-                        const cleanPName = sanitizeDocText(p.name);
-                        return cleanPName.includes(firstToken) || cleanPName.includes(stemToken);
-                    });
-                }
-                return match || null;
-            };
-
             // Ensure data is structured correctly
             if (!data) {
                 throw new Error('La respuesta de la API está vacía');
             }
             const rawItems = Array.isArray(data.items) ? data.items : [];
 
-            // Intentamos encontrar el mejor SKU sugerido para cada item extraído por la IA
+            // Intentamos encontrar el mejor SKU sugerido usando el Motor Unificado (Memoria + Catalog + Tokens)
             const suggested = rawItems.map((item: any) => {
                 if (!item) return null;
                 const originalName = item.originalName || 'Producto Desconocido';
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
-                const match = findBestMatch(originalName);
+                const match = findBestProductMatch(originalName, products, learnedMemory);
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
                 const detectedUnit = match ? detectUnitFromName(originalName, match, productConversions) : null;
@@ -1723,27 +1676,19 @@ function CreateOrderContent() {
                 };
             });
 
-        // Guardar/Actualizar la memoria de aprendizaje del cliente en document_learning_memory
+        // Guardar/Actualizar la memoria de aprendizaje del cliente vía Motor Unificado
         const activeClientId = selectedClient;
         if (activeClientId && stagedItems.length > 0) {
-            try {
-                for (const item of stagedItems) {
-                    if (item.suggestedProduct && item.originalName) {
-                        const normText = item.originalName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
-                        if (normText) {
-                            await supabase.from('document_learning_memory').upsert({
-                                client_id: activeClientId,
-                                raw_pdf_text: item.originalName,
-                                normalized_text: normText,
-                                matched_product_id: item.suggestedProduct.id,
-                                matched_unit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
-                                last_confirmed_at: new Date().toISOString()
-                            }, { onConflict: 'client_id,normalized_text' });
-                        }
-                    }
+            for (const item of stagedItems) {
+                if (item.suggestedProduct && item.originalName) {
+                    await recordLearningMemory(
+                        supabase,
+                        activeClientId,
+                        item.originalName,
+                        item.suggestedProduct.id,
+                        item.originalUnit || item.suggestedProduct.unit_of_measure
+                    );
                 }
-            } catch (e) {
-                console.log('Could not save learning memory:', e);
             }
         }
 

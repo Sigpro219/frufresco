@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as XLSX from 'xlsx';
+import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 import { verifySessionAndPermission } from '@/lib/auth';
 
 export async function POST(req: Request) {
@@ -65,7 +66,8 @@ export async function POST(req: Request) {
       }
     `;
 
-    let requestContents: any[] = [];
+    let base64Str: string | undefined = undefined;
+    let resolvedMimeType = 'application/pdf';
 
     if (isExcel) {
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
@@ -75,10 +77,9 @@ export async function POST(req: Request) {
         csvContent += XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
       });
       prompt += `\n\nCONTENIDO DEL DOCUMENTO EXCEL EN FORMATO CSV:\n${csvContent}`;
-      requestContents = [{ text: prompt }];
     } else {
-      const base64Data = Buffer.from(arrayBuffer).toString('base64');
-      let resolvedMimeType = file.type || '';
+      base64Str = Buffer.from(arrayBuffer).toString('base64');
+      resolvedMimeType = file.type || '';
       if (!resolvedMimeType || resolvedMimeType === 'application/octet-stream') {
         const fileNameLower = file.name.toLowerCase();
         if (fileNameLower.endsWith('.pdf')) {
@@ -94,71 +95,17 @@ export async function POST(req: Request) {
         } else if (fileNameLower.endsWith('.xls')) {
           resolvedMimeType = 'application/vnd.ms-excel';
         } else {
-          // Default fallback
           resolvedMimeType = 'application/pdf';
         }
       }
-      requestContents = [
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType: resolvedMimeType
-          }
-        },
-        { text: prompt }
-      ];
     }
 
-    // Modelos alternativos activos en caso de indisponibilidad por alta demanda
-    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
-    let result = null;
-    let lastError = null;
-
-    for (const modelName of modelsToTry) {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          console.log(`[AI Extract] Intentando procesar orden con modelo: ${modelName} (intento ${attempt + 1})`);
-          const model = genAI.getGenerativeModel({ model: modelName });
-          
-          result = await model.generateContent(requestContents);
-          
-          if (result) {
-            console.log(`[AI Extract] Procesado exitosamente con modelo: ${modelName}`);
-            break;
-          }
-        } catch (err: any) {
-          console.error(`[AI Extract] Error con modelo ${modelName} (intento ${attempt + 1}):`, err.message);
-          lastError = err;
-          if (err.message?.includes('429') || err.status === 429) {
-            console.log('⏳ Rate limit 429 alcanzado. Esperando 10 segundos antes de reintentar...');
-            await new Promise(r => setTimeout(r, 10000));
-          } else {
-            break; // Switch to next model for non-429 errors
-          }
-        }
-      }
-      if (result) break;
-    }
-
-    if (!result) {
-      throw lastError || new Error("No se pudo establecer comunicación con ningún modelo de Gemini.");
-    }
-
-    const response = await result.response;
-    let text = response.text().trim();
-    
-    // Limpiar posibles bloques de código markdown si la IA los incluye
-    text = text.replace(/^```json/, '').replace(/```$/, '').trim();
-    
     try {
-        const parsedData = JSON.parse(text);
-        return NextResponse.json(parsedData);
-    } catch (parseError) {
-        console.error('[AI Extract] JSON Parse Error:', text);
-        return NextResponse.json({ 
-            error: 'La IA devolvió un formato inválido',
-            rawResponse: text 
-        }, { status: 500 });
+      const parsedData = await fetchGeminiExtraction(apiKey, prompt, base64Str, resolvedMimeType);
+      return NextResponse.json(parsedData);
+    } catch (err: any) {
+      console.error('[AI Extract Error]:', err);
+      return NextResponse.json({ error: err.message || 'Error en la extracción IA de la orden' }, { status: 500 });
     }
 
   } catch (error: any) {

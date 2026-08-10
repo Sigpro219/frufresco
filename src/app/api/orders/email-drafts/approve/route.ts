@@ -107,7 +107,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Error al guardar ítems del pedido: ${itemsErr.message}` }, { status: 500 });
     }
 
-    // 4. Mark draft / inbound email record as processed
+    // 4. Registrar memoria de aprendizaje en document_learning_memory para cada ítem verificado
+    try {
+      const { recordLearningMemory } = require('@/lib/orders/order-parser-engine');
+      for (const rawItm of items) {
+        const prodId = rawItm.productId || rawItm.product_id || rawItm.id;
+        const textToSave = rawItm.originalName || rawItm.productName || rawItm.product_name || rawItm.name;
+        const unitToSave = rawItm.unit || rawItm.unit_of_measure || 'Kg';
+        if (clientId && prodId && textToSave) {
+          await recordLearningMemory(supabaseAdmin, clientId, textToSave, prodId, unitToSave);
+        }
+      }
+    } catch (memErr) {
+      console.warn('[Approve Email Draft] Notice updating learning memory:', memErr);
+    }
+
+    // 5. Mark draft / inbound email record as processed
     if (draftId) {
       try {
         await supabaseAdmin
