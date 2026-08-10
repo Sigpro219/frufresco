@@ -1831,17 +1831,17 @@ export default function MasterProductsPage() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <span style={{ 
-                                                    fontWeight: '700', 
+                                                    fontWeight: '800', 
                                                     color: THEME.colors.primary, 
-                                                    fontSize: '0.8rem',
+                                                    fontSize: '0.85rem',
                                                     display: 'block'
                                                 }}>
-                                                    {p.sku}
+                                                    ID: {p.accounting_id ? formatNumber(p.accounting_id) : 'S/N'}
                                                 </span>
                                                 <Edit3 size={10} style={{ opacity: 0.5 }} strokeWidth={1.5} />
                                             </div>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                {p.accounting_id && (
+                                                {p.sku && (
                                                     <span style={{ 
                                                         fontSize: '0.65rem', 
                                                         fontWeight: '600', 
@@ -1850,7 +1850,7 @@ export default function MasterProductsPage() {
                                                         padding: '1px 4px',
                                                         borderRadius: '4px'
                                                     }}>
-                                                        ID: {formatNumber(p.accounting_id)}
+                                                        SKU: {p.sku}
                                                     </span>
                                                 )}
                                             </div>

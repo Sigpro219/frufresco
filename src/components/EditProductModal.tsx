@@ -462,18 +462,49 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
             }}>
                 <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.2rem', borderBottom: '1px solid #eee', paddingBottom: '0.8rem', alignItems: 'center' }}>
-                    <div>
-                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '0.8rem', margin: 0 }}>
                             <span>⚙️ Editar Maestro</span>
-                            {product.accounting_id && (
-                                <span style={{ color: '#2563EB', fontWeight: '900' }}>
-                                    #{product.accounting_id}
+                            <span style={{ color: '#2563EB', fontWeight: '900' }}>
+                                ID Contable: #{product.accounting_id || 'S/N'}
+                            </span>
+                            {product.sku && (
+                                <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '500', marginLeft: '0.4rem', backgroundColor: '#F3F4F6', padding: '4px 10px', borderRadius: '20px' }}>
+                                    SKU: {product.sku}
                                 </span>
                             )}
-                            <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '500', marginLeft: '0.4rem', backgroundColor: '#F3F4F6', padding: '4px 10px', borderRadius: '20px' }}>
-                                SKU: {product.sku}
-                            </span>
                         </h2>
+
+                        {/* Toggle Dev Revisión */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const isVerified = formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'));
+                                const newStatus = !isVerified;
+                                const updatedTags = newStatus
+                                    ? Array.from(new Set([...(formData.tags || []), 'verified_dev']))
+                                    : (formData.tags || []).filter(t => t !== 'verified_dev');
+                                setFormData(prev => ({ ...prev, is_verified_dev: newStatus, tags: updatedTags }));
+                            }}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '6px 14px',
+                                borderRadius: '20px',
+                                border: `1px solid ${ (formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '#A7F3D0' : '#FDE68A' }`,
+                                backgroundColor: (formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '#ECFDF5' : '#FFFBEB',
+                                color: (formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '#065F46' : '#92400E',
+                                fontSize: '0.8rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                            title="Haz clic para cambiar el estado de revisión en etapa de desarrollo"
+                        >
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: (formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '#10B981' : '#F59E0B' }}></div>
+                            <span>{(formData.is_verified_dev || (formData.tags && formData.tags.includes('verified_dev'))) ? '🔍 REVISADO (DEV)' : '⏳ PENDIENTE (DEV)'}</span>
+                        </button>
                     </div>
                     <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '2rem', cursor: 'pointer', color: '#6B7280' }}>✕</button>
                 </header>
