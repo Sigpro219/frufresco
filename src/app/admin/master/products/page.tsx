@@ -356,7 +356,8 @@ export default function MasterProductsPage() {
                 Tags: Array.isArray(p.tags) ? p.tags.join(',') : '',
                 Keywords: p.keywords || '',
                 Desviacion_Utilidad_Pct: p.utility_deviation_pct || 0,
-                Heredar_Precio: p.inherit_price ? 'SI' : 'NO'
+                Heredar_Precio: p.inherit_price ? 'SI' : 'NO',
+                Revisado_Dev: (p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'))) ? 'SI' : 'NO'
             };
         });
 
@@ -819,6 +820,14 @@ export default function MasterProductsPage() {
                             return isNaN(n) ? fallback : n;
                         };
 
+                        const isVerifiedDev = (row.Revisado_Dev || row['Revisado Dev'] || row.revisado_dev || row.is_verified_dev) === 'SI' || (row.Revisado_Dev || row['Revisado Dev'] || row.revisado_dev || row.is_verified_dev) === true;
+                        let tags = cleanArrayStr(row.Tags || row.tags);
+                        if (isVerifiedDev && !tags.includes('verified_dev')) {
+                            tags.push('verified_dev');
+                        } else if (!isVerifiedDev && tags.includes('verified_dev') && (row.Revisado_Dev !== undefined || row['Revisado Dev'] !== undefined || row.is_verified_dev !== undefined)) {
+                            tags = tags.filter(t => t !== 'verified_dev');
+                        }
+
                         return {
                             id,
                             sku: sku,
@@ -845,10 +854,11 @@ export default function MasterProductsPage() {
                             allowed_waste_reasons: cleanArrayStr(row.Razones_Desperdicio || row.allowed_waste_reasons),
                             inventory_group: (row.Grupo_Inventario || row.inventory_group || '').toString() || null,
                             purchase_sublist: (row.Sublista_Compra || row.purchase_sublist || '').toString() || null,
-                            tags: cleanArrayStr(row.Tags || row.tags),
+                            tags,
                             keywords: (row.Keywords || row.keywords || '').toString() || null,
                             utility_deviation_pct: parseNum(row.Desviacion_Utilidad_Pct || row.utility_deviation_pct, 0),
                             inherit_price: (row.Heredar_Precio || row.inherit_price) === 'SI' || row.inherit_price === true,
+                            is_verified_dev: isVerifiedDev,
                             
                             options_config,
                             variants,
