@@ -648,7 +648,7 @@ function CreateOrderContent() {
                     
                     activePrices?.forEach((p: any) => {
                         map[p.product_id] = p.price;
-                        if (resolvedModel.name !== 'Clientes B2C') {
+                        if (resolvedModel.name !== 'Clientes Hogar' && resolvedModel.name !== 'Clientes B2C' && !resolvedModel.is_base_model) {
                             customIds.add(p.product_id);
                         }
                     });

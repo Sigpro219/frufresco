@@ -123,7 +123,7 @@ export default function LoginPage() {
 
             if (signInError) {
                 clearTimeout(safetyTimeout);
-                console.error('❌ Error de autenticación:', signInError);
+                console.warn('⚠️ Error de autenticación:', signInError.message);
                 
                 let errorMsg = signInError.message;
                 if (errorMsg.includes('Invalid login credentials')) {

@@ -184,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🗝️ Iniciando sign-in para:', email);
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-            console.error('❌ Error en supabase.auth.signIn:', error.message);
+            console.warn('⚠️ Error en supabase.auth.signIn:', error.message);
         } else {
             console.log('✅ Sign-in de Supabase completado con éxito');
             const loggedUser = data?.user;

@@ -75,8 +75,8 @@ async function handleSync(request: Request) {
                 const { data: b2cModel } = await supabase
                     .from('pricing_models')
                     .select('*')
-                    .eq('name', 'Clientes B2C')
-                    .single();
+                    .in('name', ['Clientes Hogar', 'Clientes B2C'])
+                    .maybeSingle();
                 if (b2cModel) modelsToSync = [b2cModel];
             }
         }
@@ -89,7 +89,7 @@ async function handleSync(request: Request) {
 
         for (const model of modelsToSync) {
             console.log(`🚀 Starting pricing sync for model: ${model.name} (${model.id})`);
-            const isB2C = model.name === 'Clientes B2C';
+            const isB2C = model.name === 'Clientes Hogar' || model.name === 'Clientes B2C' || model.is_base_model;
 
             // If called automatically (no model_id query parameter), check the autosync_days schedule
             const queryModelId = searchParams.get('model_id');
