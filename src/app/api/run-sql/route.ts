@@ -54,8 +54,10 @@ export async function GET(req: NextRequest) {
             console.log(`[Run SQL] SUCCESS! Connected to pooler host: ${host}`);
             activeHost = host;
             
-            console.log("[Run SQL] Running query to update profiles RLS policies for commercial staff...");
+            console.log("[Run SQL] Running query to add is_verified_dev column to products...");
             await client.query(`
+                ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_verified_dev BOOLEAN DEFAULT false;
+                
                 CREATE OR REPLACE FUNCTION public.is_staff(user_id UUID)
                 RETURNS BOOLEAN AS $$
                 DECLARE

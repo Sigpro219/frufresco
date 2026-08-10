@@ -119,7 +119,8 @@ export interface Product {
     name_en?: string | null;
     description_en?: string | null;
     inherit_price?: boolean;
+    is_verified_dev?: boolean;
+    tags?: string[];
     pricing_model_prices?: { price: number }[];
     campaign_info?: any;
 }
- 

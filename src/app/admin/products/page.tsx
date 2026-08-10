@@ -50,6 +50,29 @@ export default function AdminProductsPage() {
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
     const ITEMS_PER_PAGE = 50;
 
+    const toggleDevVerified = async (product: Product) => {
+        const isCurrentlyVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
+        const newStatus = !isCurrentlyVerified;
+        const updatedTags = newStatus
+            ? Array.from(new Set([...(product.tags || []), 'verified_dev']))
+            : (product.tags || []).filter(t => t !== 'verified_dev');
+
+        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: newStatus, tags: updatedTags } : p));
+
+        try {
+            const { error } = await supabase
+                .from('products')
+                .update({ tags: updatedTags })
+                .eq('id', product.id);
+
+            if (error) throw error;
+            showToast(newStatus ? `🔍 SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `⏳ SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
+        } catch (e: any) {
+            setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: isCurrentlyVerified } : p));
+            showToast('Error actualizando revisión DEV: ' + e.message, 'error');
+        }
+    };
+
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
         if ((window as any).showToast) {
             (window as any).showToast(message, type);
@@ -969,6 +992,7 @@ export default function AdminProductsPage() {
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Precio</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Oferta / Var.</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Presencia</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Dev Revisión</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Acción</th>
                                 </tr>
                             </thead>
@@ -1307,6 +1331,34 @@ export default function AdminProductsPage() {
                                                 {product.is_active ? <Eye size={14} strokeWidth={1.5} /> : <EyeOff size={14} strokeWidth={1.5} />}
                                                 {product.is_active ? 'Visible' : 'Oculto'}
                                             </span>
+                                        </td>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                            {(() => {
+                                                const isVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
+                                                return (
+                                                    <button
+                                                        onClick={() => canEdit && toggleDevVerified(product)}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            padding: '4px 8px',
+                                                            borderRadius: '20px',
+                                                            border: `1px solid ${isVerified ? '#A7F3D0' : '#FDE68A'}`,
+                                                            backgroundColor: isVerified ? '#ECFDF5' : '#FFFBEB',
+                                                            color: isVerified ? '#065F46' : '#92400E',
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: '700',
+                                                            cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        title={canEdit ? (isVerified ? "Dev: SKU Revisado (Click para marcar pendiente)" : "Dev: Pendiente (Click para marcar revisado)") : "Modo Vista"}
+                                                    >
+                                                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }}></div>
+                                                        <span>{isVerified ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                                                    </button>
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <button

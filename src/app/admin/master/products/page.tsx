@@ -73,6 +73,30 @@ export default function MasterProductsPage() {
     const [filterIvaHeader, setFilterIvaHeader] = useState<string>('all');
     const [filterWebHeader, setFilterWebHeader] = useState<string>('all');
     const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
+    const [filterDevHeader, setFilterDevHeader] = useState<string>('all');
+
+    const toggleDevVerified = async (product: Product) => {
+        const isCurrentlyVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
+        const newStatus = !isCurrentlyVerified;
+        const updatedTags = newStatus
+            ? Array.from(new Set([...(product.tags || []), 'verified_dev']))
+            : (product.tags || []).filter(t => t !== 'verified_dev');
+
+        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: newStatus, tags: updatedTags } : p));
+
+        try {
+            const { error } = await supabase
+                .from('products')
+                .update({ tags: updatedTags })
+                .eq('id', product.id);
+
+            if (error) throw error;
+            showToast(newStatus ? `🔍 SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `⏳ SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
+        } catch (e: any) {
+            setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: isCurrentlyVerified } : p));
+            showToast('Error actualizando revisión DEV: ' + e.message, 'error');
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = () => setOpenHeaderDropdown(null);
@@ -1017,6 +1041,10 @@ export default function MasterProductsPage() {
                         return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
                     }
 
+                    // Filtro Dev (@dev, @revisado, @pendiente)
+                    if (tag === 'dev' || tag === 'revisado') return p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
+                    if (tag === 'pendiente') return !p.is_verified_dev && !(p.tags && p.tags.includes('verified_dev'));
+
                     // Filtro Categoría (@frutas, @despensa...)
                     const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
                         label.toLowerCase().startsWith(tag)
@@ -1037,8 +1065,20 @@ export default function MasterProductsPage() {
                     p.accounting_id?.toString().includes(factor)
                 );
             });
+
+            // Filtro por header Dev (Dropdown)
+            if (filterDevHeader === 'revisado') {
+                const isDev = p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
+                if (!isDev) return false;
+            }
+            if (filterDevHeader === 'pendiente') {
+                const isDev = p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
+                if (isDev) return false;
+            }
+
+            return matchesSearch;
         });
-    }, [products, searchQuery, filterHierarchy, filterCategoryHeader, filterIvaHeader, filterWebHeader, filterStatusHeader]);
+    }, [products, searchQuery, filterHierarchy, filterCategoryHeader, filterIvaHeader, filterWebHeader, filterStatusHeader, filterDevHeader]);
 
     const paginatedProducts = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -1061,6 +1101,7 @@ export default function MasterProductsPage() {
         // Conteo de Jerarquía
         const parentCount = products.filter(p => p.parent_id === p.id).length;
         const childCount = products.filter(p => p.parent_id !== null && p.parent_id !== p.id).length;
+        const devVerifiedCount = products.filter(p => p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'))).length;
 
         return {
             total,
@@ -1070,7 +1111,8 @@ export default function MasterProductsPage() {
             noImageCount: noImg,
             alerts: withAlert,
             parentCount,
-            childCount
+            childCount,
+            devVerifiedCount
         };
     }, [products]);
 
@@ -1286,6 +1328,7 @@ export default function MasterProductsPage() {
                         { label: 'Cobertura Imagen', value: `${formatNumber(kpiMetrics.imageCoverage)}%`, icon: <Globe size={16} strokeWidth={1.5} />, color: '#F59E0B', bg: '#FFFBEB' }, // Replaced with Globe or Eye for styling, let's keep Globe for similarity
                         { label: 'Alertas Inventario', value: formatNumber(kpiMetrics.alerts), icon: <AlertTriangle size={16} strokeWidth={1.5} />, color: '#EF4444', bg: '#FEF2F2' },
                         { label: 'Jerarquía (P/H)', value: `${formatNumber(kpiMetrics.parentCount)} P / ${formatNumber(kpiMetrics.childCount)} H`, icon: <GitFork size={16} strokeWidth={1.5} />, color: '#6D28D9', bg: '#F5F3FF' },
+                        { label: 'Revisión Dev', value: `${formatNumber(kpiMetrics.devVerifiedCount)} / ${formatNumber(kpiMetrics.total)}`, icon: <CheckCircle size={16} strokeWidth={1.5} />, color: '#10B981', bg: '#ECFDF5' },
                     ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: THEME.colors.surface,
@@ -1686,6 +1729,34 @@ export default function MasterProductsPage() {
                                         </div>
                                     )}
                                 </th>
+
+                                {/* DEV REVISIÓN */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '130px', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>DEV (REVISADO)</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'dev' ? null : 'dev'); }}
+                                            style={{ background: filterDevHeader !== 'all' ? '#10B981' : '#E2E8F0', color: filterDevHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar por revisión Dev"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'dev' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '150px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                            <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todos
+                                            </div>
+                                            <div onClick={() => { setFilterDevHeader('revisado'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'revisado' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'revisado' ? '#F1F5F9' : 'transparent' }}>
+                                                🔍 Revisados
+                                            </div>
+                                            <div onClick={() => { setFilterDevHeader('pendiente'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pendiente' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pendiente' ? '#F1F5F9' : 'transparent' }}>
+                                                ⏳ Pendientes
+                                            </div>
+                                        </div>
+                                    )}
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2055,6 +2126,36 @@ export default function MasterProductsPage() {
                                                 {p.is_active ? 'ON' : 'OFF'}
                                             </span>
                                         </div>
+                                    </td>
+                                    <td style={{ padding: '0.75rem 1rem' }}>
+                                        {(() => {
+                                            const isVerified = p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
+                                            return (
+                                                <div 
+                                                    onClick={() => canEdit && toggleDevVerified(p)}
+                                                    style={{ 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        gap: '4px', 
+                                                        background: isVerified ? '#ECFDF5' : '#FFFBEB',
+                                                        border: `1px solid ${isVerified ? '#A7F3D0' : '#FDE68A'}`,
+                                                        padding: '4px 8px',
+                                                        borderRadius: '20px',
+                                                        width: '100%',
+                                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                        transition: 'all 0.2s',
+                                                        boxShadow: isVerified ? '0 1px 2px rgba(16, 185, 129, 0.15)' : 'none'
+                                                    }}
+                                                    title={canEdit ? (isVerified ? "Dev: SKU Revisado (Click para marcar pendiente)" : "Dev: Pendiente (Click para marcar revisado)") : "Modo Vista"}
+                                                >
+                                                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }}></div>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: isVerified ? '#065F46' : '#92400E', whiteSpace: 'nowrap' }}>
+                                                        {isVerified ? '🔍 REVISADO' : '⏳ PENDIENTE'}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
                                 </tr>
                             ))}
