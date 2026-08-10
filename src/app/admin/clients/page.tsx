@@ -68,6 +68,8 @@ interface Profile {
     is_corporate_parent?: boolean;
     billing_nit?: string;
     billing_razon_social?: string;
+    is_verified_dev?: boolean;
+    tags?: string[];
     created_at: string;
 }
 

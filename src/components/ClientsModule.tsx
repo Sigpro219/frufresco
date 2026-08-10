@@ -108,6 +108,8 @@ interface Profile {
     collection_responsible_name?: string;
     collection_responsible_email?: string;
     collection_responsible_phone?: string;
+    is_verified_dev?: boolean;
+    tags?: string[];
     comm_ref_1_name?: string;
     comm_ref_1_nit?: string;
     comm_ref_1_phone?: string;
@@ -351,6 +353,30 @@ export default function ClientsModule() {
             setLeads(leads.map(l => l.id === id ? { ...l, status: newStatus } : l));
             window.showToast?.('Estado de lead actualizado', 'success');
         }
+    };
+
+    const handleUpdateDevVerified = async (clientId: string, isVerified: boolean) => {
+        const client = clientsB2B.find(c => c.id === clientId) || clientsB2C.find(c => c.id === clientId);
+        const updatedTags = isVerified 
+            ? Array.from(new Set([...(client?.tags || []), 'verified_dev']))
+            : (client?.tags || []).filter(t => t !== 'verified_dev');
+
+        setClientsB2B(prev => prev.map(c => c.id === clientId ? { ...c, is_verified_dev: isVerified, tags: updatedTags } : c));
+        setClientsB2C(prev => prev.map(c => c.id === clientId ? { ...c, is_verified_dev: isVerified, tags: updatedTags } : c));
+
+        let { error } = await supabase
+            .from('profiles')
+            .update({ is_verified_dev: isVerified, tags: updatedTags })
+            .eq('id', clientId);
+
+        if (error && error.message?.includes('column "is_verified_dev" does not exist')) {
+            await supabase
+                .from('profiles')
+                .update({ tags: updatedTags })
+                .eq('id', clientId);
+        }
+
+        window.showToast?.(isVerified ? '✓ Cliente marcado como REVISADO (Dev)' : '⏳ Cliente marcado como PENDIENTE (Dev)', 'success');
     };
 
     const downloadConversionTemplate = async () => {
@@ -1895,6 +1921,7 @@ export default function ClientsModule() {
                                                 data={client} 
                                                 pricingModels={pricingModels} 
                                                 onUpdatePricingModel={handleUpdatePricingModel}
+                                                onUpdateDevVerified={handleUpdateDevVerified}
                                                 onViewDetails={() => handleViewDetails(client)}
                                                 onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                 agreementStatus={getAgreementStatus(client.id, client.parent_id)}
@@ -1913,6 +1940,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -1922,6 +1950,7 @@ export default function ClientsModule() {
                                                         key={client.id} 
                                                         client={client} 
                                                         pricingModels={pricingModels}
+                                                        onUpdateDevVerified={handleUpdateDevVerified}
                                                         onViewDetails={() => handleViewDetails(client)}
                                                         onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                         agreementStatus={getAgreementStatus(client.id, client.parent_id)}
@@ -1946,6 +1975,7 @@ export default function ClientsModule() {
                                                 key={client.id || idx} 
                                                 type="b2c" 
                                                 data={client} 
+                                                onUpdateDevVerified={handleUpdateDevVerified}
                                                 onViewDetails={() => handleViewDetails(client)}
                                                 onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                             />
@@ -1961,6 +1991,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -1969,6 +2000,7 @@ export default function ClientsModule() {
                                                     <ClientListRow 
                                                         key={client.id} 
                                                         client={client} 
+                                                        onUpdateDevVerified={handleUpdateDevVerified}
                                                         onViewDetails={() => handleViewDetails(client)}
                                                         onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                     />
@@ -2679,12 +2711,13 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement, branchCount }: { 
+function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onUpdateDevVerified, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus, isInheritedAgreement, branchCount }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
     onUpdatePricingModel?: (id: string, modelId: string) => void,
     onUpdateStatus?: (id: string, status: string) => void,
+    onUpdateDevVerified?: (id: string, verified: boolean) => void,
     onViewDetails?: () => void,
     onEdit?: () => void,
     onRegisterContact?: () => void,
@@ -2712,6 +2745,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
     const isMatriz = isB2B && (data.is_corporate_parent === true || (data as any).classification === 'matriz' || !data.parent_id);
     const isRealBranch = isB2B && !!data.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
+
+    const isVerifiedDev = profileData?.is_verified_dev || (profileData?.tags && profileData?.tags.includes('verified_dev'));
 
     return (
         <div 
@@ -2749,10 +2784,36 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'flex-end',
-                    gap: '0.6rem',
-                    zIndex: 2
+                    gap: '6px'
                 }}
             >
+                {/* DEV REVISIÓN TOGGLE */}
+                {profileData && (
+                    <button
+                        type="button"
+                        onClick={() => onUpdateDevVerified && onUpdateDevVerified(profileData.id, !isVerifiedDev)}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 9px',
+                            borderRadius: '20px',
+                            border: `1px solid ${isVerifiedDev ? '#A7F3D0' : '#FDE68A'}`,
+                            backgroundColor: isVerifiedDev ? '#ECFDF5' : '#FFFBEB',
+                            color: isVerifiedDev ? '#065F46' : '#92400E',
+                            fontSize: '0.65rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}
+                        title="Etapa Dev: Click para cambiar estado de revisión del cliente"
+                    >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
+                        <span>{isVerifiedDev ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                    </button>
+                )}
+
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     {isMatriz && (
                         <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(30,58,138,0.25)' }}>🏢 MATRIZ</span>
@@ -3248,11 +3309,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     );
 }
 
-function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, isInheritedAgreement, onRegisterContact, branchCount }: { 
+function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateDevVerified, agreementStatus, isInheritedAgreement, onRegisterContact, branchCount }: { 
     client: Profile, 
     pricingModels?: PricingModel[], 
     onViewDetails: () => void, 
     onEdit?: () => void, 
+    onUpdateDevVerified?: (id: string, verified: boolean) => void,
     agreementStatus?: 'active' | 'warning' | 'expired' | 'none',
     isInheritedAgreement?: boolean,
     onRegisterContact?: () => void,
@@ -3529,6 +3591,36 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         )}
                     </div>
                 )}
+            </td>
+            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                {(() => {
+                    const isVerifiedDev = client.is_verified_dev || (client.tags && client.tags.includes('verified_dev'));
+                    return (
+                        <button
+                            type="button"
+                            onClick={() => onUpdateDevVerified && onUpdateDevVerified(client.id, !isVerifiedDev)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 9px',
+                                borderRadius: '20px',
+                                border: `1px solid ${isVerifiedDev ? '#A7F3D0' : '#FDE68A'}`,
+                                backgroundColor: isVerifiedDev ? '#ECFDF5' : '#FFFBEB',
+                                color: isVerifiedDev ? '#065F46' : '#92400E',
+                                fontSize: '0.68rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                            }}
+                            title="Etapa Dev: Click para cambiar estado de revisión del cliente"
+                        >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
+                            <span>{isVerifiedDev ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                        </button>
+                    );
+                })()}
             </td>
             <td style={{ padding: '0.65rem 1.25rem' }}>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
