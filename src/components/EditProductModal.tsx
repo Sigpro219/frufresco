@@ -468,11 +468,6 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             <span style={{ color: '#2563EB', fontWeight: '900' }}>
                                 ID Contable: #{product.accounting_id || 'S/N'}
                             </span>
-                            {product.sku && (
-                                <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '500', marginLeft: '0.4rem', backgroundColor: '#F3F4F6', padding: '4px 10px', borderRadius: '20px' }}>
-                                    SKU: {product.sku}
-                                </span>
-                            )}
                         </h2>
 
                         {/* Toggle Dev Revisión */}
@@ -565,7 +560,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>SKU Código</label>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Código Contable (SKU)</label>
                             <input
                                 required
                                 type="text"
@@ -678,13 +673,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     </div>
 
                     <div style={{ position: 'relative' }}>
-                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Vincular a SKU Padre (Hijo de...)</label>
+                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Vincular a Producto Padre (Hijo de...)</label>
                         <input
                             type="text"
-                            placeholder={hasChildren ? "Bloqueado: Este SKU ya es PADRE" : "Buscar padre por nombre o SKU..."}
+                            placeholder={hasChildren ? "Bloqueado: Este producto ya es PADRE" : "Buscar padre por nombre o ID Contable..."}
                             value={parentSearch || (formData.parent_id ? (() => {
                                 const p = allProducts.find(i => i.id === formData.parent_id);
-                                return p ? `${p.sku} - ${p.name}` : '';
+                                return p ? `ID: #${p.accounting_id || p.sku} - ${p.name}` : '';
                             })() : '')}
                             onChange={(e) => {
                                 setParentSearch(e.target.value);
@@ -706,7 +701,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         />
                         {hasChildren && (
                             <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '4px', fontWeight: 'bold' }}>
-                                ⚠️ Este SKU ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
+                                ⚠️ Este producto ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
                             </p>
                         )}
                         {showParentResults && (
@@ -724,8 +719,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 {allProducts
                                     .filter(p => 
                                         p.id !== product.id && 
-                                        p.parent_id !== product.id && // Evitar circularidad: Un hijo de este producto no puede ser su padre
-                                        (p.name.toLowerCase().includes(parentSearch.toLowerCase()) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
+                                        p.parent_id !== product.id &&
+                                        (p.name.toLowerCase().includes(parentSearch.toLowerCase()) || (p.accounting_id?.toString() || '').includes(parentSearch) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
                                     )
                                     .slice(0, 10)
                                     .map(p => (
@@ -733,14 +728,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             key={p.id}
                                             onClick={() => {
                                                 setFormData({ ...formData, parent_id: p.id });
-                                                setParentSearch(p.sku);
+                                                setParentSearch(`ID: #${p.accounting_id || p.sku} - ${p.name}`);
                                                 setShowParentResults(false);
                                             }}
                                             style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.2s' }}
                                             onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                             onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                         >
-                                            <div style={{ fontWeight: '800', color: '#2563EB' }}>{p.sku}</div>
+                                            <div style={{ fontWeight: '800', color: '#2563EB' }}>ID: #{p.accounting_id || p.sku}</div>
                                             <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{p.name}</div>
                                         </div>
                                     ))
@@ -1158,7 +1153,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                         {/* COLUMNA DERECHA: VARIANTES */}
                         <div style={{ borderLeft: '1px solid #eee', paddingLeft: '3rem' }}>
-                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>🧬 Variantes del SKU</h3>
+                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>🧬 Variantes del Producto (ID: #{formData.accounting_id || 'S/N'})</h3>
 
                             {/* BLOQUE DE VARIANTES */}
                         <div style={{ backgroundColor: '#F9FAFB', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
