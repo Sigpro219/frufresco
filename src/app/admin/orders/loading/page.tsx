@@ -438,7 +438,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))')
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, shipping_address, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 
@@ -529,11 +529,31 @@ export default function OrderLoadingPage() {
                             originSource = 'web_b2b';
                         }
 
+                        // Resolve real physical shipping address
+                        let addressToUse = order.shipping_address;
+                        const isPlaceholderAddr = !addressToUse || 
+                            addressToUse.toLowerCase().includes('registrada') || 
+                            addressToUse.toLowerCase().includes('direccion registrada') || 
+                            addressToUse.trim() === '';
+
+                        if (isPlaceholderAddr) {
+                            if (order.profiles?.address && order.profiles.address.trim() !== '') {
+                                addressToUse = order.profiles.address;
+                            } else if (order.profiles?.shipping_address && order.profiles.shipping_address.trim() !== '') {
+                                addressToUse = order.profiles.shipping_address;
+                            } else if (order.profiles?.company_name) {
+                                addressToUse = `${order.profiles.company_name} - Sede Principal`;
+                            } else {
+                                addressToUse = 'Dirección Registrada';
+                            }
+                        }
+
                         return {
                             ...order,
                             customer_name: name,
                             customer_phone: phone,
                             customer_nit: nit,
+                            shipping_address: addressToUse,
                             paymentMethod: paymentMethod,
                             total_weight_kg: totalWeight,
                             item_count: items.length,
