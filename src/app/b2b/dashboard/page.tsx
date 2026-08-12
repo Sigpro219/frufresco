@@ -1,12 +1,12 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X, ChevronRight } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -82,6 +82,84 @@ export default function B2BDashboard() {
     const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
     const [agreementSearchTerm, setAgreementSearchTerm] = useState<string>('');
     const [activeHoverPoint, setActiveHoverPoint] = useState<any | null>(null);
+    const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+    const [searchFocusedIndex, setSearchFocusedIndex] = useState(-1);
+
+    const searchDropdownResults = useMemo(() => {
+        if (!searchTerm || searchTerm.trim().length < 1) return [];
+        
+        const normalizeSearch = (str: string) => 
+            (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+        const cleanSearchQuery = normalizeSearch(searchTerm);
+        if (!cleanSearchQuery) return [];
+
+        const existingIds = new Set<string>();
+        const combined: any[] = [];
+
+        categoryProducts.forEach(p => {
+            if (p && p.id && !existingIds.has(p.id)) {
+                existingIds.add(p.id);
+                combined.push(p);
+            }
+        });
+
+        searchResults.forEach(p => {
+            if (p && p.id && !existingIds.has(p.id)) {
+                existingIds.add(p.id);
+                combined.push(p);
+            }
+        });
+
+        const allowOffAgreement = (activeProfile as any)?.allow_off_agreement_purchases !== false;
+
+        return combined.filter(p => {
+            if (p.is_active === false) return false;
+
+            if (!allowOffAgreement || agreementFilter === 'agreement') {
+                if (agreementPricesMap[p.id] === undefined) return false;
+            } else if (agreementFilter === 'non_agreement') {
+                if (agreementPricesMap[p.id] !== undefined) return false;
+            }
+
+            const nameNorm = normalizeSearch(p.name);
+            const nameEnNorm = normalizeSearch(p.name_en);
+            const skuNorm = normalizeSearch(p.sku);
+            const catNorm = normalizeSearch(p.category);
+
+            return nameNorm.includes(cleanSearchQuery) ||
+                nameEnNorm.includes(cleanSearchQuery) ||
+                skuNorm.includes(cleanSearchQuery) ||
+                catNorm.includes(cleanSearchQuery);
+        }).slice(0, 8);
+    }, [searchTerm, categoryProducts, searchResults, agreementPricesMap, activeProfile, agreementFilter]);
+
+    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (!isSearchDropdownOpen || searchDropdownResults.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setSearchFocusedIndex(prev => (prev < searchDropdownResults.length ? prev + 1 : 0));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setSearchFocusedIndex(prev => (prev > 0 ? prev - 1 : searchDropdownResults.length));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (searchFocusedIndex >= 0 && searchFocusedIndex < searchDropdownResults.length) {
+                const selectedProd = searchDropdownResults[searchFocusedIndex];
+                setModalQuantity(1);
+                setSelectedProductForModal(selectedProd);
+                setIsSearchDropdownOpen(false);
+                setSearchFocusedIndex(-1);
+            } else {
+                setIsSearchDropdownOpen(false);
+                setSearchFocusedIndex(-1);
+            }
+        } else if (e.key === 'Escape') {
+            setIsSearchDropdownOpen(false);
+            setSearchFocusedIndex(-1);
+        }
+    };
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
     const searchParams = useSearchParams();
@@ -1102,22 +1180,35 @@ export default function B2BDashboard() {
                                     </h2>
                                     
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
-                                        <div style={{ position: 'relative', flex: '1 1 130px', minWidth: '110px', maxWidth: '200px' }}>
-                                            <div style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                        <div 
+                                            style={{ position: 'relative', flex: '1 1 140px', minWidth: '120px', maxWidth: '240px' }}
+                                            onBlur={(e) => {
+                                                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                                    setIsSearchDropdownOpen(false);
+                                                }
+                                            }}
+                                        >
+                                            <div style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex', zIndex: 2 }}>
                                                 <Search size={13} strokeWidth={2} />
                                             </div>
                                             <input
                                                 type="text"
                                                 placeholder={t.b2b.dashboard.searchPlaceholder}
                                                 value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                onChange={(e) => {
+                                                    setSearchTerm(e.target.value);
+                                                    setIsSearchDropdownOpen(true);
+                                                    setSearchFocusedIndex(-1);
+                                                }}
+                                                onFocus={() => setIsSearchDropdownOpen(true)}
+                                                onKeyDown={handleSearchKeyDown}
                                                 style={{
                                                     width: '100%',
                                                     padding: '0.35rem 1.4rem 0.35rem 1.6rem',
                                                     borderRadius: THEME.radius.md,
-                                                    border: '1px solid var(--border)',
+                                                    border: isSearchDropdownOpen && searchDropdownResults.length > 0 ? '1.5px solid var(--primary)' : '1px solid var(--border)',
                                                     fontSize: '0.75rem',
-                                                    fontWeight: '500',
+                                                    fontWeight: '600',
                                                     outline: 'none',
                                                     backgroundColor: '#F9FAFB',
                                                     boxSizing: 'border-box'
@@ -1125,7 +1216,11 @@ export default function B2BDashboard() {
                                             />
                                             {searchTerm && (
                                                 <button
-                                                    onClick={() => setSearchTerm('')}
+                                                    onClick={() => {
+                                                        setSearchTerm('');
+                                                        setIsSearchDropdownOpen(false);
+                                                        setSearchFocusedIndex(-1);
+                                                    }}
                                                     style={{
                                                         position: 'absolute',
                                                         right: '6px',
@@ -1141,9 +1236,115 @@ export default function B2BDashboard() {
                                                         justifyContent: 'center',
                                                         color: '#6b7280',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.6rem'
+                                                        fontSize: '0.6rem',
+                                                        zIndex: 2
                                                     }}
                                                 >✕</button>
+                                            )}
+
+                                            {/* FLOATING AUTOCOMPLETE DROPDOWN (DESPLEGABLE IDÉNTICO A LA IMAGEN 2) */}
+                                            {isSearchDropdownOpen && searchTerm.trim().length > 0 && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: 'calc(100% + 6px)',
+                                                    left: 0,
+                                                    width: '320px',
+                                                    backgroundColor: 'white',
+                                                    borderRadius: '16px',
+                                                    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18)',
+                                                    border: '1px solid #E2E8F0',
+                                                    zIndex: 9999,
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {searchDropdownResults.length > 0 ? (
+                                                        <div>
+                                                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                                                {searchDropdownResults.map((prod, idx) => {
+                                                                    const isAgree = agreementPricesMap[prod.id] !== undefined;
+                                                                    const displayPrice = isAgree ? agreementPricesMap[prod.id] : (prod.base_price || 0);
+                                                                    const isFocused = idx === searchFocusedIndex;
+
+                                                                    return (
+                                                                        <div
+                                                                            key={prod.id}
+                                                                            onClick={() => {
+                                                                                setModalQuantity(1);
+                                                                                setSelectedProductForModal(prod);
+                                                                                setIsSearchDropdownOpen(false);
+                                                                                setSearchFocusedIndex(-1);
+                                                                            }}
+                                                                            onMouseEnter={() => setSearchFocusedIndex(idx)}
+                                                                            style={{
+                                                                                padding: '10px 14px',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'space-between',
+                                                                                gap: '10px',
+                                                                                cursor: 'pointer',
+                                                                                backgroundColor: isFocused ? '#ECFDF5' : 'white',
+                                                                                borderLeft: isFocused ? '4px solid var(--primary)' : '4px solid transparent',
+                                                                                borderBottom: '1px solid #F1F5F9',
+                                                                                transition: 'background-color 0.15s ease'
+                                                                            }}
+                                                                        >
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                                                                                <img
+                                                                                    src={prod.image_url || '/placeholder.png'}
+                                                                                    alt={prod.name}
+                                                                                    style={{ width: '40px', height: '40px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0, border: '1px solid #E2E8F0' }}
+                                                                                />
+                                                                                <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+                                                                                    <div style={{ fontWeight: '800', fontSize: '0.84rem', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                        {locale === 'en' ? (prod.name_en || prod.name) : prod.name}
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                                                                                        <span style={{ fontSize: '0.78rem', fontWeight: '900', color: isAgree ? 'var(--primary)' : '#475569' }}>
+                                                                                            ${formatPrice(displayPrice)} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600' }}>/ {prod.unit_of_measure || 'Kg'}</span>
+                                                                                        </span>
+                                                                                        {isAgree ? (
+                                                                                            <span style={{ fontSize: '0.62rem', backgroundColor: '#D1FAE5', color: '#065F46', fontWeight: '800', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                                Convenio
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span style={{ fontSize: '0.62rem', backgroundColor: '#F1F5F9', color: '#64748B', fontWeight: '700', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                                Lista
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <ChevronRight size={14} style={{ color: isFocused ? 'var(--primary)' : '#CBD5E1', flexShrink: 0 }} />
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            <div
+                                                                onClick={() => {
+                                                                    setIsSearchDropdownOpen(false);
+                                                                    setSearchFocusedIndex(-1);
+                                                                }}
+                                                                onMouseEnter={() => setSearchFocusedIndex(searchDropdownResults.length)}
+                                                                style={{
+                                                                    padding: '10px 14px',
+                                                                    textAlign: 'center',
+                                                                    fontSize: '0.78rem',
+                                                                    fontWeight: '800',
+                                                                    color: searchFocusedIndex === searchDropdownResults.length ? 'var(--primary)' : '#64748B',
+                                                                    backgroundColor: searchFocusedIndex === searchDropdownResults.length ? '#ECFDF5' : '#FAFAFA',
+                                                                    borderTop: '1px solid #E2E8F0',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Ver todos los resultados para "{searchTerm}"
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ padding: '1.25rem', textAlign: 'center', color: '#64748B', fontSize: '0.82rem' }}>
+                                                            {isSearching ? 'Buscando insumos...' : `No se encontraron productos para "${searchTerm}"`}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
 
