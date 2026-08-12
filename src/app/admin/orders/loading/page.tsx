@@ -223,6 +223,60 @@ export default function OrderLoadingPage() {
     // Edit Fields
     const [editStatus, setEditStatus] = useState('');
     const [editDeliveryDate, setEditDeliveryDate] = useState('');
+    const [editShippingAddress, setEditShippingAddress] = useState('');
+    const [editLatitude, setEditLatitude] = useState<number | null>(null);
+    const [editLongitude, setEditLongitude] = useState<number | null>(null);
+    const [isGeocoding, setIsGeocoding] = useState(false);
+    const [geocodedMessage, setGeocodedMessage] = useState<string | null>(null);
+
+    const handleGeocodeAddress = async () => {
+        if (!editShippingAddress || editShippingAddress.trim() === '') {
+            alert('Por favor ingresa una dirección de entrega válida.');
+            return;
+        }
+
+        setIsGeocoding(true);
+        setGeocodedMessage(null);
+
+        try {
+            const city = selectedOrder?.profiles?.city || 'Bogotá';
+            const res = await fetch(`/api/geocode?address=${encodeURIComponent(editShippingAddress)}&city=${encodeURIComponent(city)}`);
+            const data = await res.json();
+
+            if (data.results && data.results.length > 0) {
+                const loc = data.results[0].geometry.location;
+                const formatted = data.results[0].formatted_address;
+                setEditLatitude(loc.lat);
+                setEditLongitude(loc.lng);
+                setGeocodedMessage(`📍 Coordenadas GPS asignadas: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} (${formatted})`);
+                if (typeof window !== 'undefined' && (window as any).showToast) {
+                    (window as any).showToast(`✅ Coordenadas GPS asignadas al pedido: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 'success');
+                }
+            } else {
+                // Fallback a OpenStreetMap Nominatim
+                const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(editShippingAddress + ', ' + city + ', Colombia')}`);
+                const nomData = await nomRes.json();
+                if (nomData && nomData.length > 0) {
+                    const lat = parseFloat(nomData[0].lat);
+                    const lon = parseFloat(nomData[0].lon);
+                    setEditLatitude(lat);
+                    setEditLongitude(lon);
+                    setGeocodedMessage(`📍 Coordenadas GPS asignadas (OSM): ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+                    if (typeof window !== 'undefined' && (window as any).showToast) {
+                        (window as any).showToast(`✅ Coordenadas GPS asignadas: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'success');
+                    }
+                } else {
+                    setGeocodedMessage('⚠️ No se hallaron coordenadas automáticas. Verifica la nomenclatura.');
+                    alert('⚠️ No se encontraron coordenadas GPS para esta dirección. Asegúrate de incluir la calle/carrera y ciudad.');
+                }
+            }
+        } catch (err) {
+            console.error('Error al georreferenciar dirección:', err);
+            setGeocodedMessage('❌ Error al consultar servicio de georreferenciación');
+        } finally {
+            setIsGeocoding(false);
+        }
+    };
     
     // Product Search for adding new items
     const [productSearch, setProductSearch] = useState('');
@@ -259,8 +313,17 @@ export default function OrderLoadingPage() {
                 setIsB2CDefault(false);
                 setIsContractExpired(false);
                 setClientExceptions([]);
+                setEditShippingAddress('');
+                setEditLatitude(null);
+                setEditLongitude(null);
+                setGeocodedMessage(null);
                 return;
             }
+
+            setEditShippingAddress(selectedOrder.shipping_address || selectedOrder.profiles?.address || '');
+            setEditLatitude(selectedOrder.latitude ?? selectedOrder.profiles?.latitude ?? null);
+            setEditLongitude(selectedOrder.longitude ?? selectedOrder.profiles?.longitude ?? null);
+            setGeocodedMessage(null);
 
             const profileObj = selectedOrder.profiles;
             const effectiveClientId = profileObj?.parent_id || profileObj?.id;
@@ -1153,6 +1216,10 @@ export default function OrderLoadingPage() {
                 .update({
                     status: editStatus,
                     delivery_date: editDeliveryDate,
+                    shipping_address: editShippingAddress,
+                    latitude: editLatitude,
+                    longitude: editLongitude,
+                    geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
                     total: currentTotal,
                     total_weight_kg: currentWeight,
                     subtotal: currentSubtotal,
@@ -1255,6 +1322,10 @@ export default function OrderLoadingPage() {
                 ...o, 
                 status: editStatus, 
                 delivery_date: editDeliveryDate, 
+                shipping_address: editShippingAddress,
+                latitude: editLatitude,
+                longitude: editLongitude,
+                geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
                 total: currentTotal,
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
@@ -1265,6 +1336,10 @@ export default function OrderLoadingPage() {
                 ...selectedOrder, 
                 status: editStatus, 
                 delivery_date: editDeliveryDate,
+                shipping_address: editShippingAddress,
+                latitude: editLatitude,
+                longitude: editLongitude,
+                geocoding_status: editLatitude && editLongitude ? 'SUCCESS' : 'PENDING',
                 total: currentTotal,
                 total_weight_kg: currentWeight,
                 subtotal: currentSubtotal,
@@ -2419,8 +2494,22 @@ export default function OrderLoadingPage() {
                                                 </span>
                                             )}
                                         </div>
-                                        <div style={{ color: '#64748B', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <MapPin size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} /> {selectedOrder.shipping_address}
+                                        <div style={{ color: '#64748B', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                            <MapPin size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                            <span style={{ fontWeight: '700', color: '#334155' }}>{selectedOrder.shipping_address}</span>
+                                            {selectedOrder.latitude && selectedOrder.longitude ? (
+                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                    <CheckCircle2 size={10} /> GPS: {Number(selectedOrder.latitude).toFixed(4)}, {Number(selectedOrder.longitude).toFixed(4)}
+                                                </span>
+                                            ) : selectedOrder.profiles?.latitude && selectedOrder.profiles?.longitude ? (
+                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#F0F9FF', color: '#0369A1', padding: '2px 6px', borderRadius: '6px', fontWeight: '700', border: '1px solid #BAE6FD', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                    <Globe size={10} /> GPS Perfil: {Number(selectedOrder.profiles.latitude).toFixed(4)}, {Number(selectedOrder.profiles.longitude).toFixed(4)}
+                                                </span>
+                                            ) : (
+                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '6px', fontWeight: '700', border: '1px solid #FCD34D' }}>
+                                                    ⚠️ Sin GPS Propio
+                                                </span>
+                                            )}
                                         </div>
                                         <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: '#475569', alignItems: 'center' }}>
                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} strokeWidth={1.5} /> {selectedOrder.customer_phone || 'Sin tel.'}</div>
@@ -2510,8 +2599,9 @@ export default function OrderLoadingPage() {
                             <div style={{ padding: '0', overflowY: 'auto', flex: 1, position: 'relative' }}>
                                 {editMode && (
                                     <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F0FDFA', borderBottom: '1px solid #D1FAE5' }}>
-                                        <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.5rem' }}>
-                                            <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                                            {/* Fecha de Entrega */}
+                                            <div>
                                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#065F46', marginBottom: '6px' }}>FECHA DE ENTREGA</label>
                                                 <input 
                                                     type="date"
@@ -2524,14 +2614,78 @@ export default function OrderLoadingPage() {
                                                         borderRadius: '8px',
                                                         border: '1px solid #A7F3D0',
                                                         fontSize: '0.9rem',
-                                                        cursor: 'pointer'
+                                                        cursor: 'pointer',
+                                                        fontWeight: '700'
                                                     }}
                                                 />
-                                            </div>
-                                            <div style={{ flex: 2, display: 'flex', alignItems: 'flex-end' }}>
-                                                <p style={{ margin: 0, fontSize: '0.875rem', color: '#047857', fontStyle: 'italic' }}>
-                                                    💡 Al modificar la fecha, el pedido se moverá a la programación del día seleccionado.
+                                                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#047857', fontStyle: 'italic' }}>
+                                                    💡 Mueve el pedido al día seleccionado.
                                                 </p>
+                                            </div>
+
+                                            {/* Dirección Exclusiva del Pedido y Georreferenciación GPS */}
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#065F46' }}>
+                                                        DIRECCIÓN DE ENTREGA (EXCLUSIVA PARA ESTE PEDIDO)
+                                                    </label>
+                                                    <span style={{ fontSize: '0.68rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontWeight: '800', border: '1px solid #7DD3FC' }}>
+                                                        📍 No altera la sucursal en Maestra
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input 
+                                                        type="text"
+                                                        value={editShippingAddress}
+                                                        onChange={(e) => {
+                                                            setEditShippingAddress(e.target.value);
+                                                            setGeocodedMessage(null);
+                                                        }}
+                                                        placeholder="Ej: Calle 63 # 77 - 73 Sede Especial"
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '10px 12px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #A7F3D0',
+                                                            fontSize: '0.88rem',
+                                                            outline: 'none',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleGeocodeAddress}
+                                                        disabled={isGeocoding}
+                                                        title="Georreferenciar dirección y obtener coordenadas GPS para este pedido"
+                                                        style={{
+                                                            padding: '0 12px',
+                                                            borderRadius: '8px',
+                                                            backgroundColor: '#0D7A57',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            fontSize: '0.78rem',
+                                                            fontWeight: '800',
+                                                            cursor: isGeocoding ? 'wait' : 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        {isGeocoding ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                        {isGeocoding ? 'Buscando GPS...' : 'Georreferenciar GPS'}
+                                                    </button>
+                                                </div>
+                                                {geocodedMessage && (
+                                                    <div style={{ marginTop: '6px', fontSize: '0.75rem', fontWeight: '700', color: editLatitude ? '#065F46' : '#B45309' }}>
+                                                        {geocodedMessage}
+                                                    </div>
+                                                )}
+                                                {editLatitude && editLongitude && !geocodedMessage && (
+                                                    <div style={{ marginTop: '5px', fontSize: '0.73rem', color: '#047857', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <CheckCircle2 size={12} /> Coordenadas GPS asignadas al pedido: Lat {editLatitude.toFixed(4)}, Lng {editLongitude.toFixed(4)}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
