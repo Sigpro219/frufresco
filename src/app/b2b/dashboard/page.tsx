@@ -1173,37 +1173,38 @@ export default function B2BDashboard() {
                                             display: 'grid',
                                             gridTemplateColumns: allowOffAgreement ? 'repeat(3, 1fr)' : '1fr',
                                             backgroundColor: '#F1F5F9',
-                                            padding: '2px',
+                                            padding: '3px',
                                             borderRadius: THEME.radius.md,
-                                            gap: '2px',
-                                            width: allowOffAgreement ? '240px' : 'auto',
-                                            boxSizing: 'border-box'
+                                            gap: '4px',
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            marginTop: '0.5rem'
                                         }}>
                                             {/* Button 1: En Convenio */}
                                             <button
                                                 onClick={() => setAgreementFilter('agreement')}
                                                 style={{
                                                     minWidth: 0,
-                                                    padding: '0.35rem 0.5rem',
+                                                    padding: '0.4rem 0.5rem',
                                                     borderRadius: THEME.radius.md,
                                                     border: 'none',
                                                     backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
                                                     color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
                                                     fontWeight: agreementFilter === 'agreement' ? '800' : '600',
-                                                    fontSize: '0.7rem',
+                                                    fontSize: '0.75rem',
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    gap: '4px',
+                                                    gap: '5px',
                                                     boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    overflow: 'hidden'
+                                                    whiteSpace: 'nowrap'
                                                 }}
                                                 title="Mostrar productos incluidos en tu acuerdo comercial"
                                             >
-                                                <Tag size={12} style={{ flexShrink: 0 }} />
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Convenio</span>
-                                                <span style={{ flexShrink: 0, fontWeight: '700', fontSize: '0.64rem', backgroundColor: agreementFilter === 'agreement' ? '#059669' : '#CBD5E1', color: 'white', padding: '1px 4px', borderRadius: '8px' }}>{countInAgreement}</span>
+                                                <Tag size={13} style={{ flexShrink: 0 }} />
+                                                <span>Convenio</span>
+                                                <span style={{ flexShrink: 0, fontWeight: '800', fontSize: '0.68rem', backgroundColor: agreementFilter === 'agreement' ? '#059669' : '#94A3B8', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>{countInAgreement}</span>
                                             </button>
 
                                             {/* Buttons 2 & 3: Fuera y Todos (Visible ONLY when allowOffAgreement is true) */}
@@ -1213,51 +1214,52 @@ export default function B2BDashboard() {
                                                         onClick={() => setAgreementFilter('non_agreement')}
                                                         style={{
                                                             minWidth: 0,
-                                                            padding: '0.35rem 0.25rem',
+                                                            padding: '0.4rem 0.5rem',
                                                             borderRadius: THEME.radius.md,
                                                             border: 'none',
                                                             backgroundColor: agreementFilter === 'non_agreement' ? '#E2E8F0' : 'transparent',
                                                             color: agreementFilter === 'non_agreement' ? '#1E293B' : '#64748B',
                                                             fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
-                                                            fontSize: '0.7rem',
+                                                            fontSize: '0.75rem',
                                                             cursor: 'pointer',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            gap: '3px',
+                                                            gap: '4px',
                                                             boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                            overflow: 'hidden'
+                                                            whiteSpace: 'nowrap'
                                                         }}
                                                         title="Mostrar productos fuera de convenio"
                                                     >
-                                                        <Info size={12} style={{ flexShrink: 0 }} />
-                                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Fuera</span>
-                                                        <span style={{ flexShrink: 0, fontWeight: '700', fontSize: '0.64rem', backgroundColor: agreementFilter === 'non_agreement' ? '#475569' : '#CBD5E1', color: 'white', padding: '1px 4px', borderRadius: '8px' }}>{countOutAgreement}</span>
+                                                        <Info size={13} style={{ flexShrink: 0 }} />
+                                                        <span>Fuera</span>
+                                                        <span style={{ flexShrink: 0, fontWeight: '800', fontSize: '0.68rem', backgroundColor: agreementFilter === 'non_agreement' ? '#475569' : '#94A3B8', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>{countOutAgreement}</span>
                                                     </button>
 
                                                     <button
                                                         onClick={() => setAgreementFilter('all')}
                                                         style={{
                                                             minWidth: 0,
-                                                            padding: '0.35rem 0.25rem',
+                                                            padding: '0.4rem 0.5rem',
                                                             borderRadius: THEME.radius.md,
                                                             border: 'none',
                                                             backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
                                                             color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
                                                             fontWeight: agreementFilter === 'all' ? '800' : '600',
-                                                            fontSize: '0.7rem',
+                                                            fontSize: '0.75rem',
                                                             cursor: 'pointer',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            gap: '3px',
+                                                            gap: '4px',
                                                             boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                            overflow: 'hidden'
+                                                            whiteSpace: 'nowrap'
                                                         }}
+                                                        title="Mostrar todos los productos"
                                                     >
-                                                        <Layers size={12} style={{ flexShrink: 0 }} />
-                                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Todos</span>
-                                                        <span style={{ flexShrink: 0, fontWeight: '700', fontSize: '0.64rem', backgroundColor: agreementFilter === 'all' ? 'var(--primary)' : '#CBD5E1', color: 'white', padding: '1px 4px', borderRadius: '8px' }}>{countTotal}</span>
+                                                        <Layers size={13} style={{ flexShrink: 0 }} />
+                                                        <span>Todos</span>
+                                                        <span style={{ flexShrink: 0, fontWeight: '800', fontSize: '0.68rem', backgroundColor: agreementFilter === 'all' ? 'var(--primary)' : '#94A3B8', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>{countTotal}</span>
                                                     </button>
                                                 </>
                                             )}
