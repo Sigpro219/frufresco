@@ -300,7 +300,7 @@ export default function OrderLoadingPage() {
         setEditLatitude(tempLat);
         setEditLongitude(tempLng);
         setEditShippingAddress(tempAddress);
-        setGeocodedMessage(`📍 Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`);
+        setGeocodedMessage(`Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`);
         setIsMapPickerOpen(false);
         if (typeof window !== 'undefined' && (window as any).showToast) {
             (window as any).showToast(`✅ Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`, 'success');
@@ -2649,47 +2649,24 @@ export default function OrderLoadingPage() {
                                         <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#0F172A', fontWeight: '900' }}>
                                             Pedido {getFriendlyOrderId(selectedOrder)}
                                         </h2>
-                                        {editMode ? (
-                                            <select 
-                                                value={editStatus}
-                                                onChange={(e) => setEditStatus(e.target.value)}
-                                                style={{
-                                                    padding: '4px 12px',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '800',
-                                                    border: '1px solid #CBD5E1',
-                                                    backgroundColor: '#F8FAFC'
-                                                }}
-                                            >
-                                                <option value="pending_approval">POR APROBAR</option>
-                                                <option value="para_compra">PARA COMPRA</option>
-                                                <option value="approved">APROBADO</option>
-                                                <option value="picking">EN PREPARACIÓN</option>
-                                                <option value="shipped">DESPACHADO</option>
-                                                <option value="delivered">ENTREGADO</option>
-                                                <option value="cancelled">CANCELADO</option>
-                                            </select>
-                                        ) : (
-                                            <span style={{
-                                                padding: '4px 12px',
-                                                borderRadius: '20px',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '800',
-                                                backgroundColor: 
-                                                    selectedOrder.status === 'pending_approval' ? '#FEF3C7' : 
-                                                    selectedOrder.status === 'approved' ? '#D1FAE5' :
-                                                    selectedOrder.status === 'picking' ? '#FEF08A' :
-                                                    selectedOrder.status === 'shipped' ? '#DBEAFE' : '#F1F5F9',
-                                                color: 
-                                                    selectedOrder.status === 'pending_approval' ? '#92400E' : 
-                                                    selectedOrder.status === 'approved' ? '#065F46' :
-                                                    selectedOrder.status === 'picking' ? '#854D0E' :
-                                                    selectedOrder.status === 'shipped' ? '#1E40AF' : '#475569'
-                                            }}>
-                                                {getStatusLabel(selectedOrder.status)}
-                                            </span>
-                                        )}
+                                        <span style={{
+                                            padding: '4px 12px',
+                                            borderRadius: '20px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            backgroundColor: 
+                                                selectedOrder.status === 'pending_approval' ? '#FEF3C7' : 
+                                                selectedOrder.status === 'approved' ? '#D1FAE5' :
+                                                selectedOrder.status === 'picking' ? '#FEF08A' :
+                                                selectedOrder.status === 'shipped' ? '#DBEAFE' : '#F1F5F9',
+                                            color: 
+                                                selectedOrder.status === 'pending_approval' ? '#92400E' : 
+                                                selectedOrder.status === 'approved' ? '#065F46' :
+                                                selectedOrder.status === 'picking' ? '#854D0E' :
+                                                selectedOrder.status === 'shipped' ? '#1E40AF' : '#475569'
+                                        }}>
+                                            {getStatusLabel(selectedOrder.status)}
+                                        </span>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <div style={{ fontWeight: '700', color: '#334155', fontSize: '1rem' }}>
@@ -2712,8 +2689,8 @@ export default function OrderLoadingPage() {
                                                     <Globe size={10} /> GPS Perfil: {Number(selectedOrder.profiles.latitude).toFixed(4)}, {Number(selectedOrder.profiles.longitude).toFixed(4)}
                                                 </span>
                                             ) : (
-                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '6px', fontWeight: '700', border: '1px solid #FCD34D' }}>
-                                                    ⚠️ Sin GPS Propio
+                                                <span style={{ fontSize: '0.68rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                    <AlertTriangle size={10} /> Sin GPS Propio
                                                 </span>
                                             )}
                                         </div>
@@ -3158,26 +3135,8 @@ export default function OrderLoadingPage() {
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#475569', fontWeight: '600' }}>
-                                                        {editMode ? (
-                                                            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${!(item.unit_price) || parseFloat(item.unit_price.toString()) === 0 ? '#EF4444' : '#CBD5E1'}`, borderRadius: '6px', overflow: 'hidden', padding: '2px 4px', backgroundColor: 'white' }}>
-                                                                <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
-                                                                <input
-                                                                    type="number"
-                                                                    value={item.unit_price === 0 ? 0 : (item.unit_price || '')}
-                                                                    onFocus={(e) => e.target.select()}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                                                        const newOrderItems = [...orderItems];
-                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val as any, isModified: true };
-                                                                        setOrderItems(newOrderItems);
-                                                                    }}
-                                                                    style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
-                                                                />
-                                                            </div>
-                                                        ) : (
-                                                            formatMoney(item.unit_price || 0)
-                                                        )}
+                                                    <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#1E293B', fontWeight: '800', fontSize: '0.95rem' }}>
+                                                        {formatMoney(item.unit_price || 0)}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
                                                         {formatMoney((item.unit_price || 0) * item.quantity)}
