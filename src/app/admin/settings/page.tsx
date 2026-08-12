@@ -664,8 +664,8 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'store_status' ? 'Estado Tienda' :
                                                  setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
                                                  setting.key === 'enable_cutoff_rules' ? 'Reglas Hora de Corte (5 PM)' :
-                                                 setting.key === 'allow_sunday_deliveries' ? <><CalendarX size={14} style={{ color: 'var(--primary)' }} /> Entregas los Domingos</> :
-                                                 setting.key === 'allow_holiday_deliveries' ? <><Sparkles size={14} style={{ color: '#D97706' }} /> Entregas en Festivos (19 Días Colombia)</> :
+                                                 setting.key === 'allow_sunday_deliveries' ? <><CalendarX size={14} style={{ color: 'var(--primary)' }} /> ENTREGAS LOS DOMINGOS</> :
+                                                 setting.key === 'allow_holiday_deliveries' ? <><Sparkles size={14} style={{ color: '#D97706' }} /> ENTREGAS EN FESTIVOS (19 DÍAS COLOMBIA)</> :
                                                  setting.key === 'packaging_fee_enabled' ? <><PackageCheck size={14} style={{ color: 'var(--primary)' }} /> Cobro Empaque Plástico (Checkout)</> :
                                                  setting.key === 'packaging_fee_percentage' ? <><Percent size={14} style={{ color: 'var(--primary)' }} /> Porcentaje Empaque (%)</> :
                                                  setting.key === 'packaging_fee_note' ? <><FileText size={14} style={{ color: 'var(--primary)' }} /> Explicación de Empaque (Nota Cliente)</> :
