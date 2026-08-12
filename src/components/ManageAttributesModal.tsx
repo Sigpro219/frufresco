@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, X, Tag, AlertCircle, Save, Trash2, Edit3, Loader2, PlusCircle, ShieldAlert } from 'lucide-react';
+import { Plus, X, Tag, AlertCircle, Save, Trash2, Edit3, Loader2, PlusCircle, ShieldAlert, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface MasterAttribute {
     id: string;
@@ -175,6 +176,71 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
         }
     };
 
+    const handleExportExcel = () => {
+        try {
+            if (!localAttributes || localAttributes.length === 0) {
+                if (typeof window !== 'undefined' && (window as any).showToast) {
+                    (window as any).showToast('No hay variantes registradas para exportar', 'error');
+                } else {
+                    alert('No hay variantes registradas para exportar');
+                }
+                return;
+            }
+
+            // Pestaña 1: Resumen por Categoría Maestra
+            const summaryData = localAttributes.map(attr => ({
+                'ID Categoría': attr.id,
+                'Categoría Principal': attr.name,
+                'Mostrar en Web': attr.show_on_web ? 'SÍ' : 'NO',
+                'Cantidad Subcategorías': (attr.suggested_values || []).length,
+                'Subcategorías / Variantes': (attr.suggested_values || []).join(', ')
+            }));
+
+            // Pestaña 2: Detalle Desglosado Fila por Fila
+            const detailData: any[] = [];
+            localAttributes.forEach(attr => {
+                const values = attr.suggested_values || [];
+                if (values.length === 0) {
+                    detailData.push({
+                        'ID Categoría': attr.id,
+                        'Categoría Principal': attr.name,
+                        'Subcategoría / Variante': '(Sin subcategorías)',
+                        'Mostrar en Web': attr.show_on_web ? 'SÍ' : 'NO'
+                    });
+                } else {
+                    values.forEach(val => {
+                        detailData.push({
+                            'ID Categoría': attr.id,
+                            'Categoría Principal': attr.name,
+                            'Subcategoría / Variante': val,
+                            'Mostrar en Web': attr.show_on_web ? 'SÍ' : 'NO'
+                        });
+                    });
+                }
+            });
+
+            const workbook = XLSX.utils.book_new();
+            const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+            const wsDetail = XLSX.utils.json_to_sheet(detailData);
+
+            wsSummary['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 15 }, { wch: 22 }, { wch: 60 }];
+            wsDetail['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 30 }, { wch: 15 }];
+
+            XLSX.utils.book_append_sheet(workbook, wsSummary, "Matriz_Categorias");
+            XLSX.utils.book_append_sheet(workbook, wsDetail, "Detalle_Subcategorias");
+
+            const dateStr = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `Gobernanza_Variantes_FruFresco_${dateStr}.xlsx`);
+
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('Excel de gobernanza de variantes descargado con éxito', 'success');
+            }
+        } catch (err: any) {
+            console.error('Error al exportar variantes a Excel:', err);
+            alert('Error al generar el archivo Excel: ' + (err?.message || err));
+        }
+    };
+
     const hasChanges = JSON.stringify(dbAttributes) !== JSON.stringify(localAttributes);
 
     return (
@@ -189,12 +255,41 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 display: 'flex', flexDirection: 'column', maxHeight: '85vh', position: 'relative',
                 border: '1px solid #E5E7EB'
             }}>
-                <button 
-                    onClick={onClose} 
-                    style={{ position: 'absolute', top: '20px', right: '20px', background: '#F3F4F6', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}
-                >
-                    <X size={18} />
-                </button>
+                <div style={{ position: 'absolute', top: '20px', right: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button 
+                        type="button"
+                        onClick={handleExportExcel}
+                        style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '6px', 
+                            padding: '0.45rem 0.95rem', 
+                            backgroundColor: '#059669', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '12px', 
+                            fontSize: '0.8rem', 
+                            fontWeight: '800', 
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(5, 150, 105, 0.25)',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                        title="Descargar matriz completa de variantes en Excel (.xlsx)"
+                    >
+                        <FileSpreadsheet size={16} strokeWidth={2} />
+                        <span>Exportar Excel</span>
+                    </button>
+
+                    <button 
+                        onClick={onClose} 
+                        style={{ background: '#F3F4F6', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}
+                        title="Cerrar modal"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
 
                 <header style={{ marginBottom: '1.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
