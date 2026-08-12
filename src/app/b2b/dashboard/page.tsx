@@ -165,6 +165,18 @@ export default function B2BDashboard() {
         }
     };
 
+    const isMounted = useRef(true);
+    const hasFetchedInitial = useRef(false);
+    const searchParams = useSearchParams();
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
+
+    const categories = Object.keys(CATEGORY_MAP);
+
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
 
     // Route Guard to protect B2B Dashboard
     useEffect(() => {
