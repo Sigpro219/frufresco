@@ -138,6 +138,17 @@ export default function B2BDashboard() {
         }).slice(0, 8);
     }, [searchTerm, categoryProducts, searchResults, agreementPricesMap, activeProfile, agreementFilter]);
 
+    const searchItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+    useEffect(() => {
+        if (searchFocusedIndex >= 0 && searchItemRefs.current[searchFocusedIndex]) {
+            searchItemRefs.current[searchFocusedIndex]?.scrollIntoView({
+                block: 'nearest',
+                behavior: 'smooth'
+            });
+        }
+    }, [searchFocusedIndex]);
+
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (!isSearchDropdownOpen || searchDropdownResults.length === 0) return;
 
@@ -1268,6 +1279,7 @@ export default function B2BDashboard() {
                                                                     return (
                                                                         <div
                                                                             key={prod.id}
+                                                                            ref={(el) => { searchItemRefs.current[idx] = el; }}
                                                                             onClick={() => {
                                                                                 setModalQuantity(1);
                                                                                 setSelectedProductForModal(prod);
@@ -1321,6 +1333,7 @@ export default function B2BDashboard() {
                                                             </div>
 
                                                             <div
+                                                                ref={(el) => { searchItemRefs.current[searchDropdownResults.length] = el; }}
                                                                 onClick={() => {
                                                                     setIsSearchDropdownOpen(false);
                                                                     setSearchFocusedIndex(-1);
