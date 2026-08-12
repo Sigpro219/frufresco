@@ -219,21 +219,83 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 }
             });
 
+            // Pestaña 3: Combinaciones Ordenadas para Copiar en Celda Única (Plano SKU)
+            // Genera el producto cartesiano ordenado de todas las categorías activas
+            const activeCategories = localAttributes.filter(a => a.suggested_values && a.suggested_values.length > 0);
+            
+            const combinationsData: any[] = [];
+            const readyGroupedData: any[] = [];
+
+            if (activeCategories.length > 0) {
+                let cartesian: any[] = [{}];
+                activeCategories.forEach(cat => {
+                    const temp: any[] = [];
+                    cartesian.forEach(combo => {
+                        cat.suggested_values.forEach(val => {
+                            temp.push({ ...combo, [cat.name]: val });
+                        });
+                    });
+                    cartesian = temp;
+                });
+
+                // Ordenar combinaciones por nombre de categoría y subcategorías
+                cartesian.sort((a, b) => {
+                    const strA = Object.entries(a).map(([k, v]) => `${k}:${v}`).join('|');
+                    const strB = Object.entries(b).map(([k, v]) => `${k}:${v}`).join('|');
+                    return strA.localeCompare(strB, 'es', { numeric: true });
+                });
+
+                cartesian.forEach((combo, idx) => {
+                    const comboString = Object.entries(combo)
+                        .map(([key, val]) => `${key}: ${val}`)
+                        .join(' | ');
+
+                    const rowObj: any = {
+                        'N°': idx + 1,
+                        'ID_Combinacion': `COMB-${String(idx + 1).padStart(3, '0')}`,
+                        'Celda_Unica_Para_Copiar': comboString
+                    };
+
+                    // Añadir columnas desglosadas por cada categoría
+                    activeCategories.forEach(cat => {
+                        rowObj[cat.name] = combo[cat.name] || '';
+                    });
+
+                    combinationsData.push(rowObj);
+                });
+
+                // Formato agrupado por categoría para copiar a un producto completo
+                const groupedString = activeCategories
+                    .map(cat => `${cat.name}: ${cat.suggested_values.join(', ')}`)
+                    .join(' ; ');
+
+                readyGroupedData.push({
+                    'Instrucciones': 'Copia esta celda en la columna "Variantes" de tu Excel de Productos para asignar TODAS las subcategorías:',
+                    'Celda_Agrupada_Completa': groupedString
+                });
+            }
+
             const workbook = XLSX.utils.book_new();
             const wsSummary = XLSX.utils.json_to_sheet(summaryData);
             const wsDetail = XLSX.utils.json_to_sheet(detailData);
+            const wsCombinations = XLSX.utils.json_to_sheet(combinationsData.length > 0 ? combinationsData : [{ 'Aviso': 'No hay combinaciones activas' }]);
+            const wsGrouped = XLSX.utils.json_to_sheet(readyGroupedData.length > 0 ? readyGroupedData : [{ 'Aviso': 'No hay datos agrupados' }]);
 
             wsSummary['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 15 }, { wch: 22 }, { wch: 60 }];
             wsDetail['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 30 }, { wch: 15 }];
+            wsCombinations['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 65 }, { wch: 25 }, { wch: 25 }, { wch: 25 }];
+            wsGrouped['!cols'] = [{ wch: 80 }, { wch: 90 }];
 
             XLSX.utils.book_append_sheet(workbook, wsSummary, "Matriz_Categorias");
             XLSX.utils.book_append_sheet(workbook, wsDetail, "Detalle_Subcategorias");
+            XLSX.utils.book_append_sheet(workbook, wsCombinations, "Combinaciones_Para_Copiar");
+            XLSX.utils.book_append_sheet(workbook, wsGrouped, "Celda_Agrupada_Completa");
 
             const dateStr = new Date().toISOString().split('T')[0];
             XLSX.writeFile(workbook, `Gobernanza_Variantes_FruFresco_${dateStr}.xlsx`);
 
             if (typeof window !== 'undefined' && (window as any).showToast) {
-                (window as any).showToast('Excel de gobernanza de variantes descargado con éxito', 'success');
+                (window as any).showToast('Excel con combinaciones ordenadas generado con éxito', 'success');
             }
         } catch (err: any) {
             console.error('Error al exportar variantes a Excel:', err);

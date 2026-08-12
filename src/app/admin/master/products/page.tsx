@@ -763,10 +763,80 @@ export default function MasterProductsPage() {
 
                         const sku = (row.SKU || row.sku || '').toString().trim();
                         
-                        // Reconstruir options_config y variants JSON a partir de la pestaña Variaciones
+                        // Detección de celda única con variaciones en la misma fila del producto (ej: columna Variantes / Opciones / Combinaciones)
+                        const singleCellVar = (
+                            row.Variantes || 
+                            row.Variaciones || 
+                            row.Opciones || 
+                            row.Combinaciones || 
+                            row['Opciones Variantes'] || 
+                            row['Variantes Combinaciones'] || 
+                            row['Opciones_Variantes'] ||
+                            row['variantes'] ||
+                            row['variaciones'] ||
+                            ''
+                        ).toString().trim();
+
+                        // Reconstruir options_config y variants JSON a partir de la pestaña Variaciones O de la celda única
                         let options_config = variationsMap[sku] || [];
                         let variants: any[] = [];
-                        if (options_config.length > 0) {
+
+                        if (options_config.length === 0 && singleCellVar) {
+                            // Parsear la celda única con formato inteligente
+                            const attrMap = new Map<string, Set<string>>();
+                            const explicitCombos: Record<string, string>[] = [];
+
+                            const segments = singleCellVar.split(/[;\n]+/).map((s: string) => s.trim()).filter(Boolean);
+                            segments.forEach((segment: string) => {
+                                if (segment.includes(':') || segment.includes('=')) {
+                                    const pairs = segment.split('|').map(p => p.trim()).filter(Boolean);
+                                    const currentCombo: Record<string, string> = {};
+
+                                    pairs.forEach(pair => {
+                                        const parts = pair.split(/[:=]/);
+                                        if (parts.length >= 2) {
+                                            const attrName = parts[0].trim();
+                                            const rawVals = parts.slice(1).join(':').trim();
+                                            const valList = rawVals.split(',').map(v => v.trim()).filter(Boolean);
+
+                                            if (!attrMap.has(attrName)) attrMap.set(attrName, new Set());
+                                            valList.forEach(v => {
+                                                attrMap.get(attrName)!.add(v);
+                                                if (valList.length === 1) currentCombo[attrName] = v;
+                                            });
+                                        }
+                                    });
+
+                                    if (Object.keys(currentCombo).length > 0 && Object.keys(currentCombo).length === pairs.length) {
+                                        explicitCombos.push(currentCombo);
+                                    }
+                                } else {
+                                    const defaultAttr = "Variante";
+                                    if (!attrMap.has(defaultAttr)) attrMap.set(defaultAttr, new Set());
+                                    segment.split(',').map(v => v.trim()).filter(Boolean).forEach(v => {
+                                        attrMap.get(defaultAttr)!.add(v);
+                                    });
+                                }
+                            });
+
+                            options_config = Array.from(attrMap.entries()).map(([name, valSet]) => ({
+                                name,
+                                values: Array.from(valSet)
+                            }));
+
+                            if (explicitCombos.length > 0 && attrMap.size > 1 && explicitCombos.length < 500) {
+                                variants = explicitCombos.map(combo => {
+                                    const attrValues = Object.values(combo).map(v => (v || '').toString().substring(0, 2).toUpperCase()).join('');
+                                    return {
+                                        id: `v-${Math.random().toString(36).substring(2, 11)}`,
+                                        options: combo,
+                                        sku: `${sku}.${attrValues}`
+                                    };
+                                });
+                            }
+                        }
+
+                        if (options_config.length > 0 && variants.length === 0) {
                             let results: any[] = [{}];
                             options_config.forEach(opt => {
                                 const temp: any[] = [];
@@ -778,7 +848,7 @@ export default function MasterProductsPage() {
                                 results = temp;
                             });
                             variants = results.map(combination => {
-                                const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
+                                const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 2).toUpperCase()).join('');
                                 return {
                                     id: `v-${Math.random().toString(36).substring(2, 11)}`,
                                     options: combination,
