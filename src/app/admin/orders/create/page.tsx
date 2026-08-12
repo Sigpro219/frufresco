@@ -636,17 +636,22 @@ function CreateOrderContent() {
                     }
                 }
 
-                // 2. Fallback to Clientes Hogar / B2C if no model or if expired
+                // 2. Fallback to General Institucional (B2B) or Clientes Hogar (B2C) if no model or if expired
                 if (!resolvedModel || expired) {
                     b2cFallback = true;
-                    const { data: b2cModel } = await supabase
+                    const isB2B = clientType === 'B2B' || Boolean(selectedClient);
+                    const targetNames = isB2B 
+                        ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
+                        : ['Clientes Hogar', 'Clientes B2C'];
+
+                    const { data: defaultModel } = await supabase
                         .from('pricing_models')
                         .select('*')
-                        .in('name', ['Clientes Hogar', 'Clientes B2C'])
+                        .in('name', targetNames)
                         .maybeSingle();
-                    
-                    if (b2cModel) {
-                        resolvedModel = b2cModel;
+
+                    if (defaultModel) {
+                        resolvedModel = defaultModel;
                     }
                 }
             }
@@ -660,17 +665,22 @@ function CreateOrderContent() {
                 const map: Record<string, number> = {};
                 const customIds = new Set<string>();
 
-                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback to Clientes Hogar
+                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback
                 let baselineModelId = modelId;
                 if (!baselineModelId) {
-                    const { data: b2cModel } = await supabase
+                    const isB2B = clientType === 'B2B' || Boolean(selectedClient);
+                    const targetNames = isB2B 
+                        ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
+                        : ['Clientes Hogar', 'Clientes B2C'];
+
+                    const { data: fallbackModel } = await supabase
                         .from('pricing_models')
                         .select('id')
-                        .in('name', ['Clientes Hogar', 'Clientes B2C'])
+                        .in('name', targetNames)
                         .maybeSingle();
-                    
-                    if (b2cModel) {
-                        baselineModelId = b2cModel.id;
+
+                    if (fallbackModel) {
+                        baselineModelId = fallbackModel.id;
                     }
                 }
 
@@ -2313,9 +2323,9 @@ function CreateOrderContent() {
                                                                 marginTop: '0.5rem',
                                                                 padding: '0.35rem 0.65rem',
                                                                 borderRadius: '8px',
-                                                                backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE',
-                                                                border: `1px solid ${isB2CDefault ? '#FED7AA' : '#BAE6FD'}`,
-                                                                color: isB2CDefault ? '#C2410C' : '#0369A1',
+                                                                backgroundColor: '#E0F2FE',
+                                                                border: '1px solid #BAE6FD',
+                                                                color: '#0369A1',
                                                                 fontSize: '0.8rem',
                                                                 fontWeight: 'bold',
                                                                 display: 'flex',
@@ -2323,7 +2333,7 @@ function CreateOrderContent() {
                                                                 gap: '4px',
                                                                 width: 'fit-content'
                                                             }}>
-                                                                <span>🏷️ {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
+                                                                <span>🏷️ {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Modelo: ${activePricingModel?.name || 'General Institucional'}`}</span>
                                                                 {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                             </div>
                                                         )}
@@ -3536,9 +3546,10 @@ function CreateOrderContent() {
                                                                             </span>
                                                                         );
                                                                     } else {
+                                                                        const isB2B = clientType === 'B2B' || Boolean(selectedClient);
                                                                         return (
-                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                Tarifa B2C (Defecto)
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: isB2B ? '#ECFDF5' : '#FFF7ED', color: isB2B ? '#047857' : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                                {isB2B ? (activePricingModel?.name || 'General Institucional') : 'Tarifa B2C (Defecto)'}
                                                                             </span>
                                                                         );
                                                                     }
