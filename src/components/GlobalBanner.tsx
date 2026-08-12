@@ -96,143 +96,147 @@ export default function GlobalBanner() {
     };
   }, [pathname]);
 
-  // MODE B2B INSTITUCIONAL (HEADER FIJO SUPERIOR CON MENSAJES OPERATIVOS)
+  // MODE B2B INSTITUCIONAL (HEADER FIJO SUPERIOR CON MARQUEE CONTINUO)
   if (isB2B) {
-    const b2bMessages = [
+    const messages = [
       {
-        icon: (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FEF08A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-          </svg>
-        ),
-        text: (
-          <>
-            <b>Reporte de Novedades:</b> Ante cualquier diferencia de especificación o cantidad, <b>regístrela físicamente en la remisión</b> y notifique de inmediato a Servicio al Cliente B2B.
-          </>
-        )
+        tag: 'REPORTE DE NOVEDADES',
+        color: '#FEF08A',
+        icon: '📋',
+        text: 'Ante cualquier diferencia en características o cantidad de producto, por favor regístrela físicamente en la remisión de entrega y notifique inmediatamente a Servicio al Cliente B2B.'
       },
       {
-        icon: (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6EE7B7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="1" y="3" width="15" height="13" rx="2" />
-            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-            <circle cx="5.5" cy="18.5" r="2.5" />
-            <circle cx="18.5" cy="18.5" r="2.5" />
-          </svg>
-        ),
-        text: (
-          <>
-            <b>Atención al Transportista:</b> Si se presenta algún inconveniente con el conductor durante la recepción, <b>contacte inmediatamente a nuestra línea de atención prioritaria</b>.
-          </>
-        )
+        tag: 'ATENCIÓN AL TRANSPORTISTA',
+        color: '#6EE7B7',
+        icon: '🚛',
+        text: 'Si se presenta algún inconveniente con el conductor durante la recepción, contacte directamente a nuestra línea de atención prioritaria.'
       },
       {
-        icon: (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FDE047" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-        ),
-        text: (
-          <>
-            <b>Horario de Corte B2B:</b> Transmita sus pedidos antes de las <b>5:00 p.m.</b> para garantizar su despacho en el siguiente ciclo logístico.
-          </>
-        )
+        tag: 'HORARIO DE CORTE B2B',
+        color: '#FDE047',
+        icon: '🕒',
+        text: 'Transmita sus pedidos antes de las 5:00 p.m. para garantizar su programación en la ruta logística del día siguiente.'
+      },
+      {
+        tag: 'CANAL DE ATENCIÓN DIRECTA',
+        color: '#93C5FD',
+        icon: '📱',
+        text: 'Línea de soporte y PBX preferencial disponible de lunes a sábado para clientes institucionales.'
       }
     ];
 
-    const currentMsg = b2bMessages[messageIndex % b2bMessages.length];
+    const marqueeList = [...messages, ...messages];
 
     return (
-      <div style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 1100,
-        background: 'linear-gradient(90deg, #044E38 0%, #065F46 45%, #044E38 100%)',
-        color: '#FFFFFF',
-        textAlign: 'center',
-        padding: '0.6rem 1.25rem',
-        fontSize: '0.83rem',
-        fontWeight: '600',
-        letterSpacing: '0.01em',
-        boxShadow: '0 4px 15px rgba(4, 78, 56, 0.3)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '12px',
-        flexWrap: 'wrap',
-        fontFamily: 'var(--font-outfit), var(--font-inter), sans-serif',
-        borderBottom: '1.5px solid #10B981'
-      }}>
-        {/* Badge Institucional B2B */}
-        <span style={{ 
-          display: 'inline-flex', 
-          alignItems: 'center', 
-          gap: '6px', 
-          backgroundColor: 'rgba(16, 185, 129, 0.25)',
-          border: '1px solid rgba(52, 211, 153, 0.4)',
-          padding: '3px 10px', 
-          borderRadius: '20px', 
-          color: '#FEF08A', 
-          fontWeight: '900', 
-          fontSize: '0.73rem',
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          boxShadow: '0 0 10px rgba(16, 185, 129, 0.2)'
-        }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
-            <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-            <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
-            <path d="M10 6h4" />
-            <path d="M10 10h4" />
-            <path d="M10 14h4" />
-            <path d="M10 18h4" />
-          </svg>
-          Portal Institucional
-        </span>
+      <>
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes b2bMarqueeScroll {
+            0% { transform: translateX(0%); }
+            100% { transform: translateX(-50%); }
+          }
+          .b2b-marquee-track {
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            animation: b2bMarqueeScroll 38s linear infinite;
+          }
+          .b2b-marquee-container:hover .b2b-marquee-track {
+            animation-play-state: paused;
+          }
+        `}} />
 
-        {/* Mensaje Rotativo Animado */}
-        <div style={{ 
-          display: 'inline-flex', 
-          alignItems: 'center', 
-          gap: '8px',
-          opacity: fadeState ? 1 : 0,
-          transform: fadeState ? 'translateY(0)' : 'translateY(-2px)',
-          transition: 'all 0.3s ease-in-out',
-          color: '#F8FAFC'
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+          background: 'linear-gradient(90deg, #044E38 0%, #065F46 45%, #044E38 100%)',
+          color: '#FFFFFF',
+          padding: '0.55rem 1rem',
+          fontSize: '0.82rem',
+          fontWeight: '600',
+          letterSpacing: '0.01em',
+          boxShadow: '0 4px 15px rgba(4, 78, 56, 0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          fontFamily: 'var(--font-outfit), var(--font-inter), sans-serif',
+          borderBottom: '1.5px solid #10B981',
+          overflow: 'hidden'
         }}>
-          {currentMsg.icon}
-          <span>{currentMsg.text}</span>
+          {/* Left Static Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, zIndex: 2 }}>
+            <span style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              backgroundColor: 'rgba(16, 185, 129, 0.25)',
+              border: '1px solid rgba(52, 211, 153, 0.45)',
+              padding: '4px 12px', 
+              borderRadius: '20px', 
+              color: '#FEF08A', 
+              fontWeight: '900', 
+              fontSize: '0.73rem',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              boxShadow: '0 0 12px rgba(16, 185, 129, 0.25)',
+              backdropFilter: 'blur(4px)'
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+                <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+              </svg>
+              Portal Institucional
+            </span>
+          </div>
+
+          {/* Center Continuous Infinite Marquee Track */}
+          <div className="b2b-marquee-container" style={{ flex: 1, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
+            <div className="b2b-marquee-track">
+              {marqueeList.map((item, idx) => (
+                <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', paddingRight: '3.5rem' }}>
+                  <span style={{ fontSize: '0.9rem' }}>{item.icon}</span>
+                  <span style={{ color: item.color, fontWeight: '800', fontSize: '0.78rem', letterSpacing: '0.03em' }}>
+                    [{item.tag}]
+                  </span>
+                  <span style={{ color: '#F8FAFC', fontWeight: '500' }}>
+                    {item.text}
+                  </span>
+                  <span style={{ color: '#10B981', opacity: 0.6, fontSize: '0.8rem', paddingLeft: '1.75rem' }}>◆</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Static Action Chip */}
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, zIndex: 2 }}>
+            <a 
+              href="https://wa.me/573015421761?text=Hola%20Servicio%20al%20Cliente%20FruFresco%20B2B,%20requiero%20asistencia%20institucional" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: 'rgba(255, 255, 255, 0.16)',
+                color: '#FFFFFF',
+                textDecoration: 'none',
+                fontSize: '0.75rem',
+                fontWeight: '800',
+                padding: '4px 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                backdropFilter: 'blur(4px)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              📱 Soporte B2B
+            </a>
+          </div>
         </div>
-
-        {/* Botón de Contacto Preferencial B2B */}
-        <a 
-          href="https://wa.me/573001234567?text=Hola%20FruFresco%20B2B,%20requiero%20asistencia%20institucional" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '5px',
-            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-            color: '#FFFFFF',
-            textDecoration: 'none',
-            fontSize: '0.74rem',
-            fontWeight: '800',
-            padding: '3px 10px',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.25)',
-            transition: 'all 0.2s ease',
-            marginLeft: '6px'
-          }}
-        >
-          📱 Soporte B2B
-        </a>
-      </div>
+      </>
     );
   }
 
