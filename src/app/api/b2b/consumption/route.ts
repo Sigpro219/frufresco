@@ -130,8 +130,89 @@ export async function GET(request: Request) {
 
         const avgPrice = totalKg > 0 ? (totalCop / totalKg) : 0;
 
+        // Group history timeline for SVG Chart
+        const historyMap: Record<string, { date: string, rawDate: string, cop: number, kg: number }> = {};
+
+        filteredOrders.forEach(o => {
+            const dateStr = (o.delivery_date || o.created_at || '').substring(0, 10);
+            if (!dateStr) return;
+
+            const parts = dateStr.split('-');
+            let formattedDate = dateStr;
+            if (parts.length === 3) {
+                const day = parts[2];
+                const monthNum = parseInt(parts[1], 10) - 1;
+                const monthsShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                formattedDate = `${day} ${monthsShort[monthNum] || ''}`;
+            }
+
+            if (!historyMap[dateStr]) {
+                historyMap[dateStr] = { date: formattedDate, rawDate: dateStr, cop: 0, kg: 0 };
+            }
+
+            const orderItems = filteredItems.filter(it => it.order_id === o.id);
+            let itemsSum = 0;
+            orderItems.forEach(it => {
+                const qty = Number(it.quantity || 0);
+                const uPrice = Number(it.unit_price || 0);
+                itemsSum += qty * uPrice;
+                historyMap[dateStr].kg += qty;
+            });
+
+            const orderTotal = o.total ? Number(o.total) : itemsSum;
+            historyMap[dateStr].cop += orderTotal;
+        });
+
+        const history = Object.values(historyMap).sort((a, b) => a.rawDate.localeCompare(b.rawDate));
+
+        // Group top products for frequent items list
+        const productMap: Record<string, {
+            id: string,
+            name: string,
+            image: string,
+            unit: string,
+            totalQuantity: number,
+            ordersCount: number,
+            orderIds: Set<string>,
+            product: any
+        }> = {};
+
+        filteredItems.forEach(it => {
+            const p = Array.isArray(it.products) ? it.products[0] : it.products;
+            const pId = it.product_id || p?.id;
+            if (!pId) return;
+
+            if (!productMap[pId]) {
+                productMap[pId] = {
+                    id: pId,
+                    name: p?.name || it.nickname || 'Producto Insumo',
+                    image: p?.image_url || '',
+                    unit: p?.unit_of_measure || 'Kg',
+                    totalQuantity: 0,
+                    ordersCount: 0,
+                    orderIds: new Set<string>(),
+                    product: p || { id: pId, name: it.nickname || 'Producto Insumo', unit_of_measure: 'Kg' }
+                };
+            }
+
+            productMap[pId].totalQuantity += Number(it.quantity || 0);
+            productMap[pId].orderIds.add(it.order_id);
+        });
+
+        const topProducts = Object.values(productMap).map(p => ({
+            id: p.id,
+            name: p.name,
+            image: p.image,
+            unit: p.unit,
+            totalQuantity: p.totalQuantity,
+            ordersCount: p.orderIds.size,
+            product: p.product
+        })).sort((a, b) => b.totalQuantity - a.totalQuantity);
+
         return NextResponse.json({
             items: filteredItems,
+            history,
+            topProducts,
             kpis: {
                 totalCop,
                 totalKg,

@@ -29,6 +29,10 @@ interface OrderItem {
 }
 
 export default function B2BDashboard() {
+    const searchParams = useSearchParams();
+    const locale = (searchParams?.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
+
     const [focusMode, setFocusMode] = useState<'split' | 'catalog' | 'cart'>('split');
     const [agreementFilter, setAgreementFilter] = useState<'agreement' | 'non_agreement' | 'all'>('agreement');
     const [cartSortOrder, setCartSortOrder] = useState<'newest' | 'oldest' | 'alpha'>('newest');
@@ -225,9 +229,6 @@ export default function B2BDashboard() {
 
     const isMounted = useRef(true);
     const hasFetchedInitial = useRef(false);
-    const searchParams = useSearchParams();
-    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
-    const t = translations[locale];
 
     const categories = Object.keys(CATEGORY_MAP);
 
