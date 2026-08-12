@@ -108,6 +108,7 @@ export default function B2BDashboard() {
     const [activeHoverPoint, setActiveHoverPoint] = useState<any | null>(null);
     const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
     const [searchFocusedIndex, setSearchFocusedIndex] = useState(-1);
+    const catalogSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     const activeProfile = simulatedClientId 
         ? (simulatedProfiles.find(p => p.id === simulatedClientId) || profile) 
@@ -461,6 +462,15 @@ export default function B2BDashboard() {
 
         setSelectedProductForModal(null);
         setSelectedOptions({});
+        setSearchTerm('');
+        setIsSearchDropdownOpen(false);
+        setSearchFocusedIndex(-1);
+
+        setTimeout(() => {
+            if (catalogSearchInputRef.current) {
+                catalogSearchInputRef.current.focus();
+            }
+        }, 50);
     };
 
     const handleQuickAdd = (product: any, qty: number) => {
@@ -1276,6 +1286,7 @@ export default function B2BDashboard() {
                                                 <Search size={13} strokeWidth={2} />
                                             </div>
                                             <input
+                                                ref={catalogSearchInputRef}
                                                 type="text"
                                                 placeholder={t.b2b.dashboard.searchPlaceholder}
                                                 value={searchTerm}
