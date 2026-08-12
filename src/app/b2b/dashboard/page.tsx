@@ -293,7 +293,11 @@ export default function B2BDashboard() {
         const exists = orderItems.find(item => item.product_name === finalName && item.product_id === product.id);
 
         if (exists) {
-            updateQuantity(exists.id, exists.quantity + numericModalQty);
+            const newTotal = Math.round((exists.quantity + numericModalQty) * 100) / 100;
+            updateQuantity(exists.id, newTotal);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`🛒 Se adicionaron ${numericModalQty} ${exists.unit} a ${finalName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
+            }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
             const basePrice = product.base_price ? Number(product.base_price) : undefined;
@@ -316,6 +320,9 @@ export default function B2BDashboard() {
                 const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
                 return nameA.localeCompare(nameB);
             }));
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`✅ ${finalName} (${numericModalQty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
+            }
         }
 
         setSelectedProductForModal(null);
@@ -328,7 +335,13 @@ export default function B2BDashboard() {
         const exists = orderItems.find(item => item.product_id === product.id);
 
         if (exists) {
-            updateQuantity(exists.id, exists.quantity + qty);
+            const newTotal = Math.round((exists.quantity + qty) * 100) / 100;
+            updateQuantity(exists.id, newTotal);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`🛒 Se adicionaron ${qty} ${exists.unit} a ${baseName}. Nuevo total en pedido: ${newTotal} ${exists.unit}`, 'info');
+            } else {
+                alert(`Ya tenías ${baseName} en tu pedido (${exists.quantity} ${exists.unit}). Se adicionaron ${qty} ${exists.unit} para un nuevo total de ${newTotal} ${exists.unit}`);
+            }
         } else {
             const agreementPrice = agreementPricesMap[product.id];
             const basePrice = product.base_price ? Number(product.base_price) : undefined;
@@ -350,8 +363,12 @@ export default function B2BDashboard() {
                 const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
                 return nameA.localeCompare(nameB);
             }));
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`✅ ${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
+            } else {
+                alert(`${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) ${locale === 'en' ? 'added to order' : 'agregado al pedido'}`);
+            }
         }
-        alert(`${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) ${locale === 'en' ? 'added to order' : 'agregado al pedido'}`);
     };
 
     // Time calculation logic
@@ -3182,7 +3199,49 @@ export default function B2BDashboard() {
                             letterSpacing: '-0.02em',
                             color: 'var(--text-main)'
                         }}>{locale === 'en' ? (selectedProductForModal.name_en || selectedProductForModal.name) : selectedProductForModal.name}</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontWeight: '500' }}>{t.b2b.dashboard.modalTitle}</p>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem', fontWeight: '500' }}>{t.b2b.dashboard.modalTitle}</p>
+
+                        {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL PEDIDO */}
+                        {(() => {
+                            const existingInCart = orderItems.find(item => item.product_id === selectedProductForModal.id);
+                            if (!existingInCart) return null;
+
+                            const currentQty = Number(existingInCart.quantity || 0);
+                            const addedNum = typeof modalQuantity === 'string' 
+                                ? (parseFloat(modalQuantity.replace(',', '.')) || 1)
+                                : Number(modalQuantity) || 1;
+                            const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
+
+                            return (
+                                <div style={{
+                                    backgroundColor: '#FFFBEB',
+                                    border: '1.5px solid #F59E0B',
+                                    borderRadius: '14px',
+                                    padding: '0.85rem 1rem',
+                                    marginBottom: '1.25rem',
+                                    textAlign: 'left',
+                                    fontSize: '0.82rem',
+                                    color: '#92400E',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px',
+                                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
+                                }}>
+                                    <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <div>
+                                        <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
+                                            🛒 Insumo ya incluido en tu pedido
+                                        </div>
+                                        <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
+                                            Ya tienes <strong style={{ color: '#B45309' }}>{formatQuantity(currentQty)} {existingInCart.unit}</strong> de {locale === 'en' ? (selectedProductForModal.name_en || selectedProductForModal.name) : selectedProductForModal.name} en tu pedido.
+                                        </div>
+                                        <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
+                                            Al adicionar <strong>{formatQuantity(addedNum)} {selectedProductForModal.unit_of_measure || 'Kg'}</strong> el nuevo total será <strong>{formatQuantity(newTotal)} {existingInCart.unit}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Variantes / Opciones */}
                         {selectedProductForModal.options_config && Array.isArray(selectedProductForModal.options_config) && (
@@ -3312,7 +3371,7 @@ export default function B2BDashboard() {
                                 className="btn btn-primary"
                                 style={{ flex: 1 }}
                             >
-                                {t.b2b.dashboard.addBtn}
+                                {orderItems.some(i => i.product_id === selectedProductForModal.id) ? 'Adicionar al pedido' : t.b2b.dashboard.addBtn}
                             </button>
                         </div>
                     </div>
