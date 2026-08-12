@@ -231,10 +231,10 @@ export default function B2BDashboard() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price')
-                    .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, base_price, category, is_active')
+                    .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
                     .eq('is_active', true)
-                    .limit(5)
+                    .limit(50)
                     .abortSignal(signal as any);
 
                 if (error) {
@@ -1268,118 +1268,180 @@ export default function B2BDashboard() {
 
                             <div style={{ padding: '1.25rem 1rem' }}>
                                 {(() => {
-                                    const filteredList = categoryProducts.filter(p => {
+                                    const normalizeSearch = (str: string) => 
+                                        (str || '')
+                                            .toLowerCase()
+                                            .normalize('NFD')
+                                            .replace(/[\u0300-\u036f]/g, '')
+                                            .trim();
+
+                                    const cleanSearchQuery = normalizeSearch(searchTerm);
+
+                                    // Combinar productos cargados con resultados de la búsqueda Supabase si el término tiene al menos 2 letras
+                                    let baseList = categoryProducts;
+                                    if (cleanSearchQuery.length >= 2 && searchResults.length > 0) {
+                                        const existingIds = new Set(categoryProducts.map(p => p.id));
+                                        const missing = searchResults.filter(sr => !existingIds.has(sr.id));
+                                        if (missing.length > 0) {
+                                            baseList = [...categoryProducts, ...missing];
+                                        }
+                                    }
+
+                                    const filteredList = baseList.filter(p => {
                                         if (p.is_active === false) return false;
-                                        if (agreementFilter === 'agreement') return agreementPricesMap[p.id] !== undefined;
-                                        if (agreementFilter === 'non_agreement') return agreementPricesMap[p.id] === undefined;
+
+                                        // Filtro por pestaña (Convenio vs Fuera vs Todos).
+                                        if (cleanSearchQuery.length === 0) {
+                                            if (agreementFilter === 'agreement' && agreementPricesMap[p.id] === undefined) return false;
+                                            if (agreementFilter === 'non_agreement' && agreementPricesMap[p.id] !== undefined) return false;
+                                        }
+
+                                        // Filtro por término de búsqueda (Insensible a mayúsculas y acentos)
+                                        if (cleanSearchQuery.length > 0) {
+                                            const nameNorm = normalizeSearch(p.name);
+                                            const nameEnNorm = normalizeSearch(p.name_en);
+                                            const skuNorm = normalizeSearch(p.sku);
+                                            const catNorm = normalizeSearch(p.category);
+
+                                            const matches = 
+                                                nameNorm.includes(cleanSearchQuery) ||
+                                                nameEnNorm.includes(cleanSearchQuery) ||
+                                                skuNorm.includes(cleanSearchQuery) ||
+                                                catNorm.includes(cleanSearchQuery);
+
+                                            if (!matches) return false;
+                                        }
+
                                         return true;
                                     });
+
                                     const filterLabel = agreementFilter === 'agreement' ? 'En Convenio' : agreementFilter === 'non_agreement' ? 'Fuera de Convenio' : 'Todos los Productos';
+
                                     return (
-                                        <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <Package size={16} color="var(--primary)" /> {filterLabel} ({filteredList.length}) {selectedCategory ? `— ${t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)}` : ''}
-                                        </h4>
+                                        <>
+                                            <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Package size={16} color="var(--primary)" /> 
+                                                {cleanSearchQuery ? `Resultados de búsqueda para "${searchTerm}" (${filteredList.length})` : `${filterLabel} (${filteredList.length})`}
+                                                {selectedCategory && !cleanSearchQuery ? ` — ${t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)}` : ''}
+                                            </h4>
+
+                                            {isLoadingCategory || (cleanSearchQuery.length >= 2 && isSearching && filteredList.length === 0) ? (
+                                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
+                                            ) : filteredList.length > 0 ? (
+                                                <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
+                                                    {filteredList.map(p => (
+                                                        <div
+                                                            key={p.id}
+                                                            onClick={() => {
+                                                                setModalQuantity(1);
+                                                                setSelectedProductForModal(p);
+                                                            }}
+                                                            style={{
+                                                                padding: '0',
+                                                                border: '1px solid var(--border)',
+                                                                borderRadius: 'var(--radius-md)',
+                                                                cursor: 'pointer',
+                                                                textAlign: 'center',
+                                                                backgroundColor: '#fff',
+                                                                transition: 'all 0.2s',
+                                                                display: 'flex',
+                                                                flexDirection: 'column'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
+                                                                e.currentTarget.style.borderColor = 'var(--primary)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                                e.currentTarget.style.boxShadow = 'none';
+                                                                e.currentTarget.style.borderColor = 'var(--border)';
+                                                            }}
+                                                        >
+                                                            <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
+                                                            <div style={{ padding: '0.85rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                                <div>
+                                                                    <h5 style={{ margin: '0 0 0.35rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                                        {locale === 'en' ? (p.name_en || p.name) : p.name}
+                                                                    </h5>
+                                                                </div>
+
+                                                                <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
+                                                                    {agreementPricesMap[p.id] !== undefined ? (
+                                                                        <div>
+                                                                            <span style={{ display: 'block', fontSize: '0.95rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                                                                ${formatPrice(agreementPricesMap[p.id])} / {p.unit_of_measure}
+                                                                            </span>
+                                                                            <span style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                fontSize: '0.65rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#065F46',
+                                                                                backgroundColor: '#D1FAE5',
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '4px',
+                                                                                marginTop: '3px'
+                                                                            }}>
+                                                                                <Tag size={10} strokeWidth={2.5} /> Precio de acuerdo
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div>
+                                                                            <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: '800', color: '#475569' }}>
+                                                                                ${formatPrice(p.base_price || 0)} / {p.unit_of_measure}
+                                                                            </span>
+                                                                            <span style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px',
+                                                                                fontSize: '0.64rem',
+                                                                                fontWeight: '700',
+                                                                                color: '#475569',
+                                                                                backgroundColor: '#F1F5F9',
+                                                                                border: '1px solid #E2E8F0',
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '4px',
+                                                                                marginTop: '3px'
+                                                                            }}>
+                                                                                <Info size={10} strokeWidth={2.5} /> Fuera de convenio
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                                                    <p style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                                                        {cleanSearchQuery ? `No se encontraron productos para "${searchTerm}"` : t.b2b.dashboard.noProducts}
+                                                    </p>
+                                                    {cleanSearchQuery && (
+                                                        <button
+                                                            onClick={() => { setSearchTerm(''); setAgreementFilter('all'); setSelectedCategory(null); }}
+                                                            style={{
+                                                                marginTop: '0.75rem',
+                                                                padding: '0.4rem 0.9rem',
+                                                                backgroundColor: '#F1F5F9',
+                                                                color: '#475569',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '8px',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            Limpiar búsqueda y ver todo
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
                                     );
                                 })()}
-                                {isLoadingCategory ? (
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
-                                ) : categoryProducts.length > 0 ? (
-                                    <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-                                        {categoryProducts.filter(p => {
-                                            if (p.is_active === false) return false;
-                                            if (agreementFilter === 'agreement') return agreementPricesMap[p.id] !== undefined;
-                                            if (agreementFilter === 'non_agreement') return agreementPricesMap[p.id] === undefined;
-                                            return true;
-                                        }).map(p => (
-                                            <div
-                                                key={p.id}
-                                                onClick={() => {
-                                                    setModalQuantity(1);
-                                                    setSelectedProductForModal(p);
-                                                }}
-                                                style={{
-                                                    padding: '0',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: 'var(--radius-md)',
-                                                    cursor: 'pointer',
-                                                    textAlign: 'center',
-                                                    backgroundColor: '#fff',
-                                                    transition: 'all 0.2s',
-                                                    display: 'flex',
-                                                    flexDirection: 'column'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                                                    e.currentTarget.style.borderColor = 'var(--primary)';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = 'none';
-                                                    e.currentTarget.style.borderColor = 'var(--border)';
-                                                }}
-                                            >
-                                                <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
-                                                <div style={{ padding: '0.85rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                    <div>
-                                                        <h5 style={{ margin: '0 0 0.35rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
-                                                            {locale === 'en' ? (p.name_en || p.name) : p.name}
-                                                        </h5>
-                                                    </div>
-
-                                                    <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
-                                                        {agreementPricesMap[p.id] !== undefined ? (
-                                                            <div>
-                                                                <span style={{ display: 'block', fontSize: '0.95rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                                    ${formatPrice(agreementPricesMap[p.id])} / {p.unit_of_measure}
-                                                                </span>
-                                                                <span style={{
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '3px',
-                                                                    fontSize: '0.65rem',
-                                                                    fontWeight: '800',
-                                                                    color: '#065F46',
-                                                                    backgroundColor: '#D1FAE5',
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: '4px',
-                                                                    marginTop: '3px'
-                                                                }}>
-                                                                    <Tag size={10} strokeWidth={2.5} /> Precio de acuerdo
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <div>
-                                                                <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: '800', color: '#475569' }}>
-                                                                    ${formatPrice(p.base_price || 0)} / {p.unit_of_measure}
-                                                                </span>
-                                                                <span style={{
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '3px',
-                                                                    fontSize: '0.64rem',
-                                                                    fontWeight: '700',
-                                                                    color: '#475569',
-                                                                    backgroundColor: '#F1F5F9',
-                                                                    border: '1px solid #E2E8F0',
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: '4px',
-                                                                    marginTop: '3px'
-                                                                }}>
-                                                                    <Info size={10} strokeWidth={2.5} /> Fuera de convenio
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-                                        <p style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t.b2b.dashboard.noProducts}</p>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
