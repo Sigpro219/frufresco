@@ -178,6 +178,42 @@ export default function B2BDashboard() {
         return () => { isMounted.current = false; };
     }, []);
 
+    // Fetch simulated profiles for B2B testing/onboarding — Restringido exclusivamente a las 3 sucursales del plan piloto
+    useEffect(() => {
+        const fetchSimProfiles = async () => {
+            try {
+                // 1. Try fetching via API route to bypass browser RLS constraints
+                const res = await fetch('/api/b2b/pilot-profiles');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.profiles && json.profiles.length > 0 && isMounted.current) {
+                        setSimulatedProfiles(json.profiles);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('API pilot profiles fetch failed, trying direct Supabase query:', e);
+            }
+
+            // 2. Direct Supabase Fallback
+            const pilotIds = [
+                'dc3bd32e-32dd-4a35-934f-f5816ea576e0', // Yanuba Cedritos 150
+                'a9f31891-7278-49ea-8ee8-2252fdb44ec1', // El Corral Gourmet Floresta
+                'b7458b9c-f512-4063-847d-1c29991c15ff'  // CESNE Policía
+            ];
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, company_name, nit, parent_id, allow_off_agreement_purchases, override_parent_off_agreement')
+                .in('id', pilotIds)
+                .order('company_name');
+
+            if (data && isMounted.current) {
+                setSimulatedProfiles(data);
+            }
+        };
+        fetchSimProfiles();
+    }, []);
+
     // Route Guard to protect B2B Dashboard
     useEffect(() => {
         if (!authLoading) {
