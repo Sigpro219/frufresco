@@ -1146,8 +1146,8 @@ export default function B2BDashboard() {
                             borderRadius: THEME.radius.lg,
                             boxShadow: THEME.shadow.md,
                             border: `1px solid ${THEME.colors.border}`,
-                            overflow: 'hidden',
-                            position: 'relative'
+                            position: 'relative',
+                            zIndex: 10
                         }}>
                             {/* Sticky Header Wrapper for Catalog Search and Categories — UNIFIED COMPACT SINGLE ROW */}
                             <div className="b2b-sticky-catalog-header" style={{
@@ -1155,13 +1155,14 @@ export default function B2BDashboard() {
                                 padding: '0.75rem 1.25rem',
                                 borderBottom: `1px solid ${THEME.colors.border}`,
                                 borderLeft: `3px solid ${THEME.colors.primary}`,
-                                 borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
+                                borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '0.6rem',
                                 width: '100%',
                                 boxSizing: 'border-box',
-                                overflow: 'hidden'
+                                position: 'relative',
+                                zIndex: 100
                             }}>
                                 {/* Fila 1: Título + Buscador + Categoria */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', width: '100%' }}>
@@ -1181,7 +1182,7 @@ export default function B2BDashboard() {
                                     
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
                                         <div 
-                                            style={{ position: 'relative', flex: '1 1 140px', minWidth: '120px', maxWidth: '240px' }}
+                                            style={{ position: 'relative', flex: '1 1 140px', minWidth: '120px', maxWidth: '240px', zIndex: 1000 }}
                                             onBlur={(e) => {
                                                 if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                                                     setIsSearchDropdownOpen(false);
@@ -1248,12 +1249,12 @@ export default function B2BDashboard() {
                                                     position: 'absolute',
                                                     top: 'calc(100% + 6px)',
                                                     left: 0,
-                                                    width: '320px',
+                                                    width: '340px',
                                                     backgroundColor: 'white',
                                                     borderRadius: '16px',
-                                                    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18)',
+                                                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1)',
                                                     border: '1px solid #E2E8F0',
-                                                    zIndex: 9999,
+                                                    zIndex: 999999,
                                                     overflow: 'hidden'
                                                 }}>
                                                     {searchDropdownResults.length > 0 ? (
