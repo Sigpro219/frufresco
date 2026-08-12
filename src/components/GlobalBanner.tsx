@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 
+import { ClipboardList, Truck, Clock, Headphones, Building2, PhoneCall } from 'lucide-react';
+
 function formatSpanishDate(dateVal: string | Date): string {
     let d: Date;
     if (typeof dateVal === 'string') {
@@ -102,25 +104,25 @@ export default function GlobalBanner() {
       {
         tag: 'REPORTE DE NOVEDADES',
         color: '#FEF08A',
-        icon: '📋',
+        icon: <ClipboardList size={15} strokeWidth={2.2} style={{ color: '#FEF08A' }} />,
         text: 'Ante cualquier diferencia en características o cantidad de producto, por favor regístrela físicamente en la remisión de entrega y notifique inmediatamente a Servicio al Cliente B2B.'
       },
       {
         tag: 'ATENCIÓN AL TRANSPORTISTA',
         color: '#6EE7B7',
-        icon: '🚛',
+        icon: <Truck size={15} strokeWidth={2.2} style={{ color: '#6EE7B7' }} />,
         text: 'Si se presenta algún inconveniente con el conductor durante la recepción, contacte directamente a nuestra línea de atención prioritaria.'
       },
       {
         tag: 'HORARIO DE CORTE B2B',
         color: '#FDE047',
-        icon: '🕒',
+        icon: <Clock size={15} strokeWidth={2.2} style={{ color: '#FDE047' }} />,
         text: 'Transmita sus pedidos antes de las 5:00 p.m. para garantizar su programación en la ruta logística del día siguiente.'
       },
       {
         tag: 'CANAL DE ATENCIÓN DIRECTA',
         color: '#93C5FD',
-        icon: '📱',
+        icon: <Headphones size={15} strokeWidth={2.2} style={{ color: '#93C5FD' }} />,
         text: 'Línea de soporte y PBX preferencial disponible de lunes a sábado para clientes institucionales.'
       }
     ];
@@ -138,7 +140,7 @@ export default function GlobalBanner() {
             display: inline-flex;
             align-items: center;
             white-space: nowrap;
-            animation: b2bMarqueeScroll 38s linear infinite;
+            animation: b2bMarqueeScroll 65s linear infinite;
           }
           .b2b-marquee-container:hover .b2b-marquee-track {
             animation-play-state: paused;
@@ -182,11 +184,7 @@ export default function GlobalBanner() {
               boxShadow: '0 0 12px rgba(16, 185, 129, 0.25)',
               backdropFilter: 'blur(4px)'
             }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
-                <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-                <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
-              </svg>
+              <Building2 size={13} strokeWidth={2.2} />
               Portal Institucional
             </span>
           </div>
@@ -196,7 +194,7 @@ export default function GlobalBanner() {
             <div className="b2b-marquee-track">
               {marqueeList.map((item, idx) => (
                 <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', paddingRight: '3.5rem' }}>
-                  <span style={{ fontSize: '0.9rem' }}>{item.icon}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>{item.icon}</span>
                   <span style={{ color: item.color, fontWeight: '800', fontSize: '0.78rem', letterSpacing: '0.03em' }}>
                     [{item.tag}]
                   </span>
@@ -232,7 +230,7 @@ export default function GlobalBanner() {
                 whiteSpace: 'nowrap'
               }}
             >
-              📱 Soporte B2B
+              <Headphones size={14} strokeWidth={2.2} /> Soporte B2B
             </a>
           </div>
         </div>
