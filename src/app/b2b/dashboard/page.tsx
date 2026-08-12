@@ -6,7 +6,7 @@ import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X, ChevronRight } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X, ChevronRight, History, ArrowDownAZ } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -1922,10 +1922,13 @@ export default function B2BDashboard() {
                                                     fontSize: '0.68rem',
                                                     fontWeight: cartSortOrder === 'newest' ? '900' : '700',
                                                     cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
                                                     transition: 'all 0.15s ease'
                                                 }}
                                             >
-                                                ⚡ Último ingresado
+                                                <Zap size={11} strokeWidth={2.2} /> Último ingresado
                                             </button>
                                             <button
                                                 onClick={() => setCartSortOrder('oldest')}
@@ -1939,10 +1942,13 @@ export default function B2BDashboard() {
                                                     fontSize: '0.68rem',
                                                     fontWeight: cartSortOrder === 'oldest' ? '900' : '700',
                                                     cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
                                                     transition: 'all 0.15s ease'
                                                 }}
                                             >
-                                                ⏳ Primero ingresado
+                                                <History size={11} strokeWidth={2.2} /> Primero ingresado
                                             </button>
                                             <button
                                                 onClick={() => setCartSortOrder('alpha')}
@@ -1956,10 +1962,13 @@ export default function B2BDashboard() {
                                                     fontSize: '0.68rem',
                                                     fontWeight: cartSortOrder === 'alpha' ? '900' : '700',
                                                     cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
                                                     transition: 'all 0.15s ease'
                                                 }}
                                             >
-                                                🔤 A-Z
+                                                <ArrowDownAZ size={11} strokeWidth={2.2} /> A-Z
                                             </button>
                                         </div>
                                     </div>
