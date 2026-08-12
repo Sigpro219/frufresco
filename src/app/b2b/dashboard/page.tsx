@@ -52,7 +52,8 @@ export default function B2BDashboard() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
-    const [modalQuantity, setModalQuantity] = useState(1);
+    const [modalQuantity, setModalQuantity] = useState<number | string>(1);
+    const [itemInputs, setItemInputs] = useState<Record<string, string>>({});
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
@@ -277,6 +278,9 @@ export default function B2BDashboard() {
         if (!selectedProductForModal) return;
 
         const product = selectedProductForModal;
+        const numericModalQty = typeof modalQuantity === 'string' 
+            ? (parseFloat(modalQuantity.replace(',', '.')) || 1)
+            : Number(modalQuantity) || 1;
 
         // Construir nombre con variantes (ej: "Lulo (Maduro, Grande)")
         const baseName = locale === 'en' ? (product.name_en || product.name) : product.name;
@@ -289,7 +293,7 @@ export default function B2BDashboard() {
         const exists = orderItems.find(item => item.product_name === finalName && item.product_id === product.id);
 
         if (exists) {
-            updateQuantity(exists.id, exists.quantity + modalQuantity);
+            updateQuantity(exists.id, exists.quantity + numericModalQty);
         } else {
             const agreementPrice = agreementPricesMap[product.id];
             const basePrice = product.base_price ? Number(product.base_price) : undefined;
@@ -301,7 +305,7 @@ export default function B2BDashboard() {
                 product_name: product.name,
                 product_name_en: product.name_en,
                 product_image: product.image_url || '',
-                quantity: modalQuantity,
+                quantity: numericModalQty,
                 unit: product.unit_of_measure || 'kg',
                 unit_price: resolvedPrice,
                 base_price: basePrice,
@@ -1664,50 +1668,91 @@ export default function B2BDashboard() {
                                                                     </span>
                                                                 </div>
 
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '8px', border: '1px solid #E2E8F0', flexShrink: 0 }}>
-                                                                    <button
-                                                                        onClick={() => updateQuantity(item.id, Math.max(0, item.quantity - 1))}
-                                                                        style={{
-                                                                            width: '26px', height: '26px',
-                                                                            borderRadius: '6px',
-                                                                            border: 'none',
-                                                                            backgroundColor: 'white',
-                                                                            cursor: 'pointer',
-                                                                            fontSize: '0.85rem',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            transition: 'all 0.2s',
-                                                                            fontWeight: '700',
-                                                                            color: 'var(--text-main)',
-                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                        }}
-                                                                    >−</button>
-                                                                    
-                                                                    <div style={{ minWidth: '44px', textAlign: 'center', padding: '0 4px' }}>
-                                                                        <span style={{ fontWeight: '900', fontSize: '0.85rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', whiteSpace: 'nowrap' }}>
-                                                                            {formatQuantity(item.quantity)} <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B' }}>{item.unit}</span>
-                                                                        </span>
-                                                                    </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', backgroundColor: '#F8FAFC', padding: '2px 4px', borderRadius: '8px', border: '1px solid #CBD5E1', flexShrink: 0 }}>
+                                                                     <button
+                                                                         onClick={() => {
+                                                                             const current = item.quantity;
+                                                                             const next = Math.max(0, Math.round((current - 1) * 10) / 10);
+                                                                             updateQuantity(item.id, next);
+                                                                         }}
+                                                                         style={{
+                                                                             width: '26px', height: '26px',
+                                                                             borderRadius: '6px',
+                                                                             border: 'none',
+                                                                             backgroundColor: 'white',
+                                                                             cursor: 'pointer',
+                                                                             fontSize: '0.85rem',
+                                                                             display: 'flex',
+                                                                             alignItems: 'center',
+                                                                             justifyContent: 'center',
+                                                                             transition: 'all 0.2s',
+                                                                             fontWeight: '900',
+                                                                             color: 'var(--text-main)',
+                                                                             boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                         }}
+                                                                     >−</button>
+                                                                     
+                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 2px' }}>
+                                                                         <input
+                                                                             type="text"
+                                                                             inputMode="decimal"
+                                                                             value={itemInputs[item.id] !== undefined ? itemInputs[item.id] : String(item.quantity).replace('.', ',')}
+                                                                             onChange={(e) => {
+                                                                                 const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
+                                                                                 setItemInputs(prev => ({ ...prev, [item.id]: val }));
+                                                                                 const num = parseFloat(val.replace(',', '.'));
+                                                                                 if (!isNaN(num) && num >= 0) {
+                                                                                     updateQuantity(item.id, num);
+                                                                                 }
+                                                                             }}
+                                                                             onBlur={() => {
+                                                                                 const currentStr = itemInputs[item.id] !== undefined ? itemInputs[item.id] : String(item.quantity).replace('.', ',');
+                                                                                 const num = parseFloat(currentStr.replace(',', '.')) || 0;
+                                                                                 updateQuantity(item.id, num);
+                                                                                 setItemInputs(prev => {
+                                                                                     const copy = { ...prev };
+                                                                                     delete copy[item.id];
+                                                                                     return copy;
+                                                                                 });
+                                                                             }}
+                                                                             style={{
+                                                                                 width: '46px',
+                                                                                 border: 'none',
+                                                                                 textAlign: 'center',
+                                                                                 fontWeight: '900',
+                                                                                 fontSize: '0.85rem',
+                                                                                 color: 'var(--primary)',
+                                                                                 fontFamily: 'var(--font-outfit), sans-serif',
+                                                                                 outline: 'none',
+                                                                                 backgroundColor: 'transparent'
+                                                                             }}
+                                                                         />
+                                                                         <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', paddingRight: '2px' }}>{item.unit}</span>
+                                                                     </div>
 
-                                                                    <button
-                                                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                                                        style={{
-                                                                            width: '26px', height: '26px',
-                                                                            borderRadius: '6px',
-                                                                            border: 'none',
-                                                                            backgroundColor: 'var(--primary)',
-                                                                            color: 'white',
-                                                                            cursor: 'pointer',
-                                                                            fontSize: '0.85rem',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            transition: 'all 0.2s',
-                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                                                        }}
-                                                                    >+</button>
-                                                                </div>
+                                                                     <button
+                                                                         onClick={() => {
+                                                                             const current = item.quantity;
+                                                                             const next = Math.round((current + 1) * 10) / 10;
+                                                                             updateQuantity(item.id, next);
+                                                                         }}
+                                                                         style={{
+                                                                             width: '26px', height: '26px',
+                                                                             borderRadius: '6px',
+                                                                             border: 'none',
+                                                                             backgroundColor: 'var(--primary)',
+                                                                             color: 'white',
+                                                                             cursor: 'pointer',
+                                                                             fontSize: '0.85rem',
+                                                                             display: 'flex',
+                                                                             alignItems: 'center',
+                                                                             justifyContent: 'center',
+                                                                             transition: 'all 0.2s',
+                                                                             boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                                                             fontWeight: '900'
+                                                                         }}
+                                                                     >+</button>
+                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3169,31 +3214,87 @@ export default function B2BDashboard() {
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
                             <button
-                                onClick={() => setModalQuantity(Math.max(1, modalQuantity - 1))}
+                                onClick={() => {
+                                    const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                    const next = Math.max(0.5, Math.round((current - 1) * 10) / 10);
+                                    setModalQuantity(String(next).replace('.', ','));
+                                }}
                                 style={{
-                                    width: '48px', height: '48px',
+                                    width: '44px', height: '44px',
                                     borderRadius: '50%',
-                                    border: '1px solid var(--border)',
+                                    border: '1px solid #CBD5E1',
                                     backgroundColor: 'white',
-                                    fontSize: '1.5rem',
-                                    cursor: 'pointer'
+                                    fontSize: '1.4rem',
+                                    fontWeight: '900',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#334155'
                                 }}
                             >−</button>
-                            <span style={{ fontSize: '1.5rem', fontWeight: '700', minWidth: '80px' }}>
-                                {modalQuantity} {selectedProductForModal.unit_of_measure || 'kg'}
-                            </span>
+
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '6px', 
+                                border: '2px solid var(--primary)', 
+                                borderRadius: '14px', 
+                                padding: '0.4rem 0.9rem', 
+                                backgroundColor: '#F0FDF4',
+                                boxShadow: '0 2px 8px rgba(4, 120, 87, 0.1)'
+                            }}>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={String(modalQuantity)}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
+                                        setModalQuantity(val);
+                                    }}
+                                    onBlur={() => {
+                                        const str = String(modalQuantity);
+                                        const num = parseFloat(str.replace(',', '.')) || 1;
+                                        setModalQuantity(String(num).replace('.', ','));
+                                    }}
+                                    style={{
+                                        width: '75px',
+                                        border: 'none',
+                                        fontSize: '1.4rem',
+                                        fontWeight: '900',
+                                        color: 'var(--primary)',
+                                        textAlign: 'center',
+                                        outline: 'none',
+                                        backgroundColor: 'transparent',
+                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                    }}
+                                />
+                                <span style={{ fontSize: '1.05rem', fontWeight: '800', color: '#047857' }}>
+                                    {selectedProductForModal.unit_of_measure || 'Kg'}
+                                </span>
+                            </div>
+
                             <button
-                                onClick={() => setModalQuantity(modalQuantity + 1)}
+                                onClick={() => {
+                                    const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                    const next = Math.round((current + 1) * 10) / 10;
+                                    setModalQuantity(String(next).replace('.', ','));
+                                }}
                                 style={{
-                                    width: '48px', height: '48px',
+                                    width: '44px', height: '44px',
                                     borderRadius: '50%',
-                                    border: '1px solid var(--primary)',
+                                    border: 'none',
                                     backgroundColor: 'var(--primary)',
                                     color: 'white',
-                                    fontSize: '1.5rem',
-                                    cursor: 'pointer'
+                                    fontSize: '1.4rem',
+                                    fontWeight: '900',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 4px 10px rgba(13, 122, 87, 0.25)'
                                 }}
                             >+</button>
                         </div>
