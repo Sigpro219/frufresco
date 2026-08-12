@@ -239,6 +239,8 @@ export default function OrderLoadingPage() {
     const [activePricingModel, setActivePricingModel] = useState<any>(null);
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
+    const [agreementPricesMap, setAgreementPricesMap] = useState<Record<string, number>>({});
+    const [allowOffAgreement, setAllowOffAgreement] = useState<boolean>(true);
 
     // Client Exceptions (Product Nicknames & Notes) State
     const [clientExceptions, setClientExceptions] = useState<any[]>([]);
@@ -251,6 +253,8 @@ export default function OrderLoadingPage() {
         async function resolveContract() {
             if (!selectedOrder) {
                 setContractPrices({});
+                setAgreementPricesMap({});
+                setAllowOffAgreement(true);
                 setActivePricingModel(null);
                 setIsB2CDefault(false);
                 setIsContractExpired(false);
@@ -259,6 +263,48 @@ export default function OrderLoadingPage() {
             }
 
             const profileObj = selectedOrder.profiles;
+            const effectiveClientId = profileObj?.parent_id || profileObj?.id;
+
+            // 0. Fetch B2B Commercial Agreement Prices for this client
+            let agreeMap: Record<string, number> = {};
+            if (effectiveClientId) {
+                try {
+                    const res = await fetch(`/api/b2b/agreements?clientId=${effectiveClientId}`);
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json.pricesMap) {
+                            agreeMap = json.pricesMap;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('API agreement fetch error in admin order edit:', e);
+                }
+            }
+            setAgreementPricesMap(agreeMap);
+
+            // 0.1 Determine allow_off_agreement_purchases restriction
+            let canOffAgreement = true;
+            if (profileObj) {
+                if (profileObj.allow_off_agreement_purchases !== undefined && profileObj.allow_off_agreement_purchases !== null) {
+                    canOffAgreement = Boolean(profileObj.allow_off_agreement_purchases);
+                }
+                if (profileObj.parent_id && !profileObj.override_parent_off_agreement) {
+                    try {
+                        const { data: parentP } = await supabase
+                            .from('profiles')
+                            .select('allow_off_agreement_purchases')
+                            .eq('id', profileObj.parent_id)
+                            .single();
+                        if (parentP && parentP.allow_off_agreement_purchases !== undefined && parentP.allow_off_agreement_purchases !== null) {
+                            canOffAgreement = Boolean(parentP.allow_off_agreement_purchases);
+                        }
+                    } catch (e) {
+                        console.error('Error fetching parent profile off agreement setting:', e);
+                    }
+                }
+            }
+            setAllowOffAgreement(canOffAgreement);
+
             let modelId = profileObj?.pricing_model_id || null;
 
             if (!modelId && profileObj?.parent_id) {
@@ -762,7 +808,7 @@ export default function OrderLoadingPage() {
     };
 
     useEffect(() => {
-        if (productSearch.length < 3) {
+        if (productSearch.length < 2) {
             setSearchResults([]);
             setSearching(false);
             return;
@@ -770,22 +816,29 @@ export default function OrderLoadingPage() {
         
         setSearching(true);
         const delayDebounceFn = setTimeout(async () => {
-            console.log('🔍 Buscando productos (debounced):', productSearch);
+            console.log('🔍 Buscando productos en edición (debounced):', productSearch);
             try {
                 const { data, error } = await supabase
                     .from('products')
                     .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url, iva_rate')
                     .eq('is_active', true)
                     .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
-                    .limit(8);
+                    .limit(50);
                 
                 if (error) {
                     console.error('❌ Error de Supabase:', error.message, error.details, error.hint, error.code);
                     throw error;
                 }
+
+                let finalProducts = data || [];
+
+                // SI EL CLIENTE TIENE RESTRICCIÓN SOLO A CONVENIO (allowOffAgreement === false), FILTRAR PRODUCTOS
+                if (!allowOffAgreement && Object.keys(agreementPricesMap).length > 0) {
+                    finalProducts = finalProducts.filter(p => agreementPricesMap[p.id] !== undefined);
+                }
                 
-                console.log('✅ Resultados encontrados:', data?.length || 0);
-                setSearchResults(data || []);
+                console.log('✅ Resultados encontrados en edición:', finalProducts.length);
+                setSearchResults(finalProducts);
             } catch (err: any) {
                 console.error('💥 Excepción en búsqueda:', err);
                 const msg = err.message || JSON.stringify(err);
@@ -796,10 +849,10 @@ export default function OrderLoadingPage() {
             } finally {
                 setSearching(false);
             }
-        }, 300);
+        }, 250);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [productSearch]);
+    }, [productSearch, allowOffAgreement, agreementPricesMap]);
 
     // Autofocus logic for sub-modal
     useEffect(() => {
@@ -1000,7 +1053,11 @@ export default function OrderLoadingPage() {
             };
             setOrderItems(newOrderItems);
         } else {
-            const resolvedPrice = contractPrices[product.id] !== undefined && contractPrices[product.id] !== null ? contractPrices[product.id] : 0;
+            const resolvedPrice = (agreementPricesMap[product.id] !== undefined && agreementPricesMap[product.id] !== null)
+                ? Number(agreementPricesMap[product.id])
+                : ((contractPrices[product.id] !== undefined && contractPrices[product.id] !== null)
+                    ? Number(contractPrices[product.id])
+                    : (product.base_price ? Number(product.base_price) : 0));
             const newItem = {
                 order_id: selectedOrder.id,
                 product_id: product.id,
@@ -2373,14 +2430,27 @@ export default function OrderLoadingPage() {
                                             </div>
                                         </div>
 
-                                        {/* Product Search */}
+                                         {/* Product Search */}
                                         <div style={{ position: 'relative' }}>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#065F46', marginBottom: '6px' }}>AGREGAR PRODUCTO (NOMBRE O SKU)</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#065F46' }}>
+                                                    AGREGAR PRODUCTO (NOMBRE O SKU)
+                                                </label>
+                                                {!allowOffAgreement ? (
+                                                    <span style={{ fontSize: '0.7rem', backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontWeight: '800', border: '1px solid #F59E0B' }}>
+                                                        🔒 Cliente Restringido solo a Convenio
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ fontSize: '0.7rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontWeight: '800', border: '1px solid #7DD3FC' }}>
+                                                        🔓 Permite Fuera de Convenio
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{ display: 'flex', gap: '10px' }}>
                                                 <div style={{ position: 'relative', flex: 1 }}>
                                                     <input 
                                                         type="text"
-                                                        placeholder="Buscar productos para agregar..."
+                                                        placeholder={!allowOffAgreement ? "Buscar productos en convenio comercial..." : "Buscar productos para agregar..."}
                                                         value={productSearch}
                                                         onChange={(e) => { handleSearchProducts(e.target.value); setFocusedProductIndex(-1); }}
                                                         onKeyDown={handleProductSearchKeyDown}
@@ -2418,41 +2488,60 @@ export default function OrderLoadingPage() {
                                                     maxHeight: '280px',
                                                     overflowY: 'auto'
                                                 }}>
-                                                    {searchResults.map((prod, idx) => (
-                                                        <div 
-                                                            key={prod.id}
-                                                            id={`search-item-${idx}`}
-                                                            onClick={() => addProductToOrder(prod)}
-                                                            className="search-item"
-                                                            onMouseEnter={() => setFocusedProductIndex(idx)}
-                                                            style={{
-                                                                padding: '12px 16px',
-                                                                cursor: 'pointer',
-                                                                borderBottom: '1px solid #F1F5F9',
-                                                                display: 'flex',
-                                                                justifyContent: 'space-between',
-                                                                alignItems: 'center',
-                                                                transition: 'background-color 0.2s',
-                                                                backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
-                                                            }}
-                                                        >
-                                                            <div>
-                                                                <div style={{ fontWeight: '700', color: '#1E293B' }}>
-                                                                    {prod.name} {prod.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({prod.accounting_id})</span>}
+                                                    {searchResults.map((prod, idx) => {
+                                                        const isAgreePrice = agreementPricesMap[prod.id] !== undefined && agreementPricesMap[prod.id] !== null;
+                                                        const resolvedPrice = isAgreePrice
+                                                            ? Number(agreementPricesMap[prod.id])
+                                                            : ((contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null)
+                                                                ? Number(contractPrices[prod.id])
+                                                                : (prod.base_price ? Number(prod.base_price) : 0));
+
+                                                        return (
+                                                            <div 
+                                                                key={prod.id}
+                                                                id={`search-item-${idx}`}
+                                                                onClick={() => addProductToOrder(prod)}
+                                                                className="search-item"
+                                                                onMouseEnter={() => setFocusedProductIndex(idx)}
+                                                                style={{
+                                                                    padding: '12px 16px',
+                                                                    cursor: 'pointer',
+                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                    display: 'flex',
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center',
+                                                                    transition: 'background-color 0.2s',
+                                                                    backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
+                                                                }}
+                                                            >
+                                                                <div>
+                                                                    <div style={{ fontWeight: '700', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span>{prod.name}</span>
+                                                                        {prod.accounting_id && <span style={{ fontSize: '0.8em', color: '#6B7280' }}>({prod.accounting_id})</span>}
+                                                                    </div>
+                                                                </div>
+                                                                <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span>
+                                                                        {formatMoney(resolvedPrice)}/{prod.unit_of_measure || 'Kg'}
+                                                                    </span>
+                                                                    {isAgreePrice ? (
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 6px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                            Convenio
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#F3F4F6', color: '#4B5563', border: '1px solid #E5E7EB', padding: '2px 6px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                            Lista General
+                                                                        </span>
+                                                                    )}
+                                                                    {prod.options_config && prod.options_config.length > 0 && (
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                            ⚙️ Opciones
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                            <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <span>
-                                                                    {formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : 0)}/{prod.unit_of_measure}
-                                                                </span>
-                                                                {prod.options_config && prod.options_config.length > 0 && (
-                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                        ⚙️ Opciones
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
