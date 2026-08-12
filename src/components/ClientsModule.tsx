@@ -359,13 +359,17 @@ export default function ClientsModule() {
             if (setErr) throw setErr;
 
             // 2. Auditoría de Seguridad
-            await supabase.from('audit_logs').insert({
-                action: 'UPDATE',
-                table_name: 'products',
-                record_id: prodId,
-                old_data: { scarcity_status: 'active' },
-                new_data: { scarcity_status: 'temp_disabled_scarcity', message: newRecord.message, user: userTag }
-            }).catch(e => console.log('Audit trail entry info:', e));
+            try {
+                await supabase.from('audit_logs').insert({
+                    action: 'UPDATE',
+                    table_name: 'products',
+                    record_id: prodId,
+                    old_data: { scarcity_status: 'active' },
+                    new_data: { scarcity_status: 'temp_disabled_scarcity', message: newRecord.message, user: userTag }
+                });
+            } catch (e) {
+                console.log('Audit trail info:', e);
+            }
 
             setScarcityLockedMap(updatedMap);
             setIsScarcityModalOpen(false);
@@ -403,13 +407,17 @@ export default function ClientsModule() {
 
             // 2. Auditoría de Seguridad
             const userTag = profile?.contact_name || (profile as any)?.email || 'Comercial';
-            await supabase.from('audit_logs').insert({
-                action: 'UPDATE',
-                table_name: 'products',
-                record_id: prodId,
-                old_data: { scarcity_status: 'temp_disabled_scarcity' },
-                new_data: { scarcity_status: 'active', user: userTag }
-            }).catch(e => console.log('Audit trail entry info:', e));
+            try {
+                await supabase.from('audit_logs').insert({
+                    action: 'UPDATE',
+                    table_name: 'products',
+                    record_id: prodId,
+                    old_data: { scarcity_status: 'temp_disabled_scarcity' },
+                    new_data: { scarcity_status: 'active', user: userTag }
+                });
+            } catch (e) {
+                console.log('Audit trail info:', e);
+            }
 
             setScarcityLockedMap(updatedMap);
             if (typeof window !== 'undefined' && (window as any).showToast) {
