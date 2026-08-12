@@ -57,7 +57,8 @@ import {
     Clock,
     ShieldAlert,
     Unlock,
-    Gift
+    Gift,
+    Zap
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -2106,7 +2107,7 @@ export default function ClientsModule() {
                                                 {Object.keys(scarcityLockedMap).length} SKUs
                                             </div>
                                             <div style={{ fontSize: '0.75rem', fontWeight: '700', color: Object.keys(scarcityLockedMap).length > 0 ? '#DC2626' : '#0D7A57', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                ⚡ Bloquear / Reactivar en Mercado →
+                                                <Zap size={13} /> Bloquear / Reactivar en Mercado →
                                             </div>
                                         </div>
                                     </div>
@@ -2233,8 +2234,8 @@ export default function ClientsModule() {
                                                             </span>
                                                         </div>
 
-                                                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#334155', fontStyle: 'italic', backgroundColor: 'rgba(255,255,255,0.7)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.06)' }}>
-                                                            💬 "{lockedItem.message}"
+                                                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#334155', fontStyle: 'italic', backgroundColor: 'rgba(255,255,255,0.7)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <MessageSquare size={13} style={{ color: '#059669', flexShrink: 0 }} /> "{lockedItem.message}"
                                                         </p>
 
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
