@@ -235,7 +235,28 @@ function CreateOrderContent() {
     const [draftClientType, setDraftClientType] = useState('b2c_client');
 
 
-    
+    // Scarcity Locked SKUs State
+    const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
+
+    useEffect(() => {
+        const fetchScarcityMap = async () => {
+            try {
+                const { data } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'scarcity_locked_skus')
+                    .single();
+                if (data?.value) {
+                    const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+                    setScarcityLockedMap(parsed || {});
+                }
+            } catch (err) {
+                console.error('Error fetching scarcity map in orders create:', err);
+            }
+        };
+        fetchScarcityMap();
+    }, []);
+
     // Payment Method State
     const [paymentMethod, setPaymentMethod] = useState('contra_entrega');
 
@@ -1033,6 +1054,11 @@ function CreateOrderContent() {
     });
 
     const handleProductClick = (product: any) => {
+        if (scarcityLockedMap[product.id]) {
+            showToast(`🚫 "${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`, 'error');
+            return;
+        }
+
         // Reset modal state
         setModalQuantity(1);
         setSelectedOptions({});
@@ -2140,7 +2166,8 @@ function CreateOrderContent() {
     // Filters & Helpers
     const filteredProducts = (!productSearch || productSearch.length < 2) ? [] : (products || []).filter(p =>
         (p.name && p.name.toLowerCase().includes(productSearch.toLowerCase())) ||
-        (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
+        (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase())) ||
+        (p.accounting_id && String(p.accounting_id).toLowerCase().includes(productSearch.toLowerCase()))
     ).slice(0, 10);
 
     const handleProductSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2153,9 +2180,11 @@ function CreateOrderContent() {
             e.preventDefault();
             setFocusedProductIndex(prev => (prev > 0 ? prev - 1 : 0));
         } else if (e.key === 'Enter' || e.key === 'Tab') {
-            if (focusedProductIndex >= 0 && focusedProductIndex < filteredProducts.length) {
+            const targetIdx = (focusedProductIndex >= 0 && focusedProductIndex < filteredProducts.length) ? focusedProductIndex : 0;
+            const targetProd = filteredProducts[targetIdx];
+            if (targetProd) {
                 e.preventDefault();
-                handleProductClick(filteredProducts[focusedProductIndex]);
+                handleProductClick(targetProd);
                 setFocusedProductIndex(-1);
             }
         } else if (e.key === 'Escape') {
@@ -3384,24 +3413,41 @@ function CreateOrderContent() {
                                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
                                     maxHeight: '280px', overflowY: 'auto'
                                 }}>
-                                    {filteredProducts.map((p, idx) => (
-                                        <div
-                                            key={p.id}
-                                            onClick={() => handleProductClick(p)}
-                                            onMouseEnter={() => setFocusedProductIndex(idx)}
-                                            style={{
-                                                padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
-                                            }}
-                                        >
-                                            <span style={{ fontWeight: '600' }}>{p.name} <span style={{fontSize: '0.8em', color: '#6B7280'}}>({getAccountingIdDisplay(p)})</span></span>
-                                            <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                                {formatMoney(p.base_price)}/{p.unit_of_measure}
-                                                {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
-                                            </span>
-                                        </div>
-                                    ))}
+                                    {filteredProducts.map((p, idx) => {
+                                        const isScarcityLocked = Boolean(scarcityLockedMap[p.id]);
+                                        return (
+                                            <div
+                                                key={p.id}
+                                                onClick={() => handleProductClick(p)}
+                                                onMouseEnter={() => setFocusedProductIndex(idx)}
+                                                style={{
+                                                    padding: '0.8rem 1rem',
+                                                    cursor: isScarcityLocked ? 'not-allowed' : 'pointer',
+                                                    borderBottom: '1px solid #F3F4F6',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    backgroundColor: isScarcityLocked ? '#FEF2F2' : (idx === focusedProductIndex ? '#EFF6FF' : 'white'),
+                                                    opacity: isScarcityLocked ? 0.85 : 1
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <span style={{ fontWeight: '700', color: isScarcityLocked ? '#991B1B' : '#111827' }}>
+                                                        {p.name} <span style={{ fontSize: '0.8em', color: '#6B7280' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
+                                                    </span>
+                                                    {isScarcityLocked && (
+                                                        <span style={{ fontSize: '0.68rem', backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCA5A5', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <PackageX size={12} /> AGOTADO POR ESCASEZ
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
+                                                    {formatMoney(p.base_price)}/{p.unit_of_measure}
+                                                    {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
