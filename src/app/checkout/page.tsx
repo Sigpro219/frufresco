@@ -42,6 +42,7 @@ import {
     Banknote
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
+import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
 import dynamic from 'next/dynamic';
 
 const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), { ssr: false });
@@ -447,11 +448,38 @@ export default function CheckoutPage() {
         return result.toISOString().split('T')[0];
     };
 
-    // Initial default value to avoid empty state
+    // Initial default value to avoid empty state (skipping Sundays & 19 Colombian holidays)
     useEffect(() => {
-        const defaultDate = getSafeBogotaDate(1);
-        setDate(prev => prev || defaultDate);
-        setMinDeliveryDate(defaultDate);
+        async function initDeliveryDate() {
+            try {
+                const { data: settingsData } = await supabase
+                    .from('app_settings')
+                    .select('key, value')
+                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+
+                const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
+                const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
+                const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+
+                const now = new Date();
+                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                const bogotaNow = new Date(utc + (3600000 * -5));
+                const currentHour = bogotaNow.getHours();
+                const daysToAdd = (cutoffEnabled && currentHour >= 17) ? 2 : 1;
+
+                const baseTarget = new Date(bogotaNow);
+                baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
+
+                const validDate = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays);
+                const dateStr = validDate.toISOString().split('T')[0];
+
+                setDate(prev => prev || dateStr);
+                setMinDeliveryDate(dateStr);
+            } catch (err) {
+                console.error("Error initializing delivery date in checkout:", err);
+            }
+        }
+        initDeliveryDate();
     }, []);
 
     // Load Profile data for B2B/Registered users

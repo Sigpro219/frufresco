@@ -13,6 +13,7 @@ import { translations, Locale } from '@/lib/translations';
 import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
 import AgreementDocumentModal from '@/components/AgreementDocumentModal';
 import { ShieldCheck, ExternalLink, ArrowRight, Percent, Award } from 'lucide-react';
+import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
 
 interface OrderItem {
     id: string;
@@ -518,38 +519,41 @@ export default function B2BDashboard() {
         
         const calculateTime = async (signal?: AbortSignal) => {
             try {
-                // Check Global Cutoff Switch
-                const { data: cutoffData } = await supabase
+                // Check Global Settings (Cutoff, Sunday & Holiday Rules)
+                const { data: settingsData } = await supabase
                     .from('app_settings')
-                    .select('value')
-                    .eq('key', 'enable_cutoff_rules')
-                    .abortSignal(signal as any)
-                    .limit(1);
-
-                const cutoffSetting = (cutoffData && cutoffData.length > 0) ? cutoffData[0] : null;
+                    .select('key, value')
+                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries'])
+                    .abortSignal(signal as any);
 
                 if (!isMounted.current) return;
 
-                const cutoffEnabled = cutoffSetting?.value !== 'false';
+                const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
+                const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
+                const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+
                 const now = new Date();
                 const cutoff = new Date();
                 cutoff.setHours(17, 0, 0, 0);
 
-                const nextDeliveryDate = new Date();
+                let targetDate = new Date();
 
                 if (cutoffEnabled) {
                     const afterCutoff = now >= cutoff;
                     if (afterCutoff) {
-                        nextDeliveryDate.setDate(now.getDate() + 2);
+                        targetDate.setDate(now.getDate() + 2);
                     } else {
-                        nextDeliveryDate.setDate(now.getDate() + 1);
+                        targetDate.setDate(now.getDate() + 1);
                     }
                 } else {
-                    nextDeliveryDate.setDate(now.getDate() + 1);
+                    targetDate.setDate(now.getDate() + 1);
                 }
 
+                // Ajustar al primer día hábil permitido (saltando domingos y 19 festivos si están deshabilitados)
+                const validTargetDate = getNextValidDeliveryDate(targetDate, allowSundays, allowHolidays);
+
                 if (isMounted.current) {
-                    const minDateStr = nextDeliveryDate.toISOString().split('T')[0];
+                    const minDateStr = validTargetDate.toISOString().split('T')[0];
                     setDeliveryDate(minDateStr);
                     setMinDeliveryDate(minDateStr);
                 }

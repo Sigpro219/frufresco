@@ -24,7 +24,10 @@ import {
     Building2,
     Save,
     ShieldAlert,
-    Sparkles
+    Sparkles,
+    PackageCheck,
+    Percent,
+    CalendarX
 } from 'lucide-react';
 
 function ImageUpload({ 
@@ -273,6 +276,8 @@ export default function AdminSettingsPage() {
             { key: 'min_order_hogar', value: '30000', description: 'Pedido mínimo para la Línea Hogar' },
             { key: 'min_order_institucional', value: '150000', description: 'Pedido mínimo para la Línea Institucional' },
             { key: 'enable_cutoff_rules', value: 'true', description: 'Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)' },
+            { key: 'allow_sunday_deliveries', value: 'false', description: '¿Permitir entregas los Domingos?' },
+            { key: 'allow_holiday_deliveries', value: 'false', description: '¿Permitir entregas los Días Festivos (19 Días Colombia)?' },
             { key: 'enable_b2b_lead_capture', value: 'true', description: 'Canal de registro para nuevos clientes institucionales (B2B)' },
             { key: 'inbox_email_orders', value: 'pedidos@frufresco.com', description: 'Correo de Ingesta de Pedidos (AI)' },
             { key: 'inbox_email_commercial', value: 'contacto@investmentscortes.com', description: 'Correo Comercial de Negociaciones' },
@@ -639,7 +644,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -652,19 +657,21 @@ export default function AdminSettingsPage() {
                                             boxShadow: THEME.shadow.sm,
                                             gridColumn: setting.key === 'packaging_fee_note' ? '1 / -1' : 'span 1'
                                         }}>
-                                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 {setting.key === 'delivery_fee' ? 'Costo de Envío' :
                                                  setting.key === 'min_order_hogar' ? 'Mínimo Hogar' :
                                                  setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
                                                  setting.key === 'store_status' ? 'Estado Tienda' :
                                                  setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
                                                  setting.key === 'enable_cutoff_rules' ? 'Reglas Hora de Corte (5 PM)' :
-                                                 setting.key === 'packaging_fee_enabled' ? '🛍️ Cobro Empaque Plástico (Checkout)' :
-                                                 setting.key === 'packaging_fee_percentage' ? '🛍️ Porcentaje Empaque (%)' :
-                                                 setting.key === 'packaging_fee_note' ? '🛍️ Explicación de Empaque (Nota Cliente)' :
+                                                 setting.key === 'allow_sunday_deliveries' ? <><CalendarX size={14} style={{ color: 'var(--primary)' }} /> Entregas los Domingos</> :
+                                                 setting.key === 'allow_holiday_deliveries' ? <><Sparkles size={14} style={{ color: '#D97706' }} /> Entregas en Festivos (19 Días Colombia)</> :
+                                                 setting.key === 'packaging_fee_enabled' ? <><PackageCheck size={14} style={{ color: 'var(--primary)' }} /> Cobro Empaque Plástico (Checkout)</> :
+                                                 setting.key === 'packaging_fee_percentage' ? <><Percent size={14} style={{ color: 'var(--primary)' }} /> Porcentaje Empaque (%)</> :
+                                                 setting.key === 'packaging_fee_note' ? <><FileText size={14} style={{ color: 'var(--primary)' }} /> Explicación de Empaque (Nota Cliente)</> :
                                                  setting.key.replace(/_/g, ' ')}
                                             </h4>
-                                            {setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'packaging_fee_enabled' ? (
+                                            {setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
                                                 <select 
                                                     value={setting.value} 
                                                     onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 

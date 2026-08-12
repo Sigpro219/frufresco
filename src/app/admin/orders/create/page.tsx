@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
+import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
 
 const formatDetectedUnit = (qty: number, unit: string) => {
     const u = (unit || '').toLowerCase();
@@ -242,7 +243,7 @@ function CreateOrderContent() {
     const [productSearch, setProductSearch] = useState('');
 
     const [originSource, setOriginSource] = useState(searchParams.get('source') || 'phone'); // phone, whatsapp, email
-    const getMinDeliveryDate = () => {
+    const [minDeliveryDate, setMinDeliveryDate] = useState(() => {
         const now = new Date();
         const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
         const bogotaNow = new Date(utc + (3600000 * -5));
@@ -250,10 +251,42 @@ function CreateOrderContent() {
         const daysToAdd = currentHour >= 17 ? 2 : 1;
         const result = new Date(bogotaNow);
         result.setDate(bogotaNow.getDate() + daysToAdd);
-        return result.toISOString().split('T')[0];
-    };
-    const minDeliveryDate = getMinDeliveryDate();
-    const [deliveryDate, setDeliveryDate] = useState(minDeliveryDate); // Default safe Bogota date
+        return getNextValidDeliveryDate(result, false, false).toISOString().split('T')[0];
+    });
+    const [deliveryDate, setDeliveryDate] = useState(minDeliveryDate);
+
+    useEffect(() => {
+        async function fetchDeliverySettings() {
+            try {
+                const { data: settingsData } = await supabase
+                    .from('app_settings')
+                    .select('key, value')
+                    .in('key', ['enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+
+                const cutoffEnabled = settingsData?.find(s => s.key === 'enable_cutoff_rules')?.value !== 'false';
+                const allowSundays = settingsData?.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true';
+                const allowHolidays = settingsData?.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true';
+
+                const now = new Date();
+                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                const bogotaNow = new Date(utc + (3600000 * -5));
+                const currentHour = bogotaNow.getHours();
+                const daysToAdd = (cutoffEnabled && currentHour >= 17) ? 2 : 1;
+
+                const baseTarget = new Date(bogotaNow);
+                baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
+
+                const validDate = getNextValidDeliveryDate(baseTarget, allowSundays, allowHolidays);
+                const dateStr = validDate.toISOString().split('T')[0];
+
+                setMinDeliveryDate(dateStr);
+                setDeliveryDate(dateStr);
+            } catch (err) {
+                console.error("Error fetching delivery settings in manual orders:", err);
+            }
+        }
+        fetchDeliverySettings();
+    }, []);
     const [deliverySlot, setDeliverySlot] = useState('AM'); // AM or PM
     const [isManualDelivery, setIsManualDelivery] = useState(false);
     const [manualDeliveryTime, setManualDeliveryTime] = useState('');
