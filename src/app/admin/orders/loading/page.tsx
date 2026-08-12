@@ -438,7 +438,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, shipping_address, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))');
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))');
 
                 if (selectedDate && selectedDate !== 'all') {
                     query = query.eq('delivery_date', selectedDate);
