@@ -2831,10 +2831,9 @@ function CreateOrderContent() {
                                                 min={minDeliveryDate}
                                                 onChange={e => {
                                                     const newDate = e.target.value;
-                                                    const minDate = getMinDeliveryDate();
-                                                    if (newDate < minDate) {
-                                                        showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
-                                                        setDeliveryDate(minDate);
+                                                    if (newDate < minDeliveryDate) {
+                                                        showToast(`La fecha mínima de entrega permitida es ${minDeliveryDate}.`, 'error');
+                                                        setDeliveryDate(minDeliveryDate);
                                                         return;
                                                     }
                                                     setDeliveryDate(newDate);
