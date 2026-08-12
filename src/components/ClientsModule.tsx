@@ -225,6 +225,21 @@ export default function ClientsModule() {
         fetchData();
     }, []);
 
+    const formatCategoryName = (cat: string) => {
+        if (!cat) return 'General';
+        const map: Record<string, string> = {
+            'TU': 'Tubérculo',
+            'HO': 'Hortaliza',
+            'LA': 'Lácteo',
+            'DE': 'Despensa',
+            'FR': 'Fruta',
+            'VE': 'Verdura',
+            'AB': 'Abarrotes',
+            'HI': 'Hierba'
+        };
+        return map[cat.toUpperCase()] || cat;
+    };
+
     // Product Search for Scarcity Modal
     useEffect(() => {
         if (!scarcityProductSearch || scarcityProductSearch.trim().length < 2) {
@@ -238,8 +253,8 @@ export default function ClientsModule() {
             try {
                 const { data } = await supabase
                     .from('products')
-                    .select('id, name, sku, category, unit_of_measure, base_price')
-                    .or(`name.ilike.%${scarcityProductSearch}%,sku.ilike.%${scarcityProductSearch}%`)
+                    .select('id, name, sku, accounting_id, category, unit_of_measure, base_price')
+                    .or(`name.ilike.%${scarcityProductSearch}%,sku.ilike.%${scarcityProductSearch}%,accounting_id.ilike.%${scarcityProductSearch}%`)
                     .limit(20);
                 
                 setScarcitySearchResults(data || []);
@@ -267,6 +282,8 @@ export default function ClientsModule() {
             const newRecord = {
                 id: prodId,
                 sku: selectedScarcityProduct.sku || 'N/A',
+                accounting_id: selectedScarcityProduct.accounting_id || selectedScarcityProduct.sku || 'N/A',
+                category: selectedScarcityProduct.category || 'General',
                 name: selectedScarcityProduct.name,
                 disabledAt: nowIso,
                 message: scarcityCustomMessage.trim() || 'Insumo temporalmente agotado por escasez en el mercado. Notificaremos su disponibilidad tan pronto se restablezca el abastecimiento.',
@@ -2130,7 +2147,7 @@ export default function ClientsModule() {
                                                                     <div style={{ fontWeight: '900', fontSize: '0.9rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                                         <span>{lockedItem.name}</span>
                                                                         <span style={{ fontSize: '0.68rem', backgroundColor: 'white', padding: '1px 6px', borderRadius: '4px', border: '1px solid #CBD5E1', color: '#475569', fontWeight: '700' }}>
-                                                                            SKU: {lockedItem.sku || 'N/A'}
+                                                                            ID Contable: {lockedItem.accounting_id || lockedItem.sku || 'N/A'}
                                                                         </span>
                                                                     </div>
                                                                     <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -2863,7 +2880,7 @@ export default function ClientsModule() {
                                         <div>
                                             <div style={{ fontWeight: '900', fontSize: '0.92rem', color: '#065F46' }}>{selectedScarcityProduct.name}</div>
                                             <div style={{ fontSize: '0.75rem', color: '#0D7A57', fontWeight: '700' }}>
-                                                SKU: {selectedScarcityProduct.sku || 'N/A'} | Categoría: {selectedScarcityProduct.category || 'General'}
+                                                ID Contable: {selectedScarcityProduct.accounting_id || selectedScarcityProduct.sku || 'N/A'} | Categoría: {formatCategoryName(selectedScarcityProduct.category)}
                                             </div>
                                         </div>
                                         <button
@@ -2879,7 +2896,7 @@ export default function ClientsModule() {
                                             <Search size={16} style={{ color: '#64748B', marginRight: '8px' }} />
                                             <input
                                                 type="text"
-                                                placeholder="Buscar producto por nombre o SKU (ej: Papa, Tomate)..."
+                                                placeholder="Buscar producto por nombre, SKU o ID Contable..."
                                                 value={scarcityProductSearch}
                                                 onChange={e => setScarcityProductSearch(e.target.value)}
                                                 style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.88rem', fontWeight: '600' }}
@@ -2902,7 +2919,7 @@ export default function ClientsModule() {
                                                         onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
                                                     >
                                                         <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>{prod.name}</div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>SKU: {prod.sku || 'N/A'} • {prod.category || 'General'}</div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>ID Contable: {prod.accounting_id || prod.sku || 'N/A'} • {formatCategoryName(prod.category)}</div>
                                                     </div>
                                                 ))}
                                             </div>
