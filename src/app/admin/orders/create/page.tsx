@@ -558,9 +558,19 @@ function CreateOrderContent() {
             let modelId: string | null = null;
             let currentProfile: any = null;
 
-            if (clientType === 'B2B' && selectedClient) {
+            const isB2B = clientType === 'B2B' || Boolean(selectedClient);
+
+            if (selectedClient) {
                 currentProfile = clients.find(c => c.id === selectedClient);
-            } else if (clientType === 'B2C' && selectedClientB2C) {
+                if (!currentProfile) {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('id, company_name, pricing_model_id, parent_id, role')
+                        .eq('id', selectedClient)
+                        .maybeSingle();
+                    if (data) currentProfile = data;
+                }
+            } else if (selectedClientB2C) {
                 currentProfile = b2cClients.find(c => c.id === selectedClientB2C);
             }
 
@@ -581,8 +591,8 @@ function CreateOrderContent() {
             let activeAgreement: any = null;
 
             // Check if there is an active agreement for the client (or matrix parent)
-            if (clientType === 'B2B' && currentProfile) {
-                const effectiveClientId = currentProfile.parent_id || currentProfile.id;
+            if (isB2B && (selectedClient || currentProfile)) {
+                const effectiveClientId = currentProfile?.parent_id || currentProfile?.id || selectedClient;
                 const { data } = await supabase
                     .from('quotes')
                     .select('id, quote_number, start_date, valid_until')
@@ -639,7 +649,6 @@ function CreateOrderContent() {
                 // 2. Fallback to General Institucional (B2B) or Clientes Hogar (B2C) if no model or if expired
                 if (!resolvedModel || expired) {
                     b2cFallback = true;
-                    const isB2B = clientType === 'B2B' || Boolean(selectedClient);
                     const targetNames = isB2B 
                         ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
                         : ['Clientes Hogar', 'Clientes B2C'];
@@ -660,43 +669,25 @@ function CreateOrderContent() {
             setIsB2CDefault(b2cFallback);
             setIsContractExpired(expired);
 
-            // 3. Load prices for the resolved contract/model with baseline fallback prices
+            // 3. Load prices for the resolved contract/model
             if (resolvedModel) {
                 const map: Record<string, number> = {};
                 const customIds = new Set<string>();
 
-                // Load baseline prices: use client's assigned pricing model if available, otherwise fallback
-                let baselineModelId = modelId;
-                if (!baselineModelId) {
-                    const isB2B = clientType === 'B2B' || Boolean(selectedClient);
-                    const targetNames = isB2B 
-                        ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
-                        : ['Clientes Hogar', 'Clientes B2C'];
-
-                    const { data: fallbackModel } = await supabase
-                        .from('pricing_models')
-                        .select('id')
-                        .in('name', targetNames)
-                        .maybeSingle();
-
-                    if (fallbackModel) {
-                        baselineModelId = fallbackModel.id;
+                // Fetch model prices
+                const { data: activePrices } = await supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', resolvedModel.id);
+                
+                activePrices?.forEach((p: any) => {
+                    map[p.product_id] = p.price;
+                    if (resolvedModel.name !== 'Clientes Hogar' && resolvedModel.name !== 'Clientes B2C' && resolvedModel.name !== 'General Institucional' && !resolvedModel.is_base_model && !resolvedModel.is_agreement) {
+                        customIds.add(p.product_id);
                     }
-                }
-
-                if (baselineModelId) {
-                    const { data: baselinePrices } = await supabase
-                        .from('pricing_model_prices')
-                        .select('product_id, price')
-                        .eq('model_id', baselineModelId);
-                    
-                    baselinePrices?.forEach((p: any) => {
-                        map[p.product_id] = p.price;
-                    });
-                }
+                });
 
                 if (activeAgreement) {
-                    // Fetch agreement prices from quote_items
                     const { data: qItems } = await supabase
                         .from('quote_items')
                         .select('product_id, unit_price')
@@ -705,19 +696,6 @@ function CreateOrderContent() {
                     qItems?.forEach((p: any) => {
                         map[p.product_id] = p.unit_price;
                         customIds.add(p.product_id);
-                    });
-                } else {
-                    // Fetch active model prices
-                    const { data: activePrices } = await supabase
-                        .from('pricing_model_prices')
-                        .select('product_id, price')
-                        .eq('model_id', resolvedModel.id);
-                    
-                    activePrices?.forEach((p: any) => {
-                        map[p.product_id] = p.price;
-                        if (resolvedModel.name !== 'Clientes Hogar' && resolvedModel.name !== 'Clientes B2C' && resolvedModel.name !== 'General Institucional' && !resolvedModel.is_base_model) {
-                            customIds.add(p.product_id);
-                        }
                     });
                 }
 
