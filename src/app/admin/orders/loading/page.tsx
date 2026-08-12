@@ -307,6 +307,48 @@ export default function OrderLoadingPage() {
         }
     };
 
+    const handleSmartGeocodeInModal = async (addressToGeocode?: string) => {
+        const queryAddr = addressToGeocode || tempAddress;
+        if (!queryAddr || queryAddr.trim() === '') {
+            alert('Por favor ingresa una dirección de entrega válida.');
+            return;
+        }
+
+        setIsGeocoding(true);
+        setTempGeocodeMsg(null);
+
+        try {
+            const res = await fetch(`/api/geocode?address=${encodeURIComponent(queryAddr)}&city=${encodeURIComponent(tempCity)}`);
+            const data = await res.json();
+
+            if (data.results && data.results.length > 0) {
+                const loc = data.results[0].geometry.location;
+                setTempLat(loc.lat);
+                setTempLng(loc.lng);
+                setTempGeocodeMsg(`Ubicación georreferenciada por IA: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
+                if (typeof window !== 'undefined' && (window as any).showToast) {
+                    (window as any).showToast(`✅ Pin inteligente asignado: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 'success');
+                }
+            } else {
+                const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryAddr + ', ' + tempCity + ', Colombia')}`);
+                const nomData = await nomRes.json();
+                if (nomData && nomData.length > 0) {
+                    const lat = parseFloat(nomData[0].lat);
+                    const lon = parseFloat(nomData[0].lon);
+                    setTempLat(lat);
+                    setTempLng(lon);
+                    setTempGeocodeMsg(`Ubicación georreferenciada (OSM): ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+                } else {
+                    setTempGeocodeMsg('⚠️ No se hallaron coordenadas automáticas para esta dirección.');
+                }
+            }
+        } catch (err) {
+            console.error('Error en Pin inteligente:', err);
+        } finally {
+            setIsGeocoding(false);
+        }
+    };
+
     const handleGeocodeAddress = async () => {
         await handleOpenMapPicker();
     };
@@ -3577,13 +3619,39 @@ export default function OrderLoadingPage() {
                                         </p>
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsMapPickerOpen(false)}
-                                    style={{ background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '10px', fontSize: '1.1rem', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >
-                                    ✕
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSmartGeocodeInModal()}
+                                        disabled={isGeocoding}
+                                        title="Georreferenciar automáticamente la dirección usando Inteligencia Artificial"
+                                        style={{
+                                            backgroundColor: '#0D7A57',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '0.5rem 1.1rem',
+                                            borderRadius: '10px',
+                                            fontSize: '0.78rem',
+                                            fontWeight: '800',
+                                            cursor: isGeocoding ? 'wait' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 5px rgba(13, 122, 87, 0.25)',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {isGeocoding ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                        {isGeocoding ? 'Buscando...' : 'Pin inteligente (IA)'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMapPickerOpen(false)}
+                                        style={{ background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '10px', fontSize: '1.1rem', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Modal Body */}
