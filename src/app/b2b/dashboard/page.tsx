@@ -1283,18 +1283,21 @@ export default function B2BDashboard() {
 
                                             {/* FLOATING AUTOCOMPLETE DROPDOWN (DESPLEGABLE IDÉNTICO A LA IMAGEN 2) */}
                                             {isSearchDropdownOpen && searchTerm.trim().length > 0 && (
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    top: 'calc(100% + 6px)',
-                                                    left: 0,
-                                                    width: '340px',
-                                                    backgroundColor: 'white',
-                                                    borderRadius: '16px',
-                                                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1)',
-                                                    border: '1px solid #E2E8F0',
-                                                    zIndex: 999999,
-                                                    overflow: 'hidden'
-                                                }}>
+                                                <div 
+                                                    onMouseDown={(e) => e.preventDefault()}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 'calc(100% + 6px)',
+                                                        left: 0,
+                                                        width: '340px',
+                                                        backgroundColor: 'white',
+                                                        borderRadius: '16px',
+                                                        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1)',
+                                                        border: '1px solid #E2E8F0',
+                                                        zIndex: 999999,
+                                                        overflow: 'hidden'
+                                                    }}
+                                                >
                                                     {searchDropdownResults.length > 0 ? (
                                                         <div>
                                                             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -1307,6 +1310,13 @@ export default function B2BDashboard() {
                                                                         <div
                                                                             key={prod.id}
                                                                             ref={(el) => { searchItemRefs.current[idx] = el; }}
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                setModalQuantity(1);
+                                                                                setSelectedProductForModal(prod);
+                                                                                setIsSearchDropdownOpen(false);
+                                                                                setSearchFocusedIndex(-1);
+                                                                            }}
                                                                             onClick={() => {
                                                                                 setModalQuantity(1);
                                                                                 setSelectedProductForModal(prod);
