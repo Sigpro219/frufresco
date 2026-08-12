@@ -1290,10 +1290,14 @@ export default function B2BDashboard() {
                                     const filteredList = baseList.filter(p => {
                                         if (p.is_active === false) return false;
 
-                                        // Filtro por pestaña (Convenio vs Fuera vs Todos).
-                                        if (cleanSearchQuery.length === 0) {
-                                            if (agreementFilter === 'agreement' && agreementPricesMap[p.id] === undefined) return false;
-                                            if (agreementFilter === 'non_agreement' && agreementPricesMap[p.id] !== undefined) return false;
+                                        // Regla Estricta de Convenio:
+                                        const allowOffAgreement = (activeProfile as any)?.allow_off_agreement_purchases !== false;
+                                        
+                                        // Si el cliente no tiene permitido comprar fuera de convenio O el filtro activo es 'agreement', NUNCA mostrar productos fuera de convenio
+                                        if (!allowOffAgreement || agreementFilter === 'agreement') {
+                                            if (agreementPricesMap[p.id] === undefined) return false;
+                                        } else if (agreementFilter === 'non_agreement') {
+                                            if (agreementPricesMap[p.id] !== undefined) return false;
                                         }
 
                                         // Filtro por término de búsqueda (Insensible a mayúsculas y acentos)
