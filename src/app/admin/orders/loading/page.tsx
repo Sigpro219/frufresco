@@ -438,9 +438,17 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, shipping_address, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))')
-                    .eq('delivery_date', selectedDate)
-                    .order('created_at', { ascending: false });
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, shipping_address, pricing_model_id, parent_id), order_items(id, quantity, unit, products(weight_kg, unit_of_measure))');
+
+                if (selectedDate && selectedDate !== 'all') {
+                    query = query.eq('delivery_date', selectedDate);
+                }
+
+                query = query.order('created_at', { ascending: false });
+
+                if (selectedDate === 'all' || !selectedDate) {
+                    query = query.limit(100);
+                }
 
                 const { data, error } = await query;
 
@@ -1424,35 +1432,76 @@ export default function OrderLoadingPage() {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                         {/* Date Selector Segment */}
-                        <div style={{ 
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '0 0.8rem',
-                            backgroundColor: '#F9FAFB',
-                            borderRadius: '10px',
-                            border: '1px solid #E5E7EB',
-                            cursor: 'pointer',
-                            height: '40px'
-                        }} onClick={(e) => {
-                            const input = e.currentTarget.querySelector('input');
-                            if (input) (input as any).showPicker?.();
-                        }}>
-                             <Calendar size={16} strokeWidth={1.5} style={{ marginRight: '8px', color: THEME.colors.textSecondary }} />
-                             <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '0.8rem',
-                                    fontWeight: '800',
-                                    color: '#111827',
-                                    outline: 'none',
-                                    cursor: 'pointer',
-                                    width: '115px'
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ 
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '0 0.8rem',
+                                backgroundColor: '#F9FAFB',
+                                borderRadius: '10px',
+                                border: '1px solid #E5E7EB',
+                                cursor: 'pointer',
+                                height: '40px'
+                            }} onClick={(e) => {
+                                const input = e.currentTarget.querySelector('input');
+                                if (input) (input as any).showPicker?.();
+                            }}>
+                                 <Calendar size={16} strokeWidth={1.5} style={{ marginRight: '8px', color: THEME.colors.textSecondary }} />
+                                 <input
+                                    type="date"
+                                    value={selectedDate === 'all' ? '' : selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '800',
+                                        color: '#111827',
+                                        outline: 'none',
+                                        cursor: 'pointer',
+                                        width: '115px'
+                                    }}
+                                />
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                                    setSelectedDate(todayStr);
                                 }}
-                            />
+                                style={{
+                                    height: '40px',
+                                    padding: '0 10px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #E5E7EB',
+                                    backgroundColor: '#F8FAFC',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    color: THEME.colors.primary,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                                title="Ver pedidos programados para la fecha de hoy"
+                            >
+                                Hoy
+                            </button>
+                            <button 
+                                onClick={() => setSelectedDate('all')}
+                                style={{
+                                    height: '40px',
+                                    padding: '0 10px',
+                                    borderRadius: '10px',
+                                    border: selectedDate === 'all' ? '1px solid #818CF8' : '1px solid #E5E7EB',
+                                    backgroundColor: selectedDate === 'all' ? '#EEF2FF' : '#F8FAFC',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    color: selectedDate === 'all' ? '#4F46E5' : '#64748B',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                                title="Ver todos los pedidos recientes sin filtro de fecha"
+                            >
+                                Todas
+                            </button>
                         </div>
 
                         {/* Search Segment - Flexible & Responsive (MATCHING CLIENTS UI) */}
@@ -1753,9 +1802,43 @@ export default function OrderLoadingPage() {
 
                 {/* Empty */}
                 {!loading && filteredOrders.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: '12px' }}>
-                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={48} strokeWidth={1.5} /></div>
-                        <div style={{ color: '#64748B', fontWeight: '600' }}>No se encontraron pedidos con estos criterios</div>
+                    <div style={{ textAlign: 'center', padding: '3.5rem 2rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', margin: '1rem 0' }}>
+                        <div style={{ color: '#94A3B8', marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                            <PackageOpen size={54} strokeWidth={1.2} />
+                        </div>
+                        <div style={{ color: '#0F172A', fontWeight: '800', fontSize: '1.1rem', marginBottom: '0.4rem' }}>
+                            No se encontraron pedidos con estos criterios
+                        </div>
+                        <div style={{ color: '#64748B', fontSize: '0.85rem', marginBottom: '1.5rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
+                            {selectedDate && selectedDate !== 'all'
+                                ? `No hay entregas registradas para la fecha seleccionada (${selectedDate}). Puedes consultar los pedidos de hoy o ver todas las fechas.`
+                                : 'Intenta ajustar tus criterios de búsqueda o limpiar los filtros activos.'}
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button 
+                                onClick={() => {
+                                    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                                    setSelectedDate(todayStr);
+                                }}
+                                style={{ backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: '8px', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <Calendar size={14} /> Ver Pedidos de Hoy
+                            </button>
+                            <button 
+                                onClick={() => setSelectedDate('all')}
+                                style={{ backgroundColor: '#EEF2FF', color: '#4F46E5', border: '1px solid #C7D2FE', padding: '0.6rem 1.2rem', borderRadius: '8px', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                🌐 Ver Pedidos de Todas las Fechas
+                            </button>
+                            {hasActiveFilters && (
+                                <button 
+                                    onClick={clearAllFilters}
+                                    style={{ backgroundColor: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5', padding: '0.6rem 1.2rem', borderRadius: '8px', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <X size={14} /> Limpiar Filtros
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
 
