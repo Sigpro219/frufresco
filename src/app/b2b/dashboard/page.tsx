@@ -139,6 +139,7 @@ export default function B2BDashboard() {
     }, [searchTerm, categoryProducts, searchResults, agreementPricesMap, activeProfile, agreementFilter]);
 
     const searchItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const modalInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (searchFocusedIndex >= 0 && searchItemRefs.current[searchFocusedIndex]) {
@@ -148,6 +149,18 @@ export default function B2BDashboard() {
             });
         }
     }, [searchFocusedIndex]);
+
+    useEffect(() => {
+        if (selectedProductForModal) {
+            const timer = setTimeout(() => {
+                if (modalInputRef.current) {
+                    modalInputRef.current.focus();
+                    modalInputRef.current.select();
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedProductForModal]);
 
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (!isSearchDropdownOpen || searchDropdownResults.length === 0) return;
@@ -3379,19 +3392,28 @@ export default function B2BDashboard() {
 
             {/* QUANTITY MODAL */}
             {selectedProductForModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000,
-                    backdropFilter: 'blur(4px)'
-                }}>
+                <div 
+                    tabIndex={-1}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setSelectedProductForModal(null);
+                        }
+                    }}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        backdropFilter: 'blur(4px)'
+                    }}
+                >
                     <div style={{
                         backgroundColor: 'white',
                         padding: '2rem',
@@ -3469,6 +3491,12 @@ export default function B2BDashboard() {
                                         <select
                                             value={selectedOptions[opt.name] || ''}
                                             onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    confirmModalAdd();
+                                                }
+                                            }}
                                             style={{
                                                 width: '100%',
                                                 padding: '0.6rem',
@@ -3521,12 +3549,32 @@ export default function B2BDashboard() {
                                 boxShadow: '0 2px 8px rgba(4, 120, 87, 0.1)'
                             }}>
                                 <input
+                                    ref={modalInputRef}
                                     type="text"
                                     inputMode="decimal"
                                     value={String(modalQuantity)}
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
                                         setModalQuantity(val);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            confirmModalAdd();
+                                        } else if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            setSelectedProductForModal(null);
+                                        } else if (e.key === 'ArrowUp') {
+                                            e.preventDefault();
+                                            const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                            const next = Math.round((current + 1) * 10) / 10;
+                                            setModalQuantity(String(next).replace('.', ','));
+                                        } else if (e.key === 'ArrowDown') {
+                                            e.preventDefault();
+                                            const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                            const next = Math.max(0.5, Math.round((current - 1) * 10) / 10);
+                                            setModalQuantity(String(next).replace('.', ','));
+                                        }
                                     }}
                                     onBlur={() => {
                                         const str = String(modalQuantity);
