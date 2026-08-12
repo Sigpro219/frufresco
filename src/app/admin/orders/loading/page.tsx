@@ -352,6 +352,135 @@ export default function OrderLoadingPage() {
     const handleGeocodeAddress = async () => {
         await handleOpenMapPicker();
     };
+
+    const mapPickerContainerRef = useRef<HTMLDivElement | null>(null);
+    const mapPickerInstanceRef = useRef<any>(null);
+    const markerPickerInstanceRef = useRef<any>(null);
+
+    // Inicialización y actualización del Mapa Interactivo con Marcador Arrastrable (Google Maps o Leaflet)
+    useEffect(() => {
+        if (!isMapPickerOpen) {
+            mapPickerInstanceRef.current = null;
+            markerPickerInstanceRef.current = null;
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            if (!mapPickerContainerRef.current) return;
+
+            const mapDiv = mapPickerContainerRef.current;
+            const centerLat = tempLat || 4.6097;
+            const centerLng = tempLng || -74.0817;
+
+            // 1. Si Google Maps JavaScript API está disponible
+            if (typeof window !== 'undefined' && (window as any).google?.maps) {
+                const google = (window as any).google;
+                const center = { lat: centerLat, lng: centerLng };
+
+                if (!mapPickerInstanceRef.current || typeof mapPickerInstanceRef.current.setView === 'function') {
+                    mapDiv.innerHTML = '';
+                    mapPickerInstanceRef.current = new google.maps.Map(mapDiv, {
+                        center,
+                        zoom: 16,
+                        mapTypeControl: false,
+                        streetViewControl: false,
+                        fullscreenControl: false
+                    });
+
+                    markerPickerInstanceRef.current = new google.maps.Marker({
+                        position: center,
+                        map: mapPickerInstanceRef.current,
+                        draggable: true,
+                        animation: google.maps.Animation.DROP
+                    });
+
+                    markerPickerInstanceRef.current.addListener('dragend', () => {
+                        if (!markerPickerInstanceRef.current) return;
+                        const pos = markerPickerInstanceRef.current.getPosition();
+                        if (!pos) return;
+                        setTempLat(pos.lat());
+                        setTempLng(pos.lng());
+                        setTempGeocodeMsg(`📍 Marcador ajustado a: ${pos.lat().toFixed(5)}, ${pos.lng().toFixed(5)}`);
+                    });
+
+                    mapPickerInstanceRef.current.addListener('click', (e: any) => {
+                        const pos = e.latLng;
+                        if (!pos || !markerPickerInstanceRef.current) return;
+                        markerPickerInstanceRef.current.setPosition(pos);
+                        setTempLat(pos.lat());
+                        setTempLng(pos.lng());
+                        setTempGeocodeMsg(`📍 Marcador movido a: ${pos.lat().toFixed(5)}, ${pos.lng().toFixed(5)}`);
+                    });
+                } else {
+                    mapPickerInstanceRef.current.setCenter(center);
+                    markerPickerInstanceRef.current?.setPosition(center);
+                }
+                return;
+            }
+
+            // 2. Fallback: Leaflet (OpenStreetMap) Interactivo con Arrastre
+            const loadLeafletAndInit = () => {
+                const w = window as any;
+                if (!w.L || !mapPickerContainerRef.current) return;
+
+                if (!mapPickerInstanceRef.current || !mapPickerInstanceRef.current.setView) {
+                    mapDiv.innerHTML = '';
+                    const map = w.L.map(mapDiv).setView([centerLat, centerLng], 16);
+                    w.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap'
+                    }).addTo(map);
+
+                    const marker = w.L.marker([centerLat, centerLng], { draggable: true }).addTo(map);
+
+                    marker.on('dragend', (event: any) => {
+                        const position = event.target.getLatLng();
+                        setTempLat(position.lat);
+                        setTempLng(position.lng);
+                        setTempGeocodeMsg(`📍 Marcador arrastrado a: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`);
+                    });
+
+                    map.on('click', (e: any) => {
+                        marker.setLatLng(e.latlng);
+                        setTempLat(e.latlng.lat);
+                        setTempLng(e.latlng.lng);
+                        setTempGeocodeMsg(`📍 Marcador movido a: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+                    });
+
+                    mapPickerInstanceRef.current = map;
+                    markerPickerInstanceRef.current = marker;
+                } else {
+                    mapPickerInstanceRef.current.setView([centerLat, centerLng], 16);
+                    markerPickerInstanceRef.current?.setLatLng([centerLat, centerLng]);
+                }
+            };
+
+            const w = window as any;
+            if (w.L) {
+                loadLeafletAndInit();
+            } else {
+                if (!document.getElementById('leaflet-css')) {
+                    const link = document.createElement('link');
+                    link.id = 'leaflet-css';
+                    link.rel = 'stylesheet';
+                    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                    document.head.appendChild(link);
+                }
+
+                if (!document.getElementById('leaflet-js')) {
+                    const script = document.createElement('script');
+                    script.id = 'leaflet-js';
+                    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                    script.onload = () => loadLeafletAndInit();
+                    document.head.appendChild(script);
+                } else {
+                    loadLeafletAndInit();
+                }
+            }
+        }, 150);
+
+        return () => clearTimeout(timer);
+    }, [isMapPickerOpen, tempLat, tempLng]);
     
     // Product Search for adding new items
     const [productSearch, setProductSearch] = useState('');
@@ -3739,19 +3868,11 @@ export default function OrderLoadingPage() {
                                     {/* Right Column: Interactive Map Box */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                         <div style={{ height: '320px', width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', position: 'relative' }}>
-                                            <iframe 
-                                                title="Mapa GPS Pedido"
-                                                width="100%"
-                                                height="100%"
-                                                frameBorder="0"
-                                                style={{ border: 0 }}
-                                                src={`https://maps.google.com/maps?q=${tempLat},${tempLng}&z=16&output=embed`}
-                                                allowFullScreen
-                                            />
+                                            <div ref={mapPickerContainerRef} style={{ width: '100%', height: '100%' }} />
                                         </div>
                                         <div style={{ backgroundColor: '#ECFDF5', padding: '0.8rem 1rem', borderRadius: '12px', fontSize: '0.75rem', color: '#065F46', fontWeight: '700', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <Sparkles size={14} style={{ color: '#059669', flexShrink: 0 }} />
-                                            <span>Tip: Puedes ajustar manualmente la latitud y longitud o modificar la dirección para ubicar el punto de entrega exacto de este pedido.</span>
+                                            <span>Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.</span>
                                         </div>
                                     </div>
                                 </div>
