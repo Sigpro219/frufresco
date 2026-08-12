@@ -8,6 +8,22 @@ import { supabase, createAdminClient, type Product } from './supabase';
 export const getVisibleProducts = unstable_cache(
   async (pricingModelId?: string) => {
     const modelId = pricingModelId || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+
+    let lockedIds = new Set<string>();
+    try {
+      const { data: scarcitySetting } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'scarcity_locked_skus')
+        .limit(1);
+      if (scarcitySetting && scarcitySetting.length > 0 && scarcitySetting[0].value) {
+        const parsed = JSON.parse(scarcitySetting[0].value);
+        lockedIds = new Set(Object.keys(parsed));
+      }
+    } catch (e) {
+      console.error('Error reading scarcity_locked_skus in getVisibleProducts:', e);
+    }
+
     const { data, error } = await supabase
       .from('products')
       .select('*, pricing_model_prices(price)')
@@ -30,9 +46,9 @@ export const getVisibleProducts = unstable_cache(
         console.error('Fallback products fetch failed:', fallbackError);
         return [];
       }
-      return fallbackData as Product[];
+      return (fallbackData as Product[]).filter(p => !lockedIds.has(p.id));
     }
-    return data as Product[];
+    return (data as Product[]).filter(p => !lockedIds.has(p.id));
   },
   ['visible-products'],
   { revalidate: 3600, tags: ['products'] }

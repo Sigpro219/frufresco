@@ -53,6 +53,10 @@ import {
     Scale,
     DollarSign,
     Calendar,
+    PackageX,
+    Clock,
+    ShieldAlert,
+    Unlock,
     Gift
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -207,9 +211,146 @@ export default function ClientsModule() {
     const [converting, setConverting] = useState(false);
     const [parsingFile, setParsingFile] = useState(false);
 
+    // SKU Scarcity Control States
+    const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, { id: string; sku: string; name: string; disabledAt: string; message: string; disabledBy: string }>>({});
+    const [isScarcityModalOpen, setIsScarcityModalOpen] = useState(false);
+    const [scarcityProductSearch, setScarcityProductSearch] = useState('');
+    const [scarcitySearchResults, setScarcitySearchResults] = useState<any[]>([]);
+    const [selectedScarcityProduct, setSelectedScarcityProduct] = useState<any | null>(null);
+    const [scarcityCustomMessage, setScarcityCustomMessage] = useState('Insumo temporalmente agotado por escasez en el mercado. Notificaremos su disponibilidad tan pronto se restablezca el abastecimiento.');
+    const [isScarcitySaving, setIsScarcitySaving] = useState(false);
+    const [isSearchingScarcity, setIsSearchingScarcity] = useState(false);
+
     useEffect(() => {
         fetchData();
     }, []);
+
+    // Product Search for Scarcity Modal
+    useEffect(() => {
+        if (!scarcityProductSearch || scarcityProductSearch.trim().length < 2) {
+            setScarcitySearchResults([]);
+            setIsSearchingScarcity(false);
+            return;
+        }
+
+        setIsSearchingScarcity(true);
+        const timer = setTimeout(async () => {
+            try {
+                const { data } = await supabase
+                    .from('products')
+                    .select('id, name, sku, category, unit_of_measure, base_price')
+                    .or(`name.ilike.%${scarcityProductSearch}%,sku.ilike.%${scarcityProductSearch}%`)
+                    .limit(20);
+                
+                setScarcitySearchResults(data || []);
+            } catch (err) {
+                console.error('Error searching products for scarcity:', err);
+            } finally {
+                setIsSearchingScarcity(false);
+            }
+        }, 200);
+
+        return () => clearTimeout(timer);
+    }, [scarcityProductSearch]);
+
+    const handleLockSkuByScarcity = async () => {
+        if (!selectedScarcityProduct) {
+            alert('Por favor selecciona un producto para deshabilitar.');
+            return;
+        }
+        setIsScarcitySaving(true);
+        try {
+            const prodId = selectedScarcityProduct.id;
+            const nowIso = new Date().toISOString();
+            const userTag = profile?.contact_name || (profile as any)?.email || 'Comercial';
+
+            const newRecord = {
+                id: prodId,
+                sku: selectedScarcityProduct.sku || 'N/A',
+                name: selectedScarcityProduct.name,
+                disabledAt: nowIso,
+                message: scarcityCustomMessage.trim() || 'Insumo temporalmente agotado por escasez en el mercado. Notificaremos su disponibilidad tan pronto se restablezca el abastecimiento.',
+                disabledBy: userTag
+            };
+
+            const updatedMap = {
+                ...scarcityLockedMap,
+                [prodId]: newRecord
+            };
+
+            // 1. Guardar en app_settings
+            const { error: setErr } = await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'scarcity_locked_skus',
+                    value: JSON.stringify(updatedMap),
+                    description: 'SKUs bloqueados temporalmente por escasez de mercado'
+                }, { onConflict: 'key' });
+
+            if (setErr) throw setErr;
+
+            // 2. Auditoría de Seguridad
+            await supabase.from('audit_logs').insert({
+                action: 'UPDATE',
+                table_name: 'products',
+                record_id: prodId,
+                old_data: { scarcity_status: 'active' },
+                new_data: { scarcity_status: 'temp_disabled_scarcity', message: newRecord.message, user: userTag }
+            }).catch(e => console.log('Audit trail entry info:', e));
+
+            setScarcityLockedMap(updatedMap);
+            setIsScarcityModalOpen(false);
+            setSelectedScarcityProduct(null);
+            setScarcityProductSearch('');
+
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`🚫 ${selectedScarcityProduct.name} bloqueado por escasez. Tarea de reactivación creada.`, 'success');
+            }
+        } catch (err: any) {
+            console.error('Error locking SKU:', err);
+            alert('Error al bloquear SKU: ' + err.message);
+        } finally {
+            setIsScarcitySaving(false);
+        }
+    };
+
+    const handleReactivateSku = async (prodId: string, prodName: string) => {
+        if (!confirm(`¿Confirmas la reactivación en mercado de "${prodName}"? Volverá a estar disponible en todos los canales.`)) return;
+
+        try {
+            const updatedMap = { ...scarcityLockedMap };
+            delete updatedMap[prodId];
+
+            // 1. Guardar en app_settings
+            const { error: setErr } = await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'scarcity_locked_skus',
+                    value: JSON.stringify(updatedMap),
+                    description: 'SKUs bloqueados temporalmente por escasez de mercado'
+                }, { onConflict: 'key' });
+
+            if (setErr) throw setErr;
+
+            // 2. Auditoría de Seguridad
+            const userTag = profile?.contact_name || (profile as any)?.email || 'Comercial';
+            await supabase.from('audit_logs').insert({
+                action: 'UPDATE',
+                table_name: 'products',
+                record_id: prodId,
+                old_data: { scarcity_status: 'temp_disabled_scarcity' },
+                new_data: { scarcity_status: 'active', user: userTag }
+            }).catch(e => console.log('Audit trail entry info:', e));
+
+            setScarcityLockedMap(updatedMap);
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`⚡ "${prodName}" reactivado con éxito en todos los canales.`, 'success');
+            }
+        } catch (err: any) {
+            console.error('Error reactivando SKU:', err);
+            alert('Error al reactivar SKU: ' + err.message);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -251,6 +392,23 @@ export default function ClientsModule() {
                 .select('client_id, valid_until')
                 .eq('status', 'agreement');
             
+            // 7. SKUs Bloqueados por Escasez
+            const { data: settingsData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'scarcity_locked_skus')
+                .limit(1);
+
+            if (settingsData && settingsData.length > 0 && settingsData[0].value) {
+                try {
+                    setScarcityLockedMap(JSON.parse(settingsData[0].value));
+                } catch(e) {
+                    console.error('Error parsing scarcity_locked_skus setting:', e);
+                }
+            } else {
+                setScarcityLockedMap({});
+            }
+
             const normalizeProfile = (p: any) => ({
                 ...p,
                 phone: p.phone || p.contact_phone || '',
@@ -1832,17 +1990,49 @@ export default function ClientsModule() {
                         {activeTab === 'dashboard' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 {/* Top Row: Main KPIs */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
                                     <KPICard title="CLIENTES B2B" value={clientsB2B.length} icon={<Building2 size={18} strokeWidth={1.5} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Institucionales" />
                                     <KPICard title="CLIENTES B2C" value={clientsB2C.length} icon={<Home size={18} strokeWidth={1.5} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Consumidores" />
                                     <KPICard 
                                         title="TAREAS CRÍTICAS" 
-                                        value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
+                                        value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length + Object.keys(scarcityLockedMap).length} 
                                         icon={<AlertTriangle size={18} strokeWidth={1.5} />} 
                                         color="#EAEFEA" 
                                         textColor="#0D7A57" 
-                                        subtitle="Prioridad comercial" 
+                                        subtitle={`${Object.keys(scarcityLockedMap).length} SKUs en escasez`} 
                                     />
+                                    <div 
+                                        onClick={() => setIsScarcityModalOpen(true)}
+                                        style={{
+                                            backgroundColor: Object.keys(scarcityLockedMap).length > 0 ? '#FEF2F2' : '#F0FDFA',
+                                            borderRadius: '12px',
+                                            padding: '1.2rem 1.5rem',
+                                            border: `1.5px solid ${Object.keys(scarcityLockedMap).length > 0 ? '#FCA5A5' : '#99F6E4'}`,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            justifyContent: 'space-between',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: '900', color: Object.keys(scarcityLockedMap).length > 0 ? '#B91C1C' : '#0D7A57', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                                CONTROL DE ESCASEZ
+                                            </span>
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: Object.keys(scarcityLockedMap).length > 0 ? '#FEE2E2' : '#CCFBF1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <PackageX size={18} style={{ color: Object.keys(scarcityLockedMap).length > 0 ? '#DC2626' : '#0D7A57' }} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: Object.keys(scarcityLockedMap).length > 0 ? '#991B1B' : '#065F46' }}>
+                                                {Object.keys(scarcityLockedMap).length} SKUs
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: Object.keys(scarcityLockedMap).length > 0 ? '#DC2626' : '#0D7A57', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                ⚡ Bloquear / Reactivar en Mercado →
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Middle Row: Funnel & Critical Tasks & Sales */}
@@ -1882,13 +2072,123 @@ export default function ClientsModule() {
 
                                     {/* Task Box */}
                                     <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <AlertTriangle size={18} style={{ color: '#0D7A57' }} /> Alertas de Seguimiento
-                                            </h3>
-                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Tareas críticas pendientes</p>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <AlertTriangle size={18} style={{ color: '#0D7A57' }} /> Alertas de Seguimiento
+                                                </h3>
+                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Tareas críticas pendientes</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsScarcityModalOpen(true)}
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    borderRadius: '8px',
+                                                    backgroundColor: '#F0FDFA',
+                                                    color: '#0D7A57',
+                                                    border: '1px solid #99F6E4',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <PackageX size={13} /> Bloquear SKU
+                                            </button>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.5rem' }}>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.5rem' }}>
+                                            {/* TARJETAS DE TAREAS CRÍTICAS: SKUs BLOQUEADOS POR ESCASEZ DE MERCADO */}
+                                            {Object.values(scarcityLockedMap).map((lockedItem: any) => {
+                                                const disabledDate = new Date(lockedItem.disabledAt || Date.now());
+                                                const daysElapsed = Math.floor((Date.now() - disabledDate.getTime()) / (1000 * 60 * 60 * 24));
+                                                const formattedDateStr = disabledDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+                                                const isUrgentAlert = daysElapsed >= 3;
+
+                                                return (
+                                                    <div 
+                                                        key={lockedItem.id} 
+                                                        style={{
+                                                            backgroundColor: isUrgentAlert ? '#FEF2F2' : '#FFFBEB',
+                                                            borderRadius: '12px',
+                                                            border: `1.5px solid ${isUrgentAlert ? '#FCA5A5' : '#FDE68A'}`,
+                                                            padding: '1rem 1.1rem',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: '0.6rem',
+                                                            boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: isUrgentAlert ? '#FEE2E2' : '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                    <PackageX size={18} style={{ color: isUrgentAlert ? '#DC2626' : '#D97706' }} />
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ fontWeight: '900', fontSize: '0.9rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                        <span>{lockedItem.name}</span>
+                                                                        <span style={{ fontSize: '0.68rem', backgroundColor: 'white', padding: '1px 6px', borderRadius: '4px', border: '1px solid #CBD5E1', color: '#475569', fontWeight: '700' }}>
+                                                                            SKU: {lockedItem.sku || 'N/A'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <Clock size={12} /> Desactivado el <b>{formattedDateStr}</b> ({daysElapsed === 0 ? 'Hoy' : `hace ${daysElapsed} día${daysElapsed > 1 ? 's' : ''}`})
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <span style={{
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: '900',
+                                                                textTransform: 'uppercase',
+                                                                letterSpacing: '0.04em',
+                                                                padding: '3px 8px',
+                                                                borderRadius: '12px',
+                                                                backgroundColor: isUrgentAlert ? '#DC2626' : '#D97706',
+                                                                color: 'white',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                <AlertTriangle size={11} /> {isUrgentAlert ? 'CRÍTICO: MONITOREAR REACTIVACIÓN' : 'REACTIVACIÓN PENDIENTE'}
+                                                            </span>
+                                                        </div>
+
+                                                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#334155', fontStyle: 'italic', backgroundColor: 'rgba(255,255,255,0.7)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                                                            💬 "{lockedItem.message}"
+                                                        </p>
+
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                                                Gestor: {lockedItem.disabledBy || 'Comercial'}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => handleReactivateSku(lockedItem.id, lockedItem.name)}
+                                                                style={{
+                                                                    backgroundColor: '#059669',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    padding: '5px 12px',
+                                                                    borderRadius: '8px',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: '800',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '5px',
+                                                                    boxShadow: '0 2px 4px rgba(5, 150, 105, 0.2)'
+                                                                }}
+                                                            >
+                                                                <RefreshCw size={13} /> Reactivar SKU en Mercado
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* TAREAS DE PROSPECTOS/LEADS */}
                                             {leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length > 0 ? (
                                                 leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date())
                                                     .sort((a, b) => new Date(a.next_contact_date!).getTime() - new Date(b.next_contact_date!).getTime())
@@ -1903,11 +2203,13 @@ export default function ClientsModule() {
                                                         />
                                                     ))
                                             ) : (
-                                                <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.lg, border: '1px dashed #A7F3D0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                    <Check size={28} strokeWidth={1.5} style={{ color: THEME.colors.primary, marginBottom: '1rem' }} />
-                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>¡Gran trabajo comercial!</h4>
-                                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>No tienes tareas pendientes vencidas en este momento.</p>
-                                                </div>
+                                                Object.keys(scarcityLockedMap).length === 0 && (
+                                                    <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.lg, border: '1px dashed #A7F3D0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <Check size={28} strokeWidth={1.5} style={{ color: THEME.colors.primary, marginBottom: '1rem' }} />
+                                                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>¡Gran trabajo comercial!</h4>
+                                                        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>No tienes tareas pendientes ni SKUs deshabilitados en este momento.</p>
+                                                    </div>
+                                                )
                                             )}
                                         </div>
                                     </div>
@@ -2526,6 +2828,151 @@ export default function ClientsModule() {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {/* MODAL DE CONTROL DE ESCASEZ DE SKUs */}
+            {isScarcityModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '16px', width: '100%', maxWidth: '580px', padding: '1.75rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '1.2rem', maxHeight: '90vh', overflowY: 'auto' }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #E2E8F0', paddingBottom: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <PackageX size={22} style={{ color: '#DC2626' }} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A' }}>Control de Escasez de SKUs</h3>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Bloqueo temporal por desabastecimiento en el mercado</p>
+                                </div>
+                            </div>
+                            <button onClick={() => { setIsScarcityModalOpen(false); setSelectedScarcityProduct(null); setScarcityProductSearch(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* 1. Buscador de SKUs */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                    1. Seleccionar SKU o Producto Activo
+                                </label>
+                                {selectedScarcityProduct ? (
+                                    <div style={{ backgroundColor: '#F0FDFA', border: '1.5px solid #99F6E4', padding: '0.8rem 1rem', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <div style={{ fontWeight: '900', fontSize: '0.92rem', color: '#065F46' }}>{selectedScarcityProduct.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#0D7A57', fontWeight: '700' }}>
+                                                SKU: {selectedScarcityProduct.sku || 'N/A'} | Categoría: {selectedScarcityProduct.category || 'General'}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedScarcityProduct(null)}
+                                            style={{ backgroundColor: '#FEE2E2', border: 'none', color: '#B91C1C', padding: '4px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: '800', cursor: 'pointer' }}
+                                        >
+                                            Cambiar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #CBD5E1', borderRadius: '10px', padding: '0.6rem 0.8rem', backgroundColor: 'white' }}>
+                                            <Search size={16} style={{ color: '#64748B', marginRight: '8px' }} />
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar producto por nombre o SKU (ej: Papa, Tomate)..."
+                                                value={scarcityProductSearch}
+                                                onChange={e => setScarcityProductSearch(e.target.value)}
+                                                style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.88rem', fontWeight: '600' }}
+                                            />
+                                            {isSearchingScarcity && <Loader2 size={16} className="animate-spin" style={{ color: '#059669' }} />}
+                                        </div>
+
+                                        {/* Dropdown de Resultados */}
+                                        {scarcitySearchResults.length > 0 && (
+                                            <div style={{ position: 'absolute', top: '105%', left: 0, right: 0, backgroundColor: 'white', borderRadius: '10px', border: '1px solid #CBD5E1', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto', zIndex: 10 }}>
+                                                {scarcitySearchResults.map(prod => (
+                                                    <div
+                                                        key={prod.id}
+                                                        onClick={() => {
+                                                            setSelectedScarcityProduct(prod);
+                                                            setScarcitySearchResults([]);
+                                                        }}
+                                                        style={{ padding: '0.6rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }}
+                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                    >
+                                                        <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>{prod.name}</div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>SKU: {prod.sku || 'N/A'} • {prod.category || 'General'}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 2. Mensaje Editable */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                    2. Mensaje Explicativo al Cliente (Editable)
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    value={scarcityCustomMessage}
+                                    onChange={e => setScarcityCustomMessage(e.target.value)}
+                                    placeholder="Escribe el aviso para los clientes institucionales..."
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.84rem', fontWeight: '500', outline: 'none', resize: 'none' }}
+                                />
+                                <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '4px', fontStyle: 'italic' }}>
+                                    Este mensaje aparecerá en la plataforma B2B para informar por qué el insumo no está disponible.
+                                </div>
+                            </div>
+
+                            {/* Resumen de Impacto */}
+                            <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', padding: '0.8rem 1rem', borderRadius: '10px', fontSize: '0.78rem', color: '#991B1B', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <ShieldAlert size={15} /> Impacto Multicanal de esta acción:
+                                </div>
+                                <ul style={{ margin: 0, paddingLeft: '1.2rem', fontWeight: '600' }}>
+                                    <li><b>B2C (Tienda Hogar):</b> El producto se ocultará 100% automáticamente.</li>
+                                    <li><b>B2B (Portal Institucional):</b> Quedará marcado como `Agotado por Escasez` con pedido inhabilitado.</li>
+                                    <li><b>CRM Alertas:</b> Se creará una Tarea Crítica de Reactivación.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Footer buttons */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => { setIsScarcityModalOpen(false); setSelectedScarcityProduct(null); setScarcityProductSearch(''); }}
+                                style={{ padding: '0.6rem 1.2rem', borderRadius: '10px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#475569', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!selectedScarcityProduct || isScarcitySaving}
+                                onClick={handleLockSkuByScarcity}
+                                style={{
+                                    padding: '0.6rem 1.4rem',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    backgroundColor: selectedScarcityProduct ? '#DC2626' : '#94A3B8',
+                                    color: 'white',
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: selectedScarcityProduct ? 'pointer' : 'not-allowed',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: selectedScarcityProduct ? '0 4px 12px rgba(220, 38, 38, 0.25)' : 'none'
+                                }}
+                            >
+                                {isScarcitySaving ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />} Bloquear SKU por Escasez
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

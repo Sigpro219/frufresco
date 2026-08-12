@@ -204,6 +204,25 @@ export default function OrderLoadingPage() {
 
     const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+    const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
+
+    useEffect(() => {
+        const fetchScarcity = async () => {
+            try {
+                const { data } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'scarcity_locked_skus')
+                    .limit(1);
+                if (data && data.length > 0 && data[0].value) {
+                    setScarcityLockedMap(JSON.parse(data[0].value));
+                }
+            } catch (e) {
+                console.error('Error fetching scarcity in loading page:', e);
+            }
+        };
+        fetchScarcity();
+    }, []);
 
     const [selectedChannel, setSelectedChannel] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
@@ -1265,6 +1284,10 @@ export default function OrderLoadingPage() {
     }
 
     const addProductToOrder = (product: any) => {
+        if (scarcityLockedMap[product.id]) {
+            alert(`🚫 "${product.name}" no se puede agregar al pedido: Insumo bloqueado por escasez en el mercado.`);
+            return;
+        }
         // 1. Check for product substitution exception
         const exc = clientExceptions.find(e => e.product_id === product.id);
         if (exc && exc.substitution_product_id) {

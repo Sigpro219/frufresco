@@ -111,6 +111,26 @@ export default function B2BDashboard() {
     const [searchFocusedIndex, setSearchFocusedIndex] = useState(-1);
     const catalogSearchInputRef = useRef<HTMLInputElement | null>(null);
 
+    const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, { id: string; sku: string; name: string; disabledAt: string; message: string; disabledBy: string }>>({});
+
+    useEffect(() => {
+        const fetchScarcity = async () => {
+            try {
+                const { data } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'scarcity_locked_skus')
+                    .limit(1);
+                if (data && data.length > 0 && data[0].value) {
+                    setScarcityLockedMap(JSON.parse(data[0].value));
+                }
+            } catch (e) {
+                console.error('Error fetching scarcity_locked_skus in b2b dashboard:', e);
+            }
+        };
+        fetchScarcity();
+    }, []);
+
     const activeProfile = simulatedClientId 
         ? (simulatedProfiles.find(p => p.id === simulatedClientId) || profile) 
         : profile;
