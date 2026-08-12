@@ -285,6 +285,17 @@ export default function ClientsModule() {
         return () => clearTimeout(timer);
     }, [scarcityProductSearch]);
 
+    const scarcityItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+    useEffect(() => {
+        if (scarcityFocusedIndex >= 0 && scarcityItemRefs.current[scarcityFocusedIndex]) {
+            scarcityItemRefs.current[scarcityFocusedIndex]?.scrollIntoView({
+                block: 'nearest',
+                behavior: 'smooth'
+            });
+        }
+    }, [scarcityFocusedIndex]);
+
     const handleScarcityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (scarcitySearchResults.length === 0) return;
 
@@ -294,10 +305,12 @@ export default function ClientsModule() {
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             setScarcityFocusedIndex(prev => (prev > 0 ? prev - 1 : scarcitySearchResults.length - 1));
-        } else if (e.key === 'Enter') {
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
             e.preventDefault();
-            if (scarcityFocusedIndex >= 0 && scarcityFocusedIndex < scarcitySearchResults.length) {
-                setSelectedScarcityProduct(scarcitySearchResults[scarcityFocusedIndex]);
+            const targetIdx = scarcityFocusedIndex >= 0 && scarcityFocusedIndex < scarcitySearchResults.length ? scarcityFocusedIndex : 0;
+            const targetProd = scarcitySearchResults[targetIdx];
+            if (targetProd) {
+                setSelectedScarcityProduct(targetProd);
                 setScarcitySearchResults([]);
                 setScarcityFocusedIndex(-1);
             }
@@ -2953,6 +2966,7 @@ export default function ClientsModule() {
                                                     return (
                                                         <div
                                                             key={prod.id}
+                                                            ref={el => { scarcityItemRefs.current[idx] = el; }}
                                                             onClick={() => {
                                                                 setSelectedScarcityProduct(prod);
                                                                 setScarcitySearchResults([]);
