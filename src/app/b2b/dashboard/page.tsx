@@ -25,11 +25,13 @@ interface OrderItem {
     unit_price?: number;
     base_price?: number;
     variant_label?: string;
+    added_at?: number;
 }
 
 export default function B2BDashboard() {
     const [focusMode, setFocusMode] = useState<'split' | 'catalog' | 'cart'>('split');
     const [agreementFilter, setAgreementFilter] = useState<'agreement' | 'non_agreement' | 'all'>('agreement');
+    const [cartSortOrder, setCartSortOrder] = useState<'newest' | 'oldest' | 'alpha'>('newest');
 
     const formatPrice = (val: number | string | null | undefined): string => {
         const num = Math.round(Number(val) || 0);
@@ -44,6 +46,24 @@ export default function B2BDashboard() {
     const { user, profile, loading: authLoading } = useAuth();
     const router = useRouter();
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+
+    const displayedCartItems = useMemo(() => {
+        if (!orderItems || orderItems.length === 0) return [];
+        const copy = [...orderItems];
+
+        if (cartSortOrder === 'newest') {
+            return copy.sort((a, b) => (b.added_at || 0) - (a.added_at || 0));
+        } else if (cartSortOrder === 'oldest') {
+            return copy.sort((a, b) => (a.added_at || 0) - (b.added_at || 0));
+        } else if (cartSortOrder === 'alpha') {
+            return copy.sort((a, b) => {
+                const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
+                const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
+                return nameA.localeCompare(nameB);
+            });
+        }
+        return copy;
+    }, [orderItems, cartSortOrder, locale]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [deliveryDate, setDeliveryDate] = useState('');
@@ -429,13 +449,10 @@ export default function B2BDashboard() {
                 unit: product.unit_of_measure || 'kg',
                 unit_price: resolvedPrice,
                 base_price: basePrice,
-                variant_label: optionValues.join(', ') || undefined
+                variant_label: optionValues.join(', ') || undefined,
+                added_at: Date.now()
             };
-            setOrderItems(prev => [...prev, newItem].sort((a, b) => {
-                const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
-                const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
-                return nameA.localeCompare(nameB);
-            }));
+            setOrderItems(prev => [...prev, newItem]);
             if (typeof window !== 'undefined' && (window as any).showToast) {
                 (window as any).showToast(`✅ ${finalName} (${numericModalQty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
             }
@@ -472,13 +489,10 @@ export default function B2BDashboard() {
                 quantity: qty,
                 unit: product.unit_of_measure || 'Kg',
                 unit_price: resolvedPrice,
-                base_price: basePrice
+                base_price: basePrice,
+                added_at: Date.now()
             };
-            setOrderItems(prev => [...prev, newItem].sort((a, b) => {
-                const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
-                const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
-                return nameA.localeCompare(nameB);
-            }));
+            setOrderItems(prev => [...prev, newItem]);
             if (typeof window !== 'undefined' && (window as any).showToast) {
                 (window as any).showToast(`✅ ${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) agregado al pedido`, 'success');
             } else {
@@ -546,7 +560,8 @@ export default function B2BDashboard() {
  
     const applyHistoricalOrderToCart = (ord: any, pricesMap: Record<string, number> = agreementPricesMap) => {
         if (!ord || !ord.order_items) return;
-        const items = ord.order_items.map((item: any) => {
+        const now = Date.now();
+        const items = ord.order_items.map((item: any, idx: number) => {
             const p = Array.isArray(item.products) ? item.products[0] : item.products;
             const pId = item.product_id || p?.id;
             const priceFromMap = pricesMap && pId ? pricesMap[pId] : undefined;
@@ -560,9 +575,10 @@ export default function B2BDashboard() {
                 product_image: p?.image_url || '',
                 quantity: Number(item.quantity || 0),
                 unit_price: Number(unitPrice || 0),
-                unit: item.unit || p?.unit_of_measure || 'Kg'
+                unit: item.unit || p?.unit_of_measure || 'Kg',
+                added_at: now + idx
             };
-        }).sort((a: any, b: any) => a.product_name.localeCompare(b.product_name));
+        });
 
         setOrderItems(items);
     };
@@ -727,7 +743,8 @@ export default function B2BDashboard() {
                 if (res.ok) {
                     const json = await res.json();
                     if (isMounted.current) {
-                        setConsumptionHistory(json.items || []);
+                        setConsumptionHistory(json.history || []);
+                        setConsumptionData(json.topProducts || []);
                         setConsumptionKpis(json.kpis || { totalCop: 0, totalKg: 0, totalSavingsCop: 0, avgPrice: 0 });
                     }
                 } else {
@@ -746,8 +763,34 @@ export default function B2BDashboard() {
                             .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, base_price, category)')
                             .in('order_id', orderIds);
 
-                        if (isMounted.current) {
-                            setConsumptionHistory(itemsData || []);
+                        if (isMounted.current && itemsData) {
+                            // Compute top products for fallback
+                            const productMap: Record<string, any> = {};
+                            itemsData.forEach((it: any) => {
+                                const p = Array.isArray(it.products) ? it.products[0] : it.products;
+                                const pId = it.product_id || p?.id;
+                                if (!pId) return;
+                                if (!productMap[pId]) {
+                                    productMap[pId] = {
+                                        id: pId,
+                                        name: p?.name || it.nickname || 'Producto Insumo',
+                                        image: p?.image_url || '',
+                                        unit: p?.unit_of_measure || 'Kg',
+                                        totalQuantity: 0,
+                                        ordersCount: 0,
+                                        orderIds: new Set(),
+                                        product: p || { id: pId, name: it.nickname || 'Producto Insumo', unit_of_measure: 'Kg' }
+                                    };
+                                }
+                                productMap[pId].totalQuantity += Number(it.quantity || 0);
+                                productMap[pId].orderIds.add(it.order_id);
+                            });
+                            const top = Object.values(productMap).map((p: any) => ({
+                                ...p,
+                                ordersCount: p.orderIds.size
+                            })).sort((a: any, b: any) => b.totalQuantity - a.totalQuantity);
+
+                            setConsumptionData(top);
                         }
                     }
                 }
@@ -758,6 +801,7 @@ export default function B2BDashboard() {
             }
         };
 
+        fetchConsumption();
     }, [activeTab, activeProfile?.id, user?.id, consumptionTimeRange]);
 
     // Fetch Agreements
@@ -1850,11 +1894,81 @@ export default function B2BDashboard() {
                                     )}
                                 </div>
 
+                                {/* Cart Item Sorting Control Switcher Bar */}
+                                {orderItems.length > 1 && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '0.45rem 1.25rem',
+                                        backgroundColor: '#F1F5F9',
+                                        borderBottom: '1px solid #E2E8F0',
+                                        fontSize: '0.72rem'
+                                    }}>
+                                        <span style={{ fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Layers size={13} style={{ color: 'var(--primary)' }} /> Ordenar insumos:
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button
+                                                onClick={() => setCartSortOrder('newest')}
+                                                title="Mostrar al inicio los insumos recién agregados al pedido"
+                                                style={{
+                                                    padding: '0.2rem 0.55rem',
+                                                    borderRadius: '6px',
+                                                    border: cartSortOrder === 'newest' ? '1.5px solid var(--primary)' : '1px solid #CBD5E1',
+                                                    backgroundColor: cartSortOrder === 'newest' ? 'var(--primary)' : 'white',
+                                                    color: cartSortOrder === 'newest' ? 'white' : '#475569',
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: cartSortOrder === 'newest' ? '900' : '700',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                ⚡ Último ingresado
+                                            </button>
+                                            <button
+                                                onClick={() => setCartSortOrder('oldest')}
+                                                title="Mostrar al inicio los primeros insumos agregados"
+                                                style={{
+                                                    padding: '0.2rem 0.55rem',
+                                                    borderRadius: '6px',
+                                                    border: cartSortOrder === 'oldest' ? '1.5px solid var(--primary)' : '1px solid #CBD5E1',
+                                                    backgroundColor: cartSortOrder === 'oldest' ? 'var(--primary)' : 'white',
+                                                    color: cartSortOrder === 'oldest' ? 'white' : '#475569',
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: cartSortOrder === 'oldest' ? '900' : '700',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                ⏳ Primero ingresado
+                                            </button>
+                                            <button
+                                                onClick={() => setCartSortOrder('alpha')}
+                                                title="Ordenar alfabéticamente de la A a la Z"
+                                                style={{
+                                                    padding: '0.2rem 0.55rem',
+                                                    borderRadius: '6px',
+                                                    border: cartSortOrder === 'alpha' ? '1.5px solid var(--primary)' : '1px solid #CBD5E1',
+                                                    backgroundColor: cartSortOrder === 'alpha' ? 'var(--primary)' : 'white',
+                                                    color: cartSortOrder === 'alpha' ? 'white' : '#475569',
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: cartSortOrder === 'alpha' ? '900' : '700',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                🔤 A-Z
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Items List */}
                                 {orderItems.length > 0 ? (
                                     <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                         <div style={{ flex: 1, overflowY: 'auto' }}>
-                                            {orderItems.map((item) => {
+                                            {displayedCartItems.map((item) => {
                                                 const uPrice = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? item.base_price ?? 0);
                                                 const itemSubtotal = item.quantity * uPrice;
 
