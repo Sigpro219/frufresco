@@ -139,7 +139,10 @@ export default function B2BDashboard() {
     }, [searchTerm, categoryProducts, searchResults, agreementPricesMap, activeProfile, agreementFilter]);
 
     const searchItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const firstOptionSelectRef = useRef<HTMLSelectElement | null>(null);
     const modalInputRef = useRef<HTMLInputElement | null>(null);
+    const modalConfirmBtnRef = useRef<HTMLButtonElement | null>(null);
+    const modalCancelBtnRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => {
         if (searchFocusedIndex >= 0 && searchItemRefs.current[searchFocusedIndex]) {
@@ -153,7 +156,13 @@ export default function B2BDashboard() {
     useEffect(() => {
         if (selectedProductForModal) {
             const timer = setTimeout(() => {
-                if (modalInputRef.current) {
+                const hasOptions = selectedProductForModal.options_config && 
+                    Array.isArray(selectedProductForModal.options_config) && 
+                    selectedProductForModal.options_config.length > 0;
+
+                if (hasOptions && firstOptionSelectRef.current) {
+                    firstOptionSelectRef.current.focus();
+                } else if (modalInputRef.current) {
                     modalInputRef.current.focus();
                     modalInputRef.current.select();
                 }
@@ -171,17 +180,22 @@ export default function B2BDashboard() {
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             setSearchFocusedIndex(prev => (prev > 0 ? prev - 1 : searchDropdownResults.length));
-        } else if (e.key === 'Enter') {
+        } else if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
             e.preventDefault();
-            if (searchFocusedIndex >= 0 && searchFocusedIndex < searchDropdownResults.length) {
-                const selectedProd = searchDropdownResults[searchFocusedIndex];
-                setModalQuantity(1);
-                setSelectedProductForModal(selectedProd);
+            if (searchFocusedIndex === searchDropdownResults.length) {
                 setIsSearchDropdownOpen(false);
                 setSearchFocusedIndex(-1);
             } else {
-                setIsSearchDropdownOpen(false);
-                setSearchFocusedIndex(-1);
+                const targetIndex = searchFocusedIndex >= 0 && searchFocusedIndex < searchDropdownResults.length 
+                    ? searchFocusedIndex 
+                    : 0;
+                const selectedProd = searchDropdownResults[targetIndex];
+                if (selectedProd) {
+                    setModalQuantity(1);
+                    setSelectedProductForModal(selectedProd);
+                    setIsSearchDropdownOpen(false);
+                    setSearchFocusedIndex(-1);
+                }
             }
         } else if (e.key === 'Escape') {
             setIsSearchDropdownOpen(false);
@@ -3483,16 +3497,23 @@ export default function B2BDashboard() {
                         {/* Variantes / Opciones */}
                         {selectedProductForModal.options_config && Array.isArray(selectedProductForModal.options_config) && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-                                {selectedProductForModal.options_config.map((opt: any) => (
+                                {selectedProductForModal.options_config.map((opt: any, optIdx: number) => (
                                     <div key={opt.name}>
                                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
                                             {opt.name}
                                         </label>
                                         <select
+                                            ref={optIdx === 0 ? firstOptionSelectRef : undefined}
                                             value={selectedOptions[opt.name] || ''}
                                             onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
                                             onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
+                                                if (e.key === 'Tab' && !e.shiftKey) {
+                                                    if (optIdx === (selectedProductForModal.options_config.length - 1)) {
+                                                        e.preventDefault();
+                                                        modalInputRef.current?.focus();
+                                                        modalInputRef.current?.select();
+                                                    }
+                                                } else if (e.key === 'Enter') {
                                                     e.preventDefault();
                                                     confirmModalAdd();
                                                 }
@@ -3558,7 +3579,20 @@ export default function B2BDashboard() {
                                         setModalQuantity(val);
                                     }}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
+                                        if (e.key === 'Tab' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            modalConfirmBtnRef.current?.focus();
+                                        } else if (e.key === 'Tab' && e.shiftKey) {
+                                            e.preventDefault();
+                                            const hasOptions = selectedProductForModal.options_config && 
+                                                Array.isArray(selectedProductForModal.options_config) && 
+                                                selectedProductForModal.options_config.length > 0;
+                                            if (hasOptions && firstOptionSelectRef.current) {
+                                                firstOptionSelectRef.current.focus();
+                                            } else {
+                                                modalCancelBtnRef.current?.focus();
+                                            }
+                                        } else if (e.key === 'Enter') {
                                             e.preventDefault();
                                             confirmModalAdd();
                                         } else if (e.key === 'Escape') {
@@ -3623,14 +3657,49 @@ export default function B2BDashboard() {
 
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button
+                                ref={modalCancelBtnRef}
                                 onClick={() => setSelectedProductForModal(null)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Tab' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        const hasOptions = selectedProductForModal.options_config && 
+                                            Array.isArray(selectedProductForModal.options_config) && 
+                                            selectedProductForModal.options_config.length > 0;
+                                        if (hasOptions && firstOptionSelectRef.current) {
+                                            firstOptionSelectRef.current.focus();
+                                        } else if (modalInputRef.current) {
+                                            modalInputRef.current.focus();
+                                            modalInputRef.current.select();
+                                        }
+                                    } else if (e.key === 'Tab' && e.shiftKey) {
+                                        e.preventDefault();
+                                        modalConfirmBtnRef.current?.focus();
+                                    } else if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        setSelectedProductForModal(null);
+                                    }
+                                }}
                                 className="btn"
                                 style={{ flex: 1, backgroundColor: '#f3f4f6', color: 'var(--text-main)' }}
                             >
                                 {t.b2b.dashboard.cancelBtn}
                             </button>
                             <button
+                                ref={modalConfirmBtnRef}
                                 onClick={confirmModalAdd}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Tab' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        modalCancelBtnRef.current?.focus();
+                                    } else if (e.key === 'Tab' && e.shiftKey) {
+                                        e.preventDefault();
+                                        modalInputRef.current?.focus();
+                                        modalInputRef.current?.select();
+                                    } else if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        setSelectedProductForModal(null);
+                                    }
+                                }}
                                 className="btn btn-primary"
                                 style={{ flex: 1 }}
                             >
