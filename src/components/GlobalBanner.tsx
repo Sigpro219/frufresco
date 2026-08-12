@@ -94,7 +94,7 @@ export default function GlobalBanner() {
       if (isCheckout) window.removeEventListener('storage', () => {});
       clearInterval(interval);
     };
-  }, [isCheckout, isB2B]);
+  }, [pathname]);
 
   // MODE B2B INSTITUCIONAL (HEADER FIJO SUPERIOR CON MENSAJES OPERATIVOS)
   if (isB2B) {
