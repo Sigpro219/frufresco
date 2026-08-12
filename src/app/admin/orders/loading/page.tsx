@@ -1441,20 +1441,22 @@ export default function OrderLoadingPage() {
                                 borderRadius: '10px',
                                 border: '1px solid #E5E7EB',
                                 cursor: 'pointer',
-                                height: '40px'
+                                height: '40px',
+                                position: 'relative'
                             }} onClick={(e) => {
                                 const input = e.currentTarget.querySelector('input');
                                 if (input) (input as any).showPicker?.();
                             }}>
-                                 <Calendar size={16} strokeWidth={1.5} style={{ marginRight: '8px', color: THEME.colors.textSecondary }} />
+                                 <Calendar size={16} strokeWidth={1.5} style={{ marginRight: '6px', color: THEME.colors.textSecondary, flexShrink: 0 }} />
                                  <input
                                     type="date"
+                                    className="clean-date-input"
                                     value={selectedDate === 'all' ? '' : selectedDate}
                                     onChange={(e) => setSelectedDate(e.target.value)}
                                     style={{
                                         border: 'none',
                                         background: 'transparent',
-                                        fontSize: '0.8rem',
+                                        fontSize: '0.82rem',
                                         fontWeight: '800',
                                         color: '#111827',
                                         outline: 'none',
