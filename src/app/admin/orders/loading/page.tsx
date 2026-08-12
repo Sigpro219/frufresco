@@ -234,53 +234,81 @@ export default function OrderLoadingPage() {
     const [geocodedMessage, setGeocodedMessage] = useState<string | null>(null);
     const [showAddressInput, setShowAddressInput] = useState(false);
 
-    const handleGeocodeAddress = async () => {
+    // GPS Interactive Map Modal States
+    const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+    const [tempLat, setTempLat] = useState<number>(4.6097);
+    const [tempLng, setTempLng] = useState<number>(-74.0817);
+    const [tempAddress, setTempAddress] = useState<string>('');
+    const [tempCity, setTempCity] = useState<string>('Bogotá');
+    const [tempGeocodeMsg, setTempGeocodeMsg] = useState<string | null>(null);
+
+    const handleOpenMapPicker = async () => {
         if (!editShippingAddress || editShippingAddress.trim() === '') {
-            alert('Por favor ingresa una dirección de entrega válida.');
+            alert('Por favor ingresa una dirección de entrega válida antes de abrir el mapa.');
             return;
         }
 
+        const city = selectedOrder?.profiles?.city || 'Bogotá';
+        setTempAddress(editShippingAddress);
+        setTempCity(city);
+        setTempGeocodeMsg(null);
         setIsGeocoding(true);
-        setGeocodedMessage(null);
+
+        if (editLatitude && editLongitude) {
+            setTempLat(editLatitude);
+            setTempLng(editLongitude);
+            setIsGeocoding(false);
+            setIsMapPickerOpen(true);
+            return;
+        }
 
         try {
-            const city = selectedOrder?.profiles?.city || 'Bogotá';
             const res = await fetch(`/api/geocode?address=${encodeURIComponent(editShippingAddress)}&city=${encodeURIComponent(city)}`);
             const data = await res.json();
 
             if (data.results && data.results.length > 0) {
                 const loc = data.results[0].geometry.location;
-                const formatted = data.results[0].formatted_address;
-                setEditLatitude(loc.lat);
-                setEditLongitude(loc.lng);
-                setGeocodedMessage(`📍 Coordenadas GPS asignadas: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} (${formatted})`);
-                if (typeof window !== 'undefined' && (window as any).showToast) {
-                    (window as any).showToast(`✅ Coordenadas GPS asignadas al pedido: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`, 'success');
-                }
+                setTempLat(loc.lat);
+                setTempLng(loc.lng);
+                setTempGeocodeMsg(`Ubicación detectada: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
             } else {
-                // Fallback a OpenStreetMap Nominatim
                 const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(editShippingAddress + ', ' + city + ', Colombia')}`);
                 const nomData = await nomRes.json();
                 if (nomData && nomData.length > 0) {
                     const lat = parseFloat(nomData[0].lat);
                     const lon = parseFloat(nomData[0].lon);
-                    setEditLatitude(lat);
-                    setEditLongitude(lon);
-                    setGeocodedMessage(`📍 Coordenadas GPS asignadas (OSM): ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-                    if (typeof window !== 'undefined' && (window as any).showToast) {
-                        (window as any).showToast(`✅ Coordenadas GPS asignadas: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'success');
-                    }
+                    setTempLat(lat);
+                    setTempLng(lon);
+                    setTempGeocodeMsg(`Ubicación OSM: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
                 } else {
-                    setGeocodedMessage('⚠️ No se hallaron coordenadas automáticas. Verifica la nomenclatura.');
-                    alert('⚠️ No se encontraron coordenadas GPS para esta dirección. Asegúrate de incluir la calle/carrera y ciudad.');
+                    setTempLat(4.6097);
+                    setTempLng(-74.0817);
+                    setTempGeocodeMsg('Ubicación genérica (Bogotá). Ajusta los valores de Lat y Lng o busca otra dirección.');
                 }
             }
         } catch (err) {
-            console.error('Error al georreferenciar dirección:', err);
-            setGeocodedMessage('❌ Error al consultar servicio de georreferenciación');
+            console.error('Error al inicializar mapa:', err);
+            setTempLat(4.6097);
+            setTempLng(-74.0817);
         } finally {
             setIsGeocoding(false);
+            setIsMapPickerOpen(true);
         }
+    };
+
+    const handleConfirmMapCoordinates = () => {
+        setEditLatitude(tempLat);
+        setEditLongitude(tempLng);
+        setEditShippingAddress(tempAddress);
+        setGeocodedMessage(`📍 Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`);
+        setIsMapPickerOpen(false);
+        if (typeof window !== 'undefined' && (window as any).showToast) {
+            (window as any).showToast(`✅ Coordenadas GPS asignadas al pedido: ${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`, 'success');
+        }
+    };
+
+    const handleGeocodeAddress = async () => {
+        await handleOpenMapPicker();
     };
     
     // Product Search for adding new items
@@ -3495,6 +3523,192 @@ export default function OrderLoadingPage() {
                         </div>
                     );
                 })()}
+
+                {/* MODAL INTERACTIVO DE GEORREFERENCIACIÓN GPS */}
+                {isMapPickerOpen && (
+                    <div 
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            backdropFilter: 'blur(6px)',
+                            zIndex: 3000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '1rem'
+                        }}
+                        onClick={() => setIsMapPickerOpen(false)}
+                    >
+                        <div 
+                            style={{
+                                backgroundColor: 'white',
+                                borderRadius: '24px',
+                                width: '95%',
+                                maxWidth: '920px',
+                                maxHeight: '92vh',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                                overflow: 'hidden',
+                                border: '1px solid rgba(255,255,255,0.2)'
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* Modal Header */}
+                            <div style={{
+                                padding: '1.25rem 1.75rem',
+                                borderBottom: '1px solid #E2E8F0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                background: 'linear-gradient(to right, #F8FAFC, #FFFFFF)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <MapPin size={20} style={{ color: '#0D7A57' }} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#0F172A' }}>
+                                            Georreferenciación GPS de Pedido
+                                        </h3>
+                                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>
+                                            Ajuste de ubicación de entrega para {selectedOrder?.customer_name || 'este pedido'} ({getFriendlyOrderId(selectedOrder)})
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapPickerOpen(false)}
+                                    style={{ background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '10px', fontSize: '1.1rem', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '1.5rem', alignItems: 'start' }}>
+                                    {/* Left Column: Form & Coordinates */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                DIRECCIÓN DE ENTREGA (EXCLUSIVA DE ESTE PEDIDO)
+                                            </label>
+                                            <input 
+                                                type="text"
+                                                value={tempAddress}
+                                                onChange={(e) => setTempAddress(e.target.value)}
+                                                placeholder="Ej: Calle 63 # 77 - 73"
+                                                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', outline: 'none' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                    CIUDAD / MNPIO
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    value={tempCity}
+                                                    onChange={(e) => setTempCity(e.target.value)}
+                                                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.82rem', fontWeight: '700', backgroundColor: '#F8FAFC' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                    DEPARTAMENTO
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    value="Cundinamarca"
+                                                    readOnly
+                                                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.82rem', fontWeight: '700', backgroundColor: '#F8FAFC' }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* PANEL DE GEOCERCAS MANUAL */}
+                                        <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', marginBottom: '0.8rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                                GEOCERCAS (LAT/LNG)
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.8rem' }}>
+                                                <div>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px' }}>LAT</label>
+                                                    <input 
+                                                        type="number"
+                                                        step="0.000001"
+                                                        value={tempLat}
+                                                        onChange={(e) => setTempLat(parseFloat(e.target.value) || tempLat)}
+                                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: '800', color: '#0F172A', outline: 'none' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block', marginBottom: '4px' }}>LNG</label>
+                                                    <input 
+                                                        type="number"
+                                                        step="0.000001"
+                                                        value={tempLng}
+                                                        onChange={(e) => setTempLng(parseFloat(e.target.value) || tempLng)}
+                                                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: '800', color: '#0F172A', outline: 'none' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#D97706', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <AlertTriangle size={13} /> AJUSTE MANUAL (VERIFICA EN MAPA)
+                                            </div>
+                                        </div>
+
+                                        {tempGeocodeMsg && (
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#047857', backgroundColor: '#ECFDF5', padding: '8px 12px', borderRadius: '8px', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <CheckCircle2 size={13} /> {tempGeocodeMsg}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right Column: Interactive Map Box */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                        <div style={{ height: '320px', width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', position: 'relative' }}>
+                                            <iframe 
+                                                title="Mapa GPS Pedido"
+                                                width="100%"
+                                                height="100%"
+                                                frameBorder="0"
+                                                style={{ border: 0 }}
+                                                src={`https://maps.google.com/maps?q=${tempLat},${tempLng}&z=16&output=embed`}
+                                                allowFullScreen
+                                            />
+                                        </div>
+                                        <div style={{ backgroundColor: '#ECFDF5', padding: '0.8rem 1rem', borderRadius: '12px', fontSize: '0.75rem', color: '#065F46', fontWeight: '700', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Sparkles size={14} style={{ color: '#059669', flexShrink: 0 }} />
+                                            <span>Tip: Puedes ajustar manualmente la latitud y longitud o modificar la dirección para ubicar el punto de entrega exacto de este pedido.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{ padding: '1rem 1.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: '1rem', backgroundColor: '#F8FAFC' }}>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsMapPickerOpen(false)}
+                                    style={{ padding: '10px 20px', borderRadius: '10px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleConfirmMapCoordinates}
+                                    style={{ padding: '10px 24px', borderRadius: '10px', border: 'none', backgroundColor: '#0D7A57', color: 'white', fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 6px -1px rgba(13, 122, 87, 0.3)' }}
+                                >
+                                    <CheckCircle2 size={16} /> Confirmar Coordenadas GPS para este Pedido
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                     </>
                 ) : activeTab === 'emails' ? (
                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
