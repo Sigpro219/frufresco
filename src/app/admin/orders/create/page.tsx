@@ -38,7 +38,9 @@ import {
     User,
     UploadCloud,
     Maximize2,
-    Minimize2
+    Minimize2,
+    Pencil,
+    PackageX
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -3542,14 +3544,14 @@ function CreateOrderContent() {
                                                                     }
                                                                 }
                                                             })() : (
-                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                     ⚠️ Sin Precio
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                                                             <span style={{ fontSize: '0.75rem', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '700' }}>
-                                                                ID: {getAccountingIdDisplay(item.product)}
+                                                                ID Contable: {getAccountingIdDisplay(item.product)}
                                                             </span>
                                                             <span>•</span>
                                                             <button
@@ -3572,7 +3574,7 @@ function CreateOrderContent() {
                                                                 onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
                                                                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                                                             >
-                                                                ⚖️ Conversión {item.originalUnit && `(${item.originalQty} ${item.originalUnit})`}
+                                                                <Scale size={12} /> Conversión {item.originalUnit && `(${item.originalQty} ${item.originalUnit})`}
                                                             </button>
                                                         </div>
                                                     </div>
@@ -3666,7 +3668,7 @@ function CreateOrderContent() {
                                                             onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
                                                             title="Editar item (variantes, unidad, etc.)"
                                                         >
-                                                            ✏️
+                                                            <Pencil size={14} />
                                                         </button>
                                                         <button
                                                             onClick={() => removeFromCart(idx)}
@@ -3675,7 +3677,7 @@ function CreateOrderContent() {
                                                             onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
                                                             title="Eliminar item"
                                                         >
-                                                            ✕
+                                                            <Trash2 size={14} />
                                                         </button>
                                                     </div>
                                                 </div>
