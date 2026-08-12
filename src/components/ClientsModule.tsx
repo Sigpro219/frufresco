@@ -225,6 +225,8 @@ export default function ClientsModule() {
         fetchData();
     }, []);
 
+    const [scarcityFocusedIndex, setScarcityFocusedIndex] = useState(-1);
+
     const formatCategoryName = (cat: string) => {
         if (!cat) return 'General';
         const map: Record<string, string> = {
@@ -245,21 +247,36 @@ export default function ClientsModule() {
         if (!scarcityProductSearch || scarcityProductSearch.trim().length < 2) {
             setScarcitySearchResults([]);
             setIsSearchingScarcity(false);
+            setScarcityFocusedIndex(-1);
             return;
         }
 
         setIsSearchingScarcity(true);
         const timer = setTimeout(async () => {
             try {
-                const { data } = await supabase
+                const q = scarcityProductSearch.trim();
+                const isNum = /^\d+$/.test(q);
+
+                let query = supabase
                     .from('products')
                     .select('id, name, sku, accounting_id, category, unit_of_measure, base_price')
-                    .or(`name.ilike.%${scarcityProductSearch}%,sku.ilike.%${scarcityProductSearch}%,accounting_id.ilike.%${scarcityProductSearch}%`)
-                    .limit(20);
-                
+                    .eq('is_active', true);
+
+                if (isNum) {
+                    query = query.or(`accounting_id.eq.${parseInt(q, 10)},name.ilike.%${q}%,sku.ilike.%${q}%`);
+                } else {
+                    query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
+                }
+
+                const { data, error } = await query.limit(20);
+                if (error) throw error;
+
                 setScarcitySearchResults(data || []);
+                setScarcityFocusedIndex(data && data.length > 0 ? 0 : -1);
             } catch (err) {
                 console.error('Error searching products for scarcity:', err);
+                setScarcitySearchResults([]);
+                setScarcityFocusedIndex(-1);
             } finally {
                 setIsSearchingScarcity(false);
             }
@@ -267,6 +284,28 @@ export default function ClientsModule() {
 
         return () => clearTimeout(timer);
     }, [scarcityProductSearch]);
+
+    const handleScarcityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (scarcitySearchResults.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setScarcityFocusedIndex(prev => (prev < scarcitySearchResults.length - 1 ? prev + 1 : 0));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setScarcityFocusedIndex(prev => (prev > 0 ? prev - 1 : scarcitySearchResults.length - 1));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (scarcityFocusedIndex >= 0 && scarcityFocusedIndex < scarcitySearchResults.length) {
+                setSelectedScarcityProduct(scarcitySearchResults[scarcityFocusedIndex]);
+                setScarcitySearchResults([]);
+                setScarcityFocusedIndex(-1);
+            }
+        } else if (e.key === 'Escape') {
+            setScarcitySearchResults([]);
+            setScarcityFocusedIndex(-1);
+        }
+    };
 
     const handleLockSkuByScarcity = async () => {
         if (!selectedScarcityProduct) {
@@ -2896,32 +2935,48 @@ export default function ClientsModule() {
                                             <Search size={16} style={{ color: '#64748B', marginRight: '8px' }} />
                                             <input
                                                 type="text"
-                                                placeholder="Buscar producto por nombre, SKU o ID Contable..."
+                                                autoFocus
+                                                placeholder="Buscar por nombre, ID Contable o SKU (ej: Tomate, 1504)..."
                                                 value={scarcityProductSearch}
                                                 onChange={e => setScarcityProductSearch(e.target.value)}
+                                                onKeyDown={handleScarcityKeyDown}
                                                 style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.88rem', fontWeight: '600' }}
                                             />
                                             {isSearchingScarcity && <Loader2 size={16} className="animate-spin" style={{ color: '#059669' }} />}
                                         </div>
 
-                                        {/* Dropdown de Resultados */}
+                                        {/* Dropdown de Resultados con Navegación por Teclado */}
                                         {scarcitySearchResults.length > 0 && (
-                                            <div style={{ position: 'absolute', top: '105%', left: 0, right: 0, backgroundColor: 'white', borderRadius: '10px', border: '1px solid #CBD5E1', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto', zIndex: 10 }}>
-                                                {scarcitySearchResults.map(prod => (
-                                                    <div
-                                                        key={prod.id}
-                                                        onClick={() => {
-                                                            setSelectedScarcityProduct(prod);
-                                                            setScarcitySearchResults([]);
-                                                        }}
-                                                        style={{ padding: '0.6rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }}
-                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                                    >
-                                                        <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>{prod.name}</div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>ID Contable: {prod.accounting_id || prod.sku || 'N/A'} • {formatCategoryName(prod.category)}</div>
-                                                    </div>
-                                                ))}
+                                            <div style={{ position: 'absolute', top: '105%', left: 0, right: 0, backgroundColor: 'white', borderRadius: '12px', border: '1.5px solid #059669', boxShadow: '0 12px 24px -4px rgba(0,0,0,0.15)', maxHeight: '220px', overflowY: 'auto', zIndex: 10 }}>
+                                                {scarcitySearchResults.map((prod, idx) => {
+                                                    const isFocused = idx === scarcityFocusedIndex;
+                                                    return (
+                                                        <div
+                                                            key={prod.id}
+                                                            onClick={() => {
+                                                                setSelectedScarcityProduct(prod);
+                                                                setScarcitySearchResults([]);
+                                                                setScarcityFocusedIndex(-1);
+                                                            }}
+                                                            onMouseEnter={() => setScarcityFocusedIndex(idx)}
+                                                            style={{ 
+                                                                padding: '0.65rem 1rem', 
+                                                                cursor: 'pointer', 
+                                                                borderBottom: '1px solid #F1F5F9', 
+                                                                backgroundColor: isFocused ? '#ECFDF5' : 'white',
+                                                                borderLeft: isFocused ? '4px solid #059669' : '4px solid transparent',
+                                                                transition: 'all 0.12s ease'
+                                                            }}
+                                                        >
+                                                            <div style={{ fontWeight: '800', fontSize: '0.86rem', color: isFocused ? '#065F46' : '#0F172A' }}>
+                                                                {prod.name}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.72rem', color: isFocused ? '#047857' : '#64748B', fontWeight: '600' }}>
+                                                                ID Contable: {prod.accounting_id || prod.sku || 'N/A'} • {formatCategoryName(prod.category)}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
