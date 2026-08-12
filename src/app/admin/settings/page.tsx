@@ -667,7 +667,7 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'allow_sunday_deliveries' ? <><CalendarX size={14} style={{ color: 'var(--primary)' }} /> ENTREGAS LOS DOMINGOS</> :
                                                  setting.key === 'allow_holiday_deliveries' ? <><Sparkles size={14} style={{ color: '#D97706' }} /> ENTREGAS EN FESTIVOS (19 DÍAS COLOMBIA)</> :
                                                  setting.key === 'packaging_fee_enabled' ? <><PackageCheck size={14} style={{ color: 'var(--primary)' }} /> Cobro Empaque Plástico (Checkout)</> :
-                                                 setting.key === 'packaging_fee_percentage' ? <><Percent size={14} style={{ color: 'var(--primary)' }} /> Porcentaje Empaque (%)</> :
+                                                 setting.key === 'packaging_fee_percentage' ? <><Percent size={14} style={{ color: 'var(--primary)' }} /> PORCENTAJE EMPAQUE</> :
                                                  setting.key === 'packaging_fee_note' ? <><FileText size={14} style={{ color: 'var(--primary)' }} /> Explicación de Empaque (Nota Cliente)</> :
                                                  setting.key.replace(/_/g, ' ')}
                                             </h4>
