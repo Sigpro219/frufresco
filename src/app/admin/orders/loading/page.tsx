@@ -1625,10 +1625,77 @@ export default function OrderLoadingPage() {
         }
     };
 
+    const getColombiaTime = () => {
+        const now = new Date();
+        const bogotaStr = now.toLocaleString('en-US', { timeZone: 'America/Bogota' });
+        return new Date(bogotaStr);
+    };
+
+    const getTomorrowDateStr = () => {
+        const bogota = getColombiaTime();
+        bogota.setDate(bogota.getDate() + 1);
+        const yyyy = bogota.getFullYear();
+        const mm = String(bogota.getMonth() + 1).padStart(2, '0');
+        const dd = String(bogota.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const isWithinCutoffWindow = () => {
+        const bogota = getColombiaTime();
+        const hours = bogota.getHours();
+        const minutes = bogota.getMinutes();
+        const totalMinutes = hours * 60 + minutes;
+        const startMinutes = 10 * 60; // 10:00 AM (600 min)
+        const endMinutes = 23 * 60 + 50; // 23:50 PM (1430 min)
+        return totalMinutes >= startMinutes && totalMinutes <= endMinutes;
+    };
+
+    const handleOpenLogisticsLaunch = () => {
+        if (selectedOrders.size === 0) return;
+
+        const tomorrowStr = getTomorrowDateStr();
+        const selectedList = orders.filter(o => selectedOrders.has(o.id));
+
+        // 1. Validate Delivery Date: ONLY orders scheduled for tomorrow can be dispatched to logistics
+        const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
+        if (invalidDateOrders.length > 0) {
+            const distinctInvalidDates = Array.from(new Set(invalidDateOrders.map(o => o.delivery_date || 'Sin Fecha'))).join(', ');
+            alert(`⚠️ RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para mañana (${tomorrowStr}).`);
+            return;
+        }
+
+        // 2. Validate Cutoff Window: ONLY between 10:00 AM and 23:50 PM (Hora Colombia)
+        if (!isWithinCutoffWindow()) {
+            const bogota = getColombiaTime();
+            const currentH = String(bogota.getHours()).padStart(2, '0');
+            const currentM = String(bogota.getMinutes()).padStart(2, '0');
+            alert(`⏰ FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
+            return;
+        }
+
+        setTargetStatusToConfirm('para_compra');
+        setShowConfirmModal(true);
+    };
+
     const handleBulkAction = async (targetStatus: string) => {
         if (selectedOrders.size === 0) return;
+        
+        if (targetStatus === 'para_compra') {
+            const tomorrowStr = getTomorrowDateStr();
+            const selectedList = orders.filter(o => selectedOrders.has(o.id));
+            const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
+            if (invalidDateOrders.length > 0) {
+                alert(`⚠️ No se puede proceder: Hay pedidos seleccionados con fecha diferente a mañana (${tomorrowStr}).`);
+                return;
+            }
+            if (!isWithinCutoffWindow()) {
+                alert(`⏰ No se puede proceder: Fuera de la ventana de corte operativo (10:00 AM a 23:50 PM).`);
+                return;
+            }
+        }
+
         const confirmMsg = targetStatus === 'para_compra' 
-            ? `¿Estás seguro de enviar ${selectedOrders.size} pedidos a COMPRAS?` 
+            ? `¿Estás seguro de enviar ${selectedOrders.size} pedidos al PROCESO LOGÍSTICO (Compras, Picking y Ruteo)?` 
             : `¿Cambiar estado de ${selectedOrders.size} pedidos a ${targetStatus}?`;
         
         if (!confirm(confirmMsg)) return;
@@ -1642,7 +1709,7 @@ export default function OrderLoadingPage() {
 
             if (error) throw error;
 
-            alert('✅ Pedidos actualizados correctamente');
+            alert('✅ Pedidos enviados a Proceso Logístico correctamente');
             setSelectedOrders(new Set());
             setRefreshTrigger(prev => prev + 1); // Trigger refresh
         } catch (err: any) {
@@ -2075,24 +2142,24 @@ export default function OrderLoadingPage() {
                             </div>
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <button 
-                                    onClick={() => {
-                                        setTargetStatusToConfirm('para_compra');
-                                        setShowConfirmModal(true);
-                                    }}
+                                    onClick={handleOpenLogisticsLaunch}
                                     disabled={updateLoading}
                                     style={{
                                         backgroundColor: '#10B981',
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '8px',
-                                        padding: '0.5rem 1rem',
-                                        fontWeight: '700',
+                                        padding: '0.5rem 1.1rem',
+                                        fontWeight: '800',
                                         cursor: updateLoading ? 'wait' : 'pointer',
-                                        boxShadow: '0 4px 6px rgba(16, 185, 129, 0.2)',
-                                        opacity: updateLoading ? 0.7 : 1
+                                        boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                                        opacity: updateLoading ? 0.7 : 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
                                     }}
                                 >
-                                    {updateLoading ? 'Procesando...' : 'Enviar a Compras'}
+                                    {updateLoading ? 'Procesando...' : '🚀 Enviar a Proceso Logístico'}
                                 </button>
                                 <button 
                                     onClick={() => {
@@ -2567,17 +2634,17 @@ export default function OrderLoadingPage() {
                                          <Sparkles size={32} strokeWidth={1.5} style={{ color: '#10B981' }} />
                                      </div>
                                     <h2 style={{ margin: 0, fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.03em', background: 'linear-gradient(to right, #FFFFFF, #94A3B8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                         Resumen de Lanzamiento
+                                         Lanzamiento a Proceso Logístico
                                      </h2>
                                     <p style={{ color: '#94A3B8', marginTop: '0.8rem', fontSize: '1rem', lineHeight: '1.5', maxWidth: '85%', margin: '0.8rem auto 0' }}>
-                                         Revisa los indicadores críticos antes de sincronizar esta carga con las áreas de Compras y Transporte.
+                                         Revisa los indicadores críticos antes de sincronizar esta carga con las áreas de Compras (Abastecimiento), Alistamiento y Ruteo para entrega <strong style={{ color: '#38BDF8' }}>MAÑANA ({getTomorrowDateStr()})</strong>.
                                      </p>
                                 </div>
                                 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', zIndex: 1 }}>
                                      {/* Left Column: Logistics & Finances */}
                                      <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                         <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>MÉTRICAS DE LA TANDA</div>
+                                         <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>MÉTRICAS DE LA TANDA (MAÑANA)</div>
                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                              <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Package size={14} strokeWidth={1.5} /> Pedidos a enviar</span>
                                              <span style={{ fontWeight: '900', fontSize: '1.3rem', color: 'white' }}>{selectedOrders.size}</span>
@@ -2624,7 +2691,7 @@ export default function OrderLoadingPage() {
                                                  <div style={{ color: '#FDA4AF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AlertTriangle size={24} strokeWidth={1.5} /></div>
                                                  <div>
                                                      <div style={{ fontWeight: '900', color: '#FDA4AF', fontSize: '0.9rem' }}>Dejaste {unselectedOrdersCount} pedido(s) por fuera</div>
-                                                     <div style={{ fontSize: '0.75rem', color: '#FECDD3', marginTop: '4px', lineHeight: '1.4' }}>Hay pedidos en pantalla que no seleccionaste. Se quedarán congelados sin pasar a Compras.</div>
+                                                     <div style={{ fontSize: '0.75rem', color: '#FECDD3', marginTop: '4px', lineHeight: '1.4' }}>Hay pedidos en pantalla que no seleccionaste. Se quedarán congelados sin pasar a Logística.</div>
                                                  </div>
                                              </div>
                                          ) : (
@@ -2662,7 +2729,7 @@ export default function OrderLoadingPage() {
                                         onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
                                         onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                                     >
-                                        {updateLoading ? 'Procesando...' : 'FIRMAR Y LANZAR OPERACIÓN'}
+                                        {updateLoading ? 'Procesando...' : '🚀 FIRMAR Y LANZAR A PROCESO LOGÍSTICO'}
                                     </button>
                                 </div>
                             </div>
