@@ -475,22 +475,28 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             }
 
             if (variants && variants.length > 0 && options.length > 0) {
-                // Insertar nuevas garantizando unicidad absoluta de SKU en el lote
+                // Consultar variantes existentes para evitar duplicados contra otros productos
+                const { data: existingDbVariants } = await supabase
+                    .from('product_variants')
+                    .select('sku')
+                    .neq('product_id', product.id);
+
+                const existingOtherSkus = new Set((existingDbVariants || []).map((ev: any) => ev.sku));
                 const seenBatchSkus = new Set<string>();
+                
                 const formattedVariants = variants.map((v, idx) => {
                     let vSku = (v.sku && v.sku.trim()) || `${formData.sku || 'SKU'}-V${idx + 1}`;
-                    if (seenBatchSkus.has(vSku)) {
-                        let c = 2;
-                        while (seenBatchSkus.has(`${vSku}-${c}`)) {
-                            c++;
-                        }
-                        vSku = `${vSku}-${c}`;
+                    let testSku = vSku;
+                    let c = 2;
+                    while (seenBatchSkus.has(testSku) || existingOtherSkus.has(testSku)) {
+                        testSku = `${vSku}-${c}`;
+                        c++;
                     }
-                    seenBatchSkus.add(vSku);
+                    seenBatchSkus.add(testSku);
 
                     return {
                         product_id: product.id,
-                        sku: vSku,
+                        sku: testSku,
                         options: v.options,
                         image_url: v.image_url,
                         price_adjustment_percent: v.price_adj_pct || 0,

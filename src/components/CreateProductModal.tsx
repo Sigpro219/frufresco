@@ -370,21 +370,26 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
 
             // 2. Sincronizar tabla dedicada de variantes garantizando unicidad de SKU
             if (newProduct && variants && variants.length > 0) {
+                const { data: existingDbVariants } = await supabase
+                    .from('product_variants')
+                    .select('sku');
+
+                const existingOtherSkus = new Set((existingDbVariants || []).map((ev: any) => ev.sku));
                 const seenBatchSkus = new Set<string>();
+
                 const formattedVariants = variants.map((v, idx) => {
                     let vSku = (v.sku && v.sku.trim()) || `${formData.sku || 'SKU'}-V${idx + 1}`;
-                    if (seenBatchSkus.has(vSku)) {
-                        let c = 2;
-                        while (seenBatchSkus.has(`${vSku}-${c}`)) {
-                            c++;
-                        }
-                        vSku = `${vSku}-${c}`;
+                    let testSku = vSku;
+                    let c = 2;
+                    while (seenBatchSkus.has(testSku) || existingOtherSkus.has(testSku)) {
+                        testSku = `${vSku}-${c}`;
+                        c++;
                     }
-                    seenBatchSkus.add(vSku);
+                    seenBatchSkus.add(testSku);
 
                     return {
                         product_id: newProduct.id,
-                        sku: vSku,
+                        sku: testSku,
                         options: v.options,
                         image_url: v.image_url || null,
                         price_adjustment_percent: v.price_adjustment_percent || 0,

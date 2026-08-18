@@ -137,13 +137,15 @@ export default function CheckoutPage() {
         const rate = Number(item.iva_rate) || 0;
         if (rate <= 0) return totalTax;
         
-        // Precio incluye IVA -> IVA = Total * (Rate / (100 + Rate))
-        const itemTotal = item.price * item.quantity;
+        // Precio incluye IVA -> IVA = TotalLíneaRedondeado * (Rate / (100 + Rate))
+        const itemTotal = Math.ceil((item.price * item.quantity) / 50) * 50;
         const itemTax = itemTotal * (rate / (100 + rate));
         
-        console.log(`📊 IVA SKU [${item.name}]: Tasa ${rate}% -> Aporta $${itemTax.toFixed(2)}`);
         return totalTax + itemTax;
     }, 0);
+
+    const roundedTaxAmount = Math.round(taxAmount);
+    const roundedSubtotal = Math.round(totalPrice - roundedTaxAmount);
 
     const isB2B = profile?.role === 'b2b_client';
 
@@ -174,7 +176,9 @@ export default function CheckoutPage() {
     }, []);
 
     const packagingFeeAmount = packagingFeeEnabled ? Math.round(totalPrice * (packagingFeePercentage / 100)) : 0;
-    const finalOrderTotal = totalPrice + packagingFeeAmount;
+    // Redondear el total final de compra hacia abajo al próximo múltiplo de 50 (beneficio al usuario)
+    const rawTotal = totalPrice + packagingFeeAmount;
+    const finalOrderTotal = Math.floor(rawTotal / 50) * 50;
 
     useEffect(() => {
         setIsMounted(true);
@@ -631,8 +635,8 @@ export default function CheckoutPage() {
                 status: 'pending_approval',
                 delivery_date: date,
                 shipping_address: address,
-                subtotal: totalPrice - taxAmount,
-                tax: taxAmount,
+                subtotal: roundedSubtotal,
+                tax: roundedTaxAmount,
                 total: finalOrderTotal,
                 latitude: safeLat,
                 longitude: safeLng,
@@ -1180,7 +1184,7 @@ export default function CheckoutPage() {
                                                 margin: 0,
                                                 letterSpacing: '-0.02em'
                                             }}>
-                                                ${(item.price * item.quantity).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
+                                                ${(Math.ceil((item.price * item.quantity) / 50) * 50).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
                                             </p>
                                         </div>
                                         <button
@@ -1813,11 +1817,11 @@ export default function CheckoutPage() {
                         <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.subtotal}</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${(totalPrice - taxAmount).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${roundedSubtotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.taxes}</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${roundedTaxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
 
                             {packagingFeeEnabled && packagingFeeAmount > 0 && (
@@ -1838,7 +1842,7 @@ export default function CheckoutPage() {
                                             🛍️ Empaque e Inocuidad ({packagingFeePercentage}%):
                                         </span>
                                         <span style={{ fontWeight: '900', color: '#047857', fontSize: '0.88rem' }}>
-                                            +${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
+                                            +${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}
                                         </span>
                                     </div>
                                     {packagingFeeNote && (
@@ -1854,7 +1858,7 @@ export default function CheckoutPage() {
                                     fontFamily: 'var(--font-outfit), sans-serif',
                                     fontSize: '1.1rem', 
                                     fontWeight: '900', 
-                                    color: 'var(--text-main)',
+                                    color: 'var(--text-main)', 
                                     letterSpacing: '-0.02em'
                                 }}>{t.totalPurchase}</span>
                                 <span style={{ 
@@ -1863,7 +1867,7 @@ export default function CheckoutPage() {
                                     fontWeight: '900', 
                                     color: 'var(--primary)',
                                     letterSpacing: '-0.04em'
-                                }}>${finalOrderTotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
+                                }}>${finalOrderTotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
 
                             {!isMinOrderMet && (

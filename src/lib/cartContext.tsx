@@ -105,7 +105,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
 
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const totalPrice = items.reduce((sum, item) => sum + Math.ceil((item.price * item.quantity) / 50) * 50, 0);
     const totalWeight = items.reduce((sum, item) => {
         const unitLower = (item.unit || '').toLowerCase();
         const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
