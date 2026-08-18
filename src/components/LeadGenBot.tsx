@@ -369,203 +369,39 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
         setIsTyping(true);
         setIsSubmitting(true);
         try {
-            const isNearCall = finalData.is_near_coverage && finalData.wants_coverage_call;
-            const notesTag = finalData.is_out_of_coverage 
-                ? (isNearCall 
-                    ? ` | [ZONA PRÓXIMA - SOLICITA LLAMADA COBERTURA (a ${Math.round(finalData.distance_to_coverage || 0)}m)]` 
-                    : ` | [ZONA SIN COBERTURA (a ${Math.round(finalData.distance_to_coverage || 0)}m)]`)
-                : '';
-            const catTag = finalData.selected_categories && finalData.selected_categories.length > 0
-                ? ` | CATS: [${finalData.selected_categories.join(', ')}]`
-                : '';
-            const statusValue = finalData.is_out_of_coverage 
-                ? (isNearCall ? 'new' : 'rejected')
-                : 'new';
-
-            if (finalData.is_out_of_coverage && finalData.latitude && finalData.longitude) {
-                fetch('/api/coverage/out-of-bounds', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        address: finalData.address || addressInput,
-                        latitude: finalData.latitude,
-                        longitude: finalData.longitude,
-                        customer_name: `${finalData.company_name} (${finalData.business_type})`,
-                        customer_phone: finalData.phone,
-                        customer_email: finalData.email,
-                        channel: 'b2b',
-                        municipality: `${finalData.municipality || 'Fuera de Zona'} · ${finalData.business_size}`
-                    })
-                }).catch(e => console.warn('Silent B2B log error:', e));
-            }
-
-            // 1. Insert B2B Lead and select ID
-            const { data: leadRows, error: leadError } = await supabase
-                .from('leads')
-                .insert([{
+            const res = await fetch('/api/b2b/quote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     company_name: finalData.company_name,
-                    nit: null,
                     contact_name: finalData.contact_name,
                     phone: finalData.phone,
                     email: finalData.email,
-                    business_type: finalData.business_type || 'Restaurante',
-                    business_size: finalData.business_size || 'Entre $10M y $30M COP',
+                    business_type: finalData.business_type,
+                    business_size: finalData.business_size,
+                    selected_categories: finalData.selected_categories,
                     latitude: finalData.latitude,
                     longitude: finalData.longitude,
-                    address: finalData.address || 'Bogotá',
-                    municipality: finalData.municipality || 'Bogotá',
-                    status: statusValue,
-                    notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Bogotá'}${catTag} | ORIG: ${finalData.address}${notesTag} | PASOS_3_V2.5 🚀`
-                }])
-                .select('id')
-                .single();
+                    address: finalData.address || addressInput,
+                    municipality: finalData.municipality,
+                    is_out_of_coverage: finalData.is_out_of_coverage,
+                    is_near_coverage: finalData.is_near_coverage,
+                    distance_to_coverage: finalData.distance_to_coverage,
+                    wants_coverage_call: finalData.wants_coverage_call
+                })
+            });
 
-            if (leadError) throw leadError;
-            const newLeadId = leadRows?.id;
-            let createdQuoteId: string | null = null;
+            const data = await res.json();
 
-            // 2. Auto-generate pre-quotation (only for active 'new' leads)
-            if (newLeadId && (statusValue === 'new')) {
-                let colorTag = 'rojo';
-                const size = finalData.business_size || '';
-                if (size.includes('Grande') || size.includes('30M')) {
-                    colorTag = 'verde';
-                } else if (size.includes('Mediano') || size.includes('10M')) {
-                    colorTag = 'amarillo';
-                }
-
-                // Query model by color_tag
-                const { data: matchedModel } = await supabase
-                    .from('pricing_models')
-                    .select('id, name')
-                    .eq('color_tag', colorTag)
-                    .limit(1)
-                    .single();
-
-                const modelId = matchedModel?.id || 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
-                const modelName = matchedModel?.name || 'General Institucional';
-
-                let productsToQuote: any[] = [];
-                const chosenCats = (finalData.selected_categories && finalData.selected_categories.length > 0)
-                    ? finalData.selected_categories
-                    : ALL_CATEGORIES;
-
-                const CATEGORY_TO_CODES: Record<string, string[]> = {
-                    'Despensa': ['DE', 'Despensa', 'despensa'],
-                    'Hortalizas': ['HO', 'Hortalizas', 'hortalizas'],
-                    'Verduras': ['VE', 'Verduras', 'verduras'],
-                    'Lácteos': ['LA', 'Lácteos', 'lacteos'],
-                    'Frutas': ['FR', 'Frutas', 'frutas'],
-                    'Tubérculos': ['TU', 'Tubérculos', 'tuberculos'],
-                    'Congelados': ['CO', 'Congelados', 'congelados'],
-                    'Procesados': ['PR', 'Procesados', 'procesados']
-                };
-
-                const categoryCodes = chosenCats.flatMap(c => CATEGORY_TO_CODES[c] || [c]);
-
-                // Query products matching selected categories by category code!
-                const { data: categoryProds } = await supabase
-                    .from('products')
-                    .select('id, name, base_price, iva_rate, sku, category')
-                    .eq('is_active', true)
-                    .gt('base_price', 0)
-                    .in('category', categoryCodes)
-                    .limit(40);
-
-                if (categoryProds && categoryProds.length > 0) {
-                    const groupedByCat: Record<string, any[]> = {};
-                    categoryProds.forEach((p: any) => {
-                        const cat = p.category || 'General';
-                        if (!groupedByCat[cat]) groupedByCat[cat] = [];
-                        if (groupedByCat[cat].length < 4) {
-                            groupedByCat[cat].push(p);
-                        }
-                    });
-                    productsToQuote = Object.values(groupedByCat).flat();
-                }
-
-                // Fallback to active products if empty
-                if (productsToQuote.length === 0) {
-                    const { data: activeProds } = await supabase
-                        .from('products')
-                        .select('id, name, base_price, iva_rate, sku, category')
-                        .eq('is_active', true)
-                        .gt('base_price', 0)
-                        .limit(15);
-                    if (activeProds) productsToQuote = activeProds;
-                }
-
-                if (productsToQuote.length > 0) {
-                    const prodIds = productsToQuote.map(p => p.id);
-                    
-                    // Fetch pricing model prices cache
-                    const { data: modelPrices } = await supabase
-                        .from('pricing_model_prices')
-                        .select('product_id, price')
-                        .eq('model_id', modelId)
-                        .in('product_id', prodIds);
-
-                    let subtotal = 0;
-                    let tax = 0;
-                    let total = 0;
-                    const itemsToInsert = [];
-
-                    for (const p of productsToQuote) {
-                        const cached = modelPrices?.find(mp => mp.product_id === p.id);
-                        const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * (colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15);
-
-                        const qty = 1; // 1 unit per SKU (e.g. 1 Kg / 1 Bulto)
-                        const itemSubtotal = unitPrice * qty;
-                        const itemTaxRate = Number(p.iva_rate || 0);
-                        const itemTax = itemSubtotal * (itemTaxRate / 100);
-                        const itemTotal = itemSubtotal + itemTax;
-
-                        subtotal += itemSubtotal;
-                        tax += itemTax;
-                        total += itemTotal;
-
-                        itemsToInsert.push({
-                            product_id: p.id,
-                            product_name: p.name,
-                            quantity: qty,
-                            cost_basis: p.base_price,
-                            margin_percent: colorTag === 'verde' ? 5 : colorTag === 'amarillo' ? 10 : 15,
-                            unit_price: unitPrice,
-                            iva_rate: itemTaxRate,
-                            iva_amount: itemTax,
-                            total_price: itemTotal
-                        });
-                    }
-
-                    // Create Quote
-                    const { data: newQuote, error: newQuoteErr } = await supabase
-                        .from('quotes')
-                        .insert([{
-                            lead_id: newLeadId,
-                            client_name: finalData.company_name,
-                            model_id: modelId,
-                            model_snapshot_name: modelName,
-                            subtotal_amount: subtotal,
-                            total_tax_amount: tax,
-                            total_amount: total,
-                            status: 'sent'
-                        }])
-                        .select('id')
-                        .single();
-
-                    if (newQuoteErr) {
-                        console.error('Error creating auto-quote:', newQuoteErr);
-                    } else if (newQuote) {
-                        createdQuoteId = newQuote.id;
-                        setQuoteId(newQuote.id);
-
-                        const itemsWithQuoteId = itemsToInsert.map(it => ({ ...it, quote_id: newQuote.id }));
-                        await supabase
-                            .from('quote_items')
-                            .insert(itemsWithQuoteId);
-                    }
-                }
+            if (!res.ok || data.error) {
+                throw new Error(data.error || 'Error al procesar la pre-cotización');
             }
+
+            if (data.quoteId) {
+                setQuoteId(data.quoteId);
+            }
+
+            const statusValue = data.status || 'new';
 
             setTimeout(() => {
                 setIsTyping(false);
