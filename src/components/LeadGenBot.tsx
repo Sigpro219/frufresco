@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { isInsidePolygon, Point, getDistanceToPolygon } from '../lib/geoUtils';
 import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
-import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket, Sparkles, FileText, Bot, Check, Plus, LayoutGrid, TrendingUp, Circle, ShoppingBag } from 'lucide-react';
+import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket, Sparkles, FileText, Bot, Check, Plus, LayoutGrid, TrendingUp, Circle, ShoppingBag, Download, MessageSquare } from 'lucide-react';
 import { translations, Locale } from '../lib/translations';
 import { Polygon } from './admin/GeofencingManager';
 
@@ -1244,19 +1244,25 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
             {/* Success & PDF Download Screen */}
             {isCompleted && (
-                <div style={{ padding: '1.5rem', backgroundColor: '#ECFDF5', borderTop: '2px solid #A7F3D0', textAlign: 'center', flexShrink: 0 }}>
-                    <p style={{ color: '#065F46', fontWeight: '900', marginBottom: '0.5rem', fontSize: '1.25rem' }}>
-                        🎉 ¡Pre-Cotización Generada con Éxito!
-                    </p>
-                    <p style={{ color: '#047857', fontSize: '0.88rem', marginBottom: '1.2rem', lineHeight: '1.45' }}>
-                        Hola <strong>{leadData.contact_name}</strong>, hemos procesado la pre-cotización institucional para <strong>{leadData.company_name}</strong> con tarifas ajustadas a tu consumo.
+                <div style={{ padding: '1.25rem 1.5rem', backgroundColor: '#ECFDF5', borderTop: '2px solid #A7F3D0', textAlign: 'center', flexShrink: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '0.4rem' }}>
+                        <CheckCircle2 size={22} color="#059669" />
+                        <h4 style={{ color: '#065F46', fontWeight: '900', margin: 0, fontSize: '1.1rem', letterSpacing: '-0.01em' }}>
+                            ¡Pre-Cotización Generada con Éxito!
+                        </h4>
+                    </div>
+                    <p style={{ color: '#047857', fontSize: '0.82rem', marginBottom: '1rem', lineHeight: '1.45', fontWeight: '500' }}>
+                        Hola <strong>{leadData.contact_name}</strong>, hemos procesado la pre-cotización para <strong>{leadData.company_name}</strong> con tarifas institucionales.
                     </p>
 
                     {quoteId && (
-                        <div style={{ marginBottom: '1.2rem', padding: '1.1rem', backgroundColor: '#FFFFFF', borderRadius: '18px', border: '1.5px solid #A7F3D0', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.1)' }}>
-                            <p style={{ color: '#065F46', fontWeight: '800', fontSize: '0.9rem', marginBottom: '0.8rem' }}>
-                                📄 Tu Documento Oficial de Pre-Cotización está listo:
-                            </p>
+                        <div style={{ marginBottom: '1rem', padding: '0.85rem 1.1rem', backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1.5px solid #A7F3D0', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left' }}>
+                                <FileText size={18} color="#059669" />
+                                <span style={{ color: '#065F46', fontWeight: '800', fontSize: '0.84rem' }}>
+                                    Documento Oficial PDF
+                                </span>
+                            </div>
                             <a 
                                 href={`/quotes/${quoteId}/print`} 
                                 target="_blank" 
@@ -1266,29 +1272,31 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     color: 'white',
                                     textDecoration: 'none',
                                     fontWeight: '800',
-                                    padding: '12px 24px',
-                                    borderRadius: '99px',
-                                    fontSize: '0.9rem',
+                                    padding: '7px 16px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.82rem',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '8px',
-                                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
-                                    cursor: 'pointer'
+                                    gap: '6px',
+                                    boxShadow: '0 3px 10px rgba(16, 185, 129, 0.25)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
                                 }}
                             >
-                                📥 Descargar Pre-Cotización (PDF)
+                                <Download size={15} />
+                                <span>Descargar PDF</span>
                             </a>
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
                         {(() => {
                             const waText = encodeURIComponent(
-                                `Hola FruFresco 👋, soy ${leadData.contact_name || nameInput || 'Cliente B2B'} de ${leadData.company_name || nameInput || 'nuestra empresa'}.\n\n` +
+                                `Hola FruFresco, soy ${leadData.contact_name || nameInput || 'Cliente B2B'} de ${leadData.company_name || nameInput || 'nuestra empresa'}.\n\n` +
                                 `Acabo de generar la Pre-Cotización HORECA en su portal web.\n` +
-                                `📌 Operación: ${selectedType || 'HORECA'}\n` +
-                                `📍 Ubicación: ${leadData.address || addressInput}\n` +
-                                `📦 Volumen Estimado: ${selectedSize || 'Por definir'}\n\n` +
+                                `Operación: ${selectedType || 'HORECA'}\n` +
+                                `Ubicación: ${leadData.address || addressInput}\n` +
+                                `Volumen Estimado: ${selectedSize || 'Por definir'}\n\n` +
                                 `Me gustaría coordinar con un Asesor Comercial la activación de mi cuenta y condiciones de despacho.`
                             );
                             const cleanPhone = (phoneInput || leadData.phone || '').replace(/[^0-9]/g, '');
@@ -1299,20 +1307,21 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     style={{
-                                        backgroundColor: '#25D366',
+                                        backgroundColor: '#059669',
                                         color: 'white',
                                         textDecoration: 'none',
                                         fontWeight: '800',
-                                        padding: '11px 22px',
-                                        borderRadius: '99px',
-                                        fontSize: '0.88rem',
+                                        padding: '7px 15px',
+                                        borderRadius: '12px',
+                                        fontSize: '0.8rem',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '6px',
-                                        boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)'
+                                        boxShadow: '0 3px 10px rgba(5, 150, 105, 0.2)'
                                     }}
                                 >
-                                    💬 Coordinar con Asesor por WhatsApp
+                                    <MessageSquare size={15} />
+                                    <span>Coordinar por WhatsApp</span>
                                 </a>
                             );
                         })()}
@@ -1320,13 +1329,13 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             href="/" 
                             style={{
                                 backgroundColor: 'white',
-                                color: '#334155',
+                                color: '#475569',
                                 border: '1.5px solid #CBD5E1',
                                 textDecoration: 'none',
                                 fontWeight: '700',
-                                padding: '10px 20px',
-                                borderRadius: '99px',
-                                fontSize: '0.85rem'
+                                padding: '7px 15px',
+                                borderRadius: '12px',
+                                fontSize: '0.8rem'
                             }}
                         >
                             Volver al inicio

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
+import { FileText, Printer } from 'lucide-react';
 
 export default function PublicPrintQuotePage() {
     const formatPrice = (value: number) => {
@@ -182,9 +183,10 @@ export default function PublicPrintQuotePage() {
             ` }} />
 
             {/* Action Header for Screen */}
-            <div className="no-print" style={{ backgroundColor: '#064E3B', color: 'white', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>📄 Pre-Cotización Oficial FruFresco</span>
+            <div className="no-print" style={{ backgroundColor: '#064E3B', color: 'white', padding: '0.85rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                <div style={{ fontWeight: '800', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FileText size={18} color="#4ADE80" />
+                    <span>Pre-Cotización Oficial FruFresco</span>
                 </div>
                 <button
                     onClick={() => window.print()}
@@ -192,14 +194,18 @@ export default function PublicPrintQuotePage() {
                         backgroundColor: '#10B981',
                         color: 'white',
                         border: 'none',
-                        padding: '0.6rem 1.2rem',
-                        borderRadius: '99px',
+                        padding: '0.5rem 1.1rem',
+                        borderRadius: '10px',
                         fontWeight: '800',
                         cursor: 'pointer',
-                        fontSize: '0.85rem'
+                        fontSize: '0.82rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
                     }}
                 >
-                    🖨️ Guardar o Imprimir PDF
+                    <Printer size={15} />
+                    <span>Guardar o Imprimir PDF</span>
                 </button>
             </div>
 
