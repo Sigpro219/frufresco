@@ -3877,8 +3877,9 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
     onRegisterContact?: () => void,
     branchCount?: number
 }) {
-    const isB2B = client.role === 'b2b_client';
+    const isB2C = client.role === 'b2c_client';
     const isLead = (client as any).status !== undefined;
+    const isB2B = client.role === 'b2b_client' || (!isLead && !isB2C);
     const selectedModel = isB2B ? pricingModels?.find(m => m.id === client.pricing_model_id) : null;
 
     const handleWhatsApp = () => {
@@ -3904,14 +3905,14 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
         }
     }
 
-    const isMatriz = !isLead && (client.is_corporate_parent === true || (client as any).classification === 'matriz' || !client.parent_id);
-    const isRealBranch = !isLead && !!client.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
+    const isMatriz = isB2B && (client.is_corporate_parent === true || (client as any).classification === 'matriz' || !client.parent_id);
+    const isRealBranch = isB2B && !!client.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
 
     return (
         <tr 
             style={{ 
                 borderBottom: `1px solid ${THEME.colors.border}`, 
-                borderLeft: isMatriz ? '4px solid #1E3A8A' : '4px solid transparent',
+                borderLeft: isMatriz ? '4px solid #1E3A8A' : isRealBranch ? '4px solid #EA580C' : '4px solid transparent',
                 backgroundColor: isMatriz ? '#F8FAFC' : 'transparent',
                 transition: 'background 0.2s', 
                 cursor: 'pointer' 
@@ -3942,6 +3943,34 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                     </span>
                                 );
                             })()}
+                        </div>
+                    </>
+                ) : isB2C ? (
+                    <>
+                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                            {client.nit ? `CC: ${client.nit}` : 'Consumidor Final'}
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.62rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                🏡 HOGAR
+                            </span>
+                            {(() => {
+                                const bList = (client as any).beneficiaries || (client as any).logistics_data?.beneficiaries || [];
+                                const bCount = Array.isArray(bList) ? bList.length : 0;
+                                if (bCount > 0) {
+                                    return (
+                                        <span title="Destinatarios de regalo registrados en su histórico" style={{ fontSize: '0.62rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                            🎁 {bCount} {bCount === 1 ? 'Destinatario' : 'Destinatarios'}
+                                        </span>
+                                    );
+                                }
+                                return null;
+                            })()}
+                            {client.document_type === 'invoice' && (
+                                <span title="Facturación Electrónica Solicitada" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <FileText size={10} strokeWidth={1.5} /> {client.print_invoice ? 'FAC-IMP' : 'FAC-DIG'}
+                                </span>
+                            )}
                         </div>
                     </>
                 ) : (
@@ -5776,7 +5805,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             </section>
                         )}
 
-                        {/* BLOQUE: CONFIGURACIÓN COMERCIAL (COMMON) */}
+                        {/* BLOQUE: CONFIGURACIÓN COMERCIAL O DESTINATARIOS */}
                         <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
                             {!isB2C && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
@@ -5787,117 +5816,109 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 {isB2C ? (
-                                    <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
-                                            <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
-                                            <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
-                                        </div>
-
-                                        {/* SUBGALERÍA DE BENEFICIARIOS / DESTINATARIOS DE REGALO (B2C) */}
-                                        <div style={{ marginTop: '1.2rem', paddingTop: '1.2rem', borderTop: '1px solid #F1F5F9' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <div style={{ width: '28px', height: '28px', backgroundColor: '#ECFDF5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <Gift size={15} style={{ color: '#059669' }} />
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#1E293B' }}>DESTINATARIOS DE REGALO (BENEFICIARIOS)</div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Histórico de personas a las que este cliente les envía pedidos</div>
-                                                    </div>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{ width: '34px', height: '34px', backgroundColor: '#ECFDF5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Gift size={18} style={{ color: '#059669' }} />
                                                 </div>
-                                                {!isReadOnly && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const name = prompt('Nombre completo del destinatario:');
-                                                            if (!name || !name.trim()) return;
-                                                            const phone = prompt('Número de teléfono/celular:') || '';
-                                                            const address = prompt('Dirección de entrega (opcional):') || '';
-                                                            setBeneficiariesList(prev => [
-                                                                ...prev,
-                                                                {
-                                                                    name: name.trim(),
-                                                                    phone: phone.trim(),
-                                                                    address: address.trim(),
-                                                                    last_order_date: new Date().toISOString()
-                                                                }
-                                                            ]);
-                                                        }}
-                                                        style={{
-                                                            padding: '5px 10px',
-                                                            borderRadius: '8px',
-                                                            border: '1px solid #A7F3D0',
-                                                            backgroundColor: '#ECFDF5',
-                                                            color: '#047857',
-                                                            fontSize: '0.72rem',
-                                                            fontWeight: '800',
-                                                            cursor: 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px'
-                                                        }}
-                                                    >
-                                                        + Agregar Destinatario
-                                                    </button>
-                                                )}
+                                                <div>
+                                                    <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#1E293B' }}>DESTINATARIOS DE REGALO (BENEFICIARIOS)</div>
+                                                    <div style={{ fontSize: '0.74rem', color: '#64748B' }}>Histórico de personas a las que este cliente les envía pedidos</div>
+                                                </div>
                                             </div>
-
-                                            {beneficiariesList.length === 0 ? (
-                                                <div style={{ padding: '1.25rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#94A3B8', fontSize: '0.78rem' }}>
-                                                    🎁 Este cliente aún no tiene destinatarios de regalo registrados en su histórico.
-                                                </div>
-                                            ) : (
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.75rem' }}>
-                                                    {beneficiariesList.map((b, idx) => (
-                                                        <div key={idx} style={{
-                                                            padding: '0.85rem',
-                                                            backgroundColor: '#F0FDF4',
-                                                            border: '1px solid #BBF7D0',
-                                                            borderRadius: '12px',
-                                                            display: 'flex',
-                                                            flexDirection: 'column',
-                                                            gap: '4px'
-                                                        }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                <div style={{ fontWeight: '800', fontSize: '0.82rem', color: '#065F46' }}>
-                                                                    👤 {b.name}
-                                                                </div>
-                                                                {!isReadOnly && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            if (confirm(`¿Eliminar a ${b.name} de los destinatarios guardados?`)) {
-                                                                                setBeneficiariesList(prev => prev.filter((_, i) => i !== idx));
-                                                                            }
-                                                                        }}
-                                                                        style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '0.75rem', padding: '0 4px' }}
-                                                                        title="Eliminar destinatario"
-                                                                    >
-                                                                        ✕
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ fontSize: '0.74rem', color: '#047857', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <span>📞 Tel:</span>
-                                                                <span style={{ fontWeight: '600' }}>{b.phone || '---'}</span>
-                                                            </div>
-                                                            {b.address && (
-                                                                <div style={{ fontSize: '0.72rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <span>📍 Dir:</span>
-                                                                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{b.address}</span>
-                                                                </div>
-                                                            )}
-                                                            {b.last_order_date && (
-                                                                <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '2px' }}>
-                                                                    Último pedido: {new Date(b.last_order_date).toLocaleDateString('es-CO')}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                            {!isReadOnly && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const name = prompt('Nombre completo del destinatario:');
+                                                        if (!name || !name.trim()) return;
+                                                        const phone = prompt('Número de teléfono/celular:') || '';
+                                                        const address = prompt('Dirección de entrega (opcional):') || '';
+                                                        setBeneficiariesList(prev => [
+                                                            ...prev,
+                                                            {
+                                                                name: name.trim(),
+                                                                phone: phone.trim(),
+                                                                address: address.trim(),
+                                                                last_order_date: new Date().toISOString()
+                                                            }
+                                                        ]);
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #A7F3D0',
+                                                        backgroundColor: '#ECFDF5',
+                                                        color: '#047857',
+                                                        fontSize: '0.76rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    + Agregar Destinatario
+                                                </button>
                                             )}
                                         </div>
-                                    </>
+
+                                        {beneficiariesList.length === 0 ? (
+                                            <div style={{ padding: '1.25rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#94A3B8', fontSize: '0.78rem' }}>
+                                                🎁 Este cliente aún no tiene destinatarios de regalo registrados en su histórico.
+                                            </div>
+                                        ) : (
+                                            <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
+                                                {/* Encabezado de la Galería de Líneas Horizontales */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 40px', gap: '1rem', padding: '0.65rem 1.2rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    <div>Destinatario</div>
+                                                    <div>Teléfono</div>
+                                                    <div>Dirección</div>
+                                                    <div>Último Pedido</div>
+                                                    <div style={{ textAlign: 'center' }}>Acción</div>
+                                                </div>
+
+                                                {/* Filas Horizontales */}
+                                                {beneficiariesList.map((b, idx) => (
+                                                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 40px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1.2rem', borderBottom: idx < beneficiariesList.length - 1 ? '1px solid #F1F5F9' : 'none', backgroundColor: 'white' }}>
+                                                        <div style={{ fontWeight: '800', fontSize: '0.84rem', color: '#065F46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <User size={14} style={{ color: '#059669' }} />
+                                                            <span>{b.name}</span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <Phone size={13} style={{ color: '#64748B' }} />
+                                                            <span>{b.phone || '---'}</span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <MapPin size={13} style={{ color: '#64748B' }} />
+                                                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{b.address || '---'}</span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <Calendar size={13} style={{ color: '#94A3B8' }} />
+                                                            <span>{b.last_order_date ? new Date(b.last_order_date).toLocaleDateString('es-CO') : '---'}</span>
+                                                        </div>
+                                                        <div style={{ textAlign: 'center' }}>
+                                                            {!isReadOnly && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (confirm(`¿Eliminar a ${b.name} de los destinatarios guardados?`)) {
+                                                                            setBeneficiariesList(prev => prev.filter((_, i) => i !== idx));
+                                                                        }
+                                                                    }}
+                                                                    style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '0.75rem', padding: '4px', borderRadius: '4px' }}
+                                                                    title="Eliminar destinatario"
+                                                                >
+                                                                    <Trash2 size={15} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 ) : (
                                     <>
                                          <div style={{ display: 'grid', gridTemplateColumns: !formData.is_corporate_parent ? '2fr 1fr 1fr' : '1fr 1fr', gap: '1.2rem' }}>
