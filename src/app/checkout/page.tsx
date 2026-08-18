@@ -1817,12 +1817,18 @@ export default function CheckoutPage() {
                         <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.subtotal}</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${roundedSubtotal.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${totalPrice.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.taxes}</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${roundedTaxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}</span>
-                            </div>
+                            {roundedTaxAmount > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                    <span style={{ color: 'var(--text-muted)', fontWeight: '500', fontSize: '0.78rem' }}>
+                                        {locale === 'es' ? 'IVA discriminado (incluido en precios)' : 'Tax (included in prices)'}
+                                    </span>
+                                    <span style={{ fontWeight: '600', color: '#64748B', fontSize: '0.8rem' }}>
+                                        ${roundedTaxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}
+                                    </span>
+                                </div>
+                            )}
 
                             {packagingFeeEnabled && packagingFeeAmount > 0 && (
                                 <div style={{ 
