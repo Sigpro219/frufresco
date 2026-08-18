@@ -39,10 +39,11 @@ export async function POST(request: Request) {
             longitude: number | null;
         } | null = null;
 
-        // 1. Query client profile from profiles table
+        // 1. Query client profile strictly from profiles table where role is 'b2c_client'
         const { data: profilesList } = await supabase
             .from('profiles')
             .select('id, contact_name, address, phone, contact_phone, latitude, longitude')
+            .eq('role', 'b2c_client')
             .eq('email', normalizedEmail)
             .eq('nit', normalizedNit)
             .order('created_at', { ascending: false })
@@ -60,14 +61,16 @@ export async function POST(request: Request) {
             };
         }
 
-        // 2. Fallback: Query historical approved orders if profile is missing or lacks coordinates
+        // 2. Fallback: Query historical approved B2C orders matching BOTH Email AND NIT strictly
         if (!clientRecord || !clientRecord.latitude || !clientRecord.longitude) {
             const { data: orderList } = await supabase
                 .from('orders')
                 .select('id, shipping_address, latitude, longitude, special_notes, created_at')
                 .not('latitude', 'is', null)
                 .not('longitude', 'is', null)
-                .or(`special_notes.ilike.%ID: ${normalizedNit}%,special_notes.ilike.%Email: ${normalizedEmail}%`)
+                .in('type', ['b2c_client', 'b2c_guest', 'b2c_wompi'])
+                .ilike('special_notes', `%ID: ${normalizedNit}%`)
+                .ilike('special_notes', `%Email: ${normalizedEmail}%`)
                 .order('created_at', { ascending: false })
                 .limit(1);
 
