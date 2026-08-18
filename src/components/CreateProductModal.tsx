@@ -218,6 +218,20 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         setOptions(options.filter((_, i) => i !== index));
     };
 
+    const getAttributeCode = (rawVal: any): string => {
+        if (!rawVal) return 'X';
+        const str = rawVal.toString().trim();
+        if (str.includes('|')) {
+            const [label, code] = str.split('|');
+            const cleanCode = code ? code.replace(/[^a-zA-Z0-9]/g, '') : '';
+            const initial = label.substring(0, 1).toUpperCase();
+            return cleanCode ? `${initial}${cleanCode}` : initial;
+        }
+        const clean = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        if (clean.length <= 4) return clean;
+        return clean.substring(0, 4);
+    };
+
     const generateVariants = () => {
         const activeOptions = options.filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0);
 
@@ -239,10 +253,17 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             results = temp;
         });
 
+        const usedSkus = new Set<string>();
         const newVariants = results.map((combination, idx) => {
-            // Lógica de sufijo inteligente para variantes (Hijos)
-            const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
-            const variantSku = `${formData.sku}.${attrValues}`;
+            const attrCode = Object.values(combination).map(getAttributeCode).join('.');
+            const baseSku = `${formData.sku || 'SKU'}.${attrCode}`;
+            let variantSku = baseSku;
+            let counter = 1;
+            while (usedSkus.has(variantSku)) {
+                counter++;
+                variantSku = `${baseSku}-${counter}`;
+            }
+            usedSkus.add(variantSku);
 
             return {
                 id: `v-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
@@ -347,16 +368,29 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
 
             if (error) throw error;
 
-            // 2. Sincronizar tabla dedicada de variantes
+            // 2. Sincronizar tabla dedicada de variantes garantizando unicidad de SKU
             if (newProduct && variants && variants.length > 0) {
-                const formattedVariants = variants.map(v => ({
-                    product_id: newProduct.id,
-                    sku: v.sku,
-                    options: v.options,
-                    image_url: v.image_url || null,
-                    price_adjustment_percent: v.price_adjustment_percent || 0,
-                    is_active: true
-                }));
+                const seenBatchSkus = new Set<string>();
+                const formattedVariants = variants.map((v, idx) => {
+                    let vSku = (v.sku && v.sku.trim()) || `${formData.sku || 'SKU'}-V${idx + 1}`;
+                    if (seenBatchSkus.has(vSku)) {
+                        let c = 2;
+                        while (seenBatchSkus.has(`${vSku}-${c}`)) {
+                            c++;
+                        }
+                        vSku = `${vSku}-${c}`;
+                    }
+                    seenBatchSkus.add(vSku);
+
+                    return {
+                        product_id: newProduct.id,
+                        sku: vSku,
+                        options: v.options,
+                        image_url: v.image_url || null,
+                        price_adjustment_percent: v.price_adjustment_percent || 0,
+                        is_active: true
+                    };
+                });
 
                 const { error: variantError } = await supabase
                     .from('product_variants')

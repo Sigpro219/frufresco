@@ -204,6 +204,20 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
 
+    const getAttributeCode = (rawVal: any): string => {
+        if (!rawVal) return 'X';
+        const str = rawVal.toString().trim();
+        if (str.includes('|')) {
+            const [label, code] = str.split('|');
+            const cleanCode = code ? code.replace(/[^a-zA-Z0-9]/g, '') : '';
+            const initial = label.substring(0, 1).toUpperCase();
+            return cleanCode ? `${initial}${cleanCode}` : initial;
+        }
+        const clean = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        if (clean.length <= 4) return clean;
+        return clean.substring(0, 4);
+    };
+
     const generateVariants = (optsToUse = options) => {
         const activeOptions = optsToUse.filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0);
 
@@ -225,9 +239,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         });
 
         const usedIds = new Set<string>();
+        const usedSkus = new Set<string>();
+
         const newVariants = results.map((combination, idx) => {
-            const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
-            const variantSku = `${formData.sku}.${attrValues}`;
+            const attrCode = Object.values(combination).map(getAttributeCode).join('.');
+            const baseSku = `${formData.sku || 'SKU'}.${attrCode}`;
+            let variantSku = baseSku;
+            let counter = 1;
+            while (usedSkus.has(variantSku)) {
+                counter++;
+                variantSku = `${baseSku}-${counter}`;
+            }
+            usedSkus.add(variantSku);
 
             // Intentar preservar datos si el SKU o combinacion ya existia sin repetir ID
             const existing = variants.find(v => 
@@ -427,15 +450,28 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             }
 
             if (variants && variants.length > 0 && options.length > 0) {
-                // Insertar nuevas
-                const formattedVariants = variants.map(v => ({
-                    product_id: product.id,
-                    sku: v.sku,
-                    options: v.options,
-                    image_url: v.image_url,
-                    price_adjustment_percent: v.price_adj_pct || 0,
-                    is_active: v.show_on_web ?? true
-                }));
+                // Insertar nuevas garantizando unicidad absoluta de SKU en el lote
+                const seenBatchSkus = new Set<string>();
+                const formattedVariants = variants.map((v, idx) => {
+                    let vSku = (v.sku && v.sku.trim()) || `${formData.sku || 'SKU'}-V${idx + 1}`;
+                    if (seenBatchSkus.has(vSku)) {
+                        let c = 2;
+                        while (seenBatchSkus.has(`${vSku}-${c}`)) {
+                            c++;
+                        }
+                        vSku = `${vSku}-${c}`;
+                    }
+                    seenBatchSkus.add(vSku);
+
+                    return {
+                        product_id: product.id,
+                        sku: vSku,
+                        options: v.options,
+                        image_url: v.image_url,
+                        price_adjustment_percent: v.price_adj_pct || 0,
+                        is_active: v.show_on_web ?? true
+                    };
+                });
 
                 const { error: variantError } = await supabase
                     .from('product_variants')
