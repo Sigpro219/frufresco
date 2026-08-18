@@ -233,6 +233,13 @@ export default function CheckoutPage() {
         localStorage.setItem('checkout_address', val);
     };
 
+    const handleNotesChange = (val: string) => {
+        setSpecialNotes(val);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('checkout_specialNotes', val);
+        }
+    };
+
     useEffect(() => {
         if (date) {
             localStorage.setItem('checkout_selected_delivery_date', date);
@@ -622,7 +629,7 @@ export default function CheckoutPage() {
                 profile_id: isValidUuid(matchedProfileId) ? matchedProfileId : null,
                 payment_method: paymentMethod === 'wompi' ? 'wompi' : 'contra_entrega',
                 payment_status: 'Pendiente',
-                special_notes: `${clientNotesHeader}${packagingFeeEnabled ? `\n[EMPAQUE PLÁSTICO (${packagingFeePercentage}%): +$${packagingFeeAmount.toLocaleString('es-CO')} COP]` : ''}\n[ORIGIN: web]\n${specialNotes || ''}`
+                special_notes: `${clientNotesHeader}${packagingFeeEnabled ? `\n[EMPAQUE PLÁSTICO (${packagingFeePercentage}%): +$${packagingFeeAmount.toLocaleString('es-CO')} COP]` : ''}\n[ORIGIN: web]${specialNotes ? `\n[RECOMENDACIÓN / NOTA DE ENTREGA: ${specialNotes}]` : ''}`
             };
 
             const orderItemsData = items.map(item => ({
