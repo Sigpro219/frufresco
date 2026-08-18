@@ -597,22 +597,26 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                     </div>
 
                     <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.45rem 0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                            <span style={{ fontSize: '0.78rem', fontWeight: '700', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Home size={14} color="#DC2626" /> Hogares (B2C)
-                            </span>
-                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEE2E2', padding: '2px 8px', borderRadius: '10px' }}>
-                                {validOutOfBoundsPoints.filter(p => p.channel !== 'b2b').length} Rechazos
-                            </span>
+                        {/* Card B2C Rechazos */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'white', padding: '0.65rem 0.85rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Home size={14} color="#DC2626" />
+                                <span>Hogares (B2C)</span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', width: 'fit-content', border: '1px solid #FECACA' }}>
+                                <span>{validOutOfBoundsPoints.filter(p => p.channel !== 'b2b').length} Rechazos Capturados</span>
+                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.45rem 0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                            <span style={{ fontSize: '0.78rem', fontWeight: '700', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Building2 size={14} color="#2563EB" /> HORECA (B2B)
-                            </span>
-                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', backgroundColor: '#DBEAFE', padding: '2px 8px', borderRadius: '10px' }}>
-                                {validOutOfBoundsPoints.filter(p => p.channel === 'b2b').length} Rechazos
-                            </span>
+                        {/* Card B2B Rechazos */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'white', padding: '0.65rem 0.85rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Building2 size={14} color="#2563EB" />
+                                <span>HORECA (B2B)</span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#2563EB', backgroundColor: '#DBEAFE', padding: '3px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', width: 'fit-content', border: '1px solid #BFDBFE' }}>
+                                <span>{validOutOfBoundsPoints.filter(p => p.channel === 'b2b').length} Rechazos Capturados</span>
+                            </div>
                         </div>
 
                         <button 
