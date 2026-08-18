@@ -15,7 +15,7 @@ const supabase = isUrlValid ? createClient(supabaseUrl, supabaseKey) : null as a
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { order, items } = body;
+        const { order, items, customer_info } = body;
 
         if (!order || !items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json({ error: 'Invalid order data' }, { status: 400 });
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
                     .eq('id', userId)
                     .single();
                 if (profile) {
-                    pricingModelId = resolvePricingModelId(profile);
+                    pricingModelId = resolvePricingModelId({ ...profile, parent: Array.isArray(profile.parent) ? profile.parent[0] : profile.parent });
                 }
             }
 
@@ -177,6 +177,82 @@ export async function POST(request: Request) {
         // Ensure profile_id is a valid UUID or null
         if (order.profile_id && (typeof order.profile_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.profile_id))) {
             order.profile_id = null;
+        }
+
+        // Automatic B2C Customer Profile Registration / Upsert in CRM (public.profiles)
+        try {
+            const isB2C = order.type === 'b2c_client' || order.type === 'b2c_guest' || !order.type;
+            const cName = customer_info?.name || '';
+            const cPhone = customer_info?.phone || '';
+            const cEmail = customer_info?.email || '';
+            const cId = customer_info?.identification || '';
+            const cAddress = customer_info?.address || order.shipping_address || '';
+            const cLat = customer_info?.latitude || order.latitude || null;
+            const cLng = customer_info?.longitude || order.longitude || null;
+
+            if (isB2C && (cPhone || cEmail || cName)) {
+                let existingProfileId = order.profile_id;
+
+                if (!existingProfileId && (cPhone || cEmail)) {
+                    let query = supabase.from('profiles').select('id, contact_name, address').eq('role', 'b2c_client');
+                    if (cPhone) {
+                        query = query.eq('contact_phone', cPhone);
+                    } else if (cEmail) {
+                        query = query.eq('email', cEmail);
+                    }
+                    const { data: matchedProfiles } = await query.maybeSingle();
+                    if (matchedProfiles) {
+                        existingProfileId = matchedProfiles.id;
+                    }
+                }
+
+                if (existingProfileId) {
+                    order.profile_id = existingProfileId;
+                    if (cAddress || (cLat && cLng)) {
+                        await supabase
+                            .from('profiles')
+                            .update({
+                                address: cAddress || undefined,
+                                latitude: cLat || undefined,
+                                longitude: cLng || undefined,
+                                geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
+                            })
+                            .eq('id', existingProfileId);
+                    }
+                } else if (cName && (cPhone || cEmail)) {
+                    const newProfileId = crypto.randomUUID();
+                    const { data: newProfile, error: profileCreateErr } = await supabase
+                        .from('profiles')
+                        .insert({
+                            id: newProfileId,
+                            role: 'b2c_client',
+                            company_name: cName,
+                            contact_name: cName,
+                            contact_phone: cPhone,
+                            phone: cPhone,
+                            email: cEmail || null,
+                            nit: cId || null,
+                            address: cAddress || 'Dirección de entrega web',
+                            city: 'Bogotá',
+                            municipality: 'Bogotá',
+                            latitude: cLat || null,
+                            longitude: cLng || null,
+                            is_active: true,
+                            pricing_model_id: CLIENTES_HOGAR_ID,
+                            geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
+                        })
+                        .select('id')
+                        .single();
+
+                    if (!profileCreateErr && newProfile) {
+                        order.profile_id = newProfile.id;
+                    } else if (profileCreateErr) {
+                        console.error('Error creating B2C profile during checkout:', profileCreateErr.message);
+                    }
+                }
+            }
+        } catch (profileSyncErr: any) {
+            console.error('Exception during B2C profile sync in checkout:', profileSyncErr.message);
         }
 
         // 1. Crear la cabecera del pedido

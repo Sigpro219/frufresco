@@ -658,7 +658,19 @@ export default function CheckoutPage() {
             const createOrderPromise = fetch('/api/orders/public', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order: orderDataToInsert, items: orderItemsData })
+                body: JSON.stringify({ 
+                    order: orderDataToInsert, 
+                    items: orderItemsData,
+                    customer_info: {
+                        name,
+                        phone,
+                        email,
+                        identification,
+                        address,
+                        latitude: safeLat,
+                        longitude: safeLng
+                    }
+                })
             });
 
             const timeoutPromise = new Promise((_, reject) => 
