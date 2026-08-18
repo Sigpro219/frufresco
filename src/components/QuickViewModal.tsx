@@ -401,8 +401,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                         }}>
                             <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                             <div>
-                                <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
-                                    🛒 {titleStr}
+                                <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <ShoppingCart size={15} style={{ color: '#B45309' }} /> {titleStr}
                                 </div>
                                 <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
                                     {msgStr}

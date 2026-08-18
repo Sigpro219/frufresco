@@ -94,7 +94,7 @@ export default function CheckoutPage() {
     const [recipientName, setRecipientName] = useState('');
     const [recipientPhone, setRecipientPhone] = useState('');
     const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
-    const [selectedBeneficiaryIdx, setSelectedBeneficiaryIdx] = useState<number | 'new'>('new');
+    const [selectedBeneficiaryIdx, setSelectedBeneficiaryIdx] = useState<number | 'new' | null>(null);
 
     const itemBreakdownSummary = useMemo(() => {
         if (!items || items.length === 0) return '';
@@ -1380,7 +1380,7 @@ export default function CheckoutPage() {
                                         <AlertCircle size={14} color={lookupError ? '#EF4444' : '#2563EB'} style={{ marginTop: '1px', flexShrink: 0 }} />
                                         <div>
                                             <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: lookupError ? '#991B1B' : '#1E40AF' }}>
-                                                {lookupError ? 'Error de Validación' : '🔒 Cuenta FruFresco Detectada'}
+                                                {lookupError ? 'Error de Validación' : <><ShieldCheck size={14} style={{ color: '#059669', display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Cuenta FruFresco Detectada</>}
                                             </p>
                                             <p style={{ margin: '1px 0 0 0', fontSize: '0.7rem', fontWeight: '500', color: lookupError ? '#7F1D1D' : '#1E3A8A', lineHeight: '1.25' }}>
                                                 {lookupError || (lookupLoading ? 'Validando...' : 'Digita el celular registrado para autocompletar tu compra.')}
@@ -1517,7 +1517,7 @@ export default function CheckoutPage() {
                                             gap: '8px'
                                         }}>
                                             <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                🎁 {locale === 'es' ? 'Destinatarios frecuentes guardados:' : 'Saved Frequent Recipients:'}
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Gift size={13} style={{ color: '#047857' }} /> {locale === 'es' ? 'Destinatarios frecuentes guardados:' : 'Saved Frequent Recipients:'}</span>
                                             </div>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                 <button
@@ -1539,7 +1539,7 @@ export default function CheckoutPage() {
                                                         transition: 'all 0.15s ease'
                                                     }}
                                                 >
-                                                    + {locale === 'es' ? 'Nuevo Destinatario' : 'New Recipient'}
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Plus size={12} /> {locale === 'es' ? 'Nuevo Destinatario' : 'New Recipient'}</span>
                                                 </button>
                                                 {beneficiaries.map((b, idx) => (
                                                     <button
@@ -1573,7 +1573,7 @@ export default function CheckoutPage() {
                                                             transition: 'all 0.15s ease'
                                                         }}
                                                     >
-                                                        <span>👤 {b.name}</span>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><User size={12} style={{ color: selectedBeneficiaryIdx === idx ? 'white' : '#059669' }} /> {b.name}</span>
                                                         <span style={{ opacity: selectedBeneficiaryIdx === idx ? 0.9 : 0.65, fontSize: '0.68rem' }}>({b.phone})</span>
                                                     </button>
                                                 ))}
@@ -1581,7 +1581,15 @@ export default function CheckoutPage() {
                                         </div>
                                     )}
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                                    {beneficiaries.length > 0 && selectedBeneficiaryIdx === null && (
+                                        <div style={{ fontSize: '0.78rem', color: '#047857', fontWeight: '600', padding: '0.65rem 0.85rem', backgroundColor: '#ECFDF5', borderRadius: '10px', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Info size={14} style={{ color: '#059669', flexShrink: 0 }} />
+                                            <span>{locale === 'es' ? 'Selecciona un destinatario guardado arriba o haz clic en "+ Nuevo Destinatario" para ver o ingresar los datos de entrega.' : 'Select a saved recipient above or click "+ New Recipient" to enter recipient details.'}</span>
+                                        </div>
+                                    )}
+
+                                    {(beneficiaries.length === 0 || selectedBeneficiaryIdx !== null) && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
                                         <div>
                                             <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                                 {locale === 'es' ? 'Nombre de quien recibe *' : 'Recipient Full Name *'}
@@ -1638,6 +1646,7 @@ export default function CheckoutPage() {
                                             </div>
                                         </div>
                                     </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1945,7 +1954,7 @@ export default function CheckoutPage() {
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ color: '#047857', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            🛍️ Empaque e Inocuidad ({packagingFeePercentage}%):
+                                            <Package size={14} style={{ color: '#059669', display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Empaque e Inocuidad ({packagingFeePercentage}%):
                                         </span>
                                         <span style={{ fontWeight: '900', color: '#047857', fontSize: '0.88rem' }}>
                                             +${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}
@@ -2168,13 +2177,13 @@ export default function CheckoutPage() {
 
                             {paymentMethod === 'contra_entrega' && latitude && (
                                 <p style={{ fontSize: '0.8rem', color: '#047857', textAlign: 'center', marginTop: '0.8rem', fontWeight: '700', backgroundColor: '#ECFDF5', padding: '8px 14px', borderRadius: '10px', border: '1px solid #A7F3D0' }}>
-                                    💡 {locale === 'es' ? 'No pagas nada hoy. Cancelas el valor exacto al recibir tu pedido en puerta.' : 'You pay nothing today. Pay exact amount on delivery.'}
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Info size={14} style={{ color: '#D97706', flexShrink: 0 }} /> {locale === 'es' ? 'No pagas nada hoy. Cancelas el valor exacto al recibir tu pedido en puerta.' : 'You pay nothing today. Pay exact amount on delivery.'}</span>
                                 </p>
                             )}
 
                             {!latitude && address.trim().length > 3 && (
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem', fontWeight: '600', opacity: 0.7 }}>
-                                    {locale === 'es' ? '📍 Necesitamos tu ubicación exacta para que el repartidor llegue sin problemas.' : '📍 We need your exact location so the driver can arrive without issues.'}
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><MapPin size={14} style={{ color: '#D97706', flexShrink: 0 }} /> {locale === 'es' ? 'Necesitamos tu ubicación exacta para que el repartidor llegue sin problemas.' : 'We need your exact location so the driver can arrive without issues.'}</span>
                                 </p>
                             )}
 
@@ -2515,9 +2524,9 @@ export default function CheckoutPage() {
                                     <div style={{ color: '#94A3B8', fontSize: '0.8rem', marginTop: '1px' }}>
                                         {isGiftForRecipient ? (
                                             <>
-                                                <div>👤 {locale === 'es' ? 'Comprador:' : 'Buyer:'} {name} ({phone})</div>
-                                                <div style={{ color: '#047857', fontWeight: '700', marginTop: '2px' }}>
-                                                    🎁 {locale === 'es' ? 'Recibe en puerta:' : 'Recipient:'} {recipientName} ({recipientPhone})
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><User size={13} style={{ color: '#059669' }} /> {locale === 'es' ? 'Comprador:' : 'Buyer:'} {name} ({phone})</div>
+                                                <div style={{ color: '#047857', fontWeight: '700', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                    <Gift size={13} style={{ color: '#059669' }} /> {locale === 'es' ? 'Recibe en puerta:' : 'Recipient:'} {recipientName} ({recipientPhone})
                                                 </div>
                                             </>
                                         ) : (
@@ -2556,7 +2565,7 @@ export default function CheckoutPage() {
                                 </div>
                                 <div>
                                     <div style={{ fontWeight: '800', color: '#B45309', fontSize: '0.95rem' }}>
-                                        🚚 {locale === 'es' ? 'Pedido Contra Entrega Programado' : 'Scheduled Cash on Delivery Order'}
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Truck size={15} style={{ color: '#059669' }} /> {locale === 'es' ? 'Pedido Contra Entrega Programado' : 'Scheduled Cash on Delivery Order'}</span>
                                     </div>
                                     <div style={{ marginTop: '2px', color: '#78350F', fontSize: '0.85rem', lineHeight: '1.4' }}>
                                         {locale === 'es' 
