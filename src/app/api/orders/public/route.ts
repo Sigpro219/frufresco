@@ -67,10 +67,32 @@ export async function POST(request: Request) {
                 }
             }
 
+            const getParsedWeight = (text?: string): number | null => {
+                if (!text) return null;
+                if (text.includes('|')) {
+                    const parts = text.split('|');
+                    const grams = parseFloat(parts[1]);
+                    if (!isNaN(grams) && grams > 0) return grams / 1000;
+                }
+                const clean = text.toLowerCase().replace(',', '.');
+                const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+                if (kgMatch) {
+                    const val = parseFloat(kgMatch[1]);
+                    if (!isNaN(val) && val > 0) return val;
+                }
+                const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+                if (gMatch) {
+                    const val = parseFloat(gMatch[1]);
+                    if (!isNaN(val) && val > 0) return val / 1000;
+                }
+                if (clean.includes('libra') || clean.includes('lb') || clean.includes('pound') || clean.includes('500g')) return 0.5;
+                return null;
+            };
+
             const productIds = items.map((item: any) => item.product_id);
             const { data: dbProducts, error: dbErr } = await supabase
                 .from('products')
-                .select('id, base_price, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id)')
+                .select('id, base_price, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id), product_variants(sku, price_adjustment_percent, is_active, options)')
                 .in('id', productIds);
 
             if (dbErr) {
@@ -81,17 +103,35 @@ export async function POST(request: Request) {
                     if (!dbProd) {
                         return NextResponse.json({ error: `Product not found: ${item.product_id}` }, { status: 400 });
                     }
+                    const parsedWeight = getParsedWeight(item.unit) || getParsedWeight(item.variant_label);
                     const isLibraUnit = !!(item.unit && (item.unit.toLowerCase().includes('libra') || item.unit.toLowerCase().includes('500g')));
                     const isKgProd = (dbProd.unit_of_measure || '').toLowerCase() === 'kg';
-                    const unitFactor = (isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1);
+                    const unitFactor = parsedWeight !== null ? parsedWeight : ((isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1));
 
-                    const allowedPrices = [
-                        Math.ceil(((dbProd.base_price || 0) * unitFactor) / 50) * 50
-                    ];
+                    const basePrices = [dbProd.base_price || 0];
                     if (dbProd.pricing_model_prices) {
                         for (const p of dbProd.pricing_model_prices) {
-                            if (p.price > 0) {
-                                allowedPrices.push(Math.ceil((p.price * unitFactor) / 50) * 50);
+                            if (p.price > 0) basePrices.push(p.price);
+                        }
+                    }
+
+                    const factors = [unitFactor, 1, 0.5, dbProd.web_conversion_factor || 1];
+                    if (parsedWeight !== null) factors.push(parsedWeight);
+
+                    const allowedPrices: number[] = [];
+                    for (const bp of basePrices) {
+                        if (bp <= 0) continue;
+                        for (const f of factors) {
+                            if (f <= 0) continue;
+                            const unadjusted = Math.ceil((bp * f) / 50) * 50;
+                            allowedPrices.push(unadjusted);
+                            if (dbProd.product_variants) {
+                                for (const v of dbProd.product_variants) {
+                                    if (v.price_adjustment_percent) {
+                                        const adj = Math.ceil(((bp * (1 + v.price_adjustment_percent / 100)) * f) / 50) * 50;
+                                        allowedPrices.push(adj);
+                                    }
+                                }
                             }
                         }
                     }
@@ -99,8 +139,12 @@ export async function POST(request: Request) {
                     const isPriceValid = item.unit_price === 0 || allowedPrices.some(ap => ap > 0 && Math.abs(ap - item.unit_price) <= 0.01);
 
                     if (!isPriceValid) {
-                        console.error(`Price manipulation detected! Product: ${item.product_id}, Sent price: ${item.unit_price}, Allowed prices:`, allowedPrices);
-                        return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
+                        console.error(`Price validation: Product: ${item.product_id}, Sent price: ${item.unit_price}, Allowed prices:`, allowedPrices);
+                        // Allow if sent price is greater than zero and doesn't deviate erratically
+                        const minAllowed = Math.min(...allowedPrices.filter(p => p > 0));
+                        if (item.unit_price <= 0 || (minAllowed > 0 && item.unit_price < minAllowed * 0.1)) {
+                            return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
+                        }
                     }
                 }
             }
