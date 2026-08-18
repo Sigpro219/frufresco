@@ -3560,6 +3560,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: THEME.colors.textMain, paddingRight: '100px', lineHeight: '1.3' }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
+                {data?.created_at && !isNaN(new Date(data.created_at).getTime()) && (
+                    <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px' }} title="Fecha y hora de registro en el sistema">
+                        <Calendar size={11} style={{ color: '#94A3B8' }} />
+                        <span>Reg: {new Date(data.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })} - {new Date(data.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                    </div>
+                )}
                 {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
                 {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>{isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
             </div>
@@ -3925,6 +3931,12 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                 <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {client.company_name || client.contact_name}
                 </div>
+                {client.created_at && !isNaN(new Date(client.created_at).getTime()) && (
+                    <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '1px' }} title="Fecha y hora de registro en el sistema">
+                        <Calendar size={10} style={{ color: '#94A3B8' }} />
+                        <span>Reg: {new Date(client.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })} - {new Date(client.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                    </div>
+                )}
                 {isLead ? (
                     <>
                         {client.nit && <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit}</div>}
