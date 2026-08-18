@@ -3367,13 +3367,13 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                     >
                         <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
-                        <span>{isVerifiedDev ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{isVerifiedDev ? <><CheckCircle2 size={11} /> REVISADO</> : <><Clock size={11} /> PENDIENTE</>}</span>
                     </button>
                 )}
 
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     {isMatriz && (
-                        <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(30,58,138,0.25)' }}>🏢 MATRIZ</span>
+                        <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(30,58,138,0.25)' }}><Building2 size={11} strokeWidth={2} style={{ color: '#FFFFFF' }} /> MATRIZ</span>
                     )}
                     {isMatriz && branchCount !== undefined && branchCount > 0 && (
                         <span title="Sucursales vinculadas a esta Casa Matriz" style={{ fontSize: '0.62rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -3952,7 +3952,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                         </div>
                         <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.62rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                🏡 HOGAR
+                                <Home size={10} style={{ color: '#059669' }} /> HOGAR
                             </span>
                             {(() => {
                                 const bList = (client as any).beneficiaries || (client as any).logistics_data?.beneficiaries || [];
@@ -3979,7 +3979,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                         <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {isMatriz ? (
                                 <>
-                                    <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '3px', boxShadow: '0 1px 3px rgba(30,58,138,0.25)' }}>🏢 MATRIZ</span>
+                                    <span style={{ fontSize: '0.62rem', backgroundColor: '#1E3A8A', color: '#FFFFFF', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '3px', boxShadow: '0 1px 3px rgba(30,58,138,0.25)' }}><Building2 size={11} strokeWidth={2} style={{ color: '#FFFFFF' }} /> MATRIZ</span>
                                     {branchCount !== undefined && branchCount > 0 && (
                                         <span title="Sucursales vinculadas a esta Casa Matriz" style={{ fontSize: '0.62rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', border: '1px solid #BFDBFE', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                             <Building2 size={11} strokeWidth={2} /> {branchCount} {branchCount === 1 ? 'Sucursal' : 'Sucursales'}
@@ -4203,7 +4203,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                             title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                         >
                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerifiedDev ? '#10B981' : '#F59E0B' }} />
-                            <span>{isVerifiedDev ? '🔍 REVISADO' : '⏳ PENDIENTE'}</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{isVerifiedDev ? <><CheckCircle2 size={11} /> REVISADO</> : <><Clock size={11} /> PENDIENTE</>}</span>
                         </button>
                     );
                 })()}
@@ -5032,7 +5032,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     title="Etapa Dev: Click para cambiar estado de revisión del cliente"
                                 >
                                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: ((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '#10B981' : '#F59E0B' }} />
-                                    <span>{((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? '🔍 REVISADO (DEV)' : '⏳ PENDIENTE (DEV)'}</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev')) ? <><CheckCircle2 size={11} /> REVISADO (DEV)</> : <><Clock size={11} /> PENDIENTE (DEV)</>}</span>
                                 </button>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', backgroundColor: formData.is_active ? '#F0FDF4' : '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '16px', border: '1px solid', borderColor: formData.is_active ? '#BBF7D0' : '#FCA5A5' }}>
@@ -5131,15 +5131,15 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
                                         <div>
                                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Teléfono</span>
-                                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#1E293B', marginTop: '0.2rem' }}>📞 {editData?.phone || 'Sin número'}</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#1E293B', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={15} style={{ color: '#059669' }} /> {editData?.phone || 'Sin número'}</div>
                                         </div>
                                         <div>
                                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Email</span>
-                                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#0891B2', marginTop: '0.2rem' }}>📧 {editData?.email || 'Sin correo'}</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#0891B2', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={15} style={{ color: '#0891B2' }} /> {editData?.email || 'Sin correo'}</div>
                                         </div>
                                         <div style={{ gridColumn: 'span 2' }}>
                                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Dirección Declarada</span>
-                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1E293B', marginTop: '0.2rem' }}>📍 {(editData as any)?.address || 'No declarada'} - {(editData as any)?.municipality || ''}</div>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1E293B', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={15} style={{ color: '#64748B' }} /> {(editData as any)?.address || 'No declarada'} - {(editData as any)?.municipality || ''}</div>
                                         </div>
                                     </div>
                                 </section>
