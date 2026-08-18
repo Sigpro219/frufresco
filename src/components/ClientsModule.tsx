@@ -3960,7 +3960,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                 if (bCount > 0) {
                                     return (
                                         <span title="Destinatarios de regalo registrados en su histórico" style={{ fontSize: '0.62rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                            🎁 {bCount} {bCount === 1 ? 'Destinatario' : 'Destinatarios'}
+                                            <Gift size={10} style={{ color: '#92400E' }} /> {bCount} {bCount === 1 ? 'Destinatario' : 'Destinatarios'}
                                         </span>
                                     );
                                 }
@@ -5859,14 +5859,14 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         gap: '4px'
                                                     }}
                                                 >
-                                                    + Agregar Destinatario
+                                                    <Plus size={13} style={{ strokeWidth: 2.5 }} /> Agregar Destinatario
                                                 </button>
                                             )}
                                         </div>
 
                                         {beneficiariesList.length === 0 ? (
                                             <div style={{ padding: '1.25rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#94A3B8', fontSize: '0.78rem' }}>
-                                                🎁 Este cliente aún no tiene destinatarios de regalo registrados en su histórico.
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Gift size={16} style={{ color: '#94A3B8' }} /><span>Este cliente aún no tiene destinatarios de regalo registrados en su histórico.</span></div>
                                             </div>
                                         ) : (
                                             <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
