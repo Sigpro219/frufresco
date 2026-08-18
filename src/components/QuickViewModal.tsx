@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 import { useAuth } from '../lib/authContext';
 import { resolvePricingModelId } from '../lib/pricingUtils';
+import { AlertTriangle } from 'lucide-react';
 
 // Keep interface consistent with usage
 interface Product {
@@ -35,7 +36,7 @@ interface QuickViewModalProps {
 }
 
 const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, onClose, initialQuantity, onUpdateQuantity }) => {
-    const { addItem } = useCart();
+    const { addItem, items } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
@@ -501,9 +502,54 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                              <div style={{ fontSize: '1.35rem', fontWeight: '900', color: isAvailable ? '#111827' : '#9CA3AF' }}>
                                  ${(currentPrice * (isAvailable ? quantity : 1)).toLocaleString('es-CO')}
                              </div>
-                        </div>
+                         </div>
                     </div>
                 </div>
+
+                {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL CARRITO/PEDIDO */}
+                {(() => {
+                    const finalName = currentVariant
+                        ? `${product.name} (${Object.values(selections).map(v => v.includes('|') ? v.split('|')[0] : v).join(', ')})`
+                        : product.name;
+                    const existingInCart = items?.find(item => item.id === product.id && item.name === finalName)
+                        || items?.find(item => item.id === product.id);
+                    if (!existingInCart || onUpdateQuantity) return null;
+
+                    const currentQty = Number(existingInCart.quantity || 0);
+                    const addedNum = Number(quantity) || 0;
+                    const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
+                    const productName = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name);
+
+                    return (
+                        <div style={{
+                            backgroundColor: '#FFFBEB',
+                            border: '1.5px solid #F59E0B',
+                            borderRadius: '14px',
+                            padding: '0.85rem 1rem',
+                            marginBottom: '1rem',
+                            textAlign: 'left',
+                            fontSize: '0.82rem',
+                            color: '#92400E',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
+                        }}>
+                            <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <div>
+                                <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
+                                    🛒 {locale === 'en' ? 'Item already included in your order' : 'Insumo ya incluido en tu pedido'}
+                                </div>
+                                <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
+                                    {locale === 'en' ? 'You already have' : 'Ya tienes'} <strong style={{ color: '#B45309' }}>{currentQty} {existingInCart.unit || activeUnit}</strong> {locale === 'en' ? 'of' : 'de'} {productName} {locale === 'en' ? 'in your order.' : 'en tu pedido.'}
+                                </div>
+                                <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
+                                    {locale === 'en' ? 'Adding' : 'Al adicionar'} <strong>{quantity} {activeUnit}</strong> {locale === 'en' ? 'the new total will be' : 'el nuevo total será'} <strong>{newTotal} {existingInCart.unit || activeUnit}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {!isAvailable && (

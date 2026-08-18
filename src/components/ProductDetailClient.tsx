@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useCart } from '@/lib/cartContext';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingBag, Zap, Plus, Minus, ChevronRight, Apple } from 'lucide-react';
+import { ShoppingBag, Zap, Plus, Minus, ChevronRight, Apple, AlertTriangle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '@/lib/translations';
 
@@ -32,7 +32,7 @@ interface Product {
 }
 
 export default function ProductDetailClient({ product }: { product: Product }) {
-    const { addItem } = useCart();
+    const { addItem, items } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
     const lang = searchParams.get('lang') || 'es';
@@ -507,6 +507,51 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             )}
                         </span>
                     </div>
+
+                    {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL CARRITO/PEDIDO */}
+                    {(() => {
+                        const finalName = currentVariant
+                            ? `${product.name} (${Object.values(selections).map(v => v.includes('|') ? v.split('|')[0] : v).join(', ')})`
+                            : product.name;
+                        const existingInCart = items?.find(item => item.id === product.id && item.name === finalName)
+                            || items?.find(item => item.id === product.id);
+                        if (!existingInCart) return null;
+
+                        const currentQty = Number(existingInCart.quantity || 0);
+                        const addedNum = Number(quantity) || 0;
+                        const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
+                        const productName = (isEn && product.name_en) ? product.name_en : (product.display_name || product.name);
+
+                        return (
+                            <div style={{
+                                backgroundColor: '#FFFBEB',
+                                border: '1.5px solid #F59E0B',
+                                borderRadius: '14px',
+                                padding: '0.85rem 1rem',
+                                marginBottom: '1.25rem',
+                                textAlign: 'left',
+                                fontSize: '0.82rem',
+                                color: '#92400E',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '10px',
+                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
+                            }}>
+                                <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div>
+                                    <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
+                                        🛒 {isEn ? 'Item already included in your order' : 'Insumo ya incluido en tu pedido'}
+                                    </div>
+                                    <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
+                                        {isEn ? 'You already have' : 'Ya tienes'} <strong style={{ color: '#B45309' }}>{currentQty} {existingInCart.unit || activeUnit}</strong> {isEn ? 'of' : 'de'} {productName} {isEn ? 'in your order.' : 'en tu pedido.'}
+                                    </div>
+                                    <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
+                                        {isEn ? 'Adding' : 'Al adicionar'} <strong>{quantity} {activeUnit}</strong> {isEn ? 'the new total will be' : 'el nuevo total será'} <strong>{newTotal} {existingInCart.unit || activeUnit}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
