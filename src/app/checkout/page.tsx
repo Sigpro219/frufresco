@@ -73,6 +73,7 @@ export default function CheckoutPage() {
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
     const [specialNotes, setSpecialNotes] = useState('');
+    const [notesJustSaved, setNotesJustSaved] = useState(false);
     const [isProfileMatched, setIsProfileMatched] = useState(false);
     const [isProfileUnlocked, setIsProfileUnlocked] = useState(false);
     const [maskedName, setMaskedName] = useState('');
@@ -235,8 +236,17 @@ export default function CheckoutPage() {
 
     const handleNotesChange = (val: string) => {
         setSpecialNotes(val);
+        setNotesJustSaved(false);
         if (typeof window !== 'undefined') {
             localStorage.setItem('checkout_specialNotes', val);
+        }
+    };
+
+    const handleNotesEnter = () => {
+        setNotesJustSaved(true);
+        const paymentSection = document.getElementById('payment-method-section');
+        if (paymentSection) {
+            paymentSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     };
 
@@ -1739,9 +1749,29 @@ export default function CheckoutPage() {
 
                             <div style={{ marginTop: '0.4rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                                    <label style={{ display: 'block', margin: 0, fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                        {t.specialNotes}
-                                    </label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <label style={{ display: 'block', margin: 0, fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            {t.specialNotes}
+                                        </label>
+                                        {specialNotes.trim().length > 0 && (
+                                            <span style={{ 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '3px', 
+                                                fontSize: '0.68rem', 
+                                                fontWeight: '800', 
+                                                color: '#059669', 
+                                                backgroundColor: '#ECFDF5', 
+                                                padding: '1px 6px', 
+                                                borderRadius: '6px',
+                                                border: '1px solid #A7F3D0',
+                                                transition: 'all 0.2s ease'
+                                            }}>
+                                                <CheckCircle2 size={11} strokeWidth={2.5} color="#059669" />
+                                                {locale === 'es' ? 'Guardado' : 'Saved'}
+                                            </span>
+                                        )}
+                                    </div>
                                     <span style={{ fontSize: '0.65rem', color: specialNotes.length > 130 ? '#EF4444' : '#9CA3AF', fontWeight: '800', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                         {specialNotes.length}/150
                                     </span>
@@ -1750,14 +1780,25 @@ export default function CheckoutPage() {
                                     placeholder={isGiftForRecipient ? "Ej: Dejar en portería y decir que es un regalo de parte de German Higuera" : t.specialNotesPlaceholder}
                                     value={specialNotes}
                                     onChange={(e) => handleNotesChange(e.target.value.slice(0, 150))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleNotesEnter();
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        if (specialNotes.trim()) {
+                                            setNotesJustSaved(true);
+                                        }
+                                    }}
                                     style={{ 
                                         width: '100%', 
                                         padding: '0.55rem 0.75rem', 
                                         borderRadius: '12px', 
-                                        border: '1px solid #E2E8F0', 
+                                        border: specialNotes.trim().length > 0 ? '1.5px solid #10B981' : '1px solid #E2E8F0', 
                                         fontSize: '0.85rem', 
                                         fontWeight: '500', 
-                                        backgroundColor: 'white', 
+                                        backgroundColor: specialNotes.trim().length > 0 ? '#F0FDF4' : 'white', 
                                         outline: 'none', 
                                         minHeight: '50px', 
                                         resize: 'none',
@@ -1888,7 +1929,7 @@ export default function CheckoutPage() {
                             )}
 
                             {/* Método de Pago Selector */}
-                            <div style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
+                            <div id="payment-method-section" style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
                                 <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-inter), sans-serif' }}>
                                     {locale === 'es' ? 'Método de Pago' : 'Payment Method'}
                                 </div>
