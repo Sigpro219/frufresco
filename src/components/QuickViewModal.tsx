@@ -90,12 +90,12 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                 .reduce((acc: any, opt: any) => {
                     let values = opt.values || [];
                     if (opt.name.toLowerCase().includes('presentaci')) {
-                        if (isBaseInKg) {
-                            values = [locale === 'en' ? 'Pound (500g)|500' : 'Libra (500g)|500'];
-                        } else {
-                            const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Unidad';
-                            if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
-                                values = [defaultVal, ...values];
+                        if (!values || values.length === 0) {
+                            if (isBaseInKg) {
+                                values = [locale === 'en' ? 'Pound (500g)|500' : 'Libra (500g)|500'];
+                            } else {
+                                const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Unidad';
+                                values = [defaultVal];
                             }
                         }
                     }
@@ -104,7 +104,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
             : product.options || {};
 
         const hasPresentationKey = Object.keys(opts).some(k => k.toLowerCase().includes('presentaci'));
-        if (isBaseInKg && !hasPresentationKey) {
+        if (!hasPresentationKey && isBaseInKg) {
             opts = {
                 ...opts,
                 'Presentación': [locale === 'en' ? 'Pound (500g)|500' : 'Libra (500g)|500']
@@ -210,8 +210,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     const unitLower = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
     const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(unitLower);
     const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
-    const activeConversionFactor = isBaseInKg ? 0.5 : (parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1));
-    const activeUnit = isBaseInKg ? (locale === 'en' ? 'Pound (500g)' : 'Libra (500g)') : (selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : ((product as any).web_unit || product.unit_of_measure));
+    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (isBaseInKg ? 0.5 : (product.web_conversion_factor || 1));
+    const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : (isBaseInKg ? (locale === 'en' ? 'Pound (500g)' : 'Libra (500g)') : ((product as any).web_unit || product.unit_of_measure));
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
     const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;

@@ -14,6 +14,41 @@ interface EditProductModalProps {
     readOnly?: boolean;
 }
 
+const extractWeight = (val: string): number | null => {
+    if (!val) return null;
+    if (val.includes('|')) {
+        const grams = parseFloat(val.split('|')[1]);
+        if (!isNaN(grams) && grams > 0) return grams;
+    }
+    const clean = val.toLowerCase();
+    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+    if (kgMatch) {
+        const num = parseFloat(kgMatch[1]);
+        if (!isNaN(num) && num > 0) return num * 1000;
+    }
+    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+    if (gMatch) {
+        const num = parseFloat(gMatch[1]);
+        if (!isNaN(num) && num > 0) return num;
+    }
+    return null;
+};
+
+const sortSuggestedValues = (values: string[]): string[] => {
+    return values.slice().sort((a, b) => {
+        const weightA = extractWeight(a);
+        const weightB = extractWeight(b);
+        if (weightA !== null && weightB !== null) {
+            if (weightA !== weightB) return weightA - weightB;
+        }
+        if (weightA !== null && weightB === null) return -1;
+        if (weightA === null && weightB !== null) return 1;
+        const cleanA = a.includes('|') ? a.split('|')[0] : a;
+        const cleanB = b.includes('|') ? b.split('|')[0] : b;
+        return cleanA.localeCompare(cleanB, 'es', { numeric: true, sensitivity: 'base' });
+    });
+};
+
 export default function EditProductModal({ product, allProducts, onClose, onSave, readOnly = false }: EditProductModalProps) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -82,18 +117,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];
     const procurementMethods = ['Compras Generales', 'Contratación Directa', 'Importación', 'Local'];
-    const [baseUnits, setBaseUnits] = useState(['Kg', 'G', 'Lb', 'Pkt 250g', 'Pkt 500g', 'Lt', 'Un', 'Atado', 'Bulto', 'Caja', 'Saco', 'Cubeta']);
-
-    const INITIAL_ATTRIBUTES = [
-        { name: 'Madurez', values: ['Verde', 'Pintón', 'Maduro', 'Sobremaduro'] },
-        { name: 'Tamaño', values: ['Pequeño', 'Mediano', 'Grande', 'Extra Grande'] },
-        { name: 'Calidad', values: ['Primera (Extra)', 'Segunda (Estándar)', 'Industrial'] },
-        { name: 'Presentación', values: ['Granel', 'Empacado', 'Malla', 'Caja'] },
-        { name: 'Corte', values: ['Entero', 'Picado', 'Troceado', 'Pelado'] },
-        { name: 'Proceso', values: ['Lavado', 'Sucio', 'Cepillado'] }
-    ];
-
-    const [masterAttributes, setMasterAttributes] = useState(INITIAL_ATTRIBUTES);
+    const [baseUnits, setBaseUnits] = useState<string[]>(['Kg', 'Unidad', 'Atado', 'Bolsa', 'Caja', 'Bandeja', 'Malla', 'Gramos', 'Libra']);
+    const [masterAttributes, setMasterAttributes] = useState<{ name: string, values: string[], show_on_web?: boolean }[]>([]);
 
     useEffect(() => {
         const fetchMaster = async () => {
@@ -103,10 +128,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     console.warn('EditModal: No master table found, using defaults.');
                     return;
                 }
-                                if (data && data.length > 0) {
+                if (data && data.length > 0) {
                     setMasterAttributes(data.map(attr => ({ 
                         name: attr.name, 
-                        values: attr.suggested_values,
+                        values: sortSuggestedValues(attr.suggested_values || []),
                         show_on_web: attr.show_on_web !== false
                     })));
                 }
@@ -1273,11 +1298,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             
                                             {masterAttributes.some(a => a.name === opt.name) ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
-                                                    {masterAttributes.find(a => a.name === opt.name)?.values.slice().sort((a, b) => {
-                                                        const cleanA = a.includes('|') ? a.split('|')[0] : a;
-                                                        const cleanB = b.includes('|') ? b.split('|')[0] : b;
-                                                        return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
-                                                    }).map(val => (
+                                                    {sortSuggestedValues(masterAttributes.find(a => a.name === opt.name)?.values || []).map(val => (
                                                         <label 
                                                             key={val} 
                                                             style={{ 
@@ -1306,7 +1327,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                 }}
                                                                 style={{ width: '16px', height: '16px', accentColor: '#3B82F6' }}
                                                             />
-                                                            {val}
+                                                            {val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` : val}
                                                         </label>
                                                     ))}
                                                 </div>
