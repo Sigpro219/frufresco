@@ -768,16 +768,14 @@ export default function OrderLoadingPage() {
                             phone = order.customer_phone || 'Sin Teléfono';
 
                             if (name === 'Cliente Desconocido' && order.special_notes) {
-                                const recipientMatch = order.special_notes.match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*(.*?)\s*\|/i);
                                 const buyerMatch = order.special_notes.match(/\[COMPRADOR\s*\/\s*FACTURACIÓN:\s*(.*?)\s*\|/i);
                                 const clientMatch = order.special_notes.match(/\[CLIENTE:\s*(.*?)\s*\|/i);
+                                const recipientMatch = order.special_notes.match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*(.*?)\s*\|/i);
 
-                                if (buyerMatch && recipientMatch) {
-                                    name = `${buyerMatch[1].trim()} (Entrega: ${recipientMatch[1].trim()})`;
+                                if (buyerMatch) {
+                                    name = buyerMatch[1].trim();
                                 } else if (clientMatch) {
                                     name = clientMatch[1].trim();
-                                } else if (buyerMatch) {
-                                    name = buyerMatch[1].trim();
                                 } else if (recipientMatch) {
                                     name = recipientMatch[1].trim();
                                 }
