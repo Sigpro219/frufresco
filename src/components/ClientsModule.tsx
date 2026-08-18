@@ -5877,55 +5877,92 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         </div>
 
                                         {beneficiariesList.length === 0 ? (
-                                            <div style={{ padding: '1.25rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#94A3B8', fontSize: '0.78rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Gift size={16} style={{ color: '#94A3B8' }} /><span>Este cliente aún no tiene destinatarios de regalo registrados en su histórico.</span></div>
+                                            <div style={{ padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px dashed #CBD5E1', textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                    <Gift size={18} style={{ color: '#94A3B8' }} />
+                                                    <span>Este cliente aún no tiene destinatarios de regalo registrados en su histórico.</span>
+                                                </div>
                                             </div>
                                         ) : (
-                                            <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
-                                                {/* Encabezado de la Galería de Líneas Horizontales */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 40px', gap: '1rem', padding: '0.65rem 1.2rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                    <div>Destinatario</div>
-                                                    <div>Teléfono</div>
-                                                    <div>Dirección</div>
-                                                    <div>Último Pedido</div>
-                                                    <div style={{ textAlign: 'center' }}>Acción</div>
-                                                </div>
-
-                                                {/* Filas Horizontales */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                                 {beneficiariesList.map((b, idx) => (
-                                                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 40px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1.2rem', borderBottom: idx < beneficiariesList.length - 1 ? '1px solid #F1F5F9' : 'none', backgroundColor: 'white' }}>
-                                                        <div style={{ fontWeight: '800', fontSize: '0.84rem', color: '#065F46', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <User size={14} style={{ color: '#059669' }} />
-                                                            <span>{b.name}</span>
+                                                    <div 
+                                                        key={idx} 
+                                                        style={{ 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'space-between', 
+                                                            gap: '1.25rem', 
+                                                            padding: '1rem 1.25rem', 
+                                                            backgroundColor: '#FFFFFF', 
+                                                            border: '1px solid #E2E8F0', 
+                                                            borderRadius: '16px',
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        {/* Destinatario Info Principal */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '200px', flex: '1.2' }}>
+                                                            <div style={{ width: '38px', height: '38px', backgroundColor: '#ECFDF5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                <User size={18} style={{ color: '#059669' }} />
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ fontWeight: '800', fontSize: '0.88rem', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span>{b.name}</span>
+                                                                </div>
+                                                                {b.last_order_date && (
+                                                                    <div style={{ fontSize: '0.7rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                                                                        <Calendar size={11} style={{ color: '#94A3B8' }} />
+                                                                        <span>Último pedido: {new Date(b.last_order_date).toLocaleDateString('es-CO')}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                            <Phone size={13} style={{ color: '#64748B' }} />
-                                                            <span>{b.phone || '---'}</span>
+
+                                                        {/* Teléfono */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#334155', flex: '1', minWidth: '130px' }}>
+                                                            <div style={{ width: '26px', height: '26px', backgroundColor: '#F1F5F9', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                <Phone size={13} style={{ color: '#059669' }} />
+                                                            </div>
+                                                            <span style={{ fontWeight: '600' }}>{b.phone || 'Sin número'}</span>
                                                         </div>
-                                                        <div style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                            <MapPin size={13} style={{ color: '#64748B' }} />
-                                                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{b.address || '---'}</span>
+
+                                                        {/* Dirección */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#334155', flex: '1.5', minWidth: '180px' }}>
+                                                            <div style={{ width: '26px', height: '26px', backgroundColor: '#F1F5F9', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                <MapPin size={13} style={{ color: '#64748B' }} />
+                                                            </div>
+                                                            <span style={{ color: '#475569', fontWeight: '500' }}>{b.address || 'Sin dirección'}</span>
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                            <Calendar size={13} style={{ color: '#94A3B8' }} />
-                                                            <span>{b.last_order_date ? new Date(b.last_order_date).toLocaleDateString('es-CO') : '---'}</span>
-                                                        </div>
-                                                        <div style={{ textAlign: 'center' }}>
-                                                            {!isReadOnly && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        if (confirm(`¿Eliminar a ${b.name} de los destinatarios guardados?`)) {
-                                                                            setBeneficiariesList(prev => prev.filter((_, i) => i !== idx));
-                                                                        }
-                                                                    }}
-                                                                    style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '0.75rem', padding: '4px', borderRadius: '4px' }}
-                                                                    title="Eliminar destinatario"
-                                                                >
-                                                                    <Trash2 size={15} />
-                                                                </button>
-                                                            )}
-                                                        </div>
+
+                                                        {/* Botón Eliminar */}
+                                                        {!isReadOnly && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (confirm(`¿Eliminar a ${b.name} de los destinatarios guardados?`)) {
+                                                                        setBeneficiariesList(prev => prev.filter((_, i) => i !== idx));
+                                                                    }
+                                                                }}
+                                                                style={{ 
+                                                                    width: '32px', 
+                                                                    height: '32px', 
+                                                                    borderRadius: '8px', 
+                                                                    border: '1px solid #FEE2E2', 
+                                                                    backgroundColor: '#FEF2F2', 
+                                                                    color: '#EF4444', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0,
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                title="Eliminar destinatario"
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
