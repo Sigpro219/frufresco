@@ -49,7 +49,10 @@ import {
     Edit3,
     ChevronDown,
     Filter,
-    X
+    X,
+    Printer,
+    Zap,
+    Tag
 } from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
@@ -2045,7 +2048,7 @@ export default function OrderLoadingPage() {
                                         animation: 'fadeInUp 0.2s ease-out'
                                     }}>
                                         <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            🚀 COMANDOS RÁPIDOS (@)
+                                            <Zap size={13} style={{ color: '#38BDF8' }} /> COMANDOS RÁPIDOS (@)
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                                             <div>
@@ -2154,12 +2157,22 @@ export default function OrderLoadingPage() {
                                         cursor: updateLoading ? 'wait' : 'pointer',
                                         boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
                                         opacity: updateLoading ? 0.7 : 1,
-                                        display: 'flex',
+                                        display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '6px'
+                                        gap: '8px'
                                     }}
                                 >
-                                    {updateLoading ? 'Procesando...' : '🚀 Enviar a Proceso Logístico'}
+                                    {updateLoading ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            <span>Procesando...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Truck size={16} strokeWidth={2} />
+                                            <span>Enviar a Proceso Logístico</span>
+                                        </>
+                                    )}
                                 </button>
                                 <button 
                                     onClick={() => {
@@ -2174,9 +2187,13 @@ export default function OrderLoadingPage() {
                                         fontWeight: '700',
                                         cursor: 'pointer',
                                         boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
                                     }}
                                 >
-                                    🖨️ Etiquetas
+                                    <Printer size={16} strokeWidth={2} />
+                                    <span>Etiquetas</span>
                                 </button>
                                 <button 
                                     onClick={() => setSelectedOrders(new Set())}
@@ -2241,7 +2258,7 @@ export default function OrderLoadingPage() {
                                 onClick={() => setSelectedDate('all')}
                                 style={{ backgroundColor: '#EEF2FF', color: '#4F46E5', border: '1px solid #C7D2FE', padding: '0.6rem 1.2rem', borderRadius: '8px', fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                             >
-                                🌐 Ver Pedidos de Todas las Fechas
+                                <Globe size={14} /> Ver Pedidos de Todas las Fechas
                             </button>
                             {hasActiveFilters && (
                                 <button 
@@ -2724,12 +2741,22 @@ export default function OrderLoadingPage() {
                                         }}
                                         disabled={updateLoading}
                                         style={{
-                                            flex: 2, padding: '1.2rem', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '900', cursor: updateLoading ? 'wait' : 'pointer', boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', fontSize: '1.1rem', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                            flex: 2, padding: '1.2rem', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '900', cursor: updateLoading ? 'wait' : 'pointer', boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', fontSize: '1.1rem', letterSpacing: '0.02em', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                         }}
                                         onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
                                         onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                                     >
-                                        {updateLoading ? 'Procesando...' : '🚀 FIRMAR Y LANZAR A PROCESO LOGÍSTICO'}
+                                        {updateLoading ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                <span>Procesando...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Truck size={18} strokeWidth={2} />
+                                                <span>FIRMAR Y LANZAR A PROCESO LOGÍSTICO</span>
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>
@@ -3481,7 +3508,7 @@ export default function OrderLoadingPage() {
                                                 justifyContent: 'center',
                                                 boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                                             }}>
-                                                <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                                <Package size={32} style={{ color: '#9CA3AF' }} />
                                             </div>
                                         )}
                                         <div>
@@ -3506,8 +3533,8 @@ export default function OrderLoadingPage() {
                                         color: '#92400E',
                                         lineHeight: '1.4'
                                     }}>
-                                        <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
-                                            📌 REQUERIMIENTOS DEL CLIENTE:
+                                        <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <Info size={13} style={{ color: '#B45309' }} /> REQUERIMIENTOS DEL CLIENTE:
                                         </div>
                                         {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
                                             <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
