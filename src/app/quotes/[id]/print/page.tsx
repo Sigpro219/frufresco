@@ -90,7 +90,7 @@ export default function PublicPrintQuotePage() {
             // Load Items
             const { data: iData } = await supabase
                 .from('quote_items')
-                .select('*, products(name, unit_of_measure)')
+                .select('*, products(name, unit_of_measure, sku)')
                 .eq('quote_id', params.id);
 
             if (iData) setItems(iData);
@@ -128,7 +128,7 @@ export default function PublicPrintQuotePage() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#64748B' }}>
-                <div>Generando pre-cotización en PDF...</div>
+                <div>Generando pre-cotización comercial...</div>
             </div>
         );
     }
@@ -136,7 +136,7 @@ export default function PublicPrintQuotePage() {
     if (!quote) {
         return (
             <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'system-ui, sans-serif', color: '#EF4444' }}>
-                Error: No se pudo cargar la cotización solicitada.
+                Error: No se pudo cargar el documento de cotización.
             </div>
         );
     }
@@ -218,91 +218,185 @@ export default function PublicPrintQuotePage() {
                 </button>
             </div>
 
-            <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #059669', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+            {/* Watermark in background */}
+            <div style={{
+                position: 'fixed',
+                top: '40%',
+                left: '50%',
+                transform: 'translate(-50%, -50%) rotate(-30deg)',
+                width: '450px',
+                height: '450px',
+                backgroundImage: `url(${appSettings.provider_logo_url || appSettings.app_logo_url})`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
+                backgroundSize: 'contain',
+                opacity: 0.03,
+                pointerEvents: 'none',
+                zIndex: 0
+            }} />
+
+            <div style={{ position: 'relative', zIndex: 1, padding: '2rem', maxWidth: '850px', margin: '0 auto' }}>
+                {/* Header: Logo + Provider Info */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <div>
-                        <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#065F46', margin: 0 }}>{appSettings.app_name || 'FruFresco'}</h2>
-                        <p style={{ margin: '2px 0 0 0', color: '#047857', fontWeight: '600', fontSize: '0.85rem' }}>Proveedor Institucional HORECA</p>
-                        <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '0.78rem' }}>{appSettings.provider_legal_name} - NIT: {appSettings.provider_nit}</p>
+                        {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
+                            <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo" style={{ maxHeight: '75px', objectFit: 'contain' }} />
+                        )}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#065F46' }}>
-                            PRE-COTIZACIÓN
+                    <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#475569', lineHeight: '1.4' }}>
+                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1.1rem' }}>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}</div>
+                        <div>NIT: {appSettings.provider_nit || '901.393.217'}</div>
+                        <div>{appSettings.provider_address || 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C.'}</div>
+                        <div>{appSettings.provider_email || 'contacto@investmentscortes.com'}</div>
+                    </div>
+                </div>
+
+                {/* Solid Accent Divider */}
+                <div style={{ borderTop: `3px solid ${appSettings.primary_color || '#15803D'}`, margin: '1.5rem 0 2rem 0' }}></div>
+
+                {/* Metadata Block: 2 Columns */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
+                    <div style={{ width: '50%' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Propuesta para:</div>
+                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{quote.client_name}</div>
+                        {clientInfo ? (
+                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                                {clientInfo.company_name && clientInfo.company_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
+                                    <div>{clientInfo.company_name}</div>
+                                )}
+                                {clientInfo.nit && <div>NIT: {clientInfo.nit}</div>}
+                                {clientInfo.contact_name && <div>Atención: {clientInfo.contact_name}</div>}
+                                {clientInfo.phone && <div>Teléfono: {clientInfo.phone}</div>}
+                                {clientInfo.address && <div>Dirección: {clientInfo.address}</div>}
+                            </div>
+                        ) : lead ? (
+                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                                {lead.company_name && lead.company_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
+                                    <div>{lead.company_name}</div>
+                                )}
+                                {lead.nit && <div>NIT: {lead.nit}</div>}
+                                {lead.contact_name && <div>Atención: {lead.contact_name}</div>}
+                                {lead.phone && <div>Teléfono: {lead.phone}</div>}
+                                {lead.email && <div>Email: {lead.email}</div>}
+                                {(lead.address || lead.municipality) && (
+                                    <div>Dirección: {lead.address || ''}${lead.municipality ? ` - ${lead.municipality}` : ''}</div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
+                        )}
+                    </div>
+                    <div style={{ width: '50%', textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                            {quote.lead_id ? 'Propuesta Comercial' : 'Cotización'}
                         </div>
-                        <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '2px' }}>
-                            Fecha: {new Date(quote.created_at).toLocaleDateString('es-CO')}
+                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>
+                            {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'PRE-COTIZACIÓN HORECA'}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                            <div>Fecha: {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
+                            <div>Validez: 8 días calendario</div>
                         </div>
                     </div>
                 </div>
 
-                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #E2E8F0' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>DATOS DE LA OPERACIÓN REQUERIDA:</div>
-                    <div style={{ fontSize: '0.82rem', color: '#475569' }}><strong>Cliente / Empresa:</strong> {quote.client_name || lead?.company_name || 'Cliente B2B'}</div>
-                    {lead?.phone && <div style={{ fontSize: '0.82rem', color: '#475569' }}><strong>Contacto / WhatsApp:</strong> {lead.phone}</div>}
-                    {lead?.address && <div style={{ fontSize: '0.82rem', color: '#475569' }}><strong>Ubicación Despacho:</strong> {lead.address}</div>}
-                </div>
-
-                <table style={{ marginBottom: '1.5rem' }}>
+                {/* Table */}
+                <table style={{ marginBottom: '2.5rem' }}>
                     <thead>
-                        <tr style={{ backgroundColor: '#065F46', color: 'white' }}>
-                            <th style={{ padding: '8px' }}>Producto</th>
-                            <th style={{ padding: '8px', textAlign: 'center' }}>Empaque / Unidad</th>
-                            <th style={{ padding: '8px', textAlign: 'center' }}>Cantidad</th>
-                            <th style={{ padding: '8px', textAlign: 'right' }}>Precio Estimado</th>
-                            <th style={{ padding: '8px', textAlign: 'right' }}>Subtotal</th>
+                        <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Producto</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'center' }}>Cant.</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Valor Unitario</th>
+                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {items.map((item, idx) => (
-                            <tr key={idx} className="item-row">
-                                <td style={{ padding: '8px', fontWeight: '600' }}>{item.product_name || item.products?.name || 'Producto'}</td>
-                                <td style={{ padding: '8px', textAlign: 'center' }}>{item.products?.unit_of_measure || 'Kg'}</td>
-                                <td style={{ padding: '8px', textAlign: 'center' }}>{item.quantity}</td>
-                                <td style={{ padding: '8px', textAlign: 'right' }}>${formatPrice(item.unit_price)}</td>
-                                <td style={{ padding: '8px', textAlign: 'right', fontWeight: '700' }}>${formatPrice(item.total_price || (item.quantity * item.unit_price))}</td>
-                            </tr>
-                        ))}
+                        {[...items].sort((a, b) => {
+                            const skuA = (a.sku || a.products?.sku || a.product_name || a.products?.name || '').toString().toLowerCase();
+                            const skuB = (b.sku || b.products?.sku || b.product_name || b.products?.name || '').toString().toLowerCase();
+                            return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
+                        }).map((item, index) => {
+                            return (
+                                <tr key={item.id || index} className="item-row">
+                                    <td style={{ fontSize: '1.1rem', fontWeight: '800', color: '#CBD5E1' }}>
+                                        {String(index + 1).padStart(2, '0')}
+                                    </td>
+                                    <td>
+                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.95rem' }}>{item.product_name || item.products?.name}</div>
+                                    </td>
+                                    <td style={{ textAlign: 'center', fontWeight: '700', color: '#0F172A' }}>
+                                        {item.quantity} {item.products?.unit_of_measure || 'Kg'}
+                                    </td>
+                                    <td style={{ textAlign: 'center', fontWeight: '700', color: '#0F172A' }}>
+                                        {item.iva_rate || 0}%
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
+                                        ${formatPrice(Math.ceil(item.unit_price))}
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
+                                        ${formatPrice(Math.ceil(item.total_price))}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
+                    <tfoot>
+                        <tr style={{ color: '#475569' }}>
+                            <td colSpan={4}></td>
+                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal</td>
+                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
+                                ${formatPrice(Math.ceil(quote.subtotal_amount || quote.total_amount))}
+                            </td>
+                        </tr>
+                        <tr style={{ color: '#64748B' }}>
+                            <td colSpan={4}></td>
+                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
+                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
+                                ${formatPrice(Math.ceil(quote.total_tax_amount || 0))}
+                            </td>
+                        </tr>
+                        <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
+                            <td colSpan={4}></td>
+                            <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total General</td>
+                            <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
+                                ${formatPrice(Math.ceil(quote.total_amount))} COP
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', marginBottom: '1.5rem' }}>
-                    <div style={{ width: '250px', backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #A7F3D0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.85rem' }}>
-                            <span>Subtotal:</span>
-                            <span>${formatPrice(quote.subtotal_amount || quote.total_amount)}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '900', fontSize: '1.05rem', color: '#065F46', borderTop: '1px solid #A7F3D0', paddingTop: '6px', marginTop: '6px' }}>
-                            <span>TOTAL ESTIMADO:</span>
-                            <span>${formatPrice(quote.total_amount)} COP</span>
-                        </div>
-                    </div>
-                </div>
 
                 {/* 💡 Callout: Guía Preliminar y Negociación de Oferta */}
                 <div style={{
-                    backgroundColor: '#ECFDF5',
-                    border: '1.5px solid #A7F3D0',
-                    borderRadius: '12px',
-                    padding: '0.85rem 1.1rem',
-                    marginBottom: '1rem'
+                    marginTop: '2rem',
+                    padding: '1.25rem',
+                    backgroundColor: '#F0FDF4',
+                    borderLeft: `4px solid ${appSettings.primary_color || '#15803D'}`,
+                    borderRadius: '6px',
+                    textAlign: 'center',
+                    pageBreakInside: 'avoid'
                 }}>
-                    <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.85rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>💡 Nota Importante sobre tu Pre-Cotización:</span>
+                    <div style={{ fontWeight: '800', fontSize: '1rem', color: '#166534', marginBottom: '0.4rem' }}>
+                        💡 ¿Quieres recibir una oferta personalizada?
                     </div>
-                    <p style={{ margin: 0, color: '#047857', fontSize: '0.78rem', lineHeight: '1.45', fontWeight: '500' }}>
-                        Esta pre-cotización es una referencia orientativa calculada con nuestras tarifas base de origen. Te invitamos a contactar directamente a nuestro equipo comercial para negociar precios especiales según tu volumen real de compra, frecuencia de pedidos y acordar condiciones de pago a tu medida.
-                    </p>
+                    <div style={{ fontSize: '0.85rem', color: '#15803D', lineHeight: '1.4' }}>
+                        Esta es una pre-cotización estimada con precios estándar de origen. 
+                        <strong> Ponte en contacto con nosotros por WhatsApp </strong> para formalizar tu cuenta y negociar tarifas especiales según tu consumo real de compra.
+                    </div>
                 </div>
 
                 {/* ⚠️ Legal Disclaimer: Vigencia de 8 días y Carácter No Vinculante */}
                 <div style={{
+                    marginTop: '1rem',
+                    padding: '0.75rem 1rem',
                     backgroundColor: '#F8FAFC',
                     border: '1px solid #E2E8F0',
-                    borderRadius: '12px',
-                    padding: '0.75rem 1.1rem',
+                    borderRadius: '6px',
                     fontSize: '0.73rem',
                     color: '#64748B',
-                    lineHeight: '1.45'
+                    lineHeight: '1.45',
+                    pageBreakInside: 'avoid'
                 }}>
                     <strong style={{ color: '#475569' }}>Términos y Condiciones Legales:</strong> Esta pre-cotización tiene un propósito exclusivamente informativo y orientativo, por lo que <strong>no constituye una oferta comercial vinculante</strong> ni genera obligación contractual para FruFresco (Investments Cortés S.A.S.). Las tarifas presentadas tienen una <strong>vigencia de ocho (8) días calendario</strong> a partir de su fecha de emisión y están sujetas a variaciones de mercado o disponibilidad de cosecha.
                 </div>
