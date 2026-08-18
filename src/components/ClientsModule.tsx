@@ -2333,6 +2333,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
@@ -2385,6 +2386,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
@@ -2433,6 +2435,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
@@ -3931,12 +3934,6 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                 <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {client.company_name || client.contact_name}
                 </div>
-                {client.created_at && !isNaN(new Date(client.created_at).getTime()) && (
-                    <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '1px' }} title="Fecha y hora de registro en el sistema">
-                        <Calendar size={10} style={{ color: '#94A3B8' }} />
-                        <span>Reg: {new Date(client.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })} - {new Date(client.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                    </div>
-                )}
                 {isLead ? (
                     <>
                         {client.nit && <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>NIT: {client.nit}</div>}
@@ -4019,6 +4016,21 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     {displayCity ? `${displayCity} / ` : ''}{displayMunicipality || '---'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{displayAddress || '---'}</div>
+            </td>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                {client.created_at && !isNaN(new Date(client.created_at).getTime()) ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Calendar size={12} style={{ color: '#059669' }} />
+                            <span>{new Date(client.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                        </div>
+                        <div style={{ fontSize: '0.71rem', color: '#64748B', fontWeight: '600', paddingLeft: '17px' }}>
+                            {new Date(client.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </div>
+                    </div>
+                ) : (
+                    <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>---</span>
+                )}
             </td>
             <td style={{ padding: '0.65rem 1.25rem' }}>
                 {isB2B || client.role === 'b2c_client' ? (
