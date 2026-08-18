@@ -19,6 +19,22 @@ export async function POST(request: Request) {
         const safeLat = parseFloat(Number(latitude).toFixed(8));
         const safeLng = parseFloat(Number(longitude).toFixed(8));
 
+        // Check for recent duplicate (within last 3 minutes) to prevent multi-click duplicates
+        if (customer_phone || address) {
+            const threeMinsAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+            let query = supabase.from('out_of_bounds_requests').select('id').gte('created_at', threeMinsAgo);
+            if (customer_phone) {
+                query = query.eq('customer_phone', customer_phone);
+            } else {
+                query = query.eq('address', address);
+            }
+            const { data: recent } = await query.limit(1);
+            if (recent && recent.length > 0) {
+                console.log('📍 Ignored duplicate out-of-bounds request within 3m');
+                return NextResponse.json({ success: true, duplicate: true });
+            }
+        }
+
         const newRecord = {
             id: `oob_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
             created_at: new Date().toISOString(),

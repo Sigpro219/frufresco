@@ -335,6 +335,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     // Handle Final Step 3 Submission
     const handleStep3Submit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
         if (!nameInput || nameInput.trim().length < 2) {
             setError('Por favor ingresa tu nombre o el de tu empresa.');
             return;
