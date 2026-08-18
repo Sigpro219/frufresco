@@ -18,10 +18,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return (
         <Providers>
             <Suspense fallback={null}>
-                {!isOpsOrAdmin && <GlobalBanner />}
+                {!isOpsOrAdmin && !isPrintPage && <GlobalBanner />}
                 {!pathname?.startsWith('/ops') && !isPrintPage && <Navbar />}
                 {children}
-                {!isOpsOrAdmin && !isB2BDashboard && <Footer />}
+                {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && <Footer />}
             </Suspense>
             {isOpsOrAdmin && !isPrintPage && (
                 <>

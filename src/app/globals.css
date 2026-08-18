@@ -288,3 +288,25 @@ input:-webkit-autofill:active {
   -webkit-backdrop-filter: blur(16px);
 }
 
+/* Global Print Mode Hardening */
+@media print {
+  header,
+  footer,
+  nav,
+  .no-print,
+  #header,
+  #footer,
+  #navbar,
+  .site-header,
+  .site-footer,
+  .global-banner,
+  .announcement-bar {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+  }
+}
+
