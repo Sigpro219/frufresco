@@ -178,6 +178,15 @@ export default function PublicPrintQuotePage() {
                 p, span, div { font-size: 8.5pt; }
 
                 @media print {
+                    @page {
+                        size: letter portrait;
+                        margin: 1.2cm 1.5cm 1.5cm 1.5cm;
+                    }
+                    html, body {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: white !important;
+                    }
                     .no-print { display: none !important; }
                 }
             ` }} />
@@ -256,7 +265,7 @@ export default function PublicPrintQuotePage() {
                     </tbody>
                 </table>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', marginBottom: '1.5rem' }}>
                     <div style={{ width: '250px', backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #A7F3D0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.85rem' }}>
                             <span>Subtotal:</span>
@@ -267,6 +276,35 @@ export default function PublicPrintQuotePage() {
                             <span>${formatPrice(quote.total_amount)} COP</span>
                         </div>
                     </div>
+                </div>
+
+                {/* 💡 Callout: Guía Preliminar y Negociación de Oferta */}
+                <div style={{
+                    backgroundColor: '#ECFDF5',
+                    border: '1.5px solid #A7F3D0',
+                    borderRadius: '12px',
+                    padding: '0.85rem 1.1rem',
+                    marginBottom: '1rem'
+                }}>
+                    <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.85rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>💡 Nota Importante sobre tu Pre-Cotización:</span>
+                    </div>
+                    <p style={{ margin: 0, color: '#047857', fontSize: '0.78rem', lineHeight: '1.45', fontWeight: '500' }}>
+                        Esta pre-cotización es una referencia orientativa calculada con nuestras tarifas base de origen. Te invitamos a contactar directamente a nuestro equipo comercial para negociar precios especiales según tu volumen real de compra, frecuencia de pedidos y acordar condiciones de pago a tu medida.
+                    </p>
+                </div>
+
+                {/* ⚠️ Legal Disclaimer: Vigencia de 8 días y Carácter No Vinculante */}
+                <div style={{
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '12px',
+                    padding: '0.75rem 1.1rem',
+                    fontSize: '0.73rem',
+                    color: '#64748B',
+                    lineHeight: '1.45'
+                }}>
+                    <strong style={{ color: '#475569' }}>Términos y Condiciones Legales:</strong> Esta pre-cotización tiene un propósito exclusivamente informativo y orientativo, por lo que <strong>no constituye una oferta comercial vinculante</strong> ni genera obligación contractual para FruFresco (Investments Cortés S.A.S.). Las tarifas presentadas tienen una <strong>vigencia de ocho (8) días calendario</strong> a partir de su fecha de emisión y están sujetas a variaciones de mercado o disponibilidad de cosecha.
                 </div>
             </div>
         </div>

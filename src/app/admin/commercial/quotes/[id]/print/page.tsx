@@ -369,6 +369,20 @@ export default function PrintQuotePage() {
                         </div>
                     </div>
                 )}
+
+                <div style={{
+                    marginTop: '1rem',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    fontSize: '0.73rem',
+                    color: '#64748B',
+                    lineHeight: '1.45',
+                    pageBreakInside: 'avoid'
+                }}>
+                    <strong style={{ color: '#475569' }}>Términos y Condiciones Legales:</strong> Esta pre-cotización tiene un propósito exclusivamente informativo y orientativo, por lo que <strong>no constituye una oferta comercial vinculante</strong> ni genera obligación contractual para FruFresco (Investments Cortés S.A.S.). Las tarifas presentadas tienen una <strong>vigencia de ocho (8) días calendario</strong> a partir de su fecha de emisión y están sujetas a variaciones de mercado o disponibilidad de cosecha.
+                </div>
             </div>
         </div>
     );

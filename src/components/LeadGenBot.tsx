@@ -450,13 +450,26 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     ? finalData.selected_categories
                     : ALL_CATEGORIES;
 
-                // Query products matching selected categories!
+                const CATEGORY_TO_CODES: Record<string, string[]> = {
+                    'Despensa': ['DE', 'Despensa', 'despensa'],
+                    'Hortalizas': ['HO', 'Hortalizas', 'hortalizas'],
+                    'Verduras': ['VE', 'Verduras', 'verduras'],
+                    'Lácteos': ['LA', 'Lácteos', 'lacteos'],
+                    'Frutas': ['FR', 'Frutas', 'frutas'],
+                    'Tubérculos': ['TU', 'Tubérculos', 'tuberculos'],
+                    'Congelados': ['CO', 'Congelados', 'congelados'],
+                    'Procesados': ['PR', 'Procesados', 'procesados']
+                };
+
+                const categoryCodes = chosenCats.flatMap(c => CATEGORY_TO_CODES[c] || [c]);
+
+                // Query products matching selected categories by category code!
                 const { data: categoryProds } = await supabase
                     .from('products')
                     .select('id, name, base_price, iva_rate, sku, category')
                     .eq('is_active', true)
                     .gt('base_price', 0)
-                    .in('category', chosenCats)
+                    .in('category', categoryCodes)
                     .limit(40);
 
                 if (categoryProds && categoryProds.length > 0) {
@@ -501,7 +514,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         const cached = modelPrices?.find(mp => mp.product_id === p.id);
                         const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * (colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15);
 
-                        const qty = 10;
+                        const qty = 1; // 1 unit per SKU (e.g. 1 Kg / 1 Bulto)
                         const itemSubtotal = unitPrice * qty;
                         const itemTaxRate = Number(p.iva_rate || 0);
                         const itemTax = itemSubtotal * (itemTaxRate / 100);
