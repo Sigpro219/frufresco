@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 import { useAuth } from '../lib/authContext';
 import { resolvePricingModelId } from '../lib/pricingUtils';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ShoppingCart } from 'lucide-react';
 
 // Keep interface consistent with usage
 interface Product {

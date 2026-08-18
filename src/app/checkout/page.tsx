@@ -12,6 +12,8 @@ import { DEFAULT_CUTOFF_HOUR } from '../../lib/constants';
 import { translations, Locale } from '../../lib/translations';
  import { useSearchParams } from 'next/navigation';
 import { 
+    Plus,
+    Bell,
     Trash2, 
     MapPin, 
     Map as MapIcon, 
@@ -69,6 +71,7 @@ export default function CheckoutPage() {
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
+    const [isRegisteringRejection, setIsRegisteringRejection] = useState(false);
     const [showMapPicker, setShowMapPicker] = useState(false);
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
@@ -574,6 +577,39 @@ export default function CheckoutPage() {
     }, []);
 
     const isMinOrderMet = totalPrice >= minOrder;
+
+        const handleRegisterRejectionAndReturn = async () => {
+        try {
+            setIsRegisteringRejection(true);
+            await fetch('/api/coverage/out-of-bounds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address,
+                    latitude,
+                    longitude,
+                    customer_name: name || 'Cliente Web B2C',
+                    customer_phone: phone || '',
+                    customer_email: email || '',
+                    channel: isB2B ? 'b2b' : 'b2c',
+                    municipality: 'Fuera de Cobertura'
+                })
+            });
+            alert(locale === 'es' 
+                ? '¡Muchas gracias por tu interés! Hemos registrado tu ubicación exitosamente en nuestra base de demanda. Te avisaremos tan pronto habilitemos entregas en tu sector.' 
+                : 'Thank you for your interest! We have recorded your location in our demand database. We will notify you as soon as we expand to your area.');
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('checkout_specialNotes');
+            }
+            clearCart();
+            router.push('/');
+        } catch (err) {
+            console.error('Error registering demand rejection:', err);
+            router.push('/');
+        } finally {
+            setIsRegisteringRejection(false);
+        }
+    };
 
     const handleSubmit = async () => {
         console.log('🚀 Finalizing order. Date:', date);
@@ -2002,53 +2038,72 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
-                            {outOfZone && latitude && !isB2B && (
+                            {outOfZone && latitude && !isB2B ? (
                                 <div style={{
                                     backgroundColor: '#FEFCE8',
                                     color: '#B45309',
-                                    padding: '1.1rem',
-                                    borderRadius: '14px',
-                                    fontSize: '0.8rem',
-                                    marginBottom: '1rem',
-                                    border: '1px solid #FEF08A',
+                                    padding: '1.4rem',
+                                    borderRadius: '20px',
+                                    border: '1.5px solid #FDE047',
                                     textAlign: 'center',
-                                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.06)'
+                                    boxShadow: '0 4px 20px rgba(217, 119, 6, 0.08)',
+                                    marginTop: '1rem',
+                                    fontFamily: 'var(--font-outfit), sans-serif'
                                 }}>
-                                    <p style={{ 
-                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                        fontWeight: '900', 
-                                        margin: '0 0 6px 0',
-                                        fontSize: '0.95rem',
+                                    <div style={{
+                                        width: '44px',
+                                        height: '44px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#FEF08A',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: '6px',
-                                        color: '#B45309'
+                                        margin: '0 auto 10px auto'
                                     }}>
-                                        <MapPin size={16} color="#D97706" /> {locale === 'es' ? '¡Pronto estaremos más cerca de ti!' : 'We hope to reach your area soon!'}
+                                        <MapPin size={22} color="#D97706" />
+                                    </div>
+                                    <h4 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: '900', color: '#92400E' }}>
+                                        {locale === 'es' ? '¡Lo sentimos! Aún no llegamos a tu sector' : 'We do not reach your area yet'}
+                                    </h4>
+                                    <p style={{ margin: '0 0 14px 0', fontSize: '0.8rem', fontWeight: '500', lineHeight: '1.45', color: '#78350F' }}>
+                                        {locale === 'es' 
+                                            ? 'Nuestra ruta de entregas para hogares está activa en la Zona Norte. Hemos dispuesto este botón para guardar tu solicitud y avisarte en cuanto habilitemos despachos en tu dirección.' 
+                                            : 'Our home delivery route is active in the North Zone. We can notify you as soon as we expand to your area.'}
                                     </p>
-                                    <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', fontWeight: '500', lineHeight: '1.45', color: '#92400E' }}>
-                                        {locale === 'es' ? 'Por ahora nuestras entregas para hogares están habilitadas en la Zona Norte. Si buscas suministros para un restaurante o negocio en esta ubicación, ¡nuestro canal comercial para empresas sí puede atenderte!' : 'Our home delivery route is currently available in the North Zone. If you are buying for a restaurant or business in this area, our commercial team can serve you!'} 
-                                    </p>
-                                    <Link href="/b2b/register" style={{ 
-                                        color: 'white', 
-                                        backgroundColor: '#D97706',
-                                        padding: '0.55rem 1.1rem',
-                                        borderRadius: '10px',
-                                        fontWeight: '800', 
-                                        textDecoration: 'none',
-                                        display: 'inline-block',
-                                        fontSize: '0.78rem',
-                                        boxShadow: '0 2px 6px rgba(217, 119, 6, 0.2)',
-                                        transition: 'all 0.2s'
-                                    }}>
-                                        {locale === 'es' ? '¿Tienes un Restaurante o Negocio? Registrar mi Empresa' : 'Are you a Business? Register your Company'}
-                                    </Link>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+                                        <button
+                                            type="button"
+                                            onClick={handleRegisterRejectionAndReturn}
+                                            disabled={isRegisteringRejection}
+                                            style={{
+                                                backgroundColor: '#059669',
+                                                color: 'white',
+                                                padding: '0.75rem 1.3rem',
+                                                borderRadius: '14px',
+                                                fontWeight: '800',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                fontSize: '0.88rem',
+                                                boxShadow: '0 4px 14px rgba(5, 150, 105, 0.25)',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            {isRegisteringRejection ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />}
+                                            {locale === 'es' ? 'Notificarme cuando haya cobertura (Guardar Zona)' : 'Notify me when available'}
+                                        </button>
+                                        
+                                        <Link href="/b2b/register" style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: '700', textDecoration: 'underline', marginTop: '4px' }}>
+                                            {locale === 'es' ? '¿Tienes un Restaurante o Negocio? Registrar mi Empresa' : 'Are you a Business? Register your Company'}
+                                        </Link>
+                                    </div>
                                 </div>
-                            )}
-
-                            {/* Método de Pago Selector */}
-                            <div id="payment-method-section" style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
+                            ) : (
+                                <>
+                                    {/* Método de Pago Selector */}
+                                    <div id="payment-method-section" style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
                                 <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-inter), sans-serif' }}>
                                     {locale === 'es' ? 'Método de Pago' : 'Payment Method'}
                                 </div>
@@ -2174,6 +2229,8 @@ export default function CheckoutPage() {
                                     } {paymentMethod === 'wompi' ? <ShieldCheck size={20} strokeWidth={2} /> : <Truck size={20} strokeWidth={2} />}</>
                                 )}
                             </button>
+                                </>
+                            )}
 
                             {paymentMethod === 'contra_entrega' && latitude && (
                                 <p style={{ fontSize: '0.8rem', color: '#047857', textAlign: 'center', marginTop: '0.8rem', fontWeight: '700', backgroundColor: '#ECFDF5', padding: '8px 14px', borderRadius: '10px', border: '1px solid #A7F3D0' }}>
