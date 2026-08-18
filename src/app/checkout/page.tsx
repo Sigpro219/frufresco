@@ -576,11 +576,11 @@ export default function CheckoutPage() {
         }
 
         if (items.length === 0) return alert(t.emptyCart);
-        if (!name) return alert(locale === 'es' ? 'Por favor ingresa tu Nombre Completo.' : 'Please enter your Full Name.');
-        if (!identification) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Identificación.' : 'Please enter your ID Number.');
-        if (!phone) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.');
-        if (!email) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
-        if (!address) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
+        if (!name || !name.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Nombre Completo.' : 'Please enter your Full Name.');
+        if (!identification || !identification.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Identificación.' : 'Please enter your ID Number.');
+        if (!phone || !phone.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.');
+        if (!email || !email.trim()) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
+        if (!address || !address.trim()) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
         if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
         if (outOfZone) {
             fetch('/api/coverage/out-of-bounds', {

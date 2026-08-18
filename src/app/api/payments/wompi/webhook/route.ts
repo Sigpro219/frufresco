@@ -65,10 +65,10 @@ export async function POST(request: Request) {
 
                 // Extraer datos del cliente de las notas especiales (ya que no hay columnas nativas)
                 const notes = order.special_notes || '';
-                const nameMatch = notes.match(/\[CLIENTE:\s*(.*?)\s*\|/);
-                const phoneMatch = notes.match(/Tel:\s*(.*?)\s*\|/);
-                const emailMatch = notes.match(/Email:\s*(.*?)(?:\]|\s*\|)/);
-                const idMatch = notes.match(/ID:\s*(.*?)\]/);
+                const nameMatch = notes.match(/\[(?:CLIENTE|COMPRADOR\s*\/\s*FACTURACIÓN|DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA):\s*(.*?)\s*\|/i);
+                const phoneMatch = notes.match(/Tel:\s*(.*?)\s*\|/i);
+                const emailMatch = notes.match(/Email:\s*(.*?)(?:\]|\s*\|)/i);
+                const idMatch = notes.match(/ID:\s*(.*?)(?:\]|\s*\|)/i);
 
                 const extractedName = nameMatch ? nameMatch[1].trim() : 'Cliente Web';
                 const extractedPhone = phoneMatch ? phoneMatch[1].trim() : null;

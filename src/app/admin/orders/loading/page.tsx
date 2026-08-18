@@ -768,15 +768,27 @@ export default function OrderLoadingPage() {
                             phone = order.customer_phone || 'Sin Teléfono';
 
                             if (name === 'Cliente Desconocido' && order.special_notes) {
-                                const nameMatch = order.special_notes.match(/\[CLIENTE:\s*(.*?)\s*\|/);
-                                const phoneMatch = order.special_notes.match(/Tel:\s*(.*?)\s*\|/);
-                                if (nameMatch) name = nameMatch[1].trim();
+                                const recipientMatch = order.special_notes.match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*(.*?)\s*\|/i);
+                                const buyerMatch = order.special_notes.match(/\[COMPRADOR\s*\/\s*FACTURACIÓN:\s*(.*?)\s*\|/i);
+                                const clientMatch = order.special_notes.match(/\[CLIENTE:\s*(.*?)\s*\|/i);
+
+                                if (buyerMatch && recipientMatch) {
+                                    name = `${buyerMatch[1].trim()} (Entrega: ${recipientMatch[1].trim()})`;
+                                } else if (clientMatch) {
+                                    name = clientMatch[1].trim();
+                                } else if (buyerMatch) {
+                                    name = buyerMatch[1].trim();
+                                } else if (recipientMatch) {
+                                    name = recipientMatch[1].trim();
+                                }
+
+                                const phoneMatch = order.special_notes.match(/Tel:\s*(.*?)\s*\|/i);
                                 if (phoneMatch) phone = phoneMatch[1].trim();
                             }
 
                             if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
-                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
-                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
+                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/i);
+                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/i);
                                 if (nameMatch) name = nameMatch[1];
                                 if (phoneMatch) phone = phoneMatch[1];
                             }
@@ -784,7 +796,7 @@ export default function OrderLoadingPage() {
 
                         let nit = order.profiles?.nit || null;
                         if (!order.profiles && order.special_notes) {
-                            const nitMatch = order.special_notes.match(/ID:\s*(.*?)(?:\]|\s*\|)/);
+                            const nitMatch = order.special_notes.match(/ID:\s*(.*?)(?:\]|\s*\|)/i);
                             if (nitMatch) nit = nitMatch[1].trim();
                         }
 
