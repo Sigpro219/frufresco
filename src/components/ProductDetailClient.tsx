@@ -111,12 +111,45 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         return null;
     };
 
-    // Initialize selections with the first option of each category (sorted alphabetically)
+    // Helper para formatear visualmente valores de opciones con peso / gramaje
+    const formatOptionDisplay = (val: string, isEn?: boolean): string => {
+        if (!val) return '';
+        if (val.includes('|')) {
+            const parts = val.split('|');
+            const rawUnit = parts[0].trim();
+            const unitName = isEn ? (rawUnit.toLowerCase() === 'unidad' ? 'Unit' : rawUnit) : rawUnit;
+            const rawWeight = parts[1]?.trim();
+            if (rawWeight) {
+                const grams = parseFloat(rawWeight);
+                if (!isNaN(grams) && grams > 0) {
+                    if (grams >= 1000) {
+                        const kg = grams / 1000;
+                        const formattedKg = kg % 1 === 0 ? kg.toString() : kg.toFixed(1).replace('.', ',');
+                        return isEn 
+                            ? `${unitName} (~${formattedKg} kg / ${grams.toLocaleString('en-US')}g)` 
+                            : `${unitName} (~${formattedKg} kg / ${grams.toLocaleString('es-CO')}g)`;
+                    } else {
+                        return `${unitName} (~${grams}g)`;
+                    }
+                }
+                return `${unitName} (${rawWeight})`;
+            }
+            return unitName;
+        }
+        return val;
+    };
+
+    // Initialize selections with the first option of each category (sorted by weight/name)
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
         if (Array.isArray(values) && values.length > 0) {
             const defaultUnit = isBaseInKg ? (isEn ? 'pound (500g)' : 'libra (500g)') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
             const sortedValues = values.slice().sort((valA, valB) => {
+                const weightA = getParsedWeight(valA);
+                const weightB = getParsedWeight(valB);
+                if (weightA !== null && weightB !== null && weightA !== weightB) {
+                    return weightA - weightB;
+                }
                 const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                 const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
                 if (cleanA.toLowerCase() === defaultUnit) return -1;
@@ -141,7 +174,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const isDefaultSelected = selectedPresentationVal?.toLowerCase() === defaultUnit;
     const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
     const activeConversionFactor = isBaseInKg ? 0.5 : (parsedWeight !== null ? parsedWeight : (product.web_conversion_factor || 1));
-    const activeUnit = isBaseInKg ? (isEn ? 'Libra (500g)' : 'Libra (500g)') : (selectedPresentationVal ? (selectedPresentationVal.includes('|') ? selectedPresentationVal.split('|')[0] : selectedPresentationVal) : (product.web_unit || product.unit_of_measure));
+    const activeUnit = isBaseInKg ? (isEn ? 'Libra (500g)' : 'Libra (500g)') : (selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, isEn) : (product.web_unit || product.unit_of_measure));
 
     // Solo considerar variantes que estén marcadas para mostrarse en web
     const visibleVariants = (product.variants || []).filter(v => (v as any).show_on_web !== false);
@@ -171,8 +204,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
             .map(([key, value]) => {
-                const displayKey = key.toLowerCase().includes('presentaci') ? 'Presentación' : key;
-                const displayVal = value.includes('|') ? value.split('|')[0] : value;
+                const displayKey = key.toLowerCase().includes('presentaci') ? (isEn ? 'Presentation' : 'Presentación') : key;
+                const displayVal = formatOptionDisplay(value, isEn);
                 return `${displayKey}: ${displayVal}`;
             })
             .join(', ');
@@ -311,7 +344,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL CARRITO/PEDIDO */}
                     {(() => {
                         const finalName = currentVariant
-                            ? `${product.name} (${Object.values(selections).map(v => v.includes('|') ? v.split('|')[0] : v).join(', ')})`
+                            ? `${product.name} (${Object.values(selections).map(v => formatOptionDisplay(v, isEn)).join(', ')})`
                             : product.name;
                         const existingInCart = items?.find(item => item.id === product.id && item.name === finalName)
                             || items?.find(item => item.id === product.id);
@@ -438,6 +471,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                         {Array.isArray(values) && values
                                             .slice()
                                             .sort((valA, valB) => {
+                                                const weightA = getParsedWeight(valA);
+                                                const weightB = getParsedWeight(valB);
+                                                if (weightA !== null && weightB !== null && weightA !== weightB) {
+                                                    return weightA - weightB;
+                                                }
                                                 const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                                                 const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
                                                 const defaultUnit = (product.web_unit || product.unit_of_measure || '').toLowerCase();
@@ -446,7 +484,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                                 return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
                                             })
                                             .map((val) => {
-                                                const displayVal = val.includes('|') ? val.split('|')[0] : val;
+                                                const displayVal = formatOptionDisplay(val, isEn);
                                                 return (
                                                     <button
                                                 key={val}
