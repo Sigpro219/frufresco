@@ -344,6 +344,18 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                     const addedNum = Number(quantity) || 0;
                     const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
                     const productName = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name);
+                    const unitLabel = existingInCart.unit || activeUnit;
+
+                    const titleStr = t.alreadyInCartTitle || 'Insumo ya incluido en tu pedido';
+                    const msgStr = (t.alreadyInCartMsg || 'Ya tienes {qty} {unit} de {name} en tu pedido.')
+                        .replace('{qty}', String(currentQty))
+                        .replace('{unit}', unitLabel)
+                        .replace('{name}', productName);
+                    const badgeStr = (t.alreadyInCartBadge || 'Al adicionar {qty} {unit} el nuevo total será {total} {unit}')
+                        .replace('{qty}', String(quantity))
+                        .replace('{unit}', activeUnit)
+                        .replace('{total}', String(newTotal))
+                        .replace('{unit}', unitLabel);
 
                     return (
                         <div style={{
@@ -363,13 +375,13 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                             <div>
                                 <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
-                                    🛒 {locale === 'en' ? 'Item already included in your order' : 'Insumo ya incluido en tu pedido'}
+                                    🛒 {titleStr}
                                 </div>
                                 <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
-                                    {locale === 'en' ? 'You already have' : 'Ya tienes'} <strong style={{ color: '#B45309' }}>{currentQty} {existingInCart.unit || activeUnit}</strong> {locale === 'en' ? 'of' : 'de'} {productName} {locale === 'en' ? 'in your order.' : 'en tu pedido.'}
+                                    {msgStr}
                                 </div>
                                 <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
-                                    {locale === 'en' ? 'Adding' : 'Al adicionar'} <strong>{quantity} {activeUnit}</strong> {locale === 'en' ? 'the new total will be' : 'el nuevo total será'} <strong>{newTotal} {existingInCart.unit || activeUnit}</strong>
+                                    {badgeStr}
                                 </div>
                             </div>
                         </div>

@@ -118,6 +118,9 @@ export const translations = {
     bannerText: "¡Paraíso de frescura! Despachos de lunes a viernes.",
     loadMore: "Ver más productos",
     addedToCart: "¡{name} añadido al carrito!",
+    alreadyInCartTitle: "Insumo ya incluido en tu pedido",
+    alreadyInCartMsg: "Ya tienes {qty} {unit} de {name} en tu pedido.",
+    alreadyInCartBadge: "Al adicionar {qty} {unit} el nuevo total será {total} {unit}",
     b2b: {
       badge: "Pre-cotiza en 3 simples pasos · Exclusivo HORECA",
       title: "Tu Operación Merece \n Lo Mejor del Campo",
@@ -342,6 +345,9 @@ export const translations = {
     bannerText: "Freshness Paradise! Deliveries from Monday to Friday.",
     loadMore: "Load more products",
     addedToCart: "{name} added to cart!",
+    alreadyInCartTitle: "Item already included in your order",
+    alreadyInCartMsg: "You already have {qty} {unit} of {name} in your order.",
+    alreadyInCartBadge: "Adding {qty} {unit} will make your new total {total} {unit}",
     b2b: {
       badge: "Exclusive HORECA Bogotá, Girardot, Melgar & Anapoima",
       title: "Your Operation Deserves \n The Best from the Fields",

@@ -261,8 +261,25 @@ export function checkUserPermission(
 
     const userPerms = profile.custom_permissions || [];
 
+    // 0. Expiration parser helper
+    const isRuleExpired = (rule: string): boolean => {
+        const match = rule.match(/(?:#until:|#exp:|@until:|#expires:)([\w\-:.]+)/i);
+        if (match && match[1]) {
+            const expDate = new Date(match[1]).getTime();
+            if (!isNaN(expDate) && Date.now() > expDate) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const cleanRuleString = (rule: string): string => {
+        return rule.replace(/(?:#until:|#exp:|@until:|#expires:)[\w\-:.]+/gi, '').replace(/^[-+]/, '');
+    };
+
     const matches = (rule: string, target: string): boolean => {
-        const cleanRule = rule.replace(/^[-+]/, '');
+        if (isRuleExpired(rule)) return false;
+        const cleanRule = cleanRuleString(rule);
         if (cleanRule === '*' || cleanRule === target) return true;
         if (cleanRule.endsWith('*') && target.startsWith(cleanRule.slice(0, -1))) return true;
         if (target.startsWith(cleanRule + '.') || target.startsWith(cleanRule + ':')) return true;
@@ -278,8 +295,9 @@ export function checkUserPermission(
 
     // 2. Check custom profile-level explicit allows (prefix '+' or no prefix)
     const hasAllow = userPerms.some(p => {
-        const cleanP = p.replace(/^\+/, '');
-        if (matches(cleanP, requiredPerm)) return true;
+        if (isRuleExpired(p)) return false;
+        const cleanP = cleanRuleString(p);
+        if (matches(p, requiredPerm)) return true;
         // Child-to-parent check: e.g. if user has 'com.billing', they can see parent 'com'
         if (cleanP.startsWith(requiredPerm + '.') || cleanP.startsWith(requiredPerm + ':')) return true;
         return false;
@@ -292,8 +310,10 @@ export function checkUserPermission(
         if (userRole) {
             const rolePerms = userRole.permissions || [];
             const hasRoleAllow = rolePerms.some(p => {
+                if (isRuleExpired(p)) return false;
                 if (matches(p, requiredPerm)) return true;
-                if (p.startsWith(requiredPerm + '.') || p.startsWith(requiredPerm + ':')) return true;
+                const cleanP = cleanRuleString(p);
+                if (cleanP.startsWith(requiredPerm + '.') || cleanP.startsWith(requiredPerm + ':')) return true;
                 return false;
             });
             if (hasRoleAllow) return true;
