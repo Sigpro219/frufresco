@@ -721,8 +721,8 @@ export default function OrderLoadingPage() {
     useEffect(() => {
         let active = true;
 
-        const fetchOrders = async () => {
-            setLoading(true);
+        const fetchOrders = async (showSpinner = true) => {
+            if (showSpinner) setLoading(true);
             try {
                 let query = supabase
                     .from('orders')
@@ -868,22 +868,52 @@ export default function OrderLoadingPage() {
                         };
                     });
                     setOrders(processedData);
-                    // Reset selection on data refresh
-                    setSelectedOrders(new Set());
+                    if (showSpinner) {
+                        setSelectedOrders(new Set());
+                    }
                 }
             } catch (err) {
                 console.error('Exception:', err);
             } finally {
-                if (active) {
+                if (active && showSpinner) {
                     setLoading(false);
                 }
             }
         };
 
-        fetchOrders();
+        // 1. Initial Load
+        fetchOrders(true);
+
+        // 2. Supabase Realtime Subscription for instant live updates
+        const ordersChannel = supabase
+            .channel(`orders-live-${selectedDate || 'all'}`)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'orders' },
+                (payload) => {
+                    console.log('⚡ [Realtime] Cambio detectado en pedidos:', payload.eventType);
+                    fetchOrders(false);
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'order_items' },
+                (payload) => {
+                    console.log('⚡ [Realtime] Cambio detectado en ítems:', payload.eventType);
+                    fetchOrders(false);
+                }
+            )
+            .subscribe();
+
+        // 3. Polling Interval (8s) as robust fallback for background tabs or network drops
+        const pollInterval = setInterval(() => {
+            fetchOrders(false);
+        }, 8000);
 
         return () => {
             active = false;
+            clearInterval(pollInterval);
+            supabase.removeChannel(ordersChannel);
         };
     }, [selectedDate, refreshTrigger]);
 
