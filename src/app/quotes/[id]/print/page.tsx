@@ -49,54 +49,23 @@ export default function PublicPrintQuotePage() {
     const loadAllData = async () => {
         setLoading(true);
         try {
-            // Load App Settings
-            const { data: sData } = await supabase.from('app_settings').select('*');
-            const settingsMap: Record<string, string> = {};
-            if (sData) {
-                sData.forEach((s: any) => { settingsMap[s.key] = s.value; });
-                setAppSettings(prev => ({ ...prev, ...settingsMap }));
+            const res = await fetch(`/api/quotes/${params.id}/public`);
+            const data = await res.json();
+
+            if (!res.ok || data.error) {
+                throw new Error(data.error || 'No se pudo cargar la cotización');
             }
 
-            // Load Quote
-            const { data: qData, error: qErr } = await supabase
-                .from('quotes')
-                .select('*')
-                .eq('id', params.id)
-                .single();
-
-            if (qErr) throw qErr;
-            setQuote(qData);
-
-            // Load Lead Info if exists
-            if (qData.lead_id) {
-                const { data: lData } = await supabase
-                    .from('leads')
-                    .select('*')
-                    .eq('id', qData.lead_id)
-                    .single();
-                if (lData) setLead(lData);
+            if (data.appSettings) {
+                setAppSettings(prev => ({ ...prev, ...data.appSettings }));
             }
-
-            // Load Client Info if exists
-            if (qData.client_id) {
-                const { data: cData } = await supabase
-                    .from('profiles')
-                    .select('company_name, contact_name, nit, phone, address')
-                    .eq('id', qData.client_id)
-                    .single();
-                if (cData) setClientInfo(cData);
-            }
-
-            // Load Items
-            const { data: iData } = await supabase
-                .from('quote_items')
-                .select('*, products(name, unit_of_measure, sku)')
-                .eq('quote_id', params.id);
-
-            if (iData) setItems(iData);
+            if (data.quote) setQuote(data.quote);
+            if (data.lead) setLead(data.lead);
+            if (data.clientInfo) setClientInfo(data.clientInfo);
+            if (data.items) setItems(data.items);
 
             // Preload logo
-            const logoUrl = settingsMap.provider_logo_url || settingsMap.app_logo_url || '/logo-investments.png';
+            const logoUrl = data.appSettings?.provider_logo_url || data.appSettings?.app_logo_url || '/logo-investments.png';
             if (logoUrl) {
                 const img = new Image();
                 img.onload = () => setLogoLoaded(true);
