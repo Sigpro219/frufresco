@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolvePricingModelId, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -52,17 +53,17 @@ export async function POST(request: Request) {
             const userId = session?.user?.id;
 
             let pricingModelId = (order.type === 'b2c_client') 
-                ? 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee' 
-                : 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
+                ? CLIENTES_HOGAR_ID 
+                : GENERAL_INSTITUCIONAL_ID;
 
-            if (userId && order.type !== 'b2c_client') {
+            if (userId) {
                 const { data: profile } = await serverSupabase
                     .from('profiles')
-                    .select('pricing_model_id')
+                    .select('id, role, profile_type, company_name, pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
                     .eq('id', userId)
                     .single();
-                if (profile?.pricing_model_id) {
-                    pricingModelId = profile.pricing_model_id;
+                if (profile) {
+                    pricingModelId = resolvePricingModelId(profile);
                 }
             }
 

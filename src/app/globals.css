@@ -277,3 +277,14 @@ input:-webkit-autofill:active {
   display: none;
 }
 
+/* Sticky Catalog Search & Category Filters */
+.sticky-catalog-controls {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 85px;
+  z-index: 45;
+  background-color: rgba(251, 250, 245, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+

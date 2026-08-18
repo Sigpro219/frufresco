@@ -196,6 +196,8 @@ export default function ClientsModule() {
     const [dragging, setDragging] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isFormReadOnly, setIsFormReadOnly] = useState(false);
+    const [allowSundayDeliveries, setAllowSundayDeliveries] = useState<boolean>(false);
+    const [allowHolidayDeliveries, setAllowHolidayDeliveries] = useState<boolean>(false);
 
     // Lead Conversion Modal State
     const [conversionLead, setConversionLead] = useState<Lead | null>(null);
@@ -470,21 +472,26 @@ export default function ClientsModule() {
                 .select('client_id, valid_until')
                 .eq('status', 'agreement');
             
-            // 7. SKUs Bloqueados por Escasez
+            // 7. SKUs Bloqueados por Escasez & Reglas Globales de Entrega
             const { data: settingsData } = await supabase
                 .from('app_settings')
-                .select('value')
-                .eq('key', 'scarcity_locked_skus')
-                .limit(1);
+                .select('key, value')
+                .in('key', ['scarcity_locked_skus', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
 
-            if (settingsData && settingsData.length > 0 && settingsData[0].value) {
-                try {
-                    setScarcityLockedMap(JSON.parse(settingsData[0].value));
-                } catch(e) {
-                    console.error('Error parsing scarcity_locked_skus setting:', e);
+            if (settingsData) {
+                const scarcityRow = settingsData.find(s => s.key === 'scarcity_locked_skus');
+                if (scarcityRow && scarcityRow.value) {
+                    try {
+                        setScarcityLockedMap(JSON.parse(scarcityRow.value));
+                    } catch(e) {
+                        console.error('Error parsing scarcity_locked_skus setting:', e);
+                    }
+                } else {
+                    setScarcityLockedMap({});
                 }
-            } else {
-                setScarcityLockedMap({});
+
+                setAllowSundayDeliveries(settingsData.find(s => s.key === 'allow_sunday_deliveries')?.value === 'true');
+                setAllowHolidayDeliveries(settingsData.find(s => s.key === 'allow_holiday_deliveries')?.value === 'true');
             }
 
             const normalizeProfile = (p: any) => ({
@@ -1507,6 +1514,8 @@ export default function ClientsModule() {
                     setNicknameClientId={setNicknameClientId}
                     setIsNicknameModalOpen={setIsNicknameModalOpen}
                     isReadOnly={isFormReadOnly}
+                    allowSundayDeliveries={allowSundayDeliveries}
+                    allowHolidayDeliveries={allowHolidayDeliveries}
                     onSwitchClient={(client) => {
                         setEditTarget(client);
                         // Preserve the active mode (edit vs view-only) when switching between parent and branch
@@ -4339,7 +4348,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
     );
 }
 
-function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false, onSwitchClient, onUpdateDevVerified }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean, onSwitchClient?: (client: Profile) => void, onUpdateDevVerified?: (id: string, verified: boolean) => void }) {
+function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false, allowSundayDeliveries = false, allowHolidayDeliveries = false, onSwitchClient, onUpdateDevVerified }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean, allowSundayDeliveries?: boolean, allowHolidayDeliveries?: boolean, onSwitchClient?: (client: Profile) => void, onUpdateDevVerified?: (id: string, verified: boolean) => void }) {
     const isEdit = !!editData && !!editData.id;
     const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
@@ -6103,6 +6112,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 onClick={() => {
                                                     if (!formData.delivery_restrictions) return window.showToast?.('Escribe algo primero', 'info');
                                                     const parsed = parseLogisticsText(formData.delivery_restrictions);
+                                                    if (!allowSundayDeliveries) {
+                                                        parsed.days = parsed.days.filter((d: number) => d !== 0 && d !== 7);
+                                                        parsed.allowed_days = parsed.allowed_days.filter((d: number) => d !== 7);
+                                                    }
                                                     setFormData({ ...formData, logistics_data: parsed });
                                                     window.showToast?.('IA: Franja actualizada según el texto', 'info');
                                                 }}
@@ -6173,13 +6186,23 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 <label style={{ fontSize: '0.7rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.8rem', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>DÍAS PERMITIDOS</label>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
                                                     {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, idx) => {
-                                                        const days = formData.logistics_data?.allowed_days || [];
+                                                        const isSunday = idx + 1 === 7;
+                                                        const isSundayBlocked = isSunday && !allowSundayDeliveries;
+
+                                                        let days = formData.logistics_data?.allowed_days || [];
+                                                        if (isSundayBlocked && days.includes(7)) {
+                                                            days = days.filter((d: number) => d !== 7);
+                                                        }
                                                         const isActive = days.includes(idx + 1);
+
                                                         return (
                                                             <div 
                                                                 key={day}
                                                                 onClick={() => {
                                                                     if (isReadOnly) return;
+                                                                    if (isSundayBlocked) {
+                                                                        return window.showToast?.('🔒 Entregas en domingo desactivadas globalmente en Configuración General (/admin/settings)', 'warning');
+                                                                    }
                                                                     const newDays = isActive ? days.filter((d: number) => d !== idx + 1) : [...days, idx + 1];
                                                                     setFormData({ ...formData, logistics_data: { 
                                                                         ...formData.logistics_data, 
@@ -6187,20 +6210,40 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                         days: newDays.map((d: number) => d === 7 ? 0 : d) 
                                                                     } });
                                                                 }}
+                                                                title={isSundayBlocked ? "🔒 Entregas en Domingo DESACTIVADAS en Configuración General (/admin/settings)" : `Día ${day}`}
                                                                 style={{ 
-                                                                    width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: '600', cursor: isReadOnly ? 'default' : 'pointer',
-                                                                    backgroundColor: isActive ? THEME.colors.primary : '#F1F5F9',
-                                                                    color: isActive ? 'white' : THEME.colors.textSecondary,
+                                                                    width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: '600',
+                                                                    cursor: isReadOnly ? 'default' : (isSundayBlocked ? 'not-allowed' : 'pointer'),
+                                                                    backgroundColor: isActive ? THEME.colors.primary : (isSundayBlocked ? '#F1F5F9' : '#F8FAFC'),
+                                                                    color: isActive ? 'white' : (isSundayBlocked ? '#94A3B8' : THEME.colors.textSecondary),
+                                                                    border: isSundayBlocked ? '1px dashed #CBD5E1' : `1px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
                                                                     transition: 'all 0.2s',
                                                                     boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.2)' : 'none',
                                                                     pointerEvents: isReadOnly ? 'none' : 'auto',
-                                                                    fontFamily: THEME.typography.fontFamilyMain
+                                                                    fontFamily: THEME.typography.fontFamilyMain,
+                                                                    position: 'relative'
                                                                 }}
                                                             >
                                                                 {day}
+                                                                {isSundayBlocked && (
+                                                                    <span style={{ position: 'absolute', top: '-4px', right: '-4px', fontSize: '10px' }}>🔒</span>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}
+                                                </div>
+
+                                                <div style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    {!allowSundayDeliveries && (
+                                                        <div style={{ fontSize: '0.68rem', color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', backgroundColor: '#FEF3C7', padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #FCD34D' }}>
+                                                            <Lock size={12} /> Entregas en Domingo desactivadas por Configuración General
+                                                        </div>
+                                                    )}
+                                                    {!allowHolidayDeliveries && (
+                                                        <div style={{ fontSize: '0.68rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', backgroundColor: '#FFFBEB', padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #FDE68A' }}>
+                                                            <Calendar size={12} /> Entregas en Festivos (19 Días Colombia) desactivadas por Configuración General
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 

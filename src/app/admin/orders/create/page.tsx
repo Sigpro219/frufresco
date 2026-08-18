@@ -6,9 +6,10 @@ import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sanitizeDocText, resolveClientProfile, findBestProductMatch, recordLearningMemory } from '@/lib/orders/order-parser-engine';
+import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
-import { Map, Marker } from '@vis.gl/react-google-maps';
+import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
     X, 
@@ -19,6 +20,7 @@ import {
     Building2,
     Home,
     RefreshCw,
+    RotateCcw,
     AlertTriangle,
     Info,
     FolderOpen,
@@ -222,6 +224,7 @@ function CreateOrderContent() {
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
     const [clientSearchB2C, setClientSearchB2C] = useState('');
     const [selectedClientB2C, setSelectedClientB2C] = useState('');
+    const [loadingLastOrderB2C, setLoadingLastOrderB2C] = useState(false);
     const [focusedClientIndexB2C, setFocusedClientIndexB2C] = useState<number>(-1);
     const [guestInfo, setGuestInfo] = useState({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); // For B2C New
 
@@ -450,6 +453,7 @@ function CreateOrderContent() {
         isOpen: boolean;
         product: any;
         qty: number;
+        existingQty?: number;
         variantLabel?: string;
         optionsRaw?: any;
         unit?: string;
@@ -649,18 +653,29 @@ function CreateOrderContent() {
                 // 2. Fallback to General Institucional (B2B) or Clientes Hogar (B2C) if no model or if expired
                 if (!resolvedModel || expired) {
                     b2cFallback = true;
-                    const targetNames = isB2B 
-                        ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
-                        : ['Clientes Hogar', 'Clientes B2C'];
+                    const defaultTargetId = isB2B ? GENERAL_INSTITUCIONAL_ID : CLIENTES_HOGAR_ID;
 
                     const { data: defaultModel } = await supabase
                         .from('pricing_models')
                         .select('*')
-                        .in('name', targetNames)
+                        .eq('id', defaultTargetId)
                         .maybeSingle();
 
                     if (defaultModel) {
                         resolvedModel = defaultModel;
+                    } else {
+                        const targetNames = isB2B 
+                            ? ['General Institucional', 'Clientes Institucionales', 'B2B General']
+                            : ['Clientes Hogar', 'Clientes B2C'];
+
+                        const { data: fallbackByName } = await supabase
+                            .from('pricing_models')
+                            .select('*')
+                            .in('name', targetNames)
+                            .maybeSingle();
+                        if (fallbackByName) {
+                            resolvedModel = fallbackByName;
+                        }
                     }
                 }
             }
@@ -1099,19 +1114,27 @@ function CreateOrderContent() {
         const baseQty = parseFloat((qty * resolvedFactor).toFixed(3));
 
         if (!bypassDuplicateCheck) {
-            const existingIndex = cart.findIndex(item =>
-                item.product.id === product.id && item.variant_label === finalLabel && item.originalUnit === resolvedUnit
-            );
+            const cleanLabel = (finalLabel || '').trim().toLowerCase();
+            const cleanUnit = (resolvedUnit || '').trim().toLowerCase();
+
+            const existingIndex = cart.findIndex(item => {
+                const itemLabel = (item.variant_label || '').trim().toLowerCase();
+                const itemUnit = (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                return item.product.id === product.id && itemLabel === cleanLabel && itemUnit === cleanUnit;
+            });
 
             if (existingIndex >= 0) {
+                const existingItem = cart[existingIndex];
+                const existingQty = existingItem.originalQty !== undefined ? existingItem.originalQty : existingItem.qty;
                 setDuplicateConfirm({
                     isOpen: true,
                     product,
                     qty,
+                    existingQty,
                     variantLabel,
                     optionsRaw,
-                    unit,
-                    factor,
+                    unit: resolvedUnit,
+                    factor: resolvedFactor,
                     existingIndex
                 });
                 return;
@@ -1160,6 +1183,131 @@ function CreateOrderContent() {
         addToCartDirectly(product, qty, variantLabel, optionsRaw, unit, factor, true);
         setDuplicateConfirm(null);
         showToast('Producto agregado como una fila separada. ✅', 'success');
+    };
+
+    const handleConsolidateAllCartDuplicates = () => {
+        setCart(prev => {
+            const map = new Map<string, any>();
+            let mergedCount = 0;
+            prev.forEach(item => {
+                const cleanLabel = (item.variant_label || '').trim().toLowerCase();
+                const cleanUnit = (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                const key = `${item.product.id}_${cleanLabel}_${cleanUnit}`;
+
+                if (map.has(key)) {
+                    const existing = { ...map.get(key) };
+                    const addQty = item.originalQty !== undefined ? item.originalQty : item.qty;
+                    const newOrigQty = parseFloat(((existing.originalQty || 0) + addQty).toFixed(3));
+                    const factor = existing.conversion_factor || item.conversion_factor || 1;
+                    existing.originalQty = newOrigQty;
+                    existing.qty = parseFloat((newOrigQty * factor).toFixed(3));
+                    if (item.picking_note && !existing.picking_note) existing.picking_note = item.picking_note;
+                    if (item.delivery_note && !existing.delivery_note) existing.delivery_note = item.delivery_note;
+                    map.set(key, existing);
+                    mergedCount++;
+                } else {
+                    map.set(key, { ...item });
+                }
+            });
+            if (mergedCount > 0) {
+                showToast(`✅ Se consolidaron ${mergedCount} filas duplicadas en el pedido.`, 'success');
+            } else {
+                showToast('No se encontraron líneas duplicadas para consolidar.', 'info');
+            }
+            return Array.from(map.values());
+        });
+    };
+
+    const handleLoadLastOrderForB2C = async () => {
+        const b2c = b2cClients.find(c => c.id === selectedClientB2C);
+        if (!b2c) {
+            showToast('Por favor selecciona un cliente B2C existente primero.', 'error');
+            return;
+        }
+
+        try {
+            setLoadingLastOrderB2C(true);
+            const params = new URLSearchParams();
+            if (b2c.id) params.set('profile_id', b2c.id);
+            if (b2c.email) params.set('email', b2c.email);
+            if (b2c.contact_phone || b2c.phone) params.set('phone', b2c.contact_phone || b2c.phone);
+            if (b2c.nit) params.set('identification', b2c.nit);
+
+            const res = await fetch(`/api/orders/last-purchase?${params.toString()}`);
+            const data = await res.json();
+
+            if (!res.ok || !data.success || !data.items || data.items.length === 0) {
+                showToast(data.error || 'No se encontraron compras anteriores asociadas a este cliente.', 'info');
+                return;
+            }
+
+            // Convert items from API into CartItems format
+            const itemsToInject: any[] = [];
+            for (const item of data.items) {
+                const prod = products.find(p => p.id === item.id);
+                if (!prod) continue;
+
+                const resolvedUnit = item.unit || prod.unit_of_measure || 'Kg';
+                // For B2C existing clients, item.price comes directly with today's B2C model price from API
+                const resolvedPrice = item.price > 0 ? item.price : (contractPrices[prod.id] || prod.base_price || 0);
+
+                itemsToInject.push({
+                    product: prod,
+                    qty: item.quantity || 1,
+                    originalQty: item.quantity || 1,
+                    originalUnit: resolvedUnit,
+                    price: resolvedPrice,
+                    conversion_factor: 1,
+                    is_from_last_order: true
+                });
+            }
+
+            if (itemsToInject.length === 0) {
+                showToast('Los productos del último pedido no se encuentran activos actualmente en el catálogo.', 'info');
+                return;
+            }
+
+            // Consolidate into existing cart
+            let mergedCount = 0;
+            setCart(prev => {
+                const result = [...prev];
+                for (const newItem of itemsToInject) {
+                    const cleanLabel = (newItem.variant_label || '').trim().toLowerCase();
+                    const cleanUnit = (newItem.originalUnit || newItem.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                    const existingIdx = result.findIndex(item =>
+                        item.product.id === newItem.product.id &&
+                        (item.variant_label || '').trim().toLowerCase() === cleanLabel &&
+                        (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit
+                    );
+
+                    if (existingIdx >= 0) {
+                        const existingItem = { ...result[existingIdx] };
+                        const addQty = newItem.originalQty !== undefined ? newItem.originalQty : newItem.qty;
+                        const newOrigQty = parseFloat(((existingItem.originalQty || 0) + addQty).toFixed(3));
+                        const factor = existingItem.conversion_factor || newItem.conversion_factor || 1;
+                        existingItem.originalQty = newOrigQty;
+                        existingItem.qty = parseFloat((newOrigQty * factor).toFixed(3));
+                        existingItem.is_from_last_order = true;
+                        result[existingIdx] = existingItem;
+                        mergedCount++;
+                    } else {
+                        result.unshift(newItem);
+                    }
+                }
+                return result;
+            });
+
+            if (mergedCount > 0) {
+                showToast(`✅ Se cargaron ${itemsToInject.length - mergedCount} productos nuevos y se consolidaron ${mergedCount} cantidades del último pedido (Tarifa B2C de hoy aplicada).`, 'success');
+            } else {
+                showToast(`✅ Se cargaron ${itemsToInject.length} productos del último pedido (Tarifa B2C de hoy aplicada).`, 'success');
+            }
+        } catch (err: any) {
+            console.error('Error al cargar último pedido B2C:', err);
+            showToast('Error al consultar la última compra del cliente.', 'error');
+        } finally {
+            setLoadingLastOrderB2C(false);
+        }
     };
 
     const handleSaveVariantsFromOrder = async (productId: string, optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
@@ -1741,14 +1889,45 @@ function CreateOrderContent() {
             }
         }
 
-        setCart(prev => [...itemsToInject, ...prev]);
+        let mergedCount = 0;
+        setCart(prev => {
+            const result = [...prev];
+            for (const newItem of itemsToInject) {
+                const cleanLabel = (newItem.variant_label || '').trim().toLowerCase();
+                const cleanUnit = (newItem.originalUnit || newItem.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                const existingIdx = result.findIndex(item =>
+                    item.product.id === newItem.product.id &&
+                    (item.variant_label || '').trim().toLowerCase() === cleanLabel &&
+                    (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase() === cleanUnit
+                );
+
+                if (existingIdx >= 0) {
+                    const existingItem = { ...result[existingIdx] };
+                    const addQty = newItem.originalQty !== undefined ? newItem.originalQty : newItem.qty;
+                    const newOrigQty = parseFloat(((existingItem.originalQty || 0) + addQty).toFixed(3));
+                    const factor = existingItem.conversion_factor || newItem.conversion_factor || 1;
+                    existingItem.originalQty = newOrigQty;
+                    existingItem.qty = parseFloat((newOrigQty * factor).toFixed(3));
+                    result[existingIdx] = existingItem;
+                    mergedCount++;
+                } else {
+                    result.unshift(newItem);
+                }
+            }
+            return result;
+        });
+
         setIsStaging(false);
         setStagedItems([]);
         if (uploadedFileUrl) {
             URL.revokeObjectURL(uploadedFileUrl);
             setUploadedFileUrl(null);
         }
-        showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
+        if (mergedCount > 0) {
+            showToast(`✅ Se inyectaron ${itemsToInject.length - mergedCount} productos y se consolidaron ${mergedCount} cantidades duplicadas.`, 'success');
+        } else {
+            showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
+        }
     };
 
     const updateStagedItem = (id: string, field: string, value: any) => {
@@ -2591,6 +2770,42 @@ function CreateOrderContent() {
                                                                     <AlertTriangle size={13} strokeWidth={2} color="#EF4444" /> Sin Georeferenciación
                                                                 </div>
                                                             )}
+                                                        </div>
+
+                                                        {/* Botón Repetir Último Pedido del Cliente Hogar */}
+                                                        <div style={{ gridColumn: '1 / -1', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #BFDBFE' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleLoadLastOrderForB2C}
+                                                                disabled={loadingLastOrderB2C}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '0.65rem 1rem',
+                                                                    backgroundColor: loadingLastOrderB2C ? '#F3F4F6' : '#ECFDF5',
+                                                                    border: '1.5px solid #A7F3D0',
+                                                                    borderRadius: '10px',
+                                                                    color: loadingLastOrderB2C ? '#9CA3AF' : '#047857',
+                                                                    fontWeight: '800',
+                                                                    fontSize: '0.84rem',
+                                                                    cursor: loadingLastOrderB2C ? 'not-allowed' : 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '8px',
+                                                                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.12)',
+                                                                    transition: 'all 0.2s ease'
+                                                                }}
+                                                            >
+                                                                {loadingLastOrderB2C ? (
+                                                                    <>
+                                                                        <Loader2 size={16} className="animate-spin" /> Buscando pedido anterior...
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <RotateCcw size={16} /> Repetir Último Pedido de este Cliente
+                                                                    </>
+                                                                )}
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -3444,7 +3659,67 @@ function CreateOrderContent() {
                         )}
                         {/* 3. CART LIST WITH IMPROVED STEPPER */}
                         <div>
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>Detalle del Pedido</h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0 }}>Detalle del Pedido</h3>
+                            </div>
+
+                            {/* Duplicate Products Alert Banner */}
+                            {(() => {
+                                const dupCounts = new Map<string, number>();
+                                cart.forEach(item => {
+                                    const cleanLabel = (item.variant_label || '').trim().toLowerCase();
+                                    const cleanUnit = (item.originalUnit || item.product?.unit_of_measure || 'Kg').trim().toLowerCase();
+                                    const key = `${item.product.id}_${cleanLabel}_${cleanUnit}`;
+                                    dupCounts.set(key, (dupCounts.get(key) || 0) + 1);
+                                });
+                                const hasDuplicates = Array.from(dupCounts.values()).some(cnt => cnt > 1);
+                                
+                                if (!hasDuplicates) return null;
+
+                                return (
+                                    <div style={{
+                                        backgroundColor: '#FFFBEB',
+                                        border: '1.5px solid #FCD34D',
+                                        borderRadius: '12px',
+                                        padding: '0.85rem 1.1rem',
+                                        marginBottom: '1.25rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '12px',
+                                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#92400E', fontWeight: '600' }}>
+                                            <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0 }} />
+                                            <div>
+                                                <strong style={{ color: '#B45309' }}>🛒 Productos duplicados detectados:</strong> Hay líneas repetidas del mismo producto en este pedido.
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleConsolidateAllCartDuplicates}
+                                            style={{
+                                                padding: '7px 16px',
+                                                backgroundColor: '#D97706',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontWeight: '800',
+                                                fontSize: '0.8rem',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)',
+                                                flexShrink: 0
+                                            }}
+                                        >
+                                            ⚡ Consolidar Cantidades
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+
                             {cart.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '2rem', backgroundColor: '#F9FAFB', borderRadius: '12px', color: '#9CA3AF', border: '2px dashed #E5E7EB' }}>
                                     No hay productos agregados.
@@ -3532,8 +3807,12 @@ function CreateOrderContent() {
                                                                         );
                                                                     }
                                                                 }
-                                                            })() : (
-                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                            })() : (item.price && item.price > 0) || (item.product?.base_price && item.product.base_price > 0) ? (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: (clientType === 'B2B' || Boolean(selectedClient)) ? '#ECFDF5' : '#FFF7ED', color: (clientType === 'B2B' || Boolean(selectedClient)) ? '#047857' : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    {(clientType === 'B2B' || Boolean(selectedClient)) ? (activePricingModel?.name || 'General Institucional') : 'Tarifa B2C (Defecto)'}
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                                                     ⚠️ Sin Precio
                                                                 </span>
                                                             )}
@@ -4725,7 +5004,7 @@ function CreateOrderContent() {
                         </div>
                         
                         <div style={{ flex: 1, position: 'relative' }}>
-                            <Map
+                            <GoogleMapComponent
                                 defaultCenter={{ lat: latitude || 4.6097, lng: longitude || -74.0817 }} // Bogota o actual
                                 defaultZoom={15}
                                 mapId="DEMO_MAP_ID"
@@ -4753,7 +5032,7 @@ function CreateOrderContent() {
                                         }}
                                     />
                                 )}
-                            </Map>
+                            </GoogleMapComponent>
                         </div>
 
 
@@ -5045,115 +5324,175 @@ function CreateOrderContent() {
                 </div>
             )}
 
-            {duplicateConfirm && duplicateConfirm.isOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 11000
-                }}>
+            {duplicateConfirm && duplicateConfirm.isOpen && (() => {
+                const existingItem = cart[duplicateConfirm.existingIndex];
+                const currentQty = existingItem ? (existingItem.originalQty !== undefined ? existingItem.originalQty : existingItem.qty) : (duplicateConfirm.existingQty || 0);
+                const addedNum = duplicateConfirm.qty || 0;
+                const newTotal = parseFloat((currentQty + addedNum).toFixed(3));
+                const unitStr = duplicateConfirm.unit || duplicateConfirm.product?.unit_of_measure || 'Kg';
+
+                return (
                     <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '20px',
-                        padding: '2rem',
-                        width: '90%',
-                        maxWidth: '480px',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                        textAlign: 'center'
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+                        backdropFilter: 'blur(5px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 11000
                     }}>
                         <div style={{
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '50%',
-                            backgroundColor: '#FEF3C7',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 1.5rem',
-                            color: '#D97706'
+                            backgroundColor: 'white',
+                            borderRadius: '24px',
+                            padding: '2rem',
+                            width: '90%',
+                            maxWidth: '460px',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            textAlign: 'center'
                         }}>
-                            <AlertTriangle size={28} />
-                        </div>
-                        <h3 style={{
-                            fontSize: '1.25rem',
-                            fontWeight: 800,
-                            color: '#111827',
-                            margin: '0 0 0.5rem 0'
-                        }}>
-                            Producto Duplicado Detectado
-                        </h3>
-                        <p style={{
-                            fontSize: '0.9rem',
-                            color: '#4B5563',
-                            margin: '0 0 1.5rem 0',
-                            lineHeight: '1.6'
-                        }}>
-                            El producto <strong>{duplicateConfirm.product.name}</strong> 
-                            {duplicateConfirm.product.accounting_id ? ` (ID Contable: ${duplicateConfirm.product.accounting_id})` : ''} 
-                            ya está en este pedido. ¿Cómo deseas proceder?
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <button
-                                type="button"
-                                onClick={handleMergeDuplicateItem}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.75rem 1.5rem',
-                                    backgroundColor: '#10B981',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    fontWeight: 700,
-                                    color: 'white',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
-                                }}
-                            >
-                                Sumar cantidad a la línea existente (+{duplicateConfirm.qty})
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleKeepDuplicateAsSeparate}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.75rem 1.5rem',
-                                    backgroundColor: '#2563EB',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    fontWeight: 700,
-                                    color: 'white',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
-                                }}
-                            >
-                                Agregar como una fila separada
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setDuplicateConfirm(null)}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.75rem 1.5rem',
-                                    backgroundColor: '#F3F4F6',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    fontWeight: 700,
-                                    color: '#4B5563',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Cancelar
-                            </button>
+                            {/* Product Image / Icon */}
+                            {duplicateConfirm.product.image_url ? (
+                                <div style={{
+                                    width: '80px',
+                                    height: '80px',
+                                    borderRadius: '16px',
+                                    overflow: 'hidden',
+                                    margin: '0 auto 1rem',
+                                    boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                                    border: '2px solid #F3F4F6'
+                                }}>
+                                    <img 
+                                        src={duplicateConfirm.product.image_url} 
+                                        alt={duplicateConfirm.product.name} 
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                </div>
+                            ) : (
+                                <div style={{
+                                    width: '56px',
+                                    height: '56px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#FEF3C7',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    margin: '0 auto 1rem',
+                                    color: '#D97706'
+                                }}>
+                                    <AlertTriangle size={28} />
+                                </div>
+                            )}
+
+                            <h3 style={{
+                                fontSize: '1.35rem',
+                                fontWeight: 900,
+                                color: '#111827',
+                                margin: '0 0 0.25rem 0'
+                            }}>
+                                {duplicateConfirm.product.name}
+                            </h3>
+                            {duplicateConfirm.product.accounting_id && (
+                                <div style={{ fontSize: '0.78rem', color: '#6B7280', marginBottom: '1.25rem', fontWeight: 600 }}>
+                                    ID Contable: {duplicateConfirm.product.accounting_id}
+                                </div>
+                            )}
+
+                            {/* Banner Alerta Insumo ya incluido */}
+                            <div style={{
+                                backgroundColor: '#FFFBEB',
+                                border: '1.5px solid #FCD34D',
+                                borderRadius: '14px',
+                                padding: '0.9rem 1.1rem',
+                                marginBottom: '1.5rem',
+                                textAlign: 'left',
+                                fontSize: '0.84rem',
+                                color: '#92400E',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
+                            }}>
+                                <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div>
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#B45309' }}>
+                                        🛒 Insumo ya incluido en tu pedido
+                                    </div>
+                                    <div style={{ marginTop: '4px', color: '#78350F', lineHeight: '1.4' }}>
+                                        Ya tienes <strong style={{ color: '#B45309' }}>{currentQty} {unitStr}</strong> de {duplicateConfirm.product.name} en tu pedido.
+                                    </div>
+                                    <div style={{ marginTop: '8px', fontSize: '0.8rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 10px', borderRadius: '8px', display: 'inline-block' }}>
+                                        Al adicionar <strong>{addedNum} {unitStr}</strong> el nuevo total será <strong>{newTotal} {unitStr}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleMergeDuplicateItem}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.85rem 1.5rem',
+                                        backgroundColor: '#0D7A57',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontWeight: 800,
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    Sumar cantidad a la línea existente (Nuevo total: {newTotal} {unitStr})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleKeepDuplicateAsSeparate}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem 1.5rem',
+                                        backgroundColor: '#2563EB',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontWeight: 700,
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem',
+                                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+                                    }}
+                                >
+                                    Agregar como una fila separada
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDuplicateConfirm(null)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem 1.5rem',
+                                        backgroundColor: '#F3F4F6',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontWeight: 700,
+                                        color: '#4B5563',
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {toast && (
                 <div style={{

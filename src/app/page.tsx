@@ -320,6 +320,29 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
               padding: 5.5rem 1.5rem 3.5rem;
             }
           }
+
+          .sticky-catalog-controls {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 85px;
+            z-index: 45;
+            background-color: rgba(251, 250, 245, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 1rem 0 1.25rem 0;
+            margin: 0 -1rem 2rem -1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+          }
+
+          @media (max-width: 768px) {
+            .sticky-catalog-controls {
+              top: 85px;
+              padding: 0.75rem 0 1rem 0;
+              margin: 0 -0.5rem 1.5rem -0.5rem;
+            }
+          }
         `}} />
 
         <div className="hero-left">
@@ -365,14 +388,32 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       </Suspense>
       
       {/* CATALOG SECTION */}
-      <section id="catalog" className="container" style={{ padding: '1.8rem 1rem 1rem', scrollMarginTop: '80px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+      <section id="catalog" className="container" style={{ padding: '1.8rem 1rem 1rem', scrollMarginTop: '80px', position: 'relative' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <h2 className="section-title" style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.8rem', fontWeight: '900' }}>{catalogTitle}</h2>
-          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        </div>
+
+        {/* STICKY SEARCH & CATEGORY FILTERS */}
+        <div 
+          className="sticky-catalog-controls"
+          style={{
+            position: 'sticky',
+            top: '85px',
+            zIndex: 45,
+            backgroundColor: 'rgba(251, 250, 245, 0.95)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            padding: '1rem 0 1.25rem 0',
+            margin: '0 -1rem 2rem -1rem',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+            boxShadow: '0 8px 24px -6px rgba(0, 0, 0, 0.05)'
+          }}
+        >
+          <div style={{ maxWidth: '600px', margin: '0 auto', padding: '0 0.5rem' }}>
             <SearchBar placeholder={t.searchPlaceholder} />
           </div>
 
-          <Suspense fallback={<div style={{ height: '40px', marginTop: '1.5rem' }}></div>}>
+          <Suspense fallback={<div style={{ height: '40px', marginTop: '1.2rem' }}></div>}>
             <CategoryPills category={category} q={q} locale={locale} />
           </Suspense>
         </div>

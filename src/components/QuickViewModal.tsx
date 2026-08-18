@@ -7,6 +7,7 @@ import { useCart } from '../lib/cartContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 import { useAuth } from '../lib/authContext';
+import { resolvePricingModelId } from '../lib/pricingUtils';
 
 // Keep interface consistent with usage
 interface Product {
@@ -47,7 +48,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
 
     useEffect(() => {
         const fetchFreshProduct = async () => {
-            const pricingModelId = profile?.pricing_model_id || (profile ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee');
+            const pricingModelId = resolvePricingModelId(profile);
             const { data, error } = await supabase
                 .from('products')
                 .select('*, pricing_model_prices(price)')

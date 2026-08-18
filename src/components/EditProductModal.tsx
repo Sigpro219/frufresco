@@ -158,6 +158,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         return publicUrl;
     };
 
+    const [variantNotice, setVariantNotice] = useState<string | null>(null);
+
     // LÓGICA DE VARIANTES
     const addOption = () => {
         if (options.length < 3) {
@@ -174,26 +176,45 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         setOptions(newOptions);
     };
 
+    const updateOptionValues = (index: number, newValues: string[]) => {
+        const newOptions = [...options];
+        newOptions[index] = {
+            ...newOptions[index],
+            values: newValues
+        };
+        setOptions(newOptions);
+    };
+
+    const clearOptionValues = (index: number) => {
+        const newOptions = [...options];
+        newOptions[index] = {
+            ...newOptions[index],
+            values: []
+        };
+        setOptions(newOptions);
+    };
+
     const removeOption = (index: number) => {
         const newOptions = options.filter((_, i) => i !== index);
         setOptions(newOptions);
-        // Si ya no quedan opciones, las variantes deben limpiarse automáticamente
         if (newOptions.length === 0) {
             setVariants([]);
+            setVariantNotice('Se han eliminado las combinaciones.');
         }
     };
 
 
-    const generateVariants = () => {
-        if (options.length === 0) {
-            if (confirm('¿Eliminar todas las combinaciones generadas?')) {
-                setVariants([]);
-            }
+    const generateVariants = (optsToUse = options) => {
+        const activeOptions = optsToUse.filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0);
+
+        if (activeOptions.length === 0) {
+            setVariants([]);
+            setVariantNotice('⚠️ No hay opciones seleccionadas en ningún atributo. Se limpiaron las combinaciones.');
             return;
         }
 
         let results: any[] = [{}];
-        options.forEach(opt => {
+        activeOptions.forEach(opt => {
             const temp: any[] = [];
             results.forEach(res => {
                 opt.values.forEach((val: string) => {
@@ -229,11 +250,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 sku: variantSku,
                 price_adj_pct: existing?.price_adj_pct || existing?.price_adjustment_percent || 0,
                 image_url: existing?.image_url || null,
-                show_on_web: existing?.show_on_web !== false // Default to true if new or previously true
+                show_on_web: existing?.show_on_web !== false
             };
         });
 
         setVariants(newVariants);
+        const summaryStr = activeOptions.map(o => `${o.name} (${o.values.length})`).join(' + ');
+        setVariantNotice(`✅ ¡Combinaciones recalculadas! ${newVariants.length} combinaciones generadas con [ ${summaryStr} ]`);
     };
 
     const updateVariantPrice = (id: string, price: number) => {
@@ -339,7 +362,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 inventory_group: formData.inventory_group,
                 purchase_sublist: formData.purchase_sublist,
                 utility_deviation_pct: formData.utility_deviation_pct || 0,
-                options_config: options.map(opt => {
+                options_config: options.filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0).map(opt => {
                     const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
                     return {
                         name: opt.name,
@@ -1243,7 +1266,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     const newValues = e.target.checked
                                                                         ? [...opt.values, val]
                                                                         : opt.values.filter((v: string) => v !== val);
-                                                                    updateOption(idx, opt.name, newValues.join(', '));
+                                                                    updateOptionValues(idx, newValues);
                                                                 }}
                                                                 style={{ width: '16px', height: '16px', accentColor: '#3B82F6' }}
                                                             />
@@ -1273,19 +1296,25 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 {options.length > 0 ? (
                                     <button
                                         type="button"
-                                        onClick={generateVariants}
-                                        style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
+                                        onClick={() => generateVariants()}
+                                        style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem', transition: 'all 0.2s' }}
                                     >
                                         🔄 Regenerar Combinaciones
                                     </button>
                                 ) : variants.length > 0 && (
                                     <button
                                         type="button"
-                                        onClick={generateVariants}
+                                        onClick={() => generateVariants()}
                                         style={{ padding: '1rem', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
                                     >
                                         🗑️ Borrar Combinaciones
                                     </button>
+                                )}
+
+                                {variantNotice && (
+                                    <div style={{ marginTop: '0.6rem', padding: '0.8rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', backgroundColor: variantNotice.includes('⚠️') ? '#FEF3C7' : '#ECFDF5', color: variantNotice.includes('⚠️') ? '#92400E' : '#065F46', border: `1px solid ${variantNotice.includes('⚠️') ? '#FCD34D' : '#6EE7B7'}` }}>
+                                        {variantNotice}
+                                    </div>
                                 )}
 
                                 {variants.length > 0 && (

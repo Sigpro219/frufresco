@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
+import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -248,6 +249,8 @@ function CreateQuotePageContent() {
             }
             if (resolvedModelId) {
                 setSelectedModelId(resolvedModelId);
+            } else {
+                setSelectedModelId(GENERAL_INSTITUCIONAL_ID);
             }
             // Cargar máscaras de productos (Nicknames) para este cliente
             try {

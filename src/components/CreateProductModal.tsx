@@ -219,10 +219,17 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
     };
 
     const generateVariants = () => {
-        if (options.length === 0) return;
+        const activeOptions = options.filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0);
+
+        if (activeOptions.length === 0) {
+            if (variants.length > 0) {
+                setVariants([]);
+            }
+            return;
+        }
 
         let results: any[] = [{}];
-        options.forEach(opt => {
+        activeOptions.forEach(opt => {
             const temp: any[] = [];
             results.forEach(res => {
                 opt.values.forEach((val: string) => {

@@ -1087,7 +1087,7 @@ export default function MasterProductsPage() {
         const factors = query.split(',').map(f => f.trim()).filter(Boolean);
 
         return result.filter(p => {
-            return factors.every(factor => {
+            const matchesSearch = factors.every(factor => {
                 // 1. Lógica de IDs (#3, #15...)
                 if (factor.startsWith('#')) {
                     const id = factor.slice(1);

@@ -103,12 +103,20 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Los productos de tu última compra no están disponibles actualmente.' }, { status: 404 });
         }
 
+        // Modelo por defecto B2C: Clientes Hogar
+        const CLIENTES_HOGAR_ID = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+
         const { data: dbProducts, error: dbErr } = await supabase
             .from('products')
-            .select('id, name, display_name, base_price, unit_of_measure, image_url, is_active, iva_rate, weight_kg, web_conversion_factor')
+            .select(`
+                id, name, display_name, base_price, unit_of_measure, image_url, 
+                is_active, iva_rate, weight_kg, web_conversion_factor,
+                pricing_model_prices(price, model_id)
+            `)
             .in('id', productIds);
 
         if (dbErr || !dbProducts) {
+            console.error('Error fetching dbProducts in last-purchase API:', dbErr);
             return NextResponse.json({ error: 'Error al consultar precios del catálogo.' }, { status: 500 });
         }
 
@@ -117,13 +125,21 @@ export async function GET(request: Request) {
         for (const item of orderItems) {
             const dbProd = dbProducts.find((p: any) => p.id === item.product_id);
             if (dbProd && dbProd.is_active !== false) {
-                // PRECIO VIGENTE DE HOY EN EL CATÁLOGO
-                const currentPrice = Math.ceil(((dbProd.base_price || 0) * (dbProd.web_conversion_factor || 1)) / 50) * 50;
+                // PRECIO VIGENTE B2C (CLIENTES HOGAR) DE HOY EN EL CATÁLOGO
+                const b2cPriceObj = dbProd.pricing_model_prices?.find(
+                    (p: any) => p.model_id === CLIENTES_HOGAR_ID
+                );
+                const rawPrice = Number(b2cPriceObj?.price) > 0 
+                    ? Number(b2cPriceObj.price) 
+                    : (Number(dbProd.pricing_model_prices?.[0]?.price) || Number(dbProd.base_price) || 0);
+
+                const conversionFactor = Number(dbProd.web_conversion_factor) || 1;
+                const currentPrice = Math.ceil((rawPrice * conversionFactor) / 50) * 50;
 
                 itemsToImport.push({
                     id: dbProd.id,
                     name: dbProd.display_name || dbProd.name,
-                    price: currentPrice, // ¡PRECIO ACTUALIZADO HOY!
+                    price: currentPrice, // ¡PRECIO ACTUALIZADO HOY CON MODELO B2C!
                     iva_rate: dbProd.iva_rate || 0,
                     unit: dbProd.unit_of_measure || 'Kg',
                     quantity: Number(item.quantity) || 1,

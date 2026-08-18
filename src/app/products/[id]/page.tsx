@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Apple } from 'lucide-react';
 import { translations, Locale } from '@/lib/translations';
 import { createServerSideClient } from '@/lib/supabase/server';
+import { resolvePricingModelId, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,20 +19,17 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     const { data: { session } } = await serverSupabase.auth.getSession();
     const userId = session?.user?.id;
 
-    let pricingModelId = userId ? 'd90a91e5-827c-473d-9d4f-3e28c7c91e15' : 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2B (General Institucional) vs B2C
+    let pricingModelId = CLIENTES_HOGAR_ID;
     let agreementItems: any[] = [];
     let hasActiveAgreement = false;
 
     if (userId) {
         const { data: profile } = await serverSupabase
             .from('profiles')
-            .select('pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
+            .select('id, role, profile_type, company_name, pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
             .eq('id', userId)
             .single();
-        const resolvedModelId = profile?.pricing_model_id || (profile?.parent as any)?.pricing_model_id;
-        if (resolvedModelId) {
-            pricingModelId = resolvedModelId;
-        }
+        pricingModelId = resolvePricingModelId(profile);
 
         // Check if this client (or their matrix parent) has an active agreement quote
         const effectiveClientId = profile?.parent_id || userId;
