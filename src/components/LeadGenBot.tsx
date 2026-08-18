@@ -105,8 +105,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     
     // Step 1 Form State
     const [selectedType, setSelectedType] = useState<string>('Restaurante');
-    const [selectedCategories, setSelectedCategories] = useState<string[]>(['Frutas', 'Verduras']);
-    const [selectedSize, setSelectedSize] = useState<string>('Entre $10M y $30M COP (Mediano)');
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedSize, setSelectedSize] = useState<string>('');
 
     // Step 2 Form State
     const [addressInput, setAddressInput] = useState<string>('');
@@ -121,8 +121,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
         is_near_coverage: false,
         distance_to_coverage: 0,
         wants_coverage_call: false,
-        company_name: '', nit: '', business_type: 'Restaurante', business_size: 'Entre $10M y $30M COP (Mediano)', 
-        selected_categories: ['Frutas', 'Verduras'],
+        company_name: '', nit: '', business_type: 'Restaurante', business_size: '', 
+        selected_categories: [],
         contact_name: '', phone: '', email: '', 
         address: '', municipality: '', latitude: null, longitude: null 
     });
@@ -165,7 +165,13 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     };
 
     useEffect(() => {
-        scrollToBottom();
+        if (currentStep === 1 && messages.length <= 2) {
+            if (messagesContainerRef.current) {
+                messagesContainerRef.current.scrollTop = 0;
+            }
+        } else {
+            scrollToBottom();
+        }
     }, [messages, currentStep, isTyping]);
 
     // Handle Step 1 Submission -> Move to Step 2
@@ -1251,7 +1257,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 📄 Tu Documento Oficial de Pre-Cotización está listo:
                             </p>
                             <a 
-                                href={`/admin/commercial/quotes/${quoteId}/print`} 
+                                href={`/quotes/${quoteId}/print`} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 style={{
