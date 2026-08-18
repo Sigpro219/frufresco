@@ -299,7 +299,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                     ✕
                 </button>
 
-                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem' }}>
                     <div style={{
                         width: '140px',
                         height: '140px',
@@ -331,7 +331,52 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                     </div>
                 </div>
 
-                <div style={{ height: '1px', backgroundColor: '#F3F4F6', margin: '1.5rem 0' }}></div>
+                {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL CARRITO/PEDIDO */}
+                {(() => {
+                    const finalName = currentVariant
+                        ? `${product.name} (${Object.values(selections).map(v => v.includes('|') ? v.split('|')[0] : v).join(', ')})`
+                        : product.name;
+                    const existingInCart = items?.find(item => item.id === product.id && item.name === finalName)
+                        || items?.find(item => item.id === product.id);
+                    if (!existingInCart || onUpdateQuantity) return null;
+
+                    const currentQty = Number(existingInCart.quantity || 0);
+                    const addedNum = Number(quantity) || 0;
+                    const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
+                    const productName = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name);
+
+                    return (
+                        <div style={{
+                            backgroundColor: '#FFFBEB',
+                            border: '1.5px solid #F59E0B',
+                            borderRadius: '14px',
+                            padding: '0.85rem 1rem',
+                            marginBottom: '1rem',
+                            textAlign: 'left',
+                            fontSize: '0.82rem',
+                            color: '#92400E',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
+                        }}>
+                            <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <div>
+                                <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
+                                    🛒 {locale === 'en' ? 'Item already included in your order' : 'Insumo ya incluido en tu pedido'}
+                                </div>
+                                <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
+                                    {locale === 'en' ? 'You already have' : 'Ya tienes'} <strong style={{ color: '#B45309' }}>{currentQty} {existingInCart.unit || activeUnit}</strong> {locale === 'en' ? 'of' : 'de'} {productName} {locale === 'en' ? 'in your order.' : 'en tu pedido.'}
+                                </div>
+                                <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
+                                    {locale === 'en' ? 'Adding' : 'Al adicionar'} <strong>{quantity} {activeUnit}</strong> {locale === 'en' ? 'the new total will be' : 'el nuevo total será'} <strong>{newTotal} {existingInCart.unit || activeUnit}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                <div style={{ height: '1px', backgroundColor: '#F3F4F6', margin: '1.25rem 0' }}></div>
 
                 <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1.5rem', paddingRight: '0.5rem' }}>
                     {Object.entries(displayOptions)
@@ -505,51 +550,6 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                          </div>
                     </div>
                 </div>
-
-                {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL CARRITO/PEDIDO */}
-                {(() => {
-                    const finalName = currentVariant
-                        ? `${product.name} (${Object.values(selections).map(v => v.includes('|') ? v.split('|')[0] : v).join(', ')})`
-                        : product.name;
-                    const existingInCart = items?.find(item => item.id === product.id && item.name === finalName)
-                        || items?.find(item => item.id === product.id);
-                    if (!existingInCart || onUpdateQuantity) return null;
-
-                    const currentQty = Number(existingInCart.quantity || 0);
-                    const addedNum = Number(quantity) || 0;
-                    const newTotal = Math.round((currentQty + addedNum) * 100) / 100;
-                    const productName = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name);
-
-                    return (
-                        <div style={{
-                            backgroundColor: '#FFFBEB',
-                            border: '1.5px solid #F59E0B',
-                            borderRadius: '14px',
-                            padding: '0.85rem 1rem',
-                            marginBottom: '1rem',
-                            textAlign: 'left',
-                            fontSize: '0.82rem',
-                            color: '#92400E',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '10px',
-                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
-                        }}>
-                            <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
-                            <div>
-                                <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309' }}>
-                                    🛒 {locale === 'en' ? 'Item already included in your order' : 'Insumo ya incluido en tu pedido'}
-                                </div>
-                                <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
-                                    {locale === 'en' ? 'You already have' : 'Ya tienes'} <strong style={{ color: '#B45309' }}>{currentQty} {existingInCart.unit || activeUnit}</strong> {locale === 'en' ? 'of' : 'de'} {productName} {locale === 'en' ? 'in your order.' : 'en tu pedido.'}
-                                </div>
-                                <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
-                                    {locale === 'en' ? 'Adding' : 'Al adicionar'} <strong>{quantity} {activeUnit}</strong> {locale === 'en' ? 'the new total will be' : 'el nuevo total será'} <strong>{newTotal} {existingInCart.unit || activeUnit}</strong>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {!isAvailable && (
