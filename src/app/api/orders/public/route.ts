@@ -190,64 +190,131 @@ export async function POST(request: Request) {
             const cLat = customer_info?.latitude || order.latitude || null;
             const cLng = customer_info?.longitude || order.longitude || null;
 
-            if (isB2C && (cPhone || cEmail || cName)) {
-                let existingProfileId = order.profile_id;
+            // Recipient data
+            const recNameMatch = (order.special_notes || '').match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*([^|]+)\|/i);
+            const recPhoneMatch = (order.special_notes || '').match(/\[DESTINATARIO[^\]]*?Tel:\s*([^\]\n|]+)/i);
+            const recName = customer_info?.recipient_name || (recNameMatch ? recNameMatch[1].trim() : null);
+            const recPhone = customer_info?.recipient_phone || (recPhoneMatch ? recPhoneMatch[1].trim() : null);
 
-                if (!existingProfileId && (cPhone || cEmail)) {
-                    let query = supabase.from('profiles').select('id, contact_name, address').eq('role', 'b2c_client');
+            if (isB2C && (cPhone || cEmail || cName)) {
+                let existingProfile: any = null;
+
+                if (order.profile_id) {
+                    const { data: pData } = await supabase.from('profiles').select('id, contact_name, address, logistics_data').eq('id', order.profile_id).maybeSingle();
+                    if (pData) existingProfile = pData;
+                }
+
+                if (!existingProfile && (cPhone || cEmail || cId)) {
+                    let query = supabase.from('profiles').select('id, contact_name, address, logistics_data').eq('role', 'b2c_client');
                     if (cPhone) {
                         query = query.eq('contact_phone', cPhone);
                     } else if (cEmail) {
                         query = query.eq('email', cEmail);
+                    } else if (cId) {
+                        query = query.eq('nit', cId);
                     }
                     const { data: matchedProfiles } = await query.maybeSingle();
                     if (matchedProfiles) {
-                        existingProfileId = matchedProfiles.id;
+                        existingProfile = matchedProfiles;
                     }
                 }
 
-                if (existingProfileId) {
-                    order.profile_id = existingProfileId;
-                    if (cAddress || (cLat && cLng)) {
+                const compileBeneficiaries = (existingList: any[] = []) => {
+                    const map = new Map<string, any>();
+                    (existingList || []).forEach(b => {
+                        if (b && b.name) {
+                            const k = `${b.name.toLowerCase().trim()}_${(b.phone || '').replace(/\D/g, '')}`;
+                            map.set(k, b);
+                        }
+                    });
+                    if (recName) {
+                        const newKey = `${recName.toLowerCase().trim()}_${(recPhone || '').replace(/\D/g, '')}`;
+                        map.set(newKey, {
+                            name: recName,
+                            phone: recPhone || '',
+                            address: order.shipping_address || cAddress,
+                            latitude: cLat,
+                            longitude: cLng,
+                            last_order_date: new Date().toISOString()
+                        });
+                    }
+                    return Array.from(map.values());
+                };
+
+                if (existingProfile) {
+                    order.profile_id = existingProfile.id;
+                    const prevBeneficiaries = existingProfile.beneficiaries || existingProfile.logistics_data?.beneficiaries || [];
+                    const updatedBeneficiaries = compileBeneficiaries(prevBeneficiaries);
+                    const updatedLogistics = { ...(existingProfile.logistics_data || {}), beneficiaries: updatedBeneficiaries };
+
+                    const updateFields: any = {
+                        address: cAddress || undefined,
+                        latitude: cLat || undefined,
+                        longitude: cLng || undefined,
+                        logistics_data: updatedLogistics,
+                        geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
+                    };
+
+                    try {
                         await supabase
                             .from('profiles')
-                            .update({
-                                address: cAddress || undefined,
-                                latitude: cLat || undefined,
-                                longitude: cLng || undefined,
-                                geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
-                            })
-                            .eq('id', existingProfileId);
+                            .update({ ...updateFields, beneficiaries: updatedBeneficiaries })
+                            .eq('id', existingProfile.id);
+                    } catch {
+                        // Fallback without beneficiaries column if table not yet migrated
+                        await supabase
+                            .from('profiles')
+                            .update(updateFields)
+                            .eq('id', existingProfile.id);
                     }
                 } else if (cName && (cPhone || cEmail)) {
                     const newProfileId = crypto.randomUUID();
-                    const { data: newProfile, error: profileCreateErr } = await supabase
-                        .from('profiles')
-                        .insert({
-                            id: newProfileId,
-                            role: 'b2c_client',
-                            company_name: cName,
-                            contact_name: cName,
-                            contact_phone: cPhone,
-                            phone: cPhone,
-                            email: cEmail || null,
-                            nit: cId || null,
-                            address: cAddress || 'Dirección de entrega web',
-                            city: 'Bogotá',
-                            municipality: 'Bogotá',
-                            latitude: cLat || null,
-                            longitude: cLng || null,
-                            is_active: true,
-                            pricing_model_id: CLIENTES_HOGAR_ID,
-                            geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
-                        })
-                        .select('id')
-                        .single();
+                    const initialBeneficiaries = compileBeneficiaries([]);
+                    const initialLogistics = { beneficiaries: initialBeneficiaries };
 
-                    if (!profileCreateErr && newProfile) {
+                    const insertFields: any = {
+                        id: newProfileId,
+                        role: 'b2c_client',
+                        company_name: cName,
+                        contact_name: cName,
+                        contact_phone: cPhone,
+                        phone: cPhone,
+                        email: cEmail || null,
+                        nit: cId || null,
+                        address: cAddress || 'Dirección de entrega web',
+                        city: 'Bogotá',
+                        municipality: 'Bogotá',
+                        latitude: cLat || null,
+                        longitude: cLng || null,
+                        is_active: true,
+                        pricing_model_id: CLIENTES_HOGAR_ID,
+                        logistics_data: initialLogistics,
+                        geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
+                    };
+
+                    let newProfile = null;
+                    try {
+                        const { data, error } = await supabase
+                            .from('profiles')
+                            .insert({ ...insertFields, beneficiaries: initialBeneficiaries })
+                            .select('id')
+                            .single();
+                        if (!error) newProfile = data;
+                    } catch {
+                        // Fallback without beneficiaries column
+                    }
+
+                    if (!newProfile) {
+                        const { data, error: fbErr } = await supabase
+                            .from('profiles')
+                            .insert(insertFields)
+                            .select('id')
+                            .single();
+                        if (!fbErr) newProfile = data;
+                    }
+
+                    if (newProfile) {
                         order.profile_id = newProfile.id;
-                    } else if (profileCreateErr) {
-                        console.error('Error creating B2C profile during checkout:', profileCreateErr.message);
                     }
                 }
             }

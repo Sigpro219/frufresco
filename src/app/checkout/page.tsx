@@ -93,6 +93,8 @@ export default function CheckoutPage() {
     const [isGiftForRecipient, setIsGiftForRecipient] = useState(false);
     const [recipientName, setRecipientName] = useState('');
     const [recipientPhone, setRecipientPhone] = useState('');
+    const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
+    const [selectedBeneficiaryIdx, setSelectedBeneficiaryIdx] = useState<number | 'new'>('new');
 
     const itemBreakdownSummary = useMemo(() => {
         if (!items || items.length === 0) return '';
@@ -347,6 +349,9 @@ export default function CheckoutPage() {
                                 setLongitude(null);
                                 setOriginalCoords(null);
                             }
+                            if (Array.isArray(data.beneficiaries) && data.beneficiaries.length > 0) {
+                                setBeneficiaries(data.beneficiaries);
+                            }
                             setIsProfileMatched(false);
                         } else {
                             setLookupError(data.error || 'El celular no coincide.');
@@ -515,6 +520,10 @@ export default function CheckoutPage() {
                 setAddress(profile.address_main);
                 localStorage.setItem('checkout_address', profile.address_main);
             }
+            const profileBeneficiaries = (profile as any).beneficiaries || (profile as any).logistics_data?.beneficiaries || [];
+            if (Array.isArray(profileBeneficiaries) && profileBeneficiaries.length > 0) {
+                setBeneficiaries(profileBeneficiaries);
+            }
             console.log('👤 profile found, filling member data...');
         }
     }, [profile]);
@@ -668,7 +677,10 @@ export default function CheckoutPage() {
                         identification,
                         address,
                         latitude: safeLat,
-                        longitude: safeLng
+                        longitude: safeLng,
+                        is_gift: isGiftForRecipient,
+                        recipient_name: isGiftForRecipient ? recipientName : null,
+                        recipient_phone: isGiftForRecipient ? recipientPhone : null
                     }
                 })
             });
@@ -1492,6 +1504,82 @@ export default function CheckoutPage() {
                                             {locale === 'es' ? 'Datos de quien recibe el pedido' : 'Recipient Information'}
                                         </span>
                                     </div>
+
+                                    {/* Subgalería / Selector de Beneficiarios Guardados */}
+                                    {beneficiaries.length > 0 && (
+                                        <div style={{
+                                            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                                            padding: '0.75rem 0.9rem',
+                                            borderRadius: '12px',
+                                            border: '1px dashed #6EE7B7',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '8px'
+                                        }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                🎁 {locale === 'es' ? 'Destinatarios frecuentes guardados:' : 'Saved Frequent Recipients:'}
+                                            </div>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedBeneficiaryIdx('new');
+                                                        setRecipientName('');
+                                                        setRecipientPhone('');
+                                                    }}
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.74rem',
+                                                        fontWeight: '700',
+                                                        border: selectedBeneficiaryIdx === 'new' ? '1.5px solid #059669' : '1px solid #CBD5E1',
+                                                        backgroundColor: selectedBeneficiaryIdx === 'new' ? '#059669' : 'white',
+                                                        color: selectedBeneficiaryIdx === 'new' ? 'white' : '#64748B',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                >
+                                                    + {locale === 'es' ? 'Nuevo Destinatario' : 'New Recipient'}
+                                                </button>
+                                                {beneficiaries.map((b, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedBeneficiaryIdx(idx);
+                                                            setRecipientName(b.name || '');
+                                                            setRecipientPhone(b.phone || '');
+                                                            if (b.address) {
+                                                                setAddress(b.address);
+                                                                localStorage.setItem('checkout_address', b.address);
+                                                            }
+                                                            if (b.latitude && b.longitude) {
+                                                                setLatitude(parseFloat(b.latitude));
+                                                                setLongitude(parseFloat(b.longitude));
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            padding: '4px 10px',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.74rem',
+                                                            fontWeight: '700',
+                                                            border: selectedBeneficiaryIdx === idx ? '1.5px solid #059669' : '1px solid #A7F3D0',
+                                                            backgroundColor: selectedBeneficiaryIdx === idx ? '#059669' : '#ECFDF5',
+                                                            color: selectedBeneficiaryIdx === idx ? 'white' : '#065F46',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <span>👤 {b.name}</span>
+                                                        <span style={{ opacity: selectedBeneficiaryIdx === idx ? 0.9 : 0.65, fontSize: '0.68rem' }}>({b.phone})</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
                                         <div>

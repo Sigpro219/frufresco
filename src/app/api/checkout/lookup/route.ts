@@ -100,13 +100,73 @@ export async function POST(request: Request) {
 
             if (clientEnteredPhone && dbPhone && clientEnteredPhone === dbPhone) {
                 console.log(`Successfully verified and unlocked profile/history for: ${normalizedEmail}`);
+
+                // Fetch or compile gift beneficiaries from profile and historical orders
+                const beneficiariesMap = new Map<string, any>();
+
+                // From profile logistics_data / beneficiaries if present
+                if (profilesList && profilesList.length > 0) {
+                    const prof = profilesList[0] as any;
+                    const savedBeneficiaries = prof.beneficiaries || prof.logistics_data?.beneficiaries || [];
+                    if (Array.isArray(savedBeneficiaries)) {
+                        savedBeneficiaries.forEach((b: any) => {
+                            if (b && b.name) {
+                                const key = `${b.name.toLowerCase().trim()}_${(b.phone || '').replace(/\D/g, '')}`;
+                                beneficiariesMap.set(key, b);
+                            }
+                        });
+                    }
+                }
+
+                // From historical orders
+                try {
+                    const { data: pastGiftOrders } = await supabase
+                        .from('orders')
+                        .select('shipping_address, latitude, longitude, special_notes, created_at')
+                        .or(`profile_id.eq.${clientRecord.id},special_notes.ilike.%Email: ${normalizedEmail}%,special_notes.ilike.%ID: ${normalizedNit}%`)
+                        .ilike('special_notes', '%DESTINATARIO / RECIBE EN PUERTA%')
+                        .order('created_at', { ascending: false })
+                        .limit(20);
+
+                    if (pastGiftOrders) {
+                        for (const ord of pastGiftOrders) {
+                            const notes = ord.special_notes || '';
+                            const recNameMatch = notes.match(/\[DESTINATARIO\s*\/\s*RECIBE\s*EN\s*PUERTA:\s*([^|]+)\|/i);
+                            const recPhoneMatch = notes.match(/\[DESTINATARIO[^\]]*?Tel:\s*([^\]\n|]+)/i);
+
+                            if (recNameMatch) {
+                                const rName = recNameMatch[1].trim();
+                                const rPhone = recPhoneMatch ? recPhoneMatch[1].trim() : '';
+                                const key = `${rName.toLowerCase()}_${rPhone.replace(/\D/g, '')}`;
+
+                                if (!beneficiariesMap.has(key)) {
+                                    beneficiariesMap.set(key, {
+                                        name: rName,
+                                        phone: rPhone,
+                                        address: ord.shipping_address || '',
+                                        latitude: ord.latitude ? parseFloat(ord.latitude) : null,
+                                        longitude: ord.longitude ? parseFloat(ord.longitude) : null,
+                                        last_order_date: ord.created_at
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (bErr) {
+                    console.warn('Error fetching past beneficiaries in lookup:', bErr);
+                }
+
+                const compiledBeneficiaries = Array.from(beneficiariesMap.values());
+
                 return NextResponse.json({
                     verified: true,
+                    profile_id: clientRecord.id,
                     name: clientRecord.name,
                     address: clientRecord.address,
                     phone: clientRecord.phone,
                     latitude: clientRecord.latitude,
-                    longitude: clientRecord.longitude
+                    longitude: clientRecord.longitude,
+                    beneficiaries: compiledBeneficiaries
                 });
             } else {
                 console.log(`Phone verification failed for: ${normalizedEmail}. Entered: ${clientEnteredPhone}, DB: ${dbPhone}`);
