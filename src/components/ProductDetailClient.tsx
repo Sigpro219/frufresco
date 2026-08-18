@@ -111,7 +111,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         return null;
     };
 
-    // Helper para formatear visualmente valores de opciones con peso / gramaje
+    // Helper para formatear visualmente valores de opciones con peso en Kg
     const formatOptionDisplay = (val: string, isEn?: boolean): string => {
         if (!val) return '';
         if (val.includes('|')) {
@@ -122,15 +122,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             if (rawWeight) {
                 const grams = parseFloat(rawWeight);
                 if (!isNaN(grams) && grams > 0) {
-                    if (grams >= 1000) {
-                        const kg = grams / 1000;
-                        const formattedKg = kg % 1 === 0 ? kg.toString() : kg.toFixed(1).replace('.', ',');
-                        return isEn 
-                            ? `${unitName} (~${formattedKg} kg / ${grams.toLocaleString('en-US')}g)` 
-                            : `${unitName} (~${formattedKg} kg / ${grams.toLocaleString('es-CO')}g)`;
-                    } else {
-                        return `${unitName} (~${grams}g)`;
-                    }
+                    const kg = grams / 1000;
+                    const formattedKg = kg % 1 === 0 ? kg.toString() : (isEn ? kg.toFixed(1) : kg.toFixed(1).replace('.', ','));
+                    return `${unitName} (~${formattedKg} kg)`;
                 }
                 return `${unitName} (${rawWeight})`;
             }
