@@ -1,60 +1,26 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2, Inbox, Plus, ChevronRight, FileText, RefreshCw } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight, FileText } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 
 export default function QuotesListPage() {
     const [quotes, setQuotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const fetchQuotes = async (showSpinner = true) => {
-        if (showSpinner) {
-            setLoading(true);
-        } else {
-            setIsRefreshing(true);
-        }
+    const fetchQuotes = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('quotes')
+            .select('*, profiles:client_id(role, company_name, contact_name), leads:lead_id(company_name, contact_name, business_type, business_size)')
+            .neq('status', 'agreement')
+            .order('created_at', { ascending: false });
 
-        try {
-            const { data, error } = await supabase
-                .from('quotes')
-                .select('*, profiles:client_id(role, company_name, contact_name), leads:lead_id(company_name, contact_name, business_type, business_size)')
-                .neq('status', 'agreement')
-                .order('created_at', { ascending: false });
-
-            if (data) setQuotes(data);
-        } catch (err) {
-            console.error('Error fetching quotes:', err);
-        } finally {
-            if (showSpinner) setLoading(false);
-            setIsRefreshing(false);
-        }
+        if (data) setQuotes(data);
+        setLoading(false);
     };
-
-    useEffect(() => {
-        fetchQuotes(true);
-
-        // 1. Supabase Realtime Channel
-        const channel = supabase
-            .channel('commercial-quotes-realtime-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, () => {
-                fetchQuotes(false);
-            })
-            .subscribe();
-
-        // 2. Background Polling Fallback (cada 8 segundos)
-        const interval = setInterval(() => {
-            fetchQuotes(false);
-        }, 8000);
-
-        return () => {
-            supabase.removeChannel(channel);
-            clearInterval(interval);
-        };
-    }, []);
 
     const renderClientTypeBadge = (quote: any) => {
         if (quote.lead_id || quote.leads) {
@@ -185,68 +151,37 @@ export default function QuotesListPage() {
                     </Link>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-                    <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.025em' }}>Historial de Cotizaciones</h1>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.78rem', color: '#059669', fontWeight: '700' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block', boxShadow: '0 0 6px #10B981' }} />
-                            <span>Sincronización en tiempo real activa (Auto-Refresh)</span>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <button
-                            onClick={() => fetchQuotes(false)}
-                            disabled={isRefreshing || loading}
-                            title="Actualizar cotizaciones"
-                            style={{
-                                padding: '0.65rem 1rem',
-                                backgroundColor: 'white',
-                                color: THEME.colors.textSecondary,
-                                border: `1px solid ${THEME.colors.border}`,
-                                borderRadius: THEME.radius.md,
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                fontSize: '0.82rem',
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.025em' }}>Historial de Cotizaciones</h1>
+                    <Link href="/admin/commercial/quotes/create">
+                        <button 
+                            style={{ 
+                                padding: '0.75rem 1.5rem', 
+                                backgroundColor: THEME.colors.primary, 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: THEME.radius.md, 
+                                fontWeight: '700', 
+                                cursor: 'pointer', 
+                                fontSize: '0.9rem',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.2s',
                                 boxShadow: THEME.shadow.sm
                             }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                e.currentTarget.style.transform = 'translateY(0)';
+                            }}
                         >
-                            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} style={{ transition: 'transform 0.3s' }} />
-                            <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+                            <Plus size={16} strokeWidth={1.5} /> Nueva Cotización
                         </button>
-                        <Link href="/admin/commercial/quotes/create">
-                            <button 
-                                style={{ 
-                                    padding: '0.75rem 1.5rem', 
-                                    backgroundColor: THEME.colors.primary, 
-                                    color: 'white', 
-                                    border: 'none', 
-                                    borderRadius: THEME.radius.md, 
-                                    fontWeight: '700', 
-                                    cursor: 'pointer', 
-                                    fontSize: '0.9rem',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    transition: 'all 0.2s',
-                                    boxShadow: THEME.shadow.sm
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = THEME.colors.primary;
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                <Plus size={16} strokeWidth={1.5} /> Nueva Cotización
-                            </button>
-                        </Link>
-                    </div>
+                    </Link>
                 </div>
 
                 <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, overflow: 'hidden' }}>
