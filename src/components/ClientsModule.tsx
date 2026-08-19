@@ -1543,7 +1543,7 @@ export default function ClientsModule() {
                 />
             )}
 
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0.75rem 1rem' }}>
+            <div style={{ maxWidth: '1600px', width: '100%', margin: '0 auto', padding: '0.75rem 1.5rem' }}>
                 <header style={{ 
                     marginBottom: '0.85rem', 
                     display: 'flex', 
@@ -2327,17 +2327,17 @@ export default function ClientsModule() {
                                     </div>
                                 ) : (
                                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
+                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2380,16 +2380,16 @@ export default function ClientsModule() {
                                     </div>
                                 ) : (
                                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
+                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2429,16 +2429,16 @@ export default function ClientsModule() {
                                     </div>
                                 ) : (
                                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
+                                                    <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -3959,7 +3959,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isMatriz ? '#F8FAFC' : 'transparent')}
             onClick={onViewDetails}
         >
-            <td style={{ padding: '0.65rem 1.25rem' }}>
+            <td style={{ padding: '0.65rem 0.6rem' }}>
                 <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {client.company_name || client.contact_name}
                 </div>
@@ -4035,18 +4035,18 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     </>
                 )}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem' }}>
+            <td style={{ padding: '0.65rem 0.6rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
                 <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>{client.phone}</div>
                 {client.email && <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', marginTop: '2px' }}>{client.email}</div>}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem' }}>
+            <td style={{ padding: '0.65rem 0.6rem' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
                     {displayCity ? `${displayCity} / ` : ''}{displayMunicipality || '---'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{displayAddress || '---'}</div>
             </td>
-            <td style={{ padding: '0.65rem 1.25rem' }}>
+            <td style={{ padding: '0.65rem 0.6rem' }}>
                 {client.created_at && !isNaN(new Date(client.created_at).getTime()) ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -4061,7 +4061,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>---</span>
                 )}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem' }}>
+            <td style={{ padding: '0.65rem 0.6rem' }}>
                 {isB2B || client.role === 'b2c_client' ? (
                     <div>
                         {client.is_active !== false ? (
@@ -4123,7 +4123,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Hogar</span>
                 )}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem' }}>
+            <td style={{ padding: '0.65rem 0.6rem' }}>
                 {isLead ? (
                     <div>
                         {(client as any).last_contact_date ? (
@@ -4231,7 +4231,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     </div>
                 )}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <td style={{ padding: '0.65rem 0.6rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                 {(() => {
                     const isVerifiedDev = client.is_verified_dev || (client.tags && client.tags.includes('verified_dev'));
                     return (
@@ -4261,8 +4261,8 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     );
                 })()}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px' }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <td style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
                     {!isLead && onEdit && (
                         <button 
                             onClick={onEdit} 

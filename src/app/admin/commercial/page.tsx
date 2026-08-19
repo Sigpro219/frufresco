@@ -227,7 +227,7 @@ export default function CommercialDashboard() {
             
             {/* MAIN TABS */}
             <div style={{ backgroundColor: 'white', borderBottom: `1px solid ${THEME.colors.border}`, padding: '0 2rem' }}>
-                <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', gap: '2rem' }}>
+                <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '2rem' }}>
                     <button 
                         onClick={() => setActiveMainTab('dashboard')}
                         style={{
