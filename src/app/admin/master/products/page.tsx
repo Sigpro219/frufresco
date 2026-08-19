@@ -74,6 +74,7 @@ export default function MasterProductsPage() {
     const [filterWebHeader, setFilterWebHeader] = useState<string>('all');
     const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
     const [filterDevHeader, setFilterDevHeader] = useState<string>('all');
+    const [filterPhotoHeader, setFilterPhotoHeader] = useState<string>('all');
 
     const toggleDevVerified = async (product: Product) => {
         const isCurrentlyVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
@@ -1080,6 +1081,12 @@ export default function MasterProductsPage() {
             result = result.filter(p => !p.is_active);
         }
 
+        if (filterPhotoHeader === 'con_foto') {
+            result = result.filter(p => p.image_url && p.image_url.trim() !== '' && p.image_url !== '0');
+        } else if (filterPhotoHeader === 'sin_foto') {
+            result = result.filter(p => !p.image_url || p.image_url.trim() === '' || p.image_url === '0');
+        }
+
         const query = searchQuery.trim().toLowerCase();
         if (!query) return result;
 
@@ -1098,6 +1105,15 @@ export default function MasterProductsPage() {
                 if (factor.startsWith('@')) {
                     const tag = factor.slice(1);
                     
+                    // Filtro Foto / Imagen (@foto, @confoto, @con-foto, @imagen / @sinfoto, @sin-foto, @sinimagen)
+                    const hasPhoto = Boolean(p.image_url && p.image_url.trim() !== '' && p.image_url !== '0');
+                    if (['foto', 'confoto', 'con-foto', 'imagen', 'conimagen', 'con-imagen', 'photo', 'withphoto'].includes(tag)) {
+                        return hasPhoto;
+                    }
+                    if (['sinfoto', 'sin-foto', 'sin_foto', 'sinimagen', 'sin-imagen', 'sin_imagen', 'nophoto', 'no-photo', 'sinimg', 'sin-img'].includes(tag)) {
+                        return !hasPhoto;
+                    }
+
                     // Filtro IVA (@19, @19%, @0...)
                     if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
                         const rate = parseInt(tag.replace('%', ''));
@@ -1620,6 +1636,8 @@ export default function MasterProductsPage() {
                                     {[
                                         { tag: '@web', desc: 'En Tienda Web' },
                                         { tag: '@oculto', desc: 'No Web' },
+                                        { tag: '@foto', desc: 'Con Foto' },
+                                        { tag: '@sinfoto', desc: 'Sin Foto' },
                                         { tag: '@sindatos', desc: 'Faltan datos' },
                                         { tag: '@activo', desc: 'Habilitados' },
                                         { tag: '@padre', desc: 'Producto Base' },
@@ -1675,7 +1693,33 @@ export default function MasterProductsPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
+                                {/* FOTO */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '80px', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>FOTO</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'photo' ? null : 'photo'); }}
+                                            style={{ background: filterPhotoHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterPhotoHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar por Foto"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'photo' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '150px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                            <div onClick={() => { setFilterPhotoHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterPhotoHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterPhotoHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todas
+                                            </div>
+                                            <div onClick={() => { setFilterPhotoHeader('con_foto'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterPhotoHeader === 'con_foto' ? 'bold' : 'normal', backgroundColor: filterPhotoHeader === 'con_foto' ? '#F1F5F9' : 'transparent' }}>
+                                                📷 Con Foto
+                                            </div>
+                                            <div onClick={() => { setFilterPhotoHeader('sin_foto'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterPhotoHeader === 'sin_foto' ? 'bold' : 'normal', backgroundColor: filterPhotoHeader === 'sin_foto' ? '#F1F5F9' : 'transparent' }}>
+                                                🚫 Sin Foto
+                                            </div>
+                                        </div>
+                                    )}
+                                </th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>ID Contable</th>
 
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
