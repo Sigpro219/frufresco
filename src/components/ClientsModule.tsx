@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import Toast from '@/components/Toast';
@@ -31,6 +31,8 @@ import {
     Building2,
     Users,
     ChevronRight,
+    ChevronDown,
+    Filter,
     Home,
     HelpCircle,
     Info,
@@ -223,6 +225,43 @@ export default function ClientsModule() {
     const [scarcityCustomMessage, setScarcityCustomMessage] = useState('Insumo temporalmente agotado por escasez en el mercado. Notificaremos su disponibilidad tan pronto se restablezca el abastecimiento.');
     const [isScarcitySaving, setIsScarcitySaving] = useState(false);
     const [isSearchingScarcity, setIsSearchingScarcity] = useState(false);
+
+    // Table Header Dropdown Filters State (Like Maestro SKU)
+    const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
+    const [filterLocationHeader, setFilterLocationHeader] = useState<string>('all');
+    const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
+    const [filterAgreementGpsHeader, setFilterAgreementGpsHeader] = useState<string>('all');
+    const [filterDevHeader, setFilterDevHeader] = useState<string>('all');
+
+    useEffect(() => {
+        const handleClickOutside = () => setOpenHeaderDropdown(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
+
+    const availableLocations = useMemo(() => {
+        const currentList = activeTab === 'b2b' ? clientsB2B : activeTab === 'b2c' ? clientsB2C : leads;
+        const locs = new Set<string>();
+        currentList.forEach((c: any) => {
+            if (c.city && typeof c.city === 'string' && c.city.trim() && c.city !== '---') {
+                locs.add(c.city.trim());
+            }
+            if (c.municipality && typeof c.municipality === 'string' && c.municipality.trim() && c.municipality !== '---') {
+                locs.add(c.municipality.trim());
+            }
+        });
+        return Array.from(locs).sort((a, b) => a.localeCompare(b));
+    }, [activeTab, clientsB2B, clientsB2C, leads]);
+
+    const hasActiveHeaderFilters = filterLocationHeader !== 'all' || filterStatusHeader !== 'all' || filterAgreementGpsHeader !== 'all' || filterDevHeader !== 'all';
+
+    const clearAllHeaderFilters = () => {
+        setFilterLocationHeader('all');
+        setFilterStatusHeader('all');
+        setFilterAgreementGpsHeader('all');
+        setFilterDevHeader('all');
+        setOpenHeaderDropdown(null);
+    };
 
     useEffect(() => {
         fetchData();
@@ -1390,10 +1429,80 @@ export default function ClientsModule() {
 
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
         let result = data;
+
+        // 1. Header Dropdown Filter: Ubicación
+        if (filterLocationHeader !== 'all') {
+            result = result.filter((item: any) => {
+                if (filterLocationHeader === 'sin_ubicacion') {
+                    const noCity = !item.city || item.city === '---';
+                    const noMuni = !item.municipality || item.municipality === '---';
+                    const noAddr = !item.address || item.address === '---';
+                    return noCity && noMuni && noAddr;
+                }
+                const locTerm = filterLocationHeader.toLowerCase();
+                const city = String(item.city || '').toLowerCase();
+                const muni = String(item.municipality || '').toLowerCase();
+                const dept = String(item.department || '').toLowerCase();
+                const addr = String(item.address || '').toLowerCase();
+                return city.includes(locTerm) || muni.includes(locTerm) || dept.includes(locTerm) || addr.includes(locTerm);
+            });
+        }
+
+        // 2. Header Dropdown Filter: Estado Cuenta / Lead Status
+        if (filterStatusHeader !== 'all') {
+            result = result.filter((item: any) => {
+                if (activeTab === 'leads') {
+                    return String(item.status || '').toLowerCase() === filterStatusHeader.toLowerCase();
+                }
+                if (filterStatusHeader === 'activo') return item.is_active !== false;
+                if (filterStatusHeader === 'inactivo') return item.is_active === false;
+                return true;
+            });
+        }
+
+        // 3. Header Dropdown Filter: Acuerdo / GPS
+        if (filterAgreementGpsHeader !== 'all') {
+            result = result.filter((item: any) => {
+                if (filterAgreementGpsHeader === 'agreement_active') {
+                    return getAgreementStatus(String(item.id || ''), String(item.parent_id || '')) === 'active';
+                }
+                if (filterAgreementGpsHeader === 'agreement_warning') {
+                    return getAgreementStatus(String(item.id || ''), String(item.parent_id || '')) === 'warning';
+                }
+                if (filterAgreementGpsHeader === 'agreement_expired') {
+                    return getAgreementStatus(String(item.id || ''), String(item.parent_id || '')) === 'expired';
+                }
+                if (filterAgreementGpsHeader === 'agreement_inherited') {
+                    return isAgreementInherited(String(item.id || ''), String(item.parent_id || '')) === true;
+                }
+                if (filterAgreementGpsHeader === 'agreement_none') {
+                    return getAgreementStatus(String(item.id || ''), String(item.parent_id || '')) === 'none';
+                }
+                if (filterAgreementGpsHeader === 'gps_ok') {
+                    return !!(item.latitude && item.longitude);
+                }
+                if (filterAgreementGpsHeader === 'gps_missing') {
+                    return !item.is_corporate_parent && (!item.latitude || !item.longitude);
+                }
+                return true;
+            });
+        }
+
+        // 4. Header Dropdown Filter: DEV (Revisado)
+        if (filterDevHeader !== 'all') {
+            result = result.filter((item: any) => {
+                const isVerifiedDev = item.is_verified_dev || (item.tags && item.tags.includes('verified_dev'));
+                if (filterDevHeader === 'verified') return !!isVerifiedDev;
+                if (filterDevHeader === 'pending') return !isVerifiedDev;
+                return true;
+            });
+        }
+
+        // 5. Text Search (and @commands)
         if (searchTerm) {
             const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
             if (searchTerms.length > 0) {
-                result = data.filter(item => {
+                result = result.filter(item => {
                     const record = item as Record<string, unknown>;
                     return searchTerms.every(term => {
                         // Special command handlers starting with @
@@ -1484,7 +1593,7 @@ export default function ClientsModule() {
     };
 
     const getActiveFilteredCount = (): number | null => {
-        if (!searchTerm) return null;
+        if (!searchTerm && !hasActiveHeaderFilters) return null;
         if (activeTab === 'b2b') {
             return filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).length;
         }
@@ -2332,11 +2441,176 @@ export default function ClientsModule() {
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    
+                                                    {/* UBICACIÓN */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>UBICACIÓN</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2b_location' ? null : 'b2b_location'); }}
+                                                                style={{ 
+                                                                    background: filterLocationHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterLocationHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Ubicación"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2b_location' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterLocationHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
+                                                                </div>
+                                                                {availableLocations.map(loc => (
+                                                                    <div key={loc} onClick={() => { setFilterLocationHeader(loc); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === loc ? 'bold' : 'normal', backgroundColor: filterLocationHeader === loc ? '#F1F5F9' : 'transparent' }}>
+                                                                        📍 {loc}
+                                                                    </div>
+                                                                ))}
+                                                                <div onClick={() => { setFilterLocationHeader('sin_ubicacion'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'sin_ubicacion' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'sin_ubicacion' ? '#F1F5F9' : 'transparent', color: '#94A3B8' }}>
+                                                                    🚫 Sin ubicación
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
+
+                                                    {/* ESTADO CUENTA */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>ESTADO CUENTA</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2b_status' ? null : 'b2b_status'); }}
+                                                                style={{ 
+                                                                    background: filterStatusHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterStatusHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Estado de Cuenta"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2b_status' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('activo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'activo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'activo' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🟢 Activos
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🔴 Inactivos
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
+                                                    {/* ACUERDO / GPS */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>ACUERDO / GPS</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2b_agreement' ? null : 'b2b_agreement'); }}
+                                                                style={{ 
+                                                                    background: filterAgreementGpsHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterAgreementGpsHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Acuerdo / GPS"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2b_agreement' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '190px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos
+                                                                </div>
+                                                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', padding: '4px 8px 2px', textTransform: 'uppercase' }}>Acuerdos de Precios</div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_active'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_active' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_active' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ⚡ Al Día
+                                                                </div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_warning'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_warning' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_warning' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ⚠️ Por Vencer
+                                                                </div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_expired'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_expired' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_expired' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🚫 Vencido
+                                                                </div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_inherited'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_inherited' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_inherited' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🏢 Heredado Matriz
+                                                                </div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('agreement_none'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'agreement_none' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'agreement_none' ? '#F1F5F9' : 'transparent' }}>
+                                                                    📄 Sin Acuerdo
+                                                                </div>
+                                                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', padding: '6px 8px 2px', borderTop: '1px solid #F1F5F9', textTransform: 'uppercase', marginTop: '4px' }}>Geolocalización</div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('gps_ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'gps_ok' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'gps_ok' ? '#F1F5F9' : 'transparent' }}>
+                                                                    📍 GPS OK
+                                                                </div>
+                                                                <div onClick={() => { setFilterAgreementGpsHeader('gps_missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'gps_missing' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'gps_missing' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ❌ Sin GPS
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
+                                                    {/* DEV (REVISADO) */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                            <span>DEV (REVISADO)</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2b_dev' ? null : 'b2b_dev'); }}
+                                                                style={{ 
+                                                                    background: filterDevHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterDevHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Revisión Dev"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2b_dev' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos
+                                                                </div>
+                                                                <div onClick={() => { setFilterDevHeader('verified'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'verified' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'verified' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ✅ Revisados
+                                                                </div>
+                                                                <div onClick={() => { setFilterDevHeader('pending'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pending' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pending' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ⏳ Pendientes
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
                                                     <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -2385,10 +2659,119 @@ export default function ClientsModule() {
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>DIRECCIÓN</th>
+                                                    
+                                                    {/* DIRECCIÓN / UBICACIÓN */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>DIRECCIÓN</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2c_location' ? null : 'b2c_location'); }}
+                                                                style={{ 
+                                                                    background: filterLocationHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterLocationHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Ubicación"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2c_location' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterLocationHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
+                                                                </div>
+                                                                {availableLocations.map(loc => (
+                                                                    <div key={loc} onClick={() => { setFilterLocationHeader(loc); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === loc ? 'bold' : 'normal', backgroundColor: filterLocationHeader === loc ? '#F1F5F9' : 'transparent' }}>
+                                                                        📍 {loc}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </th>
+
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ESTADO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
+
+                                                    {/* ESTADO */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>ESTADO</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2c_status' ? null : 'b2c_status'); }}
+                                                                style={{ 
+                                                                    background: filterStatusHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterStatusHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Estado"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2c_status' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('activo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'activo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'activo' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🟢 Activos
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('inactivo'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'inactivo' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'inactivo' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🔴 Inactivos
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
+                                                    {/* DEV (REVISADO) */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', textAlign: 'center', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                            <span>DEV (REVISADO)</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2c_dev' ? null : 'b2c_dev'); }}
+                                                                style={{ 
+                                                                    background: filterDevHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterDevHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Revisión Dev"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2c_dev' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos
+                                                                </div>
+                                                                <div onClick={() => { setFilterDevHeader('verified'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'verified' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'verified' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ✅ Revisados
+                                                                </div>
+                                                                <div onClick={() => { setFilterDevHeader('pending'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pending' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pending' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ⏳ Pendientes
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
                                                     <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -2434,9 +2817,88 @@ export default function ClientsModule() {
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>UBICACIÓN</th>
+                                                    
+                                                    {/* UBICACIÓN */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>UBICACIÓN</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'lead_location' ? null : 'lead_location'); }}
+                                                                style={{ 
+                                                                    background: filterLocationHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterLocationHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Ubicación"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'lead_location' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterLocationHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
+                                                                </div>
+                                                                {availableLocations.map(loc => (
+                                                                    <div key={loc} onClick={() => { setFilterLocationHeader(loc); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === loc ? 'bold' : 'normal', backgroundColor: filterLocationHeader === loc ? '#F1F5F9' : 'transparent' }}>
+                                                                        📍 {loc}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </th>
+
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>ESTADO</th>
+
+                                                    {/* ESTADO */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>ESTADO</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'lead_status' ? null : 'lead_status'); }}
+                                                                style={{ 
+                                                                    background: filterStatusHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterStatusHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 4px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center' 
+                                                                }}
+                                                                title="Filtrar por Estado de Prospecto"
+                                                            >
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'lead_status' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('new'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'new' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'new' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🆕 Nuevos
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('contacted'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'contacted' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'contacted' ? '#F1F5F9' : 'transparent' }}>
+                                                                    📞 Contactados
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('converted'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'converted' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'converted' ? '#F1F5F9' : 'transparent' }}>
+                                                                    🤝 Convertidos
+                                                                </div>
+                                                                <div onClick={() => { setFilterStatusHeader('rejected'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'rejected' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'rejected' ? '#F1F5F9' : 'transparent' }}>
+                                                                    ❌ Descartados
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
+
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
                                                     <th style={{ padding: '0.65rem 0.75rem 0.65rem 0.25rem', textAlign: 'right', whiteSpace: 'nowrap', width: '80px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
