@@ -158,6 +158,10 @@ export async function POST(request: Request) {
 
             const categoryCodes = chosenCats.flatMap(c => CATEGORY_TO_CODES[c] || [c]);
 
+            // Determinar límite por categoría según la cantidad de categorías seleccionadas
+            const numCats = chosenCats.length;
+            const maxPerCat = numCats === 1 ? 25 : numCats <= 3 ? 12 : 6;
+
             // Query products matching selected categories
             const { data: categoryProds } = await supabase
                 .from('products')
@@ -165,14 +169,15 @@ export async function POST(request: Request) {
                 .eq('is_active', true)
                 .gt('base_price', 0)
                 .in('category', categoryCodes)
-                .limit(40);
+                .order('name', { ascending: true })
+                .limit(150);
 
             if (categoryProds && categoryProds.length > 0) {
                 const groupedByCat: Record<string, any[]> = {};
                 categoryProds.forEach((p: any) => {
                     const cat = p.category || 'General';
                     if (!groupedByCat[cat]) groupedByCat[cat] = [];
-                    if (groupedByCat[cat].length < 4) {
+                    if (groupedByCat[cat].length < maxPerCat) {
                         groupedByCat[cat].push(p);
                     }
                 });
@@ -186,7 +191,8 @@ export async function POST(request: Request) {
                     .select('id, name, base_price, iva_rate, sku, category')
                     .eq('is_active', true)
                     .gt('base_price', 0)
-                    .limit(15);
+                    .order('name', { ascending: true })
+                    .limit(20);
                 if (activeProds) productsToQuote = activeProds;
             }
 
@@ -207,7 +213,13 @@ export async function POST(request: Request) {
 
                 for (const p of productsToQuote) {
                     const cached = modelPrices?.find(mp => mp.product_id === p.id);
-                    const unitPrice = cached ? Number(cached.price) : Number(p.base_price) * (colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15);
+                    const validCachedPrice = cached && Number(cached.price) > 0 ? Number(cached.price) : null;
+                    const marginMultiplier = colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15;
+                    const marginPercent = colorTag === 'verde' ? 5 : colorTag === 'amarillo' ? 10 : 15;
+
+                    const unitPrice = validCachedPrice 
+                        ? validCachedPrice 
+                        : Math.round(Number(p.base_price) * marginMultiplier);
 
                     const qty = 1; // 1 unit per SKU (e.g. 1 Kg / 1 Bulto)
                     const itemSubtotal = unitPrice * qty;
@@ -224,7 +236,7 @@ export async function POST(request: Request) {
                         product_name: p.name,
                         quantity: qty,
                         cost_basis: p.base_price,
-                        margin_percent: colorTag === 'verde' ? 5 : colorTag === 'amarillo' ? 10 : 15,
+                        margin_percent: marginPercent,
                         unit_price: unitPrice,
                         iva_rate: itemTaxRate,
                         iva_amount: itemTax,
