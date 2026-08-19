@@ -480,8 +480,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             const displayOptionName = getFormattedOptionName(optionName, isEn);
                             return (
                                 <div key={optionName} style={{ marginBottom: '2rem' }}>
-                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', fontSize: '0.88rem', color: '#1F2937' }}>
-                                        {displayOptionName}:
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em', color: '#1F2937' }}>
+                                        {displayOptionName}
                                     </label>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                                         {Array.isArray(values) && values

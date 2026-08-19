@@ -446,8 +446,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             const displayOptionName = getFormattedOptionName(optionName, locale === 'en');
                             return (
                                 <div key={optionName} style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', fontSize: '0.8rem', color: '#374151' }}>
-                                        {displayOptionName}:
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#6B7280' }}>
+                                        {displayOptionName}
                                     </label>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
                                         {Array.isArray(values) && values
