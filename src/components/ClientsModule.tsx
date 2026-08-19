@@ -1426,7 +1426,7 @@ export default function ClientsModule() {
                                 return getAgreementStatus(String(record.id || ''), String(record.parent_id || '')) === 'none';
                             }
                             if (cleanCmd === 'nogps' || cleanCmd === 'singps') {
-                                return !record.latitude || !record.longitude;
+                                return !record.is_corporate_parent && (!record.latitude || !record.longitude);
                             }
                             if (cleanCmd === 'gps' || cleanCmd === 'congps') {
                                 return !!record.latitude && !!record.longitude;
@@ -3499,34 +3499,63 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
                 {/* GPS INDICATOR (Gerencia Visual) */}
                 {(isB2B || isB2C) && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                        padding: '4px 10px',
-                        borderRadius: '10px',
-                        border: '1px solid',
-                        borderColor: (profileData?.latitude && profileData?.longitude) ? '#A7F3D0' : '#FECACA',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                    }}>
+                    (profileData?.latitude && profileData?.longitude) ? (
                         <div style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: (profileData?.latitude && profileData?.longitude) ? '#10B981' : '#EF4444',
-                            boxShadow: `0 0 6px ${(profileData?.latitude && profileData?.longitude) ? '#10B98188' : '#EF444488'}`
-                        }} />
-                        <span style={{ 
-                            fontSize: '0.6rem', 
-                            fontWeight: '900', 
-                            color: (profileData?.latitude && profileData?.longitude) ? '#059669' : '#B91C1C',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.02rem'
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            padding: '4px 10px',
+                            borderRadius: '10px',
+                            border: '1px solid #A7F3D0',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                         }}>
-                            {(profileData?.latitude && profileData?.longitude) ? 'GPS OK' : 'FALTA GPS'}
-                        </span>
-                    </div>
+                            <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: '#10B981',
+                                boxShadow: '0 0 6px #10B98188'
+                            }} />
+                            <span style={{ 
+                                fontSize: '0.6rem', 
+                                fontWeight: '900', 
+                                color: '#059669',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.02rem'
+                            }}>
+                                GPS OK
+                            </span>
+                        </div>
+                    ) : !profileData?.is_corporate_parent ? (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            padding: '4px 10px',
+                            borderRadius: '10px',
+                            border: '1px solid #FECACA',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                        }}>
+                            <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: '#EF4444',
+                                boxShadow: '0 0 6px #EF444488'
+                            }} />
+                            <span style={{ 
+                                fontSize: '0.6rem', 
+                                fontWeight: '900', 
+                                color: '#B91C1C',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.02rem'
+                            }}>
+                                FALTA GPS
+                            </span>
+                        </div>
+                    ) : null
                 )}
 
                 {/* CORPORATE BADGE */}
@@ -4182,7 +4211,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                             }}>
                                 <MapPin size={10} strokeWidth={2} style={{ color: '#16A34A' }} /> GPS OK
                             </span>
-                        ) : (
+                        ) : !client.is_corporate_parent ? (
                             <span style={{
                                 fontSize: '0.65rem',
                                 padding: '2px 7px',
@@ -4198,7 +4227,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                             }}>
                                 <MapPin size={10} strokeWidth={2} style={{ color: '#DC2626' }} /> SIN GPS
                             </span>
-                        )}
+                        ) : null}
                     </div>
                 )}
             </td>
