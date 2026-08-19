@@ -29,6 +29,43 @@ const CATEGORY_TO_CODES: Record<string, string[]> = {
   'Procesados': ['PR', 'Procesados', 'procesados']
 };
 
+const ANCHOR_PRIORITY: Record<string, string[]> = {
+  'Frutas': [
+    'aguacate hass', 'aguacate', 'banano', 'naranja valencia', 'naranja', 'papaya maradol', 'papaya',
+    'piña gold', 'piña', 'limon tahiti', 'limon', 'fresa', 'mango tommy', 'mango',
+    'maracuya', 'maracuyá', 'lulo', 'mora', 'melon', 'melón', 'patilla', 'sandia',
+    'manzana', 'guanabana', 'guanábana', 'mandarina', 'guayaba', 'uva', 'durazno', 'pera'
+  ],
+  'Verduras': [
+    'tomate chonto', 'tomate milano', 'tomate', 'cebolla cabezona blanca', 'cebolla cabezona roja',
+    'cebolla junca', 'cebolla puerro', 'cebolla', 'zanahoria', 'pimenton rojo', 'pimenton',
+    'lechuga batavia', 'lechuga crespa', 'lechuga', 'cilantro', 'pepino cohombro', 'pepino',
+    'arveja', 'habichuela', 'brocoli', 'brócoli', 'coliflor', 'champiñon', 'champiñón',
+    'espinaca', 'apio', 'calabacin', 'calabacín', 'perejil', 'ajo', 'remolacha', 'ahuyama'
+  ],
+  'Hortalizas': [
+    'tomate chonto', 'tomate', 'cebolla cabezona', 'cebolla junca', 'cebolla', 'zanahoria',
+    'pimenton', 'lechuga batavia', 'lechuga', 'cilantro', 'pepino', 'espinaca', 'apio',
+    'calabacin', 'brocoli', 'coliflor', 'perejil', 'ajo', 'remolacha', 'ahuyama', 'acelga'
+  ],
+  'Tubérculos': [
+    'papa pastusa', 'papa criolla', 'papa r-12', 'papa sabanera', 'papa capira', 'papa',
+    'platano verde', 'platano maduro', 'platano', 'plátano', 'yuca', 'arracacha', 'ñame'
+  ],
+  'Despensa': [
+    'aceite', 'arroz', 'azucar', 'azúcar', 'sal', 'huevo', 'harina', 'promasa', 'pasta', 'grasa', 'vinagre'
+  ],
+  'Lácteos': [
+    'queso campesino', 'queso doble crema', 'queso mozzarella', 'queso', 'leche', 'crema de leche', 'mantequilla', 'yogurt'
+  ],
+  'Congelados': [
+    'pulpa de mora', 'pulpa de lulo', 'pulpa de maracuya', 'pulpa de mango', 'pulpa de fresa', 'pulpa', 'francesa', 'congelad'
+  ],
+  'Procesados': [
+    'pelad', 'picad', 'procesad', 'desgranad'
+  ]
+};
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -160,66 +197,97 @@ export async function POST(request: Request) {
 
             // Determinar límite por categoría según la cantidad de categorías seleccionadas
             const numCats = chosenCats.length;
-            const maxPerCat = numCats === 1 ? 25 : numCats <= 3 ? 12 : 6;
+            const maxPerCat = numCats === 1 ? 25 : numCats <= 3 ? 15 : 8;
 
-            // Query products matching selected categories
-            const { data: categoryProds } = await supabase
+            // 1. Fetch active products from selected categories
+            const { data: allCategoryProds } = await supabase
                 .from('products')
-                .select('id, name, base_price, iva_rate, sku, category')
+                .select('id, name, base_price, iva_rate, sku, category, unit_of_measure')
                 .eq('is_active', true)
-                .gt('base_price', 0)
-                .in('category', categoryCodes)
-                .order('name', { ascending: true })
-                .limit(150);
+                .in('category', categoryCodes);
 
-            if (categoryProds && categoryProds.length > 0) {
-                const groupedByCat: Record<string, any[]> = {};
-                categoryProds.forEach((p: any) => {
-                    const cat = p.category || 'General';
-                    if (!groupedByCat[cat]) groupedByCat[cat] = [];
-                    if (groupedByCat[cat].length < maxPerCat) {
-                        groupedByCat[cat].push(p);
-                    }
+            // 2. Fetch pricing model prices cache
+            const { data: modelPrices } = await supabase
+                .from('pricing_model_prices')
+                .select('product_id, price')
+                .eq('model_id', modelId);
+
+            const modelPriceMap = new Map<string, number>();
+            if (modelPrices) {
+                modelPrices.forEach(mp => {
+                    if (Number(mp.price) > 0) modelPriceMap.set(mp.product_id, Number(mp.price));
                 });
-                productsToQuote = Object.values(groupedByCat).flat();
+            }
+
+            if (allCategoryProds && allCategoryProds.length > 0) {
+                // Filter only products that have a valid price (base_price > 0 OR model price > 0)
+                const validProds = allCategoryProds.filter(p => {
+                    return Number(p.base_price) > 0 || modelPriceMap.has(p.id);
+                });
+
+                const usedIds = new Set<string>();
+
+                for (const catName of chosenCats) {
+                    const codes = CATEGORY_TO_CODES[catName] || [catName];
+                    const catProds = validProds.filter(p => codes.includes(p.category));
+                    const keywords = ANCHOR_PRIORITY[catName] || [];
+                    const catSelected: any[] = [];
+
+                    // Pass 1: Match high-priority Anchor SKUs in order of importance
+                    for (const kw of keywords) {
+                        if (catSelected.length >= maxPerCat) break;
+                        const matches = catProds.filter(p => !usedIds.has(p.id) && p.name.toLowerCase().includes(kw));
+                        for (const m of matches) {
+                            if (catSelected.length >= maxPerCat) break;
+                            catSelected.push(m);
+                            usedIds.add(m.id);
+                        }
+                    }
+
+                    // Pass 2: Fill remainder of category quota with any remaining valid products
+                    for (const p of catProds) {
+                        if (catSelected.length >= maxPerCat) break;
+                        if (!usedIds.has(p.id)) {
+                            catSelected.push(p);
+                            usedIds.add(p.id);
+                        }
+                    }
+
+                    productsToQuote.push(...catSelected);
+                }
             }
 
             // Fallback to active products if empty
             if (productsToQuote.length === 0) {
                 const { data: activeProds } = await supabase
                     .from('products')
-                    .select('id, name, base_price, iva_rate, sku, category')
+                    .select('id, name, base_price, iva_rate, sku, category, unit_of_measure')
                     .eq('is_active', true)
                     .gt('base_price', 0)
-                    .order('name', { ascending: true })
                     .limit(20);
                 if (activeProds) productsToQuote = activeProds;
             }
 
             if (productsToQuote.length > 0) {
-                const prodIds = productsToQuote.map(p => p.id);
-                
-                // Fetch pricing model prices cache
-                const { data: modelPrices } = await supabase
-                    .from('pricing_model_prices')
-                    .select('product_id, price')
-                    .eq('model_id', modelId)
-                    .in('product_id', prodIds);
-
                 let subtotal = 0;
                 let tax = 0;
                 let total = 0;
                 const itemsToInsert = [];
 
                 for (const p of productsToQuote) {
-                    const cached = modelPrices?.find(mp => mp.product_id === p.id);
-                    const validCachedPrice = cached && Number(cached.price) > 0 ? Number(cached.price) : null;
+                    const validCachedPrice = modelPriceMap.get(p.id);
                     const marginMultiplier = colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15;
                     const marginPercent = colorTag === 'verde' ? 5 : colorTag === 'amarillo' ? 10 : 15;
 
-                    const unitPrice = validCachedPrice 
-                        ? validCachedPrice 
-                        : Math.round(Number(p.base_price) * marginMultiplier);
+                    let unitPrice = 0;
+                    if (validCachedPrice && validCachedPrice > 0) {
+                        unitPrice = validCachedPrice;
+                    } else if (Number(p.base_price) > 0) {
+                        unitPrice = Math.round(Number(p.base_price) * marginMultiplier);
+                    }
+
+                    // Ensure minimum unit price
+                    if (unitPrice <= 0) unitPrice = 1000;
 
                     const qty = 1; // 1 unit per SKU (e.g. 1 Kg / 1 Bulto)
                     const itemSubtotal = unitPrice * qty;
