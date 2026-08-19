@@ -75,6 +75,7 @@ export default function MasterProductsPage() {
     const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
     const [filterDevHeader, setFilterDevHeader] = useState<string>('all');
     const [filterPhotoHeader, setFilterPhotoHeader] = useState<string>('all');
+    const [filterUnitHeader, setFilterUnitHeader] = useState<string>('all');
 
     const toggleDevVerified = async (product: Product) => {
         const isCurrentlyVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
@@ -1050,6 +1051,12 @@ export default function MasterProductsPage() {
         showToast('Plantilla descargada (sin precios estáticos)', 'success');
     };
 
+    const availableUnits = useMemo(() => {
+        const unitsFromProducts = products.map(p => p.unit_of_measure?.trim()).filter(Boolean) as string[];
+        const combined = Array.from(new Set([...dynamicUnits, ...unitsFromProducts]));
+        return combined.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    }, [products, dynamicUnits]);
+
     const filteredProducts = useMemo(() => {
         let result = products;
 
@@ -1087,6 +1094,10 @@ export default function MasterProductsPage() {
             result = result.filter(p => !p.image_url || p.image_url.trim() === '' || p.image_url === '0');
         }
 
+        if (filterUnitHeader !== 'all') {
+            result = result.filter(p => (p.unit_of_measure || '').trim().toLowerCase() === filterUnitHeader.trim().toLowerCase());
+        }
+
         const query = searchQuery.trim().toLowerCase();
         if (!query) return result;
 
@@ -1113,6 +1124,19 @@ export default function MasterProductsPage() {
                     if (['sinfoto', 'sin-foto', 'sin_foto', 'sinimagen', 'sin-imagen', 'sin_imagen', 'nophoto', 'no-photo', 'sinimg', 'sin-img'].includes(tag)) {
                         return !hasPhoto;
                     }
+
+                    // Filtro Unidad (@kg, @g, @lb, @un, @atado, @bulto, @caja, @lt, @saco, @cubeta)
+                    const unitLower = (p.unit_of_measure || '').trim().toLowerCase();
+                    if (['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos'].includes(tag)) return unitLower === 'kg';
+                    if (['g', 'gr', 'gramo', 'gramos'].includes(tag)) return unitLower === 'g' || unitLower === 'gr';
+                    if (['lb', 'libra', 'libras'].includes(tag)) return unitLower === 'lb';
+                    if (['un', 'und', 'unidad', 'unidades'].includes(tag)) return unitLower === 'un' || unitLower === 'und' || unitLower === 'unidad';
+                    if (['atado', 'atados'].includes(tag)) return unitLower === 'atado' || unitLower === 'atados';
+                    if (['bulto', 'bultos'].includes(tag)) return unitLower === 'bulto' || unitLower === 'bultos';
+                    if (['caja', 'cajas'].includes(tag)) return unitLower === 'caja' || unitLower === 'cajas';
+                    if (['saco', 'sacos'].includes(tag)) return unitLower === 'saco' || unitLower === 'sacos';
+                    if (['lt', 'litro', 'litros'].includes(tag)) return unitLower === 'lt' || unitLower === 'litro';
+                    if (['cubeta', 'cubetas'].includes(tag)) return unitLower === 'cubeta' || unitLower === 'cubetas';
 
                     // Filtro IVA (@19, @19%, @0...)
                     if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
@@ -1647,6 +1671,8 @@ export default function MasterProductsPage() {
                                         { tag: '@frutas', desc: 'Cat. Frutas' },
                                         { tag: '@verduras', desc: 'Cat. Verduras' },
                                         { tag: '@despensa', desc: 'Cat. Despensa' },
+                                        { tag: '@kg', desc: 'Unidad: Kg' },
+                                        { tag: '@un', desc: 'Unidad: Un/Atado' },
                                         { tag: '#ID', desc: 'ID Contable (#12)' }
                                     ].map((item, i) => (
                                         <div 
@@ -1761,7 +1787,33 @@ export default function MasterProductsPage() {
                                 </th>
 
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
+                                
+                                {/* UNIDAD */}
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                        <span>UNIDAD</span>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'unit' ? null : 'unit'); }}
+                                            style={{ background: filterUnitHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', color: filterUnitHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                            title="Filtrar por Unidad"
+                                        >
+                                            <ChevronDown size={12} />
+                                        </button>
+                                    </div>
+                                    {openHeaderDropdown === 'unit' && (
+                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '150px', maxHeight: '250px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none', textAlign: 'left' }}>
+                                            <div onClick={() => { setFilterUnitHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterUnitHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterUnitHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                <Filter size={13} style={{ color: '#64748B' }} /> Todas las unidades
+                                            </div>
+                                            {availableUnits.map(unit => (
+                                                <div key={unit} onClick={() => { setFilterUnitHeader(unit); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterUnitHeader.toLowerCase() === unit.toLowerCase() ? 'bold' : 'normal', backgroundColor: filterUnitHeader.toLowerCase() === unit.toLowerCase() ? '#F1F5F9' : 'transparent' }}>
+                                                    📦 {unit}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </th>
 
                                 {/* IVA */}
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center', position: 'relative' }}>
