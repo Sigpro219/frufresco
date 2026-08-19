@@ -19,6 +19,42 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     const [showDropdown, setShowDropdown] = useState(false);
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    // Auto-focus and scroll to search bar when clicking "Catálogo" or navigating with #catalog
+    useEffect(() => {
+        const focusInput = () => {
+            setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                    const len = inputRef.current.value.length;
+                    inputRef.current.setSelectionRange(len, len);
+                }
+            }, 120);
+        };
+
+        const handleCatalogFocusEvent = () => {
+            focusInput();
+        };
+
+        window.addEventListener('focus-catalog-search', handleCatalogFocusEvent);
+
+        if (typeof window !== 'undefined' && (window.location.hash === '#catalog' || window.location.hash.includes('catalog'))) {
+            focusInput();
+        }
+
+        const handleHashChange = () => {
+            if (window.location.hash === '#catalog' || window.location.hash.includes('catalog')) {
+                focusInput();
+            }
+        };
+        window.addEventListener('hashchange', handleHashChange);
+
+        return () => {
+            window.removeEventListener('focus-catalog-search', handleCatalogFocusEvent);
+            window.removeEventListener('hashchange', handleHashChange);
+        };
+    }, []);
 
     // Reset activeIndex when suggestions change
     useEffect(() => {
@@ -128,6 +164,8 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
         <div ref={containerRef} style={{ position: 'relative', width: '100%', maxWidth: '750px', margin: '0 auto 2.5rem' }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
+                    ref={inputRef}
+                    id="catalog-search-input"
                     type="text"
                     placeholder={placeholder || "Buscar productos (ej: Tomate, Cebolla...)"}
                     value={query}

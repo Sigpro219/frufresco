@@ -300,7 +300,15 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {t.navHome}
                 </Link> 
                 <ChevronRight size={14} />
-                <Link href={`/#catalog${isEn ? '?lang=en' : ''}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>
+                <Link 
+                    href={`/${isEn ? '?lang=en' : ''}#catalog`} 
+                    style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}
+                    onClick={() => {
+                        if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('focus-catalog-search'));
+                        }
+                    }}
+                >
                     {t.navCatalog || 'Catálogo'}
                 </Link> 
                 <ChevronRight size={14} />

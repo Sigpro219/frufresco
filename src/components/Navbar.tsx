@@ -218,6 +218,25 @@ export default function Navbar() {
         flexShrink: 0,
     };
 
+    const handleCatalogClick = (e: React.MouseEvent) => {
+        if (pathname === '/') {
+            e.preventDefault();
+            const catalogEl = document.getElementById('catalog');
+            if (catalogEl) {
+                catalogEl.scrollIntoView({ behavior: 'smooth' });
+            }
+            window.dispatchEvent(new CustomEvent('focus-catalog-search'));
+            const searchInput = document.getElementById('catalog-search-input') as HTMLInputElement | null;
+            if (searchInput) {
+                setTimeout(() => {
+                    searchInput.focus();
+                    const len = searchInput.value.length;
+                    searchInput.setSelectionRange(len, len);
+                }, 100);
+            }
+        }
+    };
+
     return (
         <header 
             style={{
@@ -348,15 +367,7 @@ export default function Navbar() {
                                 href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} 
                                 className="premium-nav-link" 
                                 style={{ fontWeight: '600', fontSize: '1.05rem' }}
-                                onClick={(e) => {
-                                    if (pathname === '/') {
-                                        e.preventDefault();
-                                        const catalogEl = document.getElementById('catalog');
-                                        if (catalogEl) {
-                                            catalogEl.scrollIntoView({ behavior: 'smooth' });
-                                        }
-                                    }
-                                }}
+                                onClick={handleCatalogClick}
                             >
                                 {t.navCatalog}
                             </Link>
@@ -378,7 +389,12 @@ export default function Navbar() {
                             <Link href="/" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2} /> {t.navHome}
                             </Link>
-                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Link 
+                                href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} 
+                                className="premium-nav-link" 
+                                style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                onClick={handleCatalogClick}
+                            >
                                 <ShoppingBag size={18} strokeWidth={2} /> {t.navCatalog || 'Catálogo'}
                             </Link>
                             <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -875,13 +891,7 @@ export default function Navbar() {
                                 className="mobile-nav-link" 
                                 onClick={(e) => {
                                     setMobileOpen(false);
-                                    if (pathname === '/') {
-                                        e.preventDefault();
-                                        const catalogEl = document.getElementById('catalog');
-                                        if (catalogEl) {
-                                            catalogEl.scrollIntoView({ behavior: 'smooth' });
-                                        }
-                                    }
+                                    handleCatalogClick(e);
                                 }}
                             >
                                 <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
