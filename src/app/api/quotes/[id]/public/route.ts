@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
-const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 
 export async function GET(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    context: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
-        const { id } = await params;
+        const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
+        const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        const rawParams = await context.params;
+        const id = rawParams?.id;
         if (!id) {
             return NextResponse.json({ error: 'ID de cotización requerido' }, { status: 400 });
         }

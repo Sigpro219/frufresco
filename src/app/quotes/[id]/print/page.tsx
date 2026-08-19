@@ -46,37 +46,93 @@ export default function PublicPrintQuotePage() {
         }
     }, [params.id]);
 
+    const preloadLogo = (settings?: any) => {
+        const logoUrl = settings?.provider_logo_url || settings?.app_logo_url || '/logo-investments.png';
+        if (logoUrl) {
+            const img = new Image();
+            img.onload = () => setLogoLoaded(true);
+            img.onerror = () => setLogoLoaded(true);
+            img.src = logoUrl;
+        } else {
+            setLogoLoaded(true);
+        }
+    };
+
     const loadAllData = async () => {
         setLoading(true);
+        const quoteId = params.id as string;
         try {
-            const res = await fetch(`/api/quotes/${params.id}/public`);
-            const data = await res.json();
-
-            if (!res.ok || data.error) {
-                throw new Error(data.error || 'No se pudo cargar la cotización');
+            // Attempt 1: Fetch via server API route
+            let loaded = false;
+            try {
+                const res = await fetch(`/api/quotes/${quoteId}/public`, { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.quote) {
+                        if (data.appSettings) {
+                            setAppSettings(prev => ({ ...prev, ...data.appSettings }));
+                        }
+                        if (data.quote) setQuote(data.quote);
+                        if (data.lead) setLead(data.lead);
+                        if (data.clientInfo) setClientInfo(data.clientInfo);
+                        if (data.items) setItems(data.items);
+                        preloadLogo(data.appSettings);
+                        loaded = true;
+                    }
+                }
+            } catch (apiErr) {
+                console.warn('API route failed, trying Supabase direct client...', apiErr);
             }
 
-            if (data.appSettings) {
-                setAppSettings(prev => ({ ...prev, ...data.appSettings }));
-            }
-            if (data.quote) setQuote(data.quote);
-            if (data.lead) setLead(data.lead);
-            if (data.clientInfo) setClientInfo(data.clientInfo);
-            if (data.items) setItems(data.items);
+            // Attempt 2: Direct Supabase client query fallback
+            if (!loaded) {
+                const { data: qData, error: qErr } = await supabase
+                    .from('quotes')
+                    .select('*')
+                    .eq('id', quoteId)
+                    .maybeSingle();
 
-            // Preload logo
-            const logoUrl = data.appSettings?.provider_logo_url || data.appSettings?.app_logo_url || '/logo-investments.png';
-            if (logoUrl) {
-                const img = new Image();
-                img.onload = () => setLogoLoaded(true);
-                img.onerror = () => setLogoLoaded(true);
-                img.src = logoUrl;
-            } else {
-                setLogoLoaded(true);
+                if (qErr || !qData) {
+                    throw new Error(qErr?.message || 'No se pudo cargar la cotización');
+                }
+
+                setQuote(qData);
+
+                if (qData.lead_id) {
+                    const { data: lData } = await supabase
+                        .from('leads')
+                        .select('*')
+                        .eq('id', qData.lead_id)
+                        .maybeSingle();
+                    if (lData) setLead(lData);
+                }
+
+                if (qData.client_id) {
+                    const { data: cData } = await supabase
+                        .from('profiles')
+                        .select('company_name, contact_name, nit, phone, address')
+                        .eq('id', qData.client_id)
+                        .maybeSingle();
+                    if (cData) setClientInfo(cData);
+                }
+
+                const { data: itemsData } = await supabase
+                    .from('quote_items')
+                    .select('*, products(name, unit_of_measure, sku)')
+                    .eq('quote_id', quoteId);
+                if (itemsData) setItems(itemsData);
+
+                const { data: sData } = await supabase.from('app_settings').select('*');
+                if (sData) {
+                    const sMap: Record<string, string> = {};
+                    sData.forEach((s: any) => { sMap[s.key] = s.value; });
+                    setAppSettings(prev => ({ ...prev, ...sMap }));
+                    preloadLogo(sMap);
+                }
             }
         } catch (error) {
             console.error('Error loading print data:', error);
-            setLogoLoaded(true);
+            preloadLogo();
         } finally {
             setLoading(false);
         }
