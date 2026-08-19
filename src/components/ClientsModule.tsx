@@ -2326,8 +2326,8 @@ export default function ClientsModule() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
@@ -2337,7 +2337,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO CUENTA</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACUERDO / GPS</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2379,8 +2379,8 @@ export default function ClientsModule() {
                                         {clientsB2C.length === 0 && <EmptyState text="No hay clientes hogar registrados aún." />}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>CLIENTE / IDENTIFICACIÓN</th>
@@ -2389,7 +2389,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', ...THEME.typography.tableHeader }}>DEV (REVISADO)</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2428,8 +2428,8 @@ export default function ClientsModule() {
                                         {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>PROSPECTO / EMPRESA</th>
@@ -2438,7 +2438,7 @@ export default function ClientsModule() {
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>FECHA REGISTRO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ESTADO</th>
                                                     <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>SEGUIMIENTO</th>
-                                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>ACCIONES</th>
+                                                    <th style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px', ...THEME.typography.tableHeader }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -4261,12 +4261,12 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     );
                 })()}
             </td>
-            <td style={{ padding: '0.65rem 1.25rem' }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
                     {!isLead && onEdit && (
                         <button 
                             onClick={onEdit} 
-                            style={{ background: '#F1F5F9', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            style={{ background: '#F1F5F9', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                             title="Editar"
                         >
                             <Edit2 size={14} strokeWidth={1.5} style={{ color: '#475569' }} />
@@ -4274,7 +4274,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     )}
                     <button 
                         onClick={handleWhatsApp} 
-                        style={{ background: '#DCFCE7', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ background: '#DCFCE7', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                         title="WhatsApp"
                     >
                         <Phone size={14} strokeWidth={1.5} style={{ color: '#166534' }} />
@@ -4282,7 +4282,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     {onRegisterContact && (
                         <button 
                             onClick={onRegisterContact} 
-                            style={{ background: '#F3E8FF', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            style={{ background: '#F3E8FF', border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                             title="Registrar Contacto"
                         >
                             <Check size={14} strokeWidth={1.5} style={{ color: '#6B21A8' }} />
@@ -6272,7 +6272,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem' }}>
                                     <FormField label="Responsable Directo" value={formData.contact_name} onChange={(v) => setFormData({...formData, contact_name: v})} required readOnly={isReadOnly} />
                                     <FormField label="WhatsApp" value={formData.phone} onChange={(v) => setFormData({...formData, phone: v})} required readOnly={isReadOnly} />
-                                    <FormField label="Email Contacto" value={formData.contact_email} onChange={(v) => setFormData({...formData, contact_email: v})} required readOnly={isReadOnly} />
+                                    <FormField label="Email Contacto" value={formData.contact_email} onChange={(v) => setFormData({...formData, contact_email: v})} readOnly={isReadOnly} />
                                 </div>
                             </section>
                         )}
