@@ -10,16 +10,21 @@ export default function QuotesListPage() {
     const [quotes, setQuotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchQuotes = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('quotes')
-            .select('*, profiles:client_id(role, company_name, contact_name), leads:lead_id(company_name, contact_name, business_type, business_size)')
-            .neq('status', 'agreement')
-            .order('created_at', { ascending: false });
+    const fetchQuotes = async (showSpinner = false) => {
+        if (showSpinner) setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('quotes')
+                .select('*, profiles:client_id(role, company_name, contact_name), leads:lead_id(company_name, contact_name, business_type, business_size)')
+                .neq('status', 'agreement')
+                .order('created_at', { ascending: false });
 
-        if (data) setQuotes(data);
-        setLoading(false);
+            if (data) setQuotes(data);
+        } catch (err) {
+            console.error('Error fetching quotes:', err);
+        } finally {
+            if (showSpinner) setLoading(false);
+        }
     };
 
     const renderClientTypeBadge = (quote: any) => {
@@ -96,7 +101,37 @@ export default function QuotesListPage() {
     };
 
     useEffect(() => {
-        fetchQuotes();
+        // Carga inicial con indicador de carga
+        fetchQuotes(true);
+
+        // 1. Suscripción en Tiempo Real (Supabase Realtime)
+        const channel = supabase
+            .channel('realtime_admin_quotes_list')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'quotes' },
+                () => {
+                    fetchQuotes(false);
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'leads' },
+                () => {
+                    fetchQuotes(false);
+                }
+            )
+            .subscribe();
+
+        // 2. Heartbeat de sincronización silenciosa en segundo plano (cada 8s)
+        const pollingInterval = setInterval(() => {
+            fetchQuotes(false);
+        }, 8000);
+
+        return () => {
+            supabase.removeChannel(channel);
+            clearInterval(pollingInterval);
+        };
     }, []);
 
     const handleDelete = async (id: string, quoteNumber: string) => {
