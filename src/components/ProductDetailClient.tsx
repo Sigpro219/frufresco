@@ -195,10 +195,32 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const originalPriceWithAdjustment = originalBasePrice * (1 + adjustmentPercent / 100);
     const originalPrice = Math.ceil((originalPriceWithAdjustment * activeConversionFactor) / 50) * 50;
 
+    const getFormattedOptionName = (name: string, isEn?: boolean) => {
+        const lower = name.toLowerCase();
+        if (lower.includes('madura') || lower.includes('madurez')) {
+            return isEn ? 'Ripeness level' : 'Punto de maduración';
+        }
+        if (lower.includes('presentaci')) {
+            return isEn ? 'Presentation' : 'Presentación';
+        }
+        if (lower.includes('calidad') || lower.includes('grado')) {
+            return isEn ? 'Grade / Quality' : 'Grado de calidad';
+        }
+        if (lower.includes('corte') || lower.includes('tamano') || lower.includes('tamaño')) {
+            return isEn ? 'Size / Cut' : 'Tamaño / Corte';
+        }
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    };
+
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
             .map(([key, value]) => {
-                const displayKey = key.toLowerCase().includes('presentaci') ? (isEn ? 'Presentation' : 'Presentación') : key;
+                const rawKey = key.toLowerCase();
+                const displayKey = (rawKey.includes('madura') || rawKey.includes('madurez'))
+                    ? (isEn ? 'Ripeness' : 'Maduración')
+                    : rawKey.includes('presentaci')
+                        ? (isEn ? 'Presentation' : 'Presentación')
+                        : key;
                 const displayVal = formatOptionDisplay(value, isEn);
                 return `${displayKey}: ${displayVal}`;
             })
@@ -455,11 +477,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {Object.entries(displayOptions)
                         .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
                         .map(([optionName, values]: [string, any]) => {
-                            const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                            const displayOptionName = getFormattedOptionName(optionName, isEn);
                             return (
                                 <div key={optionName} style={{ marginBottom: '2rem' }}>
-                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
-                                        {displayOptionName}
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', fontSize: '0.88rem', color: '#1F2937' }}>
+                                        {displayOptionName}:
                                     </label>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                                         {Array.isArray(values) && values

@@ -225,10 +225,32 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
 
     const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
 
+    const getFormattedOptionName = (name: string, isEn?: boolean) => {
+        const lower = name.toLowerCase();
+        if (lower.includes('madura') || lower.includes('madurez')) {
+            return isEn ? 'Ripeness level' : 'Punto de maduración';
+        }
+        if (lower.includes('presentaci')) {
+            return isEn ? 'Presentation' : 'Presentación';
+        }
+        if (lower.includes('calidad') || lower.includes('grado')) {
+            return isEn ? 'Grade / Quality' : 'Grado de calidad';
+        }
+        if (lower.includes('corte') || lower.includes('tamano') || lower.includes('tamaño')) {
+            return isEn ? 'Size / Cut' : 'Tamaño / Corte';
+        }
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    };
+
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
             .map(([key, value]) => {
-                const displayKey = key.toLowerCase().includes('presentaci') ? (locale === 'en' ? 'Presentation' : 'Presentación') : key;
+                const rawKey = key.toLowerCase();
+                const displayKey = (rawKey.includes('madura') || rawKey.includes('madurez'))
+                    ? (locale === 'en' ? 'Ripeness' : 'Maduración')
+                    : rawKey.includes('presentaci')
+                        ? (locale === 'en' ? 'Presentation' : 'Presentación')
+                        : key;
                 const displayVal = formatOptionDisplay(value, locale === 'en');
                 return `${displayKey}: ${displayVal}`;
             })
@@ -421,11 +443,11 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                     {Object.entries(displayOptions)
                         .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
                         .map(([optionName, values]: [string, any]) => {
-                            const displayOptionName = optionName.toLowerCase().includes('presentaci') ? 'Presentación' : optionName;
+                            const displayOptionName = getFormattedOptionName(optionName, locale === 'en');
                             return (
                                 <div key={optionName} style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#9CA3AF' }}>
-                                        {displayOptionName}
+                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', fontSize: '0.8rem', color: '#374151' }}>
+                                        {displayOptionName}:
                                     </label>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
                                         {Array.isArray(values) && values
