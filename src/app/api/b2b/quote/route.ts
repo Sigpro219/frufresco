@@ -8,23 +8,23 @@ const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || pro
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const ALL_CATEGORIES = [
-  'Despensa',
-  'Hortalizas',
-  'Verduras',
-  'Lácteos',
   'Frutas',
+  'Verduras',
+  'Hortalizas',
   'Tubérculos',
+  'Despensa',
+  'Lácteos',
   'Congelados',
   'Procesados'
 ];
 
 const CATEGORY_TO_CODES: Record<string, string[]> = {
-  'Despensa': ['DE', 'Despensa', 'despensa'],
-  'Hortalizas': ['HO', 'Hortalizas', 'hortalizas'],
-  'Verduras': ['VE', 'Verduras', 'verduras'],
-  'Lácteos': ['LA', 'Lácteos', 'lacteos'],
   'Frutas': ['FR', 'Frutas', 'frutas'],
+  'Verduras': ['VE', 'Verduras', 'verduras'],
+  'Hortalizas': ['HO', 'Hortalizas', 'hortalizas'],
   'Tubérculos': ['TU', 'Tubérculos', 'tuberculos'],
+  'Despensa': ['DE', 'Despensa', 'despensa'],
+  'Lácteos': ['LA', 'Lácteos', 'lacteos'],
   'Congelados': ['CO', 'Congelados', 'congelados'],
   'Procesados': ['PR', 'Procesados', 'procesados']
 };
@@ -189,9 +189,18 @@ export async function POST(request: Request) {
             const modelName = matchedModel?.name || 'General Institucional';
 
             let productsToQuote: any[] = [];
-            const chosenCats = (selected_categories && selected_categories.length > 0)
+            const rawChosenCats = (selected_categories && selected_categories.length > 0)
                 ? selected_categories
                 : ALL_CATEGORIES;
+
+            // Sort chosen categories strictly: 1. Frutas, 2. Verduras, 3. Hortalizas, etc.
+            const chosenCats = [...rawChosenCats].sort((a, b) => {
+                const idxA = ALL_CATEGORIES.indexOf(a);
+                const idxB = ALL_CATEGORIES.indexOf(b);
+                const prioA = idxA !== -1 ? idxA : 999;
+                const prioB = idxB !== -1 ? idxB : 999;
+                return prioA - prioB;
+            });
 
             const categoryCodes = chosenCats.flatMap(c => CATEGORY_TO_CODES[c] || [c]);
 
@@ -252,6 +261,9 @@ export async function POST(request: Request) {
                             usedIds.add(p.id);
                         }
                     }
+
+                    // Sort items within each category alphabetically by name
+                    catSelected.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true, sensitivity: 'base' }));
 
                     productsToQuote.push(...catSelected);
                 }

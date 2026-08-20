@@ -1219,80 +1219,73 @@ function CreateQuotePageContent() {
                         </div>
                     </div>
 
-
-
                     {/* Table */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '3rem', position: 'relative', zIndex: 1 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '1.5rem', position: 'relative', zIndex: 1 }}>
                         <thead>
-                            <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '60%' }}>Producto</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Cant.</th>
-                                <th className="no-print" style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
-                                <th className="no-print" style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Margen (%)</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Valor Unitario</th>
-                                <th style={{ padding: '1rem 0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
-                                <th className="no-print" style={{ padding: '1rem 0.5rem', width: '5%' }}></th>
+                            <tr style={{ borderBottom: '1.5px solid #CBD5E1', color: '#475569', backgroundColor: '#F1F5F9' }}>
+                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%', textAlign: 'center' }}>#</th>
+                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Producto</th>
+                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'center' }}>Cant.</th>
+                                <th className="no-print" style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '8%', textAlign: 'center' }}>IVA</th>
+                                <th className="no-print" style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>Margen</th>
+                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Tarifa Unit.</th>
+                                <th style={{ padding: '0.45rem 0.5rem', fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
+                                <th className="no-print" style={{ padding: '0.45rem 0.5rem', width: '4%' }}></th>
                             </tr>
                         </thead>
                         <tbody>
                             {items.map((item, index) => {
-                                const isService = item.unit === 'Servicio' || item.unit === 'Hora';
-                                const typeLabel = isService ? 'SERVICIO' : 'BIEN';
-                                const typeColor = isService ? '#475569' : '#16A34A';
-                                const typeBg = isService ? '#F1F5F9' : '#DCFCE7';
-                                
                                 return (
                                     <tr key={index} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }}>
                                         {/* Row Index */}
-                                        <td style={{ padding: '1.2rem 0.5rem', fontSize: '1.1rem', fontWeight: '800', color: '#CBD5E1' }}>
+                                        <td style={{ padding: '0.45rem 0.5rem', fontSize: '0.75rem', fontWeight: '700', color: '#94A3B8', textAlign: 'center' }}>
                                             {String(index + 1).padStart(2, '0')}
                                         </td>
                                         
                                         {/* Description */}
-                                        <td style={{ padding: '1.2rem 0.5rem' }}>
-                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.95rem' }}>{item.name}</div>
+                                        <td style={{ padding: '0.45rem 0.5rem' }}>
+                                            <div style={{ fontWeight: '600', color: '#0F172A', fontSize: '0.82rem' }}>{item.name}</div>
                                             <span className="no-print" style={{ 
                                                 display: 'inline-block',
-                                                padding: '2px 8px',
+                                                padding: '1px 6px',
                                                 borderRadius: '4px',
                                                 backgroundColor: '#F1F5F9',
                                                 color: '#64748B',
-                                                fontSize: '0.7rem',
-                                                fontWeight: 'bold',
-                                                marginTop: '4px'
+                                                fontSize: '0.68rem',
+                                                fontWeight: '600',
+                                                marginTop: '2px'
                                             }}>
                                                 Costo base: ${formatPrice(Math.ceil(item.cost))}
                                             </span>
                                         </td>
                                         
                                         {/* Quantity */}
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
-                                            <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                        <td style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
+                                            <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
                                                 <input 
                                                     type="number" 
-                                                    min="0.01"
+                                                    min="0.01" 
                                                     step="any"
                                                     value={item.quantity === undefined || item.quantity === null ? '' : item.quantity} 
                                                     onChange={e => {
                                                         const raw = e.target.value;
                                                         updateQuantity(index, raw === '' ? '' : parseFloat(raw));
                                                     }} 
-                                                    style={{ width: '60px', padding: '0.35rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
+                                                    style={{ width: '50px', padding: '0.25rem', textAlign: 'center', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold', fontSize: '0.8rem' }} 
                                                 />
-                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>{item.unit}</span>
+                                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>{item.unit}</span>
                                             </div>
-                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>{parseFloat(item.quantity) || 0}</span>
+                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A', fontSize: '7.8pt' }}>{parseFloat(item.quantity) || 0} {item.unit}</span>
                                         </td>
                                         
                                         {/* IVA (No-print) */}
-                                        <td className="no-print" style={{ padding: '1.2rem 0.5rem', textAlign: 'center', color: '#475569', fontSize: '0.9rem', fontWeight: '600' }}>
+                                        <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center', color: '#475569', fontSize: '0.78rem', fontWeight: '600' }}>
                                             {item.iva_rate || 0}%
                                         </td>
                                         
                                         {/* Margin (No-print) */}
-                                        <td className="no-print" style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                        <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
                                                 <input 
                                                     type="number" 
                                                     value={item.margin === undefined || item.margin === null ? '' : item.margin} 
@@ -1311,14 +1304,14 @@ function CreateQuotePageContent() {
                                                             handleMarginChange(index, val);
                                                         }
                                                     }} 
-                                                    style={{ width: '55px', padding: '0.35rem', textAlign: 'center', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
+                                                    style={{ width: '45px', padding: '0.25rem', textAlign: 'center', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold', fontSize: '0.8rem' }} 
                                                 />
-                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
+                                                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 'bold' }}>%</span>
                                             </div>
                                         </td>
                                         
                                         {/* Unit Price */}
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right' }}>
+                                        <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right' }}>
                                             <div className="no-print">
                                                 <input 
                                                     type="number" 
@@ -1336,22 +1329,22 @@ function CreateQuotePageContent() {
                                                             handlePriceChange(index, val);
                                                         }
                                                     }} 
-                                                    style={{ width: '85px', padding: '0.35rem', textAlign: 'right', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold' }} 
+                                                    style={{ width: '75px', padding: '0.25rem', textAlign: 'right', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', fontWeight: 'bold', fontSize: '0.8rem' }} 
                                                 />
                                             </div>
-                                            <span className="only-print" style={{ fontWeight: '700', color: '#0F172A' }}>${formatPrice(Math.ceil(parseFloat(item.price) || 0))}</span>
+                                            <span className="only-print num-cell" style={{ fontWeight: '600', color: '#0F172A', fontSize: '7.8pt' }}>${formatPrice(Math.ceil(parseFloat(item.price) || 0))}</span>
                                         </td>
                                         
                                         {/* Total */}
-                                        <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                        <td className="num-cell" style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '700', color: '#0F172A', fontSize: '0.84rem' }}>
                                             ${formatPrice(Math.ceil(parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
                                         </td>
                                         
                                         {/* Action Button (No-print) */}
-                                        <td className="no-print" style={{ padding: '1.2rem 0.5rem', textAlign: 'center' }}>
+                                        <td className="no-print" style={{ padding: '0.45rem 0.5rem', textAlign: 'center' }}>
                                             <button 
                                                 onClick={() => removeItem(index)} 
-                                                style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '24px', height: '24px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
+                                                style={{ color: '#EF4444', border: 'none', background: '#FEE2E2', cursor: 'pointer', fontWeight: 'bold', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s', fontSize: '0.8rem' }}
                                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCA5A5'}
                                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
                                             >
@@ -1362,26 +1355,26 @@ function CreateQuotePageContent() {
                                 );
                             })}
                             {/* Totals Rows inside tbody so they only print once at the end */}
-                            <tr style={{ borderTop: '1px solid #E2E8F0', color: '#475569' }}>
+                            <tr style={{ borderTop: '1.5px solid #CBD5E1', color: '#475569' }}>
                                 <td colSpan={4}></td>
-                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal antes de impuestos</td>
-                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
+                                <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.8rem' }}>Subtotal</td>
+                                <td style={{ padding: '0.45rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', color: '#0F172A' }}>
                                     ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0))}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr style={{ color: '#64748B' }}>
                                 <td colSpan={4}></td>
-                                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
-                                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', fontWeight: '500', fontSize: '0.75rem' }}>Impuestos (IVA)</td>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>
                                     ${formatPrice(items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0)/100), 0))}
                                 </td>
                                 <td></td>
                             </tr>
                             <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
                                 <td colSpan={4}></td>
-                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total</td>
-                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
+                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '0.85rem' }}>Total</td>
+                                <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.15rem', color: appSettings.primary_color || '#15803D' }}>
                                     ${formatPrice(
                                         items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)), 0) + 
                                         items.reduce((sum, i) => sum + (Math.ceil(parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 0)) * ((i.iva_rate || 0) / 100), 0)

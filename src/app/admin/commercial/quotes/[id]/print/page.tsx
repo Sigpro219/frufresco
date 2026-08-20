@@ -1,8 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
+
+const formatCategoryTitle = (cat?: string) => {
+    if (!cat) return 'Otros Productos';
+    const c = cat.toUpperCase().trim();
+    if (c === 'FR' || c.startsWith('FRUT')) return 'Frutas';
+    if (c === 'VE' || c.startsWith('VERD')) return 'Verduras';
+    if (c === 'HO' || c.startsWith('HORT')) return 'Hortalizas';
+    if (c === 'TU' || c.startsWith('TUBER') || c.startsWith('TUBÉR')) return 'Tubérculos y Plátanos';
+    if (c === 'DE' || c.startsWith('DESP') || c.startsWith('ABARR')) return 'Despensa y Abarrotes';
+    if (c === 'LA' || c.startsWith('LACT') || c.startsWith('LÁCT')) return 'Lácteos y Derivados';
+    if (c === 'CO' || c.startsWith('CONG') || c.startsWith('PULP')) return 'Congelados y Pulpas';
+    if (c === 'PR' || c.startsWith('PROC') || c.startsWith('PELAD')) return 'Procesados y Pelados';
+    if (c === 'HI' || c.startsWith('HIER')) return 'Hierbas Aromáticas';
+    return cat;
+};
+
+// 1. Frutas, 2. Verduras, 3. Hortalizas, luego las demás
+const CATEGORY_PRIORITY = [
+    'Frutas',
+    'Verduras',
+    'Hortalizas',
+    'Tubérculos y Plátanos',
+    'Despensa y Abarrotes',
+    'Lácteos y Derivados',
+    'Congelados y Pulpas',
+    'Procesados y Pelados',
+    'Hierbas Aromáticas',
+    'Otros Productos'
+];
 
 export default function PrintQuotePage() {
     const formatPrice = (value: number) => {
@@ -86,10 +115,10 @@ export default function PrintQuotePage() {
                 if (cData) setClientInfo(cData);
             }
 
-            // Load Items
+            // Load Items with product category
             const { data: iData } = await supabase
                 .from('quote_items')
-                .select('*, products(name, unit_of_measure)')
+                .select('*, products(name, unit_of_measure, sku, category)')
                 .eq('quote_id', params.id);
 
             if (iData) setItems(iData);
@@ -124,6 +153,44 @@ export default function PrintQuotePage() {
         }
     }, [loading, quote, logoLoaded]);
 
+    // Grouping & Strict Hierarchical + Alphabetical Sorting
+    const groupedCategories = useMemo(() => {
+        const catMap = new Map<string, any[]>();
+
+        items.forEach(item => {
+            const rawCat = item.products?.category || item.category || 'Otros Productos';
+            const catTitle = formatCategoryTitle(rawCat);
+            if (!catMap.has(catTitle)) {
+                catMap.set(catTitle, []);
+            }
+            catMap.get(catTitle)!.push(item);
+        });
+
+        const groups: { category: string; items: any[] }[] = [];
+
+        catMap.forEach((groupItems, category) => {
+            // Orden alfabético estricto dentro de cada categoría
+            groupItems.sort((a, b) => {
+                const nameA = (a.product_name || a.products?.name || '').toString().toLowerCase();
+                const nameB = (b.product_name || b.products?.name || '').toString().toLowerCase();
+                return nameA.localeCompare(nameB, 'es', { numeric: true, sensitivity: 'base' });
+            });
+            groups.push({ category, items: groupItems });
+        });
+
+        // Orden estricto de categorías: 1. Frutas, 2. Verduras, 3. Hortalizas, etc.
+        groups.sort((a, b) => {
+            const idxA = CATEGORY_PRIORITY.indexOf(a.category);
+            const idxB = CATEGORY_PRIORITY.indexOf(b.category);
+            const prioA = idxA !== -1 ? idxA : 999;
+            const prioB = idxB !== -1 ? idxB : 999;
+            if (prioA !== prioB) return prioA - prioB;
+            return a.category.localeCompare(b.category, 'es');
+        });
+
+        return groups;
+    }, [items]);
+
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#64748B' }}>
@@ -140,6 +207,8 @@ export default function PrintQuotePage() {
         );
     }
 
+    let globalCounter = 0;
+
     return (
         <div className="print-container">
             {/* Styles to inject print specifics */}
@@ -150,11 +219,11 @@ export default function PrintQuotePage() {
                     margin: 0;
                     padding: 0;
                     color: #0F172A;
-                    font-family: system-ui, -apple-system, sans-serif;
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                     -webkit-print-color-adjust: exact;
                     print-color-adjust: exact;
-                    font-size: 8.5pt;
-                    line-height: 1.3;
+                    font-size: 7.8pt;
+                    line-height: 1.25;
                 }
                 .print-container {
                     padding: 0;
@@ -165,39 +234,34 @@ export default function PrintQuotePage() {
                 table { width: 100%; border-collapse: collapse; }
                 thead { display: table-header-group; }
                 tfoot { display: table-row-group; }
-                tfoot.print-spacer-tfoot { display: none !important; }
-                .print-footer { display: none !important; }
                 tr { page-break-inside: avoid; }
-                tr.item-row { border-bottom: 1px solid #E2E8F0; }
+                tr.item-row { border-bottom: 1px solid #F1F5F9; }
+                tr.item-row:nth-child(even) { background-color: #FAFAFA; }
                 th, td {
-                    padding: 4px 6px;
-                    font-size: 8.5pt;
-                    line-height: 1.3;
+                    padding: 3.5px 5px;
+                    font-size: 7.8pt;
+                    line-height: 1.2;
                     text-align: left;
                 }
-                h1 { font-size: 14pt; margin: 0 0 4px 0; }
-                h2, h3, h4 { font-size: 10pt; margin: 0 0 2px 0; }
-                p, span, div { font-size: 8.5pt; }
+                .num-cell {
+                    font-variant-numeric: tabular-nums;
+                    letter-spacing: -0.01em;
+                }
+                h1 { font-size: 13pt; margin: 0 0 3px 0; }
+                h2, h3, h4 { font-size: 9.5pt; margin: 0 0 2px 0; }
+                p, span, div { font-size: 7.8pt; }
 
-                @page {
-                    size: letter portrait;
-                    margin: 1.5cm 1.5cm 2cm 1.5cm;
-                    @bottom-left {
-                        content: "${appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}";
-                        font-size: 7.5pt;
-                        color: #94A3B8;
-                        font-family: system-ui, -apple-system, sans-serif;
-                        border-top: 1px solid #E2E8F0;
-                        padding-top: 4px;
+                @media print {
+                    @page {
+                        size: letter portrait;
+                        margin: 1.1cm 1.3cm 1.3cm 1.3cm;
                     }
-                    @bottom-right {
-                        content: "Página " counter(page) " de " counter(pages);
-                        font-size: 7.5pt;
-                        color: #94A3B8;
-                        font-family: system-ui, -apple-system, sans-serif;
-                        border-top: 1px solid #E2E8F0;
-                        padding-top: 4px;
+                    html, body {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: white !important;
                     }
+                    .page-break-avoid { page-break-inside: avoid; }
                 }
             ` }} />
 
@@ -207,27 +271,27 @@ export default function PrintQuotePage() {
                 top: '40%',
                 left: '50%',
                 transform: 'translate(-50%, -50%) rotate(-30deg)',
-                width: '450px',
-                height: '450px',
+                width: '380px',
+                height: '380px',
                 backgroundImage: `url(${appSettings.provider_logo_url || appSettings.app_logo_url})`,
                 backgroundRepeat: 'no-repeat',
                 backgroundPosition: 'center',
                 backgroundSize: 'contain',
-                opacity: 0.03,
+                opacity: 0.025,
                 pointerEvents: 'none',
                 zIndex: 0
             }} />
 
-            <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ position: 'relative', zIndex: 1, padding: '1.25rem 1.75rem', maxWidth: '850px', margin: '0 auto' }}>
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                     <div>
                         {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
-                            <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo" style={{ maxHeight: '75px', objectFit: 'contain' }} />
+                            <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo" style={{ maxHeight: '60px', objectFit: 'contain' }} />
                         )}
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#475569', lineHeight: '1.4' }}>
-                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1.1rem' }}>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}</div>
+                    <div style={{ textAlign: 'right', fontSize: '7.8pt', color: '#475569', lineHeight: '1.3' }}>
+                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '9.5pt' }}>{appSettings.provider_legal_name || 'Investments Cortés S.A.S.'}</div>
                         <div>NIT: {appSettings.provider_nit || '901.393.217'}</div>
                         <div>{appSettings.provider_address || 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C.'}</div>
                         <div>{appSettings.provider_email || 'contacto@investmentscortes.com'}</div>
@@ -235,17 +299,17 @@ export default function PrintQuotePage() {
                 </div>
 
                 {/* Solid Divider */}
-                <div style={{ borderTop: `3px solid ${appSettings.primary_color || '#15803D'}`, margin: '1.5rem 0 2rem 0' }}></div>
+                <div style={{ borderTop: `2.5px solid ${appSettings.primary_color || '#15803D'}`, margin: '0.6rem 0 1rem 0' }}></div>
 
                 {/* Metadata block */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
-                    <div style={{ width: '50%' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Propuesta para:</div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>{quote.client_name}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.1rem', backgroundColor: '#F8FAFC', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ width: '55%' }}>
+                        <div style={{ fontSize: '7pt', color: '#64748B', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Propuesta para:</div>
+                        <div style={{ fontSize: '11pt', fontWeight: '800', color: '#0F172A', marginBottom: '0.15rem' }}>{quote.client_name}</div>
                         {clientInfo ? (
-                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                            <div style={{ fontSize: '7.8pt', color: '#475569', lineHeight: '1.35' }}>
                                 {clientInfo.company_name && clientInfo.company_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
-                                    <div>{clientInfo.company_name}</div>
+                                    <div style={{ fontWeight: '600' }}>{clientInfo.company_name}</div>
                                 )}
                                 {clientInfo.nit && <div>NIT: {clientInfo.nit}</div>}
                                 {clientInfo.contact_name && <div>Atención: {clientInfo.contact_name}</div>}
@@ -253,9 +317,9 @@ export default function PrintQuotePage() {
                                 {clientInfo.address && <div>Dirección: {clientInfo.address}</div>}
                             </div>
                         ) : lead ? (
-                            <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
+                            <div style={{ fontSize: '7.8pt', color: '#475569', lineHeight: '1.35' }}>
                                 {lead.company_name && lead.company_name.trim().toLowerCase() !== (quote.client_name || '').trim().toLowerCase() && (
-                                    <div>{lead.company_name}</div>
+                                    <div style={{ fontWeight: '600' }}>{lead.company_name}</div>
                                 )}
                                 {lead.nit && <div>NIT: {lead.nit}</div>}
                                 {lead.contact_name && <div>Atención: {lead.contact_name}</div>}
@@ -266,120 +330,147 @@ export default function PrintQuotePage() {
                                 )}
                             </div>
                         ) : (
-                            <div style={{ fontSize: '0.9rem', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
+                            <div style={{ fontSize: '7.8pt', color: '#64748B', fontStyle: 'italic' }}>Consumidor Final</div>
                         )}
                     </div>
-                     <div style={{ width: '50%', textAlign: 'right' }}>
-                         <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                             {quote.lead_id ? 'Propuesta Comercial' : 'Cotización'}
-                         </div>
-                         <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.25rem' }}>
-                             {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'COTIZACIÓN'}
-                         </div>
-                         <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-                             <div>Fecha: {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
-                             <div>Validez: 30 días</div>
-                         </div>
-                     </div>
+                    <div style={{ width: '40%', textAlign: 'right' }}>
+                        <div style={{ fontSize: '7pt', color: '#64748B', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+                            {quote.lead_id ? 'Propuesta Comercial' : 'Cotización'}
+                        </div>
+                        <div style={{ fontSize: '11pt', fontWeight: '800', color: appSettings.primary_color || '#15803D', marginBottom: '0.2rem' }}>
+                            {quote.quote_number ? formatQuoteNumber(quote.quote_number, quote.created_at) : 'COTIZACIÓN'}
+                        </div>
+                        <div style={{ fontSize: '7.8pt', color: '#475569', lineHeight: '1.35' }}>
+                            <div><strong>Fecha:</strong> {quote.start_date || new Date(quote.created_at).toISOString().split('T')[0]}</div>
+                            <div><strong>Vigencia:</strong> 30 días calendario</div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Table */}
-                <table style={{ marginBottom: '3rem' }}>
+                {/* Table with Compact Rows & Category Sections */}
+                <table style={{ width: '100%', marginBottom: '1.2rem' }}>
                     <thead>
-                        <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#94A3B8' }}>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%' }}>#</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '45%' }}>Producto</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'center' }}>Cant.</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Valor Unitario</th>
-                            <th style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'right' }}>Total</th>
+                        <tr style={{ borderBottom: '1.5px solid #CBD5E1', color: '#475569', backgroundColor: '#F1F5F9' }}>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%', textAlign: 'center' }}>#</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '46%' }}>Producto</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'center' }}>U.M.</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Valor Unitario</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Total</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {[...items].sort((a, b) => {
-                            const skuA = (a.sku || a.products?.sku || a.product_name || a.products?.name || '').toString().toLowerCase();
-                            const skuB = (b.sku || b.products?.sku || b.product_name || b.products?.name || '').toString().toLowerCase();
-                            return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
-                        }).map((item, index) => {
+                        {groupedCategories.map((group) => {
                             return (
-                                <tr key={item.id || index} className="item-row">
-                                    <td style={{ fontSize: '1.1rem', fontWeight: '800', color: '#CBD5E1' }}>
-                                        {String(index + 1).padStart(2, '0')}
-                                    </td>
-                                    <td>
-                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.95rem' }}>{item.product_name || item.products?.name}</div>
-                                    </td>
-                                    <td style={{ textAlign: 'center', fontWeight: '700', color: '#0F172A' }}>
-                                        {item.quantity} {item.products?.unit_of_measure || 'Kg'}
-                                    </td>
-                                    <td style={{ textAlign: 'center', fontWeight: '700', color: '#0F172A' }}>
-                                        {item.iva_rate || 0}%
-                                    </td>
-                                    <td style={{ textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
-                                        ${formatPrice(Math.ceil(item.unit_price))}
-                                    </td>
-                                    <td style={{ textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
-                                        ${formatPrice(Math.ceil(item.total_price))}
-                                    </td>
-                                </tr>
+                                <React.Fragment key={group.category}>
+                                    {/* Category Subheader Banner */}
+                                    <tr style={{ backgroundColor: '#F8FAFC', pageBreakInside: 'avoid' }}>
+                                        <td colSpan={6} style={{ 
+                                            padding: '4px 6px', 
+                                            borderLeft: `3px solid ${appSettings.primary_color || '#15803D'}`,
+                                            borderTop: '1px solid #E2E8F0',
+                                            borderBottom: '1px solid #E2E8F0'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <span style={{ fontWeight: '800', fontSize: '7.5pt', color: '#0F172A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                                    {group.category}
+                                                </span>
+                                                <span style={{ fontSize: '6.8pt', fontWeight: '700', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: '4px' }}>
+                                                    {group.items.length} {group.items.length === 1 ? 'producto' : 'productos'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    {/* Products under this category (Alphabetically sorted) */}
+                                    {group.items.map((item) => {
+                                        globalCounter++;
+                                        const unitPrice = Math.ceil(item.unit_price || 0);
+                                        const totalPrice = Math.ceil(item.total_price || (unitPrice * (item.quantity || 1)));
+                                        const unitLabel = item.products?.unit_of_measure || item.unit || 'Kg';
+
+                                        return (
+                                            <tr key={item.id || globalCounter} className="item-row">
+                                                <td style={{ textAlign: 'center', fontSize: '7.2pt', fontWeight: '700', color: '#94A3B8' }}>
+                                                    {String(globalCounter).padStart(2, '0')}
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontWeight: '600', color: '#1E293B', fontSize: '7.8pt' }}>
+                                                        {item.product_name || item.products?.name}
+                                                    </div>
+                                                </td>
+                                                <td style={{ textAlign: 'center', fontWeight: '500', color: '#475569', fontSize: '7.5pt' }}>
+                                                    {item.quantity || 1} {unitLabel}
+                                                </td>
+                                                <td style={{ textAlign: 'center', fontWeight: '500', color: '#64748B', fontSize: '7.2pt' }}>
+                                                    {item.iva_rate || 0}%
+                                                </td>
+                                                <td className="num-cell" style={{ textAlign: 'right', fontWeight: '600', color: '#0F172A', fontSize: '7.8pt' }}>
+                                                    ${formatPrice(unitPrice)}
+                                                </td>
+                                                <td className="num-cell" style={{ textAlign: 'right', fontWeight: '700', color: '#0F172A', fontSize: '7.8pt' }}>
+                                                    ${formatPrice(totalPrice)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </React.Fragment>
                             );
                         })}
                     </tbody>
                     <tfoot>
-                        <tr style={{ color: '#475569' }}>
+                        <tr style={{ color: '#475569', borderTop: '1.5px solid #CBD5E1' }}>
                             <td colSpan={4}></td>
-                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem' }}>Subtotal</td>
-                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: '700', fontSize: '1.05rem', color: '#0F172A' }}>
-                                ${formatPrice(Math.ceil(quote.subtotal_amount))}
+                            <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '600', fontSize: '7.8pt' }}>Subtotal</td>
+                            <td className="num-cell" style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '700', fontSize: '8.5pt', color: '#0F172A' }}>
+                                ${formatPrice(Math.ceil(quote.subtotal_amount || quote.total_amount))}
                             </td>
                         </tr>
                         <tr style={{ color: '#64748B' }}>
                             <td colSpan={4}></td>
-                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem' }}>Impuestos (IVA)</td>
-                            <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', fontWeight: '600', fontSize: '0.95rem' }}>
-                                ${formatPrice(Math.ceil(quote.total_tax_amount))}
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '500', fontSize: '7.5pt' }}>Impuestos (IVA)</td>
+                            <td className="num-cell" style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '600', fontSize: '8pt' }}>
+                                ${formatPrice(Math.ceil(quote.total_tax_amount || 0))}
                             </td>
                         </tr>
                         <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
                             <td colSpan={4}></td>
-                            <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>Total General</td>
-                            <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem', color: appSettings.primary_color || '#15803D' }}>
-                                ${formatPrice(Math.ceil(quote.total_amount))}
+                            <td style={{ padding: '6px 6px', textAlign: 'right', fontWeight: '900', fontSize: '8.5pt' }}>Total General</td>
+                            <td className="num-cell" style={{ padding: '6px 6px', textAlign: 'right', fontWeight: '900', fontSize: '10.5pt', color: appSettings.primary_color || '#15803D' }}>
+                                ${formatPrice(Math.ceil(quote.total_amount))} COP
                             </td>
                         </tr>
                     </tfoot>
                 </table>
                 
                 {quote.lead_id && (
-                    <div style={{
-                        marginTop: '2rem',
-                        padding: '1.25rem',
+                    <div className="page-break-avoid" style={{
+                        marginTop: '1rem',
+                        padding: '0.75rem 1rem',
                         backgroundColor: '#F0FDF4',
-                        borderLeft: `4px solid ${appSettings.primary_color || '#15803D'}`,
+                        borderLeft: `3.5px solid ${appSettings.primary_color || '#15803D'}`,
                         borderRadius: '6px',
-                        textAlign: 'center',
-                        pageBreakInside: 'avoid'
+                        textAlign: 'center'
                     }}>
-                        <div style={{ fontWeight: '800', fontSize: '1rem', color: '#166534', marginBottom: '0.4rem' }}>
+                        <div style={{ fontWeight: '800', fontSize: '8.2pt', color: '#166534', marginBottom: '0.2rem' }}>
                             💡 ¿Quieres recibir una oferta personalizada?
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: '#15803D', lineHeight: '1.4' }}>
+                        <div style={{ fontSize: '7.5pt', color: '#15803D', lineHeight: '1.3' }}>
                             Esta es una pre-cotización estimada con precios estándar de tu categoría. 
                             <strong> Ponte en contacto con nosotros al WhatsApp </strong> para formalizar tu cuenta y negociar tarifas especiales según tu consumo real.
                         </div>
                     </div>
                 )}
 
-                <div style={{
-                    marginTop: '1rem',
-                    padding: '0.75rem 1rem',
+                <div className="page-break-avoid" style={{
+                    marginTop: '0.65rem',
+                    padding: '0.5rem 0.75rem',
                     backgroundColor: '#F8FAFC',
                     border: '1px solid #E2E8F0',
                     borderRadius: '6px',
-                    fontSize: '0.73rem',
+                    fontSize: '6.8pt',
                     color: '#64748B',
-                    lineHeight: '1.45',
-                    pageBreakInside: 'avoid'
+                    lineHeight: '1.35'
                 }}>
                     <strong style={{ color: '#475569' }}>Términos y Condiciones Legales:</strong> Esta pre-cotización tiene un propósito exclusivamente informativo y orientativo, por lo que <strong>no constituye una oferta comercial vinculante</strong> ni genera obligación contractual para FruFresco (Investments Cortés S.A.S.). Las tarifas presentadas tienen una <strong>vigencia de ocho (8) días calendario</strong> a partir de su fecha de emisión y están sujetas a variaciones de mercado o disponibilidad de cosecha.
                 </div>

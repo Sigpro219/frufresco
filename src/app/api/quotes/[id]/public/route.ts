@@ -59,10 +59,10 @@ export async function GET(
             if (cData) clientInfo = cData;
         }
 
-        // 3. Fetch Items
+        // 3. Fetch Items with category
         const { data: items } = await supabase
             .from('quote_items')
-            .select('*, products(name, unit_of_measure, sku)')
+            .select('*, products(name, unit_of_measure, sku, category)')
             .eq('quote_id', id);
 
         return NextResponse.json({

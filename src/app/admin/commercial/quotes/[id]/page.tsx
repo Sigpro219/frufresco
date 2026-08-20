@@ -1,11 +1,40 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME } from '@/lib/adminTheme';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Edit3, Rocket, FileSpreadsheet, MessageCircle, Printer, CheckCircle, Handshake } from 'lucide-react';
+
+const formatCategoryTitle = (cat?: string) => {
+    if (!cat) return 'Otros Productos';
+    const c = cat.toUpperCase().trim();
+    if (c === 'FR' || c.startsWith('FRUT')) return 'Frutas';
+    if (c === 'VE' || c.startsWith('VERD')) return 'Verduras';
+    if (c === 'HO' || c.startsWith('HORT')) return 'Hortalizas';
+    if (c === 'TU' || c.startsWith('TUBER') || c.startsWith('TUBÉR')) return 'Tubérculos y Plátanos';
+    if (c === 'DE' || c.startsWith('DESP') || c.startsWith('ABARR')) return 'Despensa y Abarrotes';
+    if (c === 'LA' || c.startsWith('LACT') || c.startsWith('LÁCT')) return 'Lácteos y Derivados';
+    if (c === 'CO' || c.startsWith('CONG') || c.startsWith('PULP')) return 'Congelados y Pulpas';
+    if (c === 'PR' || c.startsWith('PROC') || c.startsWith('PELAD')) return 'Procesados y Pelados';
+    if (c === 'HI' || c.startsWith('HIER')) return 'Hierbas Aromáticas';
+    return cat;
+};
+
+// 1. Frutas, 2. Verduras, 3. Hortalizas, luego las demás
+const CATEGORY_PRIORITY = [
+    'Frutas',
+    'Verduras',
+    'Hortalizas',
+    'Tubérculos y Plátanos',
+    'Despensa y Abarrotes',
+    'Lácteos y Derivados',
+    'Congelados y Pulpas',
+    'Procesados y Pelados',
+    'Hierbas Aromáticas',
+    'Otros Productos'
+];
 
 export default function QuoteDetailPage() {
     const formatPrice = (value: number) => {
@@ -80,15 +109,53 @@ export default function QuoteDetailPage() {
             if (lData) setLead(lData);
         }
 
-        // Load Items (Joins product to get the name)
+        // Load Items (Joins product to get the name, sku, unit, and category)
         const { data: iData } = await supabase
             .from('quote_items')
-            .select('*, products(name)')
+            .select('*, products(name, unit_of_measure, sku, category)')
             .eq('quote_id', params.id);
 
         if (iData) setItems(iData);
         setLoading(false);
     };
+
+    // Grouping & Strict Hierarchical + Alphabetical Sorting
+    const groupedCategories = useMemo(() => {
+        const catMap = new Map<string, any[]>();
+
+        items.forEach(item => {
+            const rawCat = item.products?.category || item.category || 'Otros Productos';
+            const catTitle = formatCategoryTitle(rawCat);
+            if (!catMap.has(catTitle)) {
+                catMap.set(catTitle, []);
+            }
+            catMap.get(catTitle)!.push(item);
+        });
+
+        const groups: { category: string; items: any[] }[] = [];
+
+        catMap.forEach((groupItems, category) => {
+            // Orden alfabético estricto dentro de cada categoría
+            groupItems.sort((a, b) => {
+                const nameA = (a.product_name || a.products?.name || '').toString().toLowerCase();
+                const nameB = (b.product_name || b.products?.name || '').toString().toLowerCase();
+                return nameA.localeCompare(nameB, 'es', { numeric: true, sensitivity: 'base' });
+            });
+            groups.push({ category, items: groupItems });
+        });
+
+        // Orden estricto de categorías: 1. Frutas, 2. Verduras, 3. Hortalizas, etc.
+        groups.sort((a, b) => {
+            const idxA = CATEGORY_PRIORITY.indexOf(a.category);
+            const idxB = CATEGORY_PRIORITY.indexOf(b.category);
+            const prioA = idxA !== -1 ? idxA : 999;
+            const prioB = idxB !== -1 ? idxB : 999;
+            if (prioA !== prioB) return prioA - prioB;
+            return a.category.localeCompare(b.category, 'es');
+        });
+
+        return groups;
+    }, [items]);
 
     // --- CONVERSION LOGIC ---
     const handleConvertClick = async () => {
@@ -541,56 +608,105 @@ export default function QuoteDetailPage() {
                 )}
 
                 {/* ITEMS TABLE */}
-                <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                            <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Producto</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Cant</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Costo Base</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Margen</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>IVA</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right' }}>Precio Unit.</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right' }}>Total</th>
+                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%', textAlign: 'center' }}>#</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Producto</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Cant. / U.M.</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Costo Base</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Margen</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>IVA</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Precio Unit.</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {[...items].sort((a, b) => {
-                                const skuA = (a.sku || a.products?.sku || a.product_name || a.products?.name || '').toString().toLowerCase();
-                                const skuB = (b.sku || b.products?.sku || b.product_name || b.products?.name || '').toString().toLowerCase();
-                                return skuA.localeCompare(skuB, 'es', { numeric: true, sensitivity: 'base' });
-                            }).map(item => (
-                                <tr key={item.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.product_name || item.products?.name || 'Producto'}</td>
-                                    <td style={{ padding: '1rem' }}>{item.quantity} {item.unit || ''}</td>
-                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${formatPrice(item.cost_basis || 0)}</td>
-                                    <td style={{ padding: '1rem', color: '#2563EB', fontWeight: 'bold' }}>{Math.round((item.margin_percent || 0) * 10) / 10}%</td>
-                                    <td style={{ padding: '1rem', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem' }}>{item.iva_rate || 0}%</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${formatPrice(item.unit_price || 0)}</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${formatPrice((item.quantity || 0) * (item.unit_price || 0))}</td>
-                                </tr>
-                            ))}
+                            {(() => {
+                                let counter = 0;
+                                return groupedCategories.map(group => (
+                                    <React.Fragment key={group.category}>
+                                        {/* Category Subheader Banner */}
+                                        <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                            <td colSpan={8} style={{ 
+                                                padding: '0.45rem 0.85rem', 
+                                                borderLeft: '3.5px solid #10B981',
+                                                borderTop: '1px solid #E2E8F0',
+                                                borderBottom: '1px solid #E2E8F0'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <span style={{ fontWeight: '800', fontSize: '0.78rem', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                        {group.category}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B', backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px' }}>
+                                                        {group.items.length} {group.items.length === 1 ? 'ítem' : 'ítems'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        {/* Items in Category (Alphabetically sorted) */}
+                                        {group.items.map(item => {
+                                            counter++;
+                                            const unitPrice = item.unit_price || 0;
+                                            const qty = item.quantity || 1;
+                                            const totalPrice = item.total_price || (unitPrice * qty);
+                                            const unitLabel = item.products?.unit_of_measure || item.unit || 'Kg';
+
+                                            return (
+                                                <tr key={item.id || counter} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#94A3B8' }}>
+                                                        {String(counter).padStart(2, '0')}
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', fontWeight: '600', color: '#1E293B', fontSize: '0.84rem' }}>
+                                                        {item.product_name || item.products?.name || 'Producto'}
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', color: '#475569', fontSize: '0.8rem' }}>
+                                                        {qty} {unitLabel}
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'right', color: '#64748B', fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                        ${formatPrice(item.cost_basis || 0)}
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', color: '#2563EB', fontWeight: '700', fontSize: '0.8rem' }}>
+                                                        {Math.round((item.margin_percent || 0) * 10) / 10}%
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', color: '#64748B', fontSize: '0.78rem' }}>
+                                                        {item.iva_rate || 0}%
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'right', fontWeight: '700', color: '#0F172A', fontSize: '0.84rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                        ${formatPrice(unitPrice)}
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'right', fontWeight: '800', color: '#0F172A', fontSize: '0.84rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                        ${formatPrice(totalPrice)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                ));
+                            })()}
                         </tbody>
                         <tfoot>
-                            <tr style={{ borderTop: '2px solid #E5E7EB' }}>
-                                <td colSpan={5}></td>
-                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>Subtotal antes de impuestos</td>
-                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                                    ${formatPrice(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)), 0))}
+                            <tr style={{ borderTop: '2px solid #E5E7EB', color: '#475569' }}>
+                                <td colSpan={6}></td>
+                                <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem' }}>Subtotal</td>
+                                <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right', fontWeight: '700', fontSize: '0.95rem', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                    ${formatPrice(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity || 1) * (i.unit_price || 0)), 0))}
                                 </td>
                             </tr>
-                            <tr style={{ color: '#4B5563' }}>
-                                <td colSpan={5}></td>
-                                <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>Impuestos</td>
-                                <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
-                                    ${formatPrice(quote?.total_tax_amount || items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unit_price || 0)) * ((i.iva_rate || 0) / 100), 0))}
+                            <tr style={{ color: '#64748B' }}>
+                                <td colSpan={6}></td>
+                                <td style={{ padding: '0.4rem 0.85rem', textAlign: 'right', fontWeight: '600', fontSize: '0.8rem' }}>Impuestos (IVA)</td>
+                                <td style={{ padding: '0.4rem 0.85rem', textAlign: 'right', fontWeight: '600', fontSize: '0.88rem', fontVariantNumeric: 'tabular-nums' }}>
+                                    ${formatPrice(quote?.total_tax_amount || items.reduce((sum, i) => sum + ((i.quantity || 1) * (i.unit_price || 0)) * ((i.iva_rate || 0) / 100), 0))}
                                 </td>
                             </tr>
-                            <tr style={{ backgroundColor: '#F9FAFB' }}>
-                                <td colSpan={5}></td>
-                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900' }}>Total</td>
-                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.5rem', color: '#059669' }}>
-                                    ${formatPrice(quote?.total_amount || 0)}
+                            <tr style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+                                <td colSpan={6}></td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontWeight: '900', fontSize: '0.95rem', color: '#0F172A' }}>Total Cotización</td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', fontWeight: '900', fontSize: '1.25rem', color: '#059669', fontVariantNumeric: 'tabular-nums' }}>
+                                    ${formatPrice(quote?.total_amount || 0)} COP
                                 </td>
                             </tr>
                         </tfoot>
