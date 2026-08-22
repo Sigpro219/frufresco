@@ -178,10 +178,6 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         Object.entries(selections).every(([key, value]) => v.options[key] === value)
     );
 
-    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
-    const isPriceValid = (currentPrice || 0) > 0;
-    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? isPriceValid : (!!currentVariant && isPriceValid)) : isPriceValid;
-    
     // Aplicar factor de conversión comercial
     const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price) : (product.pricing_model_prices?.[0]?.price || product.base_price);
     
@@ -195,6 +191,10 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const originalBasePrice = product.campaign_info ? product.campaign_info.originalPrice : basePrice;
     const originalPriceWithAdjustment = originalBasePrice * (1 + adjustmentPercent / 100);
     const originalPrice = Math.ceil((originalPriceWithAdjustment * activeConversionFactor) / 50) * 50;
+
+    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
+    const isPriceValid = (currentPrice || 0) > 0;
+    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? isPriceValid : (!!currentVariant && isPriceValid)) : isPriceValid;
 
     const getFormattedOptionName = (name: string, isEn?: boolean) => {
         const lower = name.toLowerCase();
