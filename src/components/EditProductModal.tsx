@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
-import { Wand2, Sparkles, Loader2, ShieldAlert } from 'lucide-react';
+import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 
@@ -1208,12 +1208,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             {/* PRESETS RÁPIDOS DE CAMPAÑAS */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                                 {[
-                                    { label: 'PROMOCION', icon: '🏷️', activeBg: '#FEF2F2', activeColor: '#DC2626', activeBorder: '#FCA5A5' },
-                                    { label: 'COSECHA', icon: '🌾', activeBg: '#ECFDF5', activeColor: '#059669', activeBorder: '#A7F3D0' },
-                                    { label: 'TEMPORADA', icon: '🍃', activeBg: '#ECFDF5', activeColor: '#059669', activeBorder: '#A7F3D0' },
-                                    { label: 'BEST SELLER', icon: '🔥', activeBg: '#FFFBEB', activeColor: '#D97706', activeBorder: '#FDE68A' },
-                                    { label: 'OFERTA', icon: '⚡', activeBg: '#FEF2F2', activeColor: '#DC2626', activeBorder: '#FCA5A5' },
-                                    { label: 'GOURMET', icon: '⭐', activeBg: '#F5F3FF', activeColor: '#7C3AED', activeBorder: '#DDD6FE' }
+                                    { label: 'PROMOCION', type: 'promo', activeBg: '#FEF2F2', activeColor: '#DC2626', activeBorder: '#FCA5A5' },
+                                    { label: 'COSECHA', type: 'harvest', activeBg: '#ECFDF5', activeColor: '#059669', activeBorder: '#A7F3D0' },
+                                    { label: 'TEMPORADA', type: 'season', activeBg: '#ECFDF5', activeColor: '#059669', activeBorder: '#A7F3D0' },
+                                    { label: 'BEST SELLER', type: 'bestseller', activeBg: '#FFFBEB', activeColor: '#D97706', activeBorder: '#FDE68A' },
+                                    { label: 'OFERTA', type: 'flash', activeBg: '#FEF2F2', activeColor: '#DC2626', activeBorder: '#FCA5A5' },
+                                    { label: 'GOURMET', type: 'gourmet', activeBg: '#F5F3FF', activeColor: '#7C3AED', activeBorder: '#DDD6FE' }
                                 ].map((preset) => {
                                     const isSelected = (formData.tags || []).some(t => t.toUpperCase() === preset.label);
                                     return (
@@ -1237,7 +1237,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             style={{
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '4px',
+                                                gap: '5px',
                                                 padding: '4px 10px',
                                                 borderRadius: '20px',
                                                 fontSize: '0.72rem',
@@ -1250,11 +1250,23 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
                                             }}
                                         >
-                                            <span>{preset.icon}</span>
+                                            {preset.type === 'promo' ? (
+                                                <Tag size={12} strokeWidth={2.5} />
+                                            ) : preset.type === 'harvest' || preset.type === 'season' ? (
+                                                <Leaf size={12} strokeWidth={2.5} />
+                                            ) : preset.type === 'bestseller' ? (
+                                                <Flame size={12} strokeWidth={2.5} />
+                                            ) : preset.type === 'flash' ? (
+                                                <Zap size={12} strokeWidth={2.5} />
+                                            ) : (
+                                                <Sparkles size={12} strokeWidth={2.5} />
+                                            )}
                                             <span>{preset.label}</span>
-                                            <span style={{ fontSize: '0.8rem', marginLeft: '2px', fontWeight: '900' }}>
-                                                {isSelected ? '✓' : '+'}
-                                            </span>
+                                            {isSelected ? (
+                                                <Check size={12} strokeWidth={3} style={{ marginLeft: '2px' }} />
+                                            ) : (
+                                                <Plus size={12} strokeWidth={2.5} style={{ marginLeft: '2px' }} />
+                                            )}
                                         </button>
                                     );
                                 })}

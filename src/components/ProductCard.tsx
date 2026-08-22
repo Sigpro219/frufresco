@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Product } from '../lib/supabase';
-import { Apple, Eye, Info } from 'lucide-react';
+import { Apple, Eye, Info, Tag, Leaf, Flame, Sparkles, Zap } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
@@ -149,7 +149,7 @@ export default function ProductCard({ product }: { product: Product }) {
                         </button>
                     </div>
 
-                    {/* BADGES DE ETIQUETAS (TAGS) */}
+                    {/* BADGES DE ETIQUETAS (TAGS CON LUCIDE ICONS) */}
                     <div style={{ 
                         position: 'absolute', 
                         top: '12px', 
@@ -161,12 +161,13 @@ export default function ProductCard({ product }: { product: Product }) {
                     }}>
                         {product.tags?.map((tag, i) => {
                             const lower = (tag || '').toLowerCase();
-                            const isPromo = lower.includes('promo') || lower.includes('oferta') || lower.includes('descuento');
+                            const isPromo = lower.includes('promo') || lower.includes('descuento');
+                            const isFlash = lower.includes('oferta') || lower.includes('flash') || lower.includes('rayo');
                             const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
                             const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
                             const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
                             
-                            const bg = isPromo 
+                            const bg = (isPromo || isFlash) 
                                 ? '#FEF2F2' 
                                 : isHarvest 
                                 ? '#ECFDF5' 
@@ -176,7 +177,7 @@ export default function ProductCard({ product }: { product: Product }) {
                                 ? '#F5F3FF' 
                                 : 'rgba(255, 255, 255, 0.95)';
                                 
-                            const color = isPromo 
+                            const color = (isPromo || isFlash) 
                                 ? '#DC2626' 
                                 : isHarvest 
                                 ? '#059669' 
@@ -186,7 +187,7 @@ export default function ProductCard({ product }: { product: Product }) {
                                 ? '#7C3AED' 
                                 : 'var(--primary-dark)';
 
-                            const border = isPromo 
+                            const border = (isPromo || isFlash) 
                                 ? '1px solid #FCA5A5' 
                                 : isHarvest 
                                 ? '1px solid #A7F3D0' 
@@ -195,8 +196,6 @@ export default function ProductCard({ product }: { product: Product }) {
                                 : isGourmet 
                                 ? '1px solid #DDD6FE' 
                                 : '1px solid rgba(0, 0, 0, 0.08)';
-
-                            const icon = isPromo ? '🏷️ ' : isHarvest ? '🌾 ' : isBestSeller ? '🔥 ' : isGourmet ? '⭐ ' : '';
                             
                             return (
                                 <div key={i} style={{ 
@@ -214,9 +213,21 @@ export default function ProductCard({ product }: { product: Product }) {
                                     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '3px'
+                                    gap: '4px'
                                 }}>
-                                    <span>{icon}</span>
+                                    {isFlash ? (
+                                        <Zap size={11} strokeWidth={2.5} />
+                                    ) : isPromo ? (
+                                        <Tag size={11} strokeWidth={2.5} />
+                                    ) : isHarvest ? (
+                                        <Leaf size={11} strokeWidth={2.5} />
+                                    ) : isBestSeller ? (
+                                        <Flame size={11} strokeWidth={2.5} />
+                                    ) : isGourmet ? (
+                                        <Sparkles size={11} strokeWidth={2.5} />
+                                    ) : (
+                                        <Tag size={11} strokeWidth={2.5} />
+                                    )}
                                     <span>{tag}</span>
                                 </div>
                             );

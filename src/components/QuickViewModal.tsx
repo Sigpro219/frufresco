@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 import { useAuth } from '../lib/authContext';
 import { resolvePricingModelId } from '../lib/pricingUtils';
-import { AlertTriangle, ShoppingCart } from 'lucide-react';
+import { AlertTriangle, ShoppingCart, Tag, Leaf, Flame, Sparkles, Zap } from 'lucide-react';
 
 // Keep interface consistent with usage
 interface Product {
@@ -366,76 +366,29 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             onError={(e) => (e.currentTarget.src = 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=400')}
                         />
-                        {/* BADGES EN IMAGEN MODAL */}
-                        {product.tags && product.tags.length > 0 && (
-                            <div style={{
-                                position: 'absolute',
-                                top: '6px',
-                                right: '6px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '3px',
-                                zIndex: 5
-                            }}>
-                                {product.tags.map((tag, i) => {
-                                    const lower = (tag || '').toLowerCase();
-                                    const isPromo = lower.includes('promo') || lower.includes('oferta') || lower.includes('descuento');
-                                    const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
-                                    const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
-                                    const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
-                                    
-                                    const bg = isPromo ? '#FEF2F2' : isHarvest ? '#ECFDF5' : isBestSeller ? '#FFFBEB' : isGourmet ? '#F5F3FF' : 'rgba(255, 255, 255, 0.95)';
-                                    const color = isPromo ? '#DC2626' : isHarvest ? '#059669' : isBestSeller ? '#D97706' : isGourmet ? '#7C3AED' : 'var(--primary-dark)';
-                                    const border = isPromo ? '1px solid #FCA5A5' : isHarvest ? '1px solid #A7F3D0' : isBestSeller ? '1px solid #FDE68A' : isGourmet ? '1px solid #DDD6FE' : '1px solid rgba(0, 0, 0, 0.08)';
-                                    const icon = isPromo ? '🏷️ ' : isHarvest ? '🌾 ' : isBestSeller ? '🔥 ' : isGourmet ? '⭐ ' : '';
-                                    
-                                    return (
-                                        <div key={i} style={{
-                                            backgroundColor: bg,
-                                            padding: '2px 6px',
-                                            borderRadius: '50px',
-                                            fontSize: '0.55rem',
-                                            fontWeight: '800',
-                                            color: color,
-                                            backdropFilter: 'blur(8px)',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.04em',
-                                            border: border,
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '2px'
-                                        }}>
-                                            <span>{icon}</span>
-                                            <span>{tag}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        {/* BADGES ARRIBA DEL TÍTULO EN MODAL */}
+                        {/* BADGES ARRIBA DEL TÍTULO EN MODAL (ÚNICO CON LUCIDE ICONS) */}
                         {product.tags && product.tags.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
                                 {product.tags.map((tag, i) => {
                                     const lower = (tag || '').toLowerCase();
-                                    const isPromo = lower.includes('promo') || lower.includes('oferta') || lower.includes('descuento');
+                                    const isPromo = lower.includes('promo') || lower.includes('descuento');
+                                    const isFlash = lower.includes('oferta') || lower.includes('flash') || lower.includes('rayo');
                                     const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
                                     const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
                                     const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
                                     
-                                    const bg = isPromo ? '#FEF2F2' : isHarvest ? '#ECFDF5' : isBestSeller ? '#FFFBEB' : isGourmet ? '#F5F3FF' : 'rgba(0, 0, 0, 0.04)';
-                                    const color = isPromo ? '#DC2626' : isHarvest ? '#059669' : isBestSeller ? '#D97706' : isGourmet ? '#7C3AED' : 'var(--primary-dark)';
-                                    const border = isPromo ? '1px solid #FCA5A5' : isHarvest ? '1px solid #A7F3D0' : isBestSeller ? '1px solid #FDE68A' : isGourmet ? '1px solid #DDD6FE' : '1px solid rgba(0, 0, 0, 0.08)';
-                                    const icon = isPromo ? '🏷️ ' : isHarvest ? '🌾 ' : isBestSeller ? '🔥 ' : isGourmet ? '⭐ ' : '';
+                                    const bg = (isPromo || isFlash) ? '#FEF2F2' : isHarvest ? '#ECFDF5' : isBestSeller ? '#FFFBEB' : isGourmet ? '#F5F3FF' : 'rgba(0, 0, 0, 0.04)';
+                                    const color = (isPromo || isFlash) ? '#DC2626' : isHarvest ? '#059669' : isBestSeller ? '#D97706' : isGourmet ? '#7C3AED' : 'var(--primary-dark)';
+                                    const border = (isPromo || isFlash) ? '1px solid #FCA5A5' : isHarvest ? '1px solid #A7F3D0' : isBestSeller ? '1px solid #FDE68A' : isGourmet ? '1px solid #DDD6FE' : '1px solid rgba(0, 0, 0, 0.08)';
                                     
                                     return (
                                         <span key={i} style={{
                                             backgroundColor: bg,
-                                            padding: '2px 6px',
+                                            padding: '3px 8px',
                                             borderRadius: '6px',
-                                            fontSize: '0.62rem',
+                                            fontSize: '0.65rem',
                                             fontWeight: '800',
                                             color: color,
                                             textTransform: 'uppercase',
@@ -443,9 +396,21 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                                             border: border,
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '3px'
+                                            gap: '4px'
                                         }}>
-                                            <span>{icon}</span>
+                                            {isFlash ? (
+                                                <Zap size={12} strokeWidth={2.5} />
+                                            ) : isPromo ? (
+                                                <Tag size={12} strokeWidth={2.5} />
+                                            ) : isHarvest ? (
+                                                <Leaf size={12} strokeWidth={2.5} />
+                                            ) : isBestSeller ? (
+                                                <Flame size={12} strokeWidth={2.5} />
+                                            ) : isGourmet ? (
+                                                <Sparkles size={12} strokeWidth={2.5} />
+                                            ) : (
+                                                <Tag size={12} strokeWidth={2.5} />
+                                            )}
                                             <span>{tag}</span>
                                         </span>
                                     );
