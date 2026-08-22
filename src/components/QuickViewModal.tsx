@@ -26,6 +26,7 @@ interface Product {
     web_conversion_factor?: number;
     display_name?: string;
     pricing_model_prices?: { price: number }[];
+    tags?: string[];
 }
 
 interface QuickViewModalProps {
@@ -355,7 +356,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                         borderRadius: '16px',
                         overflow: 'hidden',
                         backgroundColor: '#F9FAFB',
-                        border: '1px solid #F3F4F6'
+                        border: '1px solid #F3F4F6',
+                        position: 'relative',
+                        flexShrink: 0
                     }}>
                         <img
                             src={product.image_url}
@@ -363,19 +366,103 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             onError={(e) => (e.currentTarget.src = 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=400')}
                         />
+                        {/* BADGES EN IMAGEN MODAL */}
+                        {product.tags && product.tags.length > 0 && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '6px',
+                                right: '6px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '3px',
+                                zIndex: 5
+                            }}>
+                                {product.tags.map((tag, i) => {
+                                    const lower = (tag || '').toLowerCase();
+                                    const isPromo = lower.includes('promo') || lower.includes('oferta') || lower.includes('descuento');
+                                    const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
+                                    const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
+                                    const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
+                                    
+                                    const bg = isPromo ? '#FEF2F2' : isHarvest ? '#ECFDF5' : isBestSeller ? '#FFFBEB' : isGourmet ? '#F5F3FF' : 'rgba(255, 255, 255, 0.95)';
+                                    const color = isPromo ? '#DC2626' : isHarvest ? '#059669' : isBestSeller ? '#D97706' : isGourmet ? '#7C3AED' : 'var(--primary-dark)';
+                                    const border = isPromo ? '1px solid #FCA5A5' : isHarvest ? '1px solid #A7F3D0' : isBestSeller ? '1px solid #FDE68A' : isGourmet ? '1px solid #DDD6FE' : '1px solid rgba(0, 0, 0, 0.08)';
+                                    const icon = isPromo ? '🏷️ ' : isHarvest ? '🌾 ' : isBestSeller ? '🔥 ' : isGourmet ? '⭐ ' : '';
+                                    
+                                    return (
+                                        <div key={i} style={{
+                                            backgroundColor: bg,
+                                            padding: '2px 6px',
+                                            borderRadius: '50px',
+                                            fontSize: '0.55rem',
+                                            fontWeight: '800',
+                                            color: color,
+                                            backdropFilter: 'blur(8px)',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.04em',
+                                            border: border,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '2px'
+                                        }}>
+                                            <span>{icon}</span>
+                                            <span>{tag}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
-                    <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: '1.35rem', fontWeight: '800', margin: '0 0 0.5rem', color: '#111827' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* BADGES ARRIBA DEL TÍTULO EN MODAL */}
+                        {product.tags && product.tags.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+                                {product.tags.map((tag, i) => {
+                                    const lower = (tag || '').toLowerCase();
+                                    const isPromo = lower.includes('promo') || lower.includes('oferta') || lower.includes('descuento');
+                                    const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
+                                    const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
+                                    const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
+                                    
+                                    const bg = isPromo ? '#FEF2F2' : isHarvest ? '#ECFDF5' : isBestSeller ? '#FFFBEB' : isGourmet ? '#F5F3FF' : 'rgba(0, 0, 0, 0.04)';
+                                    const color = isPromo ? '#DC2626' : isHarvest ? '#059669' : isBestSeller ? '#D97706' : isGourmet ? '#7C3AED' : 'var(--primary-dark)';
+                                    const border = isPromo ? '1px solid #FCA5A5' : isHarvest ? '1px solid #A7F3D0' : isBestSeller ? '1px solid #FDE68A' : isGourmet ? '1px solid #DDD6FE' : '1px solid rgba(0, 0, 0, 0.08)';
+                                    const icon = isPromo ? '🏷️ ' : isHarvest ? '🌾 ' : isBestSeller ? '🔥 ' : isGourmet ? '⭐ ' : '';
+                                    
+                                    return (
+                                        <span key={i} style={{
+                                            backgroundColor: bg,
+                                            padding: '2px 6px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.62rem',
+                                            fontWeight: '800',
+                                            color: color,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.04em',
+                                            border: border,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                        }}>
+                                            <span>{icon}</span>
+                                            <span>{tag}</span>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: '0 0 0.4rem', color: '#111827', lineHeight: '1.3' }}>
                             {locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name)}
                         </h2>
                         <p style={{
-                            fontSize: '1.75rem',
+                            fontSize: '1.6rem',
                             fontWeight: '900',
                             color: 'var(--primary)',
                             margin: 0
                         }}>
                             ${(currentPrice || 0).toLocaleString('es-CO')}
-                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '500' }}> / {activeUnit}</span>
+                            <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '500' }}> / {activeUnit}</span>
                         </p>
                     </div>
                 </div>

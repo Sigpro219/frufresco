@@ -1200,7 +1200,66 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         </div>
                         
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Etiquetas (Tags) - Búsqueda Web</label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#9A3412' }}>Etiquetas Comerciales & Búsqueda Web</label>
+                                <span style={{ fontSize: '0.7rem', color: '#7C2D12', fontStyle: 'italic' }}>Activan badges automáticos en carrusel y catálogo</span>
+                            </div>
+
+                            {/* PRESETS RÁPIDOS DE CAMPAÑAS */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                                {[
+                                    { label: 'PROMOCION', icon: '🏷️', activeBg: '#FEF2F2', activeColor: '#DC2626', activeBorder: '#FCA5A5' },
+                                    { label: 'COSECHA', icon: '🌾', activeBg: '#ECFDF5', activeColor: '#059669', activeBorder: '#A7F3D0' },
+                                    { label: 'TEMPORADA', icon: '🍃', activeBg: '#ECFDF5', activeColor: '#059669', activeBorder: '#A7F3D0' },
+                                    { label: 'BEST SELLER', icon: '🔥', activeBg: '#FFFBEB', activeColor: '#D97706', activeBorder: '#FDE68A' },
+                                    { label: 'OFERTA', icon: '⚡', activeBg: '#FEF2F2', activeColor: '#DC2626', activeBorder: '#FCA5A5' },
+                                    { label: 'GOURMET', icon: '⭐', activeBg: '#F5F3FF', activeColor: '#7C3AED', activeBorder: '#DDD6FE' }
+                                ].map((preset) => {
+                                    const isSelected = (formData.tags || []).some(t => t.toUpperCase() === preset.label);
+                                    return (
+                                        <button
+                                            key={preset.label}
+                                            type="button"
+                                            onClick={() => {
+                                                const currentTags = formData.tags || [];
+                                                if (isSelected) {
+                                                    setFormData({
+                                                        ...formData,
+                                                        tags: currentTags.filter(t => t.toUpperCase() !== preset.label)
+                                                    });
+                                                } else {
+                                                    setFormData({
+                                                        ...formData,
+                                                        tags: [...currentTags, preset.label]
+                                                    });
+                                                }
+                                            }}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                padding: '4px 10px',
+                                                borderRadius: '20px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                backgroundColor: isSelected ? preset.activeBg : '#FFFFFF',
+                                                color: isSelected ? preset.activeColor : '#6B7280',
+                                                border: isSelected ? `1.5px solid ${preset.activeBorder}` : '1px solid #E5E7EB',
+                                                boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
+                                            }}
+                                        >
+                                            <span>{preset.icon}</span>
+                                            <span>{preset.label}</span>
+                                            <span style={{ fontSize: '0.8rem', marginLeft: '2px', fontWeight: '900' }}>
+                                                {isSelected ? '✓' : '+'}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
                             <div style={{ 
                                 display: 'flex', 
                                 flexWrap: 'wrap', 
@@ -1237,19 +1296,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 ))}
                                 <input
                                     type="text"
-                                    placeholder={(!formData.tags || formData.tags.length === 0) ? "Ej: organico, oferta, temporada..." : "Agregar tag..."}
+                                    placeholder={(!formData.tags || formData.tags.length === 0) ? "Ej: organico, oferta, temporada..." : "Agregar tag manual..."}
                                     value={tagInput}
                                     onChange={(e) => setTagInput(e.target.value)}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' || e.key === ',') {
                                             e.preventDefault();
-                                            const newTag = tagInput.trim().toLowerCase();
-                                            if (newTag && !(formData.tags || []).includes(newTag)) {
+                                            const newTag = tagInput.trim().toUpperCase();
+                                            if (newTag && !(formData.tags || []).some(t => t.toUpperCase() === newTag)) {
                                                 setFormData({ ...formData, tags: [...(formData.tags || []), newTag] });
                                                 setTagInput('');
                                             }
                                         } else if (e.key === 'Backspace' && tagInput === '' && (formData.tags || []).length > 0) {
-                                            // Optional: remove last tag on backspace
                                             setFormData({ ...formData, tags: (formData.tags || []).slice(0, -1) });
                                         }
                                     }}
@@ -1265,7 +1323,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     }}
                                 />
                             </div>
-                            <p style={{ fontSize: '0.7rem', color: '#7C2D12', marginTop: '4px' }}>Presiona <strong>Enter</strong> o <strong>Coma (,)</strong> para añadir la etiqueta.</p>
+                            <p style={{ fontSize: '0.7rem', color: '#7C2D12', marginTop: '4px' }}>Presiona <strong>Enter</strong> o <strong>Coma (,)</strong> para añadir tags personalizados adicionales.</p>
                         </div>
                     </div>
 

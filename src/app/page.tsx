@@ -64,24 +64,67 @@ async function FeaturedSection({ locale }: { locale: Locale }) {
 
     if (!allVisible || allVisible.length === 0) return null;
 
-    // Featured Logic
+    // Featured Logic: Algoritmo Híbrido Comercial
+    // 1. Prioridad Alta: Productos con tags de Campaña / Cosecha / Promoción activa
+    // 2. Prioridad Media: Productos con tags de Best Seller / Top Ventas
+    // 3. Relleno Dinámico: Rotación orgánica balanceada por categorías (máx 2 por cat) hasta 10 cupos
     const featuredProducts: Product[] = [];
+    const addedIds = new Set<string>();
     const catCount: Record<string, number> = {};
-    const dailySeed = new Date().getDate();
-    
-    const sorted = [...allVisible].sort((a, b) => {
-        const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
-        const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
-        return (scoreA % 100) - (scoreB % 100);
-    });
 
-    sorted.forEach(p => {
-        if (!catCount[p.category]) catCount[p.category] = 0;
-        if (catCount[p.category] < 2 && featuredProducts.length < 10) {
+    const hasTag = (p: Product, keywords: string[]) => {
+        if (!p.tags || !Array.isArray(p.tags)) return false;
+        return p.tags.some(tag => {
+            const lower = (tag || '').toLowerCase();
+            return keywords.some(k => lower.includes(k));
+        });
+    };
+
+    // Nivel 1: Campañas y Cosechas activas
+    const campaignProducts = allVisible.filter(p => hasTag(p, ['promo', 'oferta', 'descuento', 'cosecha', 'temporada']));
+    for (const p of campaignProducts) {
+        if (featuredProducts.length >= 10) break;
+        if (!addedIds.has(p.id)) {
             featuredProducts.push(p);
-            catCount[p.category]++;
+            addedIds.add(p.id);
+            const cat = p.category || 'Otros';
+            catCount[cat] = (catCount[cat] || 0) + 1;
         }
-    });
+    }
+
+    // Nivel 2: Best Sellers marcados
+    const bestSellerProducts = allVisible.filter(p => hasTag(p, ['vendido', 'best', 'top', 'estrella']));
+    for (const p of bestSellerProducts) {
+        if (featuredProducts.length >= 10) break;
+        if (!addedIds.has(p.id)) {
+            featuredProducts.push(p);
+            addedIds.add(p.id);
+            const cat = p.category || 'Otros';
+            catCount[cat] = (catCount[cat] || 0) + 1;
+        }
+    }
+
+    // Nivel 3: Relleno inteligente con balance de categorías y rotación diaria
+    if (featuredProducts.length < 10) {
+        const dailySeed = new Date().getDate();
+        const sortedRemaining = [...allVisible]
+            .filter(p => !addedIds.has(p.id))
+            .sort((a, b) => {
+                const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
+                const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
+                return (scoreA % 100) - (scoreB % 100);
+            });
+
+        sortedRemaining.forEach(p => {
+            const cat = p.category || 'Otros';
+            if (!catCount[cat]) catCount[cat] = 0;
+            if (catCount[cat] < 2 && featuredProducts.length < 10 && !addedIds.has(p.id)) {
+                featuredProducts.push(p);
+                addedIds.add(p.id);
+                catCount[cat]++;
+            }
+        });
+    }
 
     return (
         <section style={{ padding: '3.5rem 0 1.5rem', backgroundColor: 'var(--background)', overflow: 'hidden' }}>

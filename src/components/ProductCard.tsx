@@ -160,24 +160,64 @@ export default function ProductCard({ product }: { product: Product }) {
                         zIndex: 10
                     }}>
                         {product.tags?.map((tag, i) => {
-                            const isPromo = tag.toLowerCase().includes('oferta') || tag.toLowerCase().includes('descuento');
-                            const isFresh = tag.toLowerCase().includes('fresco') || tag.toLowerCase().includes('viva');
+                            const lower = (tag || '').toLowerCase();
+                            const isPromo = lower.includes('promo') || lower.includes('oferta') || lower.includes('descuento');
+                            const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
+                            const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
+                            const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
+                            
+                            const bg = isPromo 
+                                ? '#FEF2F2' 
+                                : isHarvest 
+                                ? '#ECFDF5' 
+                                : isBestSeller 
+                                ? '#FFFBEB' 
+                                : isGourmet 
+                                ? '#F5F3FF' 
+                                : 'rgba(255, 255, 255, 0.95)';
+                                
+                            const color = isPromo 
+                                ? '#DC2626' 
+                                : isHarvest 
+                                ? '#059669' 
+                                : isBestSeller 
+                                ? '#D97706' 
+                                : isGourmet 
+                                ? '#7C3AED' 
+                                : 'var(--primary-dark)';
+
+                            const border = isPromo 
+                                ? '1px solid #FCA5A5' 
+                                : isHarvest 
+                                ? '1px solid #A7F3D0' 
+                                : isBestSeller 
+                                ? '1px solid #FDE68A' 
+                                : isGourmet 
+                                ? '1px solid #DDD6FE' 
+                                : '1px solid rgba(0, 0, 0, 0.08)';
+
+                            const icon = isPromo ? '🏷️ ' : isHarvest ? '🌾 ' : isBestSeller ? '🔥 ' : isGourmet ? '⭐ ' : '';
                             
                             return (
                                 <div key={i} style={{ 
-                                    backgroundColor: isPromo ? 'rgba(239, 68, 68, 0.12)' : isFresh ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.8)', 
-                                    padding: '4px 12px', 
+                                    backgroundColor: bg, 
+                                    padding: '4px 10px', 
                                     borderRadius: '50px',
                                     fontSize: '0.65rem',
                                     fontWeight: '800',
-                                    color: isPromo ? '#ef4444' : isFresh ? '#10b981' : 'var(--primary-dark)',
+                                    color: color,
                                     backdropFilter: 'blur(8px)',
                                     WebkitBackdropFilter: 'blur(8px)',
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.05em',
-                                    border: isPromo ? '1px solid rgba(239, 68, 68, 0.25)' : isFresh ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(255, 255, 255, 0.5)'
+                                    border: border,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
                                 }}>
-                                    {tag}
+                                    <span>{icon}</span>
+                                    <span>{tag}</span>
                                 </div>
                             );
                         })}
