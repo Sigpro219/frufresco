@@ -135,8 +135,52 @@ export default function Footer() {
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
-          © {new Date().getFullYear()} {appName}. {t.allRightsReserved}.
+        <div style={{ 
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
+          paddingTop: '2rem', 
+          display: 'flex', 
+          flexDirection: 'row', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          flexWrap: 'wrap', 
+          gap: '1.25rem',
+          fontSize: '0.85rem'
+        }}>
+          <span style={{ color: '#94a3b8', opacity: 0.7 }}>
+            © {new Date().getFullYear()} {appName}. {t.allRightsReserved}.
+          </span>
+          <div className="delta-badge" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            backgroundColor: '#121214',
+            border: '1px solid rgba(39, 39, 42, 0.9)',
+            padding: '6px 16px',
+            borderRadius: '9999px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(12px)',
+            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            cursor: 'default'
+          }}>
+            <span style={{ fontSize: '10px', color: '#a1a1aa', letterSpacing: '0.05em' }}>
+              Powered by
+            </span>
+            <img 
+              src="/assets/images/delta_symbol_white.png" 
+              alt="Delta CoreTech Icon" 
+              style={{
+                width: '20px',
+                height: '20px',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 4px rgba(255,255,255,0.4))',
+                transition: 'transform 0.2s ease'
+              }}
+              className="delta-icon" 
+            />
+            <span style={{ fontSize: '12px', fontWeight: '800', color: '#FFFFFF', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'var(--font-outfit), sans-serif' }}>
+              Delta <span style={{ color: '#FBD007' }}>CoreTech</span>
+            </span>
+          </div>
         </div>
       </div>
       <style jsx>{`
@@ -150,6 +194,12 @@ export default function Footer() {
         .footer-link:hover {
           transform: translateX(4px);
           color: #a7f3d0 !important;
+        }
+        .delta-badge:hover {
+          border-color: rgba(251, 208, 7, 0.5) !important;
+        }
+        .delta-badge:hover .delta-icon {
+          transform: scale(1.1);
         }
       `}</style>
     </footer>
