@@ -17,32 +17,57 @@ export default function Footer() {
 
   useEffect(() => {
     async function fetchSettings() {
-      const { data } = await supabase
-        .from('app_settings')
-        .select('key, value')
-        .in('key', [
-          'contact_phone', 
-          'contact_email', 
-          'contact_address', 
-          'footer_description',
-          'footer_description_en',
-          'app_logo_url',
-          'app_name'
-        ]);
-      if (data) setAppSettings(data);
+      try {
+        const { data } = await supabase
+          .from('app_settings')
+          .select('key, value')
+          .in('key', [
+            'contact_phone', 
+            'contact_email', 
+            'contact_address', 
+            'footer_description',
+            'footer_description_en',
+            'app_logo_url',
+            'app_name'
+          ]);
+        if (data) setAppSettings(data);
+      } catch (err) {
+        console.error('Error fetching footer settings:', err);
+      }
     }
+    
     fetchSettings();
+
+    // Sincronización en tiempo real con cambios en app_settings
+    const channel = supabase
+      .channel('app_settings_footer_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_settings' },
+        () => {
+          fetchSettings();
+        }
+      )
+      .subscribe();
+
+    const handleCustomUpdate = () => fetchSettings();
+    window.addEventListener('app-settings-updated', handleCustomUpdate);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('app-settings-updated', handleCustomUpdate);
+    };
   }, []);
 
   const getSetting = (key: string, defaultValue: string) => {
       const s = appSettings?.find(x => x.key === key);
-      return s ? s.value : defaultValue;
+      return s?.value ? s.value : defaultValue;
   };
 
   const appName = getSetting('app_name', config.brand.name);
-  const phone = getSetting('contact_phone', '+57 300 123 4567');
-  const email = getSetting('contact_email', `contacto@${appName.toLowerCase().replace(/\s/g, '')}.com`);
-  const address = getSetting('contact_address', 'Corabastos Bodega 123, Bogotá');
+  const phone = getSetting('contact_phone', '316 7022898');
+  const email = getSetting('contact_email', 'contacto@investmentscortes.com');
+  const address = getSetting('contact_address', 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia');
   const description = (locale === 'en' ? getSetting('footer_description_en', '') : getSetting('footer_description', '')) || t.footerDesc;
   const logoUrl = getSetting('app_logo_url', '');
 
