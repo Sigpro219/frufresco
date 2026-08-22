@@ -51,7 +51,7 @@ export const getVisibleProducts = unstable_cache(
     return (data as Product[]).filter(p => !lockedIds.has(p.id));
   },
   ['visible-products'],
-  { revalidate: 3600, tags: ['products'] }
+  { revalidate: 60, tags: ['products'] }
 );
 
 /**
@@ -82,7 +82,7 @@ export const getWebCategories = unstable_cache(
     return ['Todos', ...categories];
   },
   ['web-categories'],
-  { revalidate: 3600, tags: ['products'] }
+  { revalidate: 60, tags: ['products', 'web-categories'] }
 );
 
 /**

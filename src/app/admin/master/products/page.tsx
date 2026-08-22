@@ -12,6 +12,7 @@ import EditProductModal from '@/components/EditProductModal';
 import Toast from '@/components/Toast';
 import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { triggerProductRevalidation } from '@/lib/revalidate';
 import { 
     Plus, 
     FileDown, 
@@ -519,6 +520,7 @@ export default function MasterProductsPage() {
             if (showErr) throw showErr;
 
             showToast(`Sincronización exitosa: ${toHide} ocultos y ${toShow} nuevos publicados.`, 'success');
+            triggerProductRevalidation();
             await fetchProducts();
         } catch (err: any) {
             console.error('Sync error:', err);
@@ -566,6 +568,7 @@ export default function MasterProductsPage() {
             fetchProducts();
         } else {
             showToast('Dato maestro sincronizado', 'success');
+            triggerProductRevalidation();
         }
         setSavingId(null);
     };
@@ -641,6 +644,7 @@ export default function MasterProductsPage() {
             setProducts(prev => prev.map(p => p.id === productId ? { ...p, image_url: publicUrl } : p));
             
             showToast('Imagen principal actualizada', 'success');
+            triggerProductRevalidation();
         } catch (err: unknown) {
             const error = err as { message?: string };
             showToast('Error al subir imagen: ' + (error.message || 'Error desconocido'), 'error');

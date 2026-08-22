@@ -12,7 +12,7 @@ import ProductGridContainer from '../components/ProductGridContainer';
 import ProductSkeleton from '../components/ProductSkeleton';
 import HeroActions from '../components/HeroActions';
 
-export const revalidate = 3600; // Revalidate every hour
+export const revalidate = 60; // Auto-revalidate every 60s fallback, plus on-demand revalidation
 
 // --- SUB-COMPONENTS FOR STREAMING ---
 

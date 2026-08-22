@@ -6,6 +6,7 @@ import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError } from '@/lib/errorUtils';
 import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
 import { Wand2, Sparkles, Loader2 } from 'lucide-react';
+import { triggerProductRevalidation } from '@/lib/revalidate';
 
 interface CreateProductModalProps {
     onClose: () => void;
@@ -404,6 +405,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                 if (variantError) console.error("Error al guardar variantes iniciales:", variantError);
             }
 
+            triggerProductRevalidation();
             onSave();
             onClose();
         } catch (error: any) {

@@ -10,6 +10,7 @@ import VariantModal from '@/components/VariantModal';
 import CreateProductModal from '@/components/CreateProductModal';
 import { CATEGORY_MAP } from '@/lib/constants';
 import Image from 'next/image';
+import { triggerProductRevalidation } from '@/lib/revalidate';
 import { 
     Search,
     ChevronLeft,
@@ -290,6 +291,7 @@ export default function AdminProductsPage() {
 
             setProducts(products.map(p => p.id === selectedProduct.id ? { ...p, options_config: optionsConfig, variants: variants } : p));
             showToast('Variantes actualizadas', 'success');
+            triggerProductRevalidation();
             return true;
         } catch (err: any) {
             console.error('Error al guardar variantes:', err);

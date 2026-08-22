@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
 import { Wand2, Sparkles, Loader2, ShieldAlert } from 'lucide-react';
+import { triggerProductRevalidation } from '@/lib/revalidate';
 
 interface EditProductModalProps {
     product: Product;
@@ -516,6 +517,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
 
             console.info('✅ Producto y variantes actualizados correctamente');
+            triggerProductRevalidation();
             onSave();
             onClose();
         } catch (error: any) {
