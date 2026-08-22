@@ -179,7 +179,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     );
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
-    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;
+    const isPriceValid = (currentPrice || 0) > 0;
+    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? isPriceValid : (!!currentVariant && isPriceValid)) : isPriceValid;
     
     // Aplicar factor de conversión comercial
     const basePrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price) : (product.pricing_model_prices?.[0]?.price || product.base_price);
@@ -427,7 +428,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     </h1>
 
                     <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary-dark)', marginBottom: '1.5rem' }}>
-                        {currentPrice !== undefined ? (
+                        {currentPrice !== undefined && currentPrice > 0 ? (
                             product.campaign_info ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
@@ -467,7 +468,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             )
                         ) : (
                             <>
-                                <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>{t.unavailable}</span>
+                                <span style={{ fontSize: '1.15rem', color: '#666', fontStyle: 'italic', fontWeight: '800' }}>
+                                    {isEn ? 'Price on request' : 'Precio a consultar'}
+                                </span>
                                 <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
                                     {t.perUnit} {activeUnit}
                                 </span>
@@ -615,14 +618,14 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {/* Total Price & Availability */}
                     <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: isAvailable ? '#F3F4F6' : '#FEF2F2', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            {!isAvailable && <span style={{ color: '#EF4444', fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>⚠️ {t.notAvailableAlt}</span>}
+                            {!isAvailable && <span style={{ color: '#EF4444', fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>⚠️ {!isPriceValid ? (isEn ? 'Price on request' : 'Precio a consultar') : t.notAvailableAlt}</span>}
                             <span style={{ fontSize: '1.1rem', fontWeight: '600', color: '#4B5563' }}>{t.subtotal}:</span>
                         </div>
-                        <span style={{ fontSize: '1.8rem', fontWeight: '800', color: isAvailable ? 'var(--primary-dark)' : '#9CA3AF' }}>
-                            {currentPrice !== undefined ? (
+                        <span style={{ fontSize: isPriceValid ? '1.8rem' : '1.2rem', fontWeight: '800', color: isAvailable ? 'var(--primary-dark)' : '#9CA3AF' }}>
+                            {isPriceValid ? (
                                 `$${(currentPrice * (isAvailable ? quantity : 1)).toLocaleString('es-CO')}`
                             ) : (
-                                '---'
+                                isEn ? 'Price on request' : 'Precio a consultar'
                             )}
                         </span>
                     </div>
@@ -650,7 +653,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             }}
                         >
                             <ShoppingBag size={20} strokeWidth={2.5} /> 
-                            {isAvailable ? t.addToOrder : t.unavailable}
+                            {isAvailable ? t.addToOrder : (!isPriceValid ? (isEn ? 'Price on request' : 'Precio a consultar') : t.unavailable)}
                         </button>
                         <button
                             onClick={handleBuyNow}
@@ -674,7 +677,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             }}
                         >
                             <Zap size={20} strokeWidth={2.5} fill={isAvailable ? "currentColor" : "none"} /> 
-                            {isAvailable ? t.payNow : t.outOfStock}
+                            {isAvailable ? t.payNow : (!isPriceValid ? (isEn ? 'Price on request' : 'Precio a consultar') : t.outOfStock)}
                         </button>
                     </div>
                 </div>

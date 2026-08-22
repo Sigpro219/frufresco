@@ -37,13 +37,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     // 1. Initial Load from LocalStorage
     useEffect(() => {
-        const saved = localStorage.getItem('logistics_pro_cart');
+        const saved = localStorage.getItem('frufresco_cart') || localStorage.getItem('logistics_pro_cart');
         if (saved) {
             try {
                 setItems(JSON.parse(saved));
             } catch (e) {
                 console.error('Failed to parse cart', e);
             }
+        }
+        // Clean legacy key if present
+        if (localStorage.getItem('logistics_pro_cart')) {
+            localStorage.removeItem('logistics_pro_cart');
         }
     }, []);
 
@@ -56,11 +60,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (prevUserRef.current !== currentUserId) {
             // We only clear if there was a previous user (Logout)
             // or if we want a fresh start on every login too.
-            // Based on user request "entrar y salir... no se vacía", we clear on any state change.
             if (prevUserRef.current !== null) {
                 console.log('🛒 Sesión cambiada: Vacíando carrito por seguridad.');
                 setItems([]);
                 localStorage.removeItem('frufresco_cart');
+                localStorage.removeItem('logistics_pro_cart');
             }
             prevUserRef.current = currentUserId;
         }
@@ -68,7 +72,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     // 3. Persistent Sync to LocalStorage
     useEffect(() => {
-        localStorage.setItem('logistics_pro_cart', JSON.stringify(items));
+        localStorage.setItem('frufresco_cart', JSON.stringify(items));
     }, [items]);
 
     const addItem = (newItem: CartItem) => {
@@ -92,6 +96,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const clearCart = () => {
         setItems([]);
         localStorage.removeItem('frufresco_cart');
+        localStorage.removeItem('logistics_pro_cart');
     };
 
     const updateItemQuantity = (id: string, name: string, quantity: number) => {
