@@ -84,13 +84,15 @@ export default function ProductCard({ product }: { product: Product }) {
                             src={product.image_url}
                             alt={product.name}
                             fill
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            quality={75} 
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
+                            quality={70} 
+                            loading="lazy"
+                            decoding="async"
                             onLoad={() => setImageLoaded(true)}
                             style={{ 
                                 objectFit: 'cover',
-                                transition: 'transform 0.8s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.5s ease-in-out',
-                                transform: isHovered ? 'scale(1.08)' : 'scale(1)',
+                                transition: 'transform 0.8s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.4s ease-in-out',
+                                transform: isHovered ? 'scale(1.06)' : 'scale(1)',
                                 opacity: imageLoaded ? 1 : 0
                             }}
                             priority={false} 

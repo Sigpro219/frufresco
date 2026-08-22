@@ -7,6 +7,7 @@ import { diagnoseStorageError } from '@/lib/errorUtils';
 import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
 import { Wand2, Sparkles, Loader2 } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
+import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 
 interface CreateProductModalProps {
     onClose: () => void;
@@ -289,27 +290,43 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         if (!imageFile) return formData.image_url;
 
         setUploading(true);
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${fileName}`;
+        try {
+            const optimizedFile = await optimizeImageForUpload(imageFile, {
+                maxWidth: 800,
+                maxHeight: 800,
+                quality: 0.82
+            });
 
-        const { error: uploadError, data } = await supabase.storage
-            .from('product-images')
-            .upload(filePath, imageFile);
+            const fileExt = optimizedFile.name.split('.').pop() || 'webp';
+            const fileName = `${formData.sku || 'prod'}-${Date.now()}.${fileExt}`;
+            const filePath = `${fileName}`;
 
-        if (uploadError) {
-            diagnoseStorageError(uploadError, 'product-images');
-            alert('Error subiendo imagen: ' + uploadError.message);
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, optimizedFile, {
+                    cacheControl: '2592000',
+                    contentType: optimizedFile.type,
+                    upsert: true
+                });
+
+            if (uploadError) {
+                diagnoseStorageError(uploadError, 'product-images');
+                alert('Error subiendo imagen: ' + uploadError.message);
+                setUploading(false);
+                return formData.image_url;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath);
+
+            setUploading(false);
+            return publicUrl;
+        } catch (err) {
+            console.error('Error optimizing image:', err);
             setUploading(false);
             return formData.image_url;
         }
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(filePath);
-
-        setUploading(false);
-        return publicUrl;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

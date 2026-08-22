@@ -8,9 +8,9 @@ export async function POST(request: NextRequest) {
         const path = searchParams.get('path') || '/';
 
         // Revalidate specific tags and paths
-        revalidateTag(tag);
-        revalidateTag('products');
-        revalidateTag('web-categories');
+        (revalidateTag as any)(tag);
+        (revalidateTag as any)('products');
+        (revalidateTag as any)('web-categories');
         
         revalidatePath(path, 'page');
         revalidatePath('/', 'layout');

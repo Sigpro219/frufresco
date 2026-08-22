@@ -6,6 +6,7 @@ import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
 import { Wand2, Sparkles, Loader2, ShieldAlert } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
+import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 
 interface EditProductModalProps {
     product: Product;
@@ -162,26 +163,43 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         if (!imageFile) return formData.image_url;
 
         setUploading(true);
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `master/${fileName}`;
+        try {
+            // Compress and resize client-side to lightweight WebP thumbnail
+            const optimizedFile = await optimizeImageForUpload(imageFile, {
+                maxWidth: 800,
+                maxHeight: 800,
+                quality: 0.82
+            });
 
-        const { error: uploadError } = await supabase.storage
-            .from('product-images')
-            .upload(filePath, imageFile);
+            const fileExt = optimizedFile.name.split('.').pop() || 'webp';
+            const fileName = `${formData.sku || product.id || 'prod'}-${Date.now()}.${fileExt}`;
+            const filePath = `master/${fileName}`;
 
-        if (uploadError) {
-            diagnoseStorageError(uploadError, 'product-images');
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, optimizedFile, {
+                    cacheControl: '2592000',
+                    contentType: optimizedFile.type,
+                    upsert: true
+                });
+
+            if (uploadError) {
+                diagnoseStorageError(uploadError, 'product-images');
+                setUploading(false);
+                return formData.image_url;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath);
+
+            setUploading(false);
+            return publicUrl;
+        } catch (err) {
+            console.error('Error optimizing image:', err);
             setUploading(false);
             return formData.image_url;
         }
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(filePath);
-
-        setUploading(false);
-        return publicUrl;
     };
 
     const [variantNotice, setVariantNotice] = useState<string | null>(null);
@@ -356,13 +374,23 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const handleVariantImageUpload = async (variantId: string, file: File) => {
         setVariantUploading(variantId);
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${variantId}-${Math.random()}.${fileExt}`;
+            const optimizedFile = await optimizeImageForUpload(file, {
+                maxWidth: 600,
+                maxHeight: 600,
+                quality: 0.80
+            });
+
+            const fileExt = optimizedFile.name.split('.').pop() || 'webp';
+            const fileName = `${variantId}-${Date.now()}.${fileExt}`;
             const filePath = `variants/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('product-images')
-                .upload(filePath, file);
+                .upload(filePath, optimizedFile, {
+                    cacheControl: '2592000',
+                    contentType: optimizedFile.type,
+                    upsert: true
+                });
 
             if (uploadError) {
                 diagnoseStorageError(uploadError, 'product-images');

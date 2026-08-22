@@ -13,6 +13,7 @@ import Toast from '@/components/Toast';
 import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { triggerProductRevalidation } from '@/lib/revalidate';
+import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { 
     Plus, 
     FileDown, 
@@ -620,12 +621,23 @@ export default function MasterProductsPage() {
         }
         setSavingId(productId);
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${productId}-${Date.now()}.${fileExt}`;
+            const currentProduct = products.find(p => p.id === productId);
+            const optimizedFile = await optimizeImageForUpload(file, {
+                maxWidth: 800,
+                maxHeight: 800,
+                quality: 0.82
+            });
+
+            const fileExt = optimizedFile.name.split('.').pop() || 'webp';
+            const fileName = `${currentProduct?.sku || productId}-${Date.now()}.${fileExt}`;
             
             const { error: uploadError } = await supabase.storage
                 .from('product-images')
-                .upload(fileName, file, { upsert: true });
+                .upload(fileName, optimizedFile, {
+                    cacheControl: '2592000',
+                    contentType: optimizedFile.type,
+                    upsert: true
+                });
 
             if (uploadError) throw uploadError;
 
@@ -643,7 +655,7 @@ export default function MasterProductsPage() {
             // Optimistic update: Update local state immediately without full re-fetch
             setProducts(prev => prev.map(p => p.id === productId ? { ...p, image_url: publicUrl } : p));
             
-            showToast('Imagen principal actualizada', 'success');
+            showToast('Imagen principal optimizada y actualizada', 'success');
             triggerProductRevalidation();
         } catch (err: unknown) {
             const error = err as { message?: string };

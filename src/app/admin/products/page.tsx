@@ -11,6 +11,7 @@ import CreateProductModal from '@/components/CreateProductModal';
 import { CATEGORY_MAP } from '@/lib/constants';
 import Image from 'next/image';
 import { triggerProductRevalidation } from '@/lib/revalidate';
+import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { 
     Search,
     ChevronLeft,
@@ -206,6 +207,7 @@ export default function AdminProductsPage() {
         } else {
             setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
             showToast('Cambio guardado con éxito', 'success');
+            triggerProductRevalidation();
         }
         setSavingId(null);
     };
@@ -222,26 +224,43 @@ export default function AdminProductsPage() {
             return;
         }
         setSavingId(id);
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${fileName}`;
+        try {
+            const currentProduct = products.find(p => p.id === id);
+            const optimizedFile = await optimizeImageForUpload(file, {
+                maxWidth: 800,
+                maxHeight: 800,
+                quality: 0.82
+            });
 
-        const { error: uploadError } = await supabase.storage
-            .from('product-images')
-            .upload(filePath, file, { upsert: true });
+            const fileExt = optimizedFile.name.split('.').pop() || 'webp';
+            const fileName = `${currentProduct?.sku || id}-${Date.now()}.${fileExt}`;
+            const filePath = `${fileName}`;
 
-        if (uploadError) {
-            console.error('Error subiendo imagen:', uploadError);
-            showToast('Error al subir imagen: ' + uploadError.message, 'error');
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, optimizedFile, { 
+                    cacheControl: '2592000',
+                    contentType: optimizedFile.type,
+                    upsert: true 
+                });
+
+            if (uploadError) {
+                console.error('Error subiendo imagen:', uploadError);
+                showToast('Error al subir imagen: ' + uploadError.message, 'error');
+                setSavingId(null);
+                return;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath);
+
+            await updateProductField(id, 'image_url', publicUrl);
+        } catch (err: any) {
+            console.error('Error procesando imagen:', err);
+            showToast('Error al procesar imagen: ' + err.message, 'error');
             setSavingId(null);
-            return;
         }
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(filePath);
-
-        await updateProductField(id, 'image_url', publicUrl);
     };
 
     const handleSaveVariants = async (optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
@@ -306,16 +325,23 @@ export default function AdminProductsPage() {
             return null;
         }
         try {
-            const fileExt = file.name.split('.').pop();
+            const optimizedFile = await optimizeImageForUpload(file, {
+                maxWidth: 600,
+                maxHeight: 600,
+                quality: 0.80
+            });
+
+            const fileExt = optimizedFile.name.split('.').pop() || 'webp';
             const cleanFileName = `variant-${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
             const filePath = `${cleanFileName}`;
 
-            console.log('Iniciando subida de variante:', filePath);
+            console.log('Iniciando subida optimizada de variante:', filePath);
 
             const { error: uploadError } = await supabase.storage
                 .from('product-images')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
+                .upload(filePath, optimizedFile, {
+                    cacheControl: '2592000',
+                    contentType: optimizedFile.type,
                     upsert: true
                 });
 
