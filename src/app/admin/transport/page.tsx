@@ -140,7 +140,7 @@ export default function TransportControlTower() {
             if (routeIds.length > 0) {
                 const { data: stopsData, error: sErr } = await supabase
                     .from('route_stops')
-                    .select('*, order:orders(latitude, longitude, customer_name)')
+                    .select('*, order:orders(latitude, longitude, shipping_address, profiles(company_name, contact_name))')
                     .in('route_id', routeIds)
                     .order('sequence_number', { ascending: true })
                     .abortSignal(signal as AbortSignal);

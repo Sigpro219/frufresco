@@ -73,74 +73,50 @@ export async function POST(request: Request) {
         
         const targetDate = orders[0]?.delivery_date ? orders[0].delivery_date.split('T')[0] : new Date().toISOString().split('T')[0];
 
-        // Pad global planning horizon (starts 30 mins before fleet_start, ends 60 mins after fleet_end)
-        const [fsH, fsM] = fleet_start.split(':').map(Number);
-        const [feH, feM] = fleet_end.split(':').map(Number);
-        
-        let gStartH = fsH;
-        let gStartM = fsM - 30;
-        if (gStartM < 0) {
-            gStartH -= 1;
-            gStartM += 60;
-        }
-        if (gStartH < 0) {
-            gStartH = 0;
-            gStartM = 0;
-        }
-        
-        let gEndH = feH + 1;
-        let gEndM = feM;
-        if (gEndH >= 24) {
-            gEndH = 23;
-            gEndM = 59;
-        }
-
-        const gStartStr = `${gStartH.toString().padStart(2, '0')}:${gStartM.toString().padStart(2, '0')}`;
-        const gEndStr = `${gEndH.toString().padStart(2, '0')}:${gEndM.toString().padStart(2, '0')}`;
-
         const getOrderTimeWindow = (o: any, datePart: string) => {
             const isB2B = !!o.is_b2b || (o.type?.toLowerCase().includes('b2b') ?? false) || o.profiles?.role === 'b2b_client' || o.profiles?.role === 'b2b';
-
-            if (!isB2B) {
-                // B2C has absolutely no delivery slot constraint (flexible)
-                try {
-                    const startTime = new Date(`${datePart}T${fleet_start}:00-05:00`).toISOString();
-                    const endTime = new Date(`${datePart}T${fleet_end}:00-05:00`).toISOString();
-                    return { startTime, endTime };
-                } catch (err) {
-                    return {
-                        startTime: new Date(`${datePart}T06:00:00-05:00`).toISOString(),
-                        endTime: new Date(`${datePart}T18:00:00-05:00`).toISOString()
-                    };
-                }
-            }
 
             let startLocal = fleet_start;
             let endLocal = fleet_end;
 
-            // Scenario 1: Manual Override (takes precedence for B2B)
-            if (o.is_manual_delivery && o.logistics_data?.windows?.[0]) {
-                startLocal = o.logistics_data.windows[0].startTime || startLocal;
-                endLocal = o.logistics_data.windows[0].endTime || endLocal;
-            } 
-            // Scenario 2: Client Profile Default
-            else if (o.profiles?.logistics_data?.windows?.[0]) {
-                startLocal = o.profiles.logistics_data.windows[0].startTime || startLocal;
-                endLocal = o.profiles.logistics_data.windows[0].endTime || endLocal;
+            if (isB2B) {
+                // Scenario 1: Manual Override (takes precedence for B2B)
+                if (o.is_manual_delivery && o.logistics_data?.windows?.[0]) {
+                    startLocal = o.logistics_data.windows[0].startTime || o.logistics_data.windows[0].start || startLocal;
+                    endLocal = o.logistics_data.windows[0].endTime || o.logistics_data.windows[0].end || endLocal;
+                } 
+                // Scenario 2: Client Profile Default
+                else if (o.profiles?.logistics_data?.windows?.[0]) {
+                    startLocal = o.profiles.logistics_data.windows[0].startTime || o.profiles.logistics_data.windows[0].start || startLocal;
+                    endLocal = o.profiles.logistics_data.windows[0].endTime || o.profiles.logistics_data.windows[0].end || endLocal;
+                }
             }
 
-            // Ensure window is mathematically valid (start < end)
-            if (parseTimeStr(startLocal) >= parseTimeStr(endLocal)) {
-                startLocal = fleet_start;
-                endLocal = fleet_end;
+            const minFleetMins = parseTimeStr(fleet_start);
+            const maxFleetMins = parseTimeStr(fleet_end);
+
+            let sMins = parseTimeStr(startLocal);
+            let eMins = parseTimeStr(endLocal);
+
+            if (isNaN(sMins) || isNaN(eMins) || sMins >= eMins) {
+                sMins = minFleetMins;
+                eMins = maxFleetMins;
+            } else {
+                // Strictly clamp to fleet hours so time window is always served during driver shift
+                sMins = Math.max(minFleetMins, Math.min(sMins, maxFleetMins - 30));
+                eMins = Math.min(maxFleetMins, Math.max(eMins, sMins + 30));
             }
+
+            const sH = Math.floor(sMins / 60).toString().padStart(2, '0');
+            const sM = (sMins % 60).toString().padStart(2, '0');
+            const eH = Math.floor(eMins / 60).toString().padStart(2, '0');
+            const eM = (eMins % 60).toString().padStart(2, '0');
 
             try {
-                const startTime = new Date(`${datePart}T${startLocal}:00-05:00`).toISOString();
-                const endTime = new Date(`${datePart}T${endLocal}:00-05:00`).toISOString();
+                const startTime = new Date(`${datePart}T${sH}:${sM}:00-05:00`).toISOString();
+                const endTime = new Date(`${datePart}T${eH}:${eM}:00-05:00`).toISOString();
                 return { startTime, endTime };
             } catch (err) {
-                console.error("Error parsing time window for order:", o.id, err);
                 return {
                     startTime: new Date(`${datePart}T${fleet_start}:00-05:00`).toISOString(),
                     endTime: new Date(`${datePart}T${fleet_end}:00-05:00`).toISOString()
@@ -204,8 +180,8 @@ export async function POST(request: Request) {
 
         const gcpRequest = {
             model: {
-                globalStartTime: new Date(`${targetDate}T${gStartStr}:00-05:00`).toISOString(),
-                globalEndTime: new Date(`${targetDate}T${gEndStr}:00-05:00`).toISOString(),
+                globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
+                globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
                 shipments: orders.map((o: any) => {
                     const cratesCount = o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / avg_kg_per_crate) : 0);
                     const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount);
