@@ -292,14 +292,26 @@ export default function AdminProductsPage() {
                     .delete()
                     .eq('product_id', selectedProduct.id);
 
-                const formattedVariants = variants.map((v: any) => ({
-                    product_id: selectedProduct.id,
-                    sku: v.sku,
-                    options: v.options,
-                    image_url: v.image_url,
-                    price_adjustment_percent: v.price_adjustment_percent || 0,
-                    is_active: v.is_active ?? true
-                }));
+                const usedBatchSkus = new Set<string>();
+                const formattedVariants = variants.map((v: any, idx: number) => {
+                    let finalSku = (v.sku || `${selectedProduct.id}-${idx + 1}`).trim();
+                    let counter = 1;
+                    const baseSku = finalSku;
+                    while (usedBatchSkus.has(finalSku)) {
+                        counter++;
+                        finalSku = `${baseSku}-${counter}`;
+                    }
+                    usedBatchSkus.add(finalSku);
+
+                    return {
+                        product_id: selectedProduct.id,
+                        sku: finalSku,
+                        options: v.options,
+                        image_url: v.image_url,
+                        price_adjustment_percent: v.price_adjustment_percent || v.price_adj_pct || 0,
+                        is_active: v.is_active ?? true
+                    };
+                });
 
                 const { error: variantError } = await supabase
                     .from('product_variants')

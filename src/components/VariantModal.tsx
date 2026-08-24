@@ -118,18 +118,44 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
         setUploadingIndex(null);
     };
 
+    const getAttributeCode = (rawVal: any): string => {
+        if (!rawVal) return 'X';
+        const str = rawVal.toString().trim();
+        if (str.includes('|')) {
+            const [label, code] = str.split('|');
+            const cleanCode = code ? code.replace(/[^a-zA-Z0-9]/g, '') : '';
+            const initial = label.substring(0, 1).toUpperCase();
+            return cleanCode ? `${initial}${cleanCode}` : initial;
+        }
+        const clean = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        if (clean.length <= 4) return clean;
+        return clean.substring(0, 4);
+    };
+
     const handleSave = async () => {
         setIsSaving(true);
-        // Map options to include show_on_web from masterAttributes
         const mappedOptions = options.map(opt => {
-            const master = masterAttributes.find(m => m.name === opt.name);
             return {
                 name: opt.name,
-                values: opt.values,
-                show_on_web: master ? master.show_on_web !== false : true
+                values: opt.values
             };
         });
-        const success = await onSave(mappedOptions, variants);
+
+        // Garantizar unicidad absoluta de SKUs para evitar violar la restricción unique de base de datos
+        const seenSkus = new Set<string>();
+        const sanitizedVariants = variants.map((v, idx) => {
+            let sku = (v.sku || `${product.accounting_id || product.sku || 'SKU'}-${idx + 1}`).trim();
+            let counter = 1;
+            const baseSku = sku;
+            while (seenSkus.has(sku)) {
+                counter++;
+                sku = `${baseSku}-${counter}`;
+            }
+            seenSkus.add(sku);
+            return { ...v, sku };
+        });
+
+        const success = await onSave(mappedOptions, sanitizedVariants);
         setIsSaving(false);
         if (success) {
             onClose();
@@ -186,11 +212,20 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
             results = temp;
         });
 
-        // Preservar imágenes si la combinación ya existe
         const usedIds = new Set<string>();
+        const usedSkus = new Set<string>();
+
         const newVariants = results.map((combination, idx) => {
-            const attrValues = Object.values(combination).map((v: any) => v.toString().substring(0, 1).toUpperCase()).join('');
-            const variantSku = `${product.sku}.${attrValues}`;
+            const attrCode = Object.values(combination).map(getAttributeCode).join('.');
+            const basePrefix = product.accounting_id ? `ACC-${product.accounting_id}` : (product.sku || 'SKU');
+            const baseSku = `${basePrefix}.${attrCode}`;
+            let variantSku = baseSku;
+            let counter = 1;
+            while (usedSkus.has(variantSku)) {
+                counter++;
+                variantSku = `${baseSku}-${counter}`;
+            }
+            usedSkus.add(variantSku);
 
             // Buscar si ya existe una variante con estas mismas opciones para mantener su imagen e ID sin repetir IDs
             const existing = variants.find(v => 
