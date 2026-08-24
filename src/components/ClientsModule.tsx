@@ -5071,11 +5071,24 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
     const fetchExceptionCount = async () => {
         if (!editData?.id) return;
-        const { count } = await supabase
+        const { data: excData } = await supabase
             .from('product_nicknames')
-            .select('*', { count: 'exact', head: true })
+            .select('product_id, nickname, picking_note, delivery_note, substitution_product_id, preferred_options')
             .eq('customer_id', editData.id);
-        setExceptionCount(count || 0);
+        
+        if (!excData) {
+            setExceptionCount(0);
+            return;
+        }
+
+        const realExceptions = excData.filter((exc: any) => {
+            const hasPickingNote = Boolean(exc.picking_note && exc.picking_note.trim());
+            const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
+            const hasSub = Boolean(exc.substitution_product_id);
+            const hasPreferredOptions = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
+            return hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
+        });
+        setExceptionCount(realExceptions.length);
     };
 
     useEffect(() => {
@@ -8447,135 +8460,141 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {loading ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Cargando excepciones...</div>
-                        ) : exceptions.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary }}>No hay excepciones configuradas.</div>
-                        ) : (
-                            exceptions.map(exc => {
-                                const origProd = getProductDetails(exc.product_id);
-                                const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
-                                return (
-                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                        <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
-                                            <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ color: '#1E293B' }}>Original: {origProd?.name || '---'}</span>
-                                                <span style={{ color: '#94A3B8' }}>|</span>
-                                                <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
-                                            </div>
+                    {(() => {
+                        const isRealLogisticalException = (exc: any) => {
+                            const origProd = getProductDetails(exc.product_id);
+                            const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
+                            const hasPickingNote = Boolean(exc.picking_note && exc.picking_note.trim());
+                            const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
+                            const hasSub = Boolean(exc.substitution_product_id);
+                            const hasPreferredOptions = Boolean(exc.preferred_options && Object.keys(exc.preferred_options).length > 0);
+                            return hasDiffNickname || hasPickingNote || hasRealDeliveryNote || hasSub || hasPreferredOptions;
+                        };
 
-                                            {/* RENDER DETAILED RULES */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                                                
-                                                {/* Nickname alias */}
-                                                {exc.nickname && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🏷️ Nombre / Alias: </span>
-                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textMain, fontWeight: '700' }}>
-                                                            {exc.nickname}
-                                                            {origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase() && (
-                                                                <span style={{ marginLeft: '6px', fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
-                                                                    Alias Factura
+                        const visibleExceptions = exceptions.filter(isRealLogisticalException);
+
+                        return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {loading ? (
+                                    <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Cargando excepciones...</div>
+                                ) : visibleExceptions.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary }}>No hay excepciones logísticas configuradas para este cliente.</div>
+                                ) : (
+                                    visibleExceptions.map(exc => {
+                                        const origProd = getProductDetails(exc.product_id);
+                                        const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
+                                        const hasDiffNickname = Boolean(exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase());
+                                        const hasRealDeliveryNote = Boolean(exc.delivery_note && exc.delivery_note.trim() && !exc.delivery_note.toLowerCase().includes('pareto demanda:'));
+
+                                        return (
+                                            <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                                <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
+                                                    <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ color: '#1E293B' }}>Original: {origProd?.name || '---'}</span>
+                                                        <span style={{ color: '#94A3B8' }}>|</span>
+                                                        <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
+                                                    </div>
+
+                                                    {/* RENDER DETAILED RULES */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                                                        
+                                                        {/* Nickname alias (Only when different) */}
+                                                        {hasDiffNickname && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🏷️ Nombre en Factura (Alias): </span>
+                                                                <span style={{ fontSize: '0.78rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                                    {exc.nickname}
                                                                 </span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                )}
+                                                            </div>
+                                                        )}
 
-                                                {/* Preferred options (Standardized variants) */}
-                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🎨 Variación Preferida: </span>
-                                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                                            {Object.entries(exc.preferred_options).map(([key, val]) => (
-                                                                <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                                    {key}: {val as string}
+                                                        {/* Preferred options (Standardized variants) */}
+                                                        {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🎨 Variación Requerida: </span>
+                                                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                                    {Object.entries(exc.preferred_options).map(([key, val]) => (
+                                                                        <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                                            {key}: {val as string}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Picking notes */}
+                                                        {exc.picking_note && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>📋 Nota de Alistamiento: </span>
+                                                                <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Real Delivery note */}
+                                                        {hasRealDeliveryNote && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '0.7rem', color: '#0369A1', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🚚 Nota de Despacho: </span>
+                                                                <span style={{ fontSize: '0.75rem', color: '#0284C7', fontWeight: '700', backgroundColor: '#F0F9FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>
+                                                                    {exc.delivery_note}
                                                                 </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                            </div>
+                                                        )}
 
-                                                {/* Picking notes */}
-                                                {exc.picking_note && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>📋 Alistamiento / Picking: </span>
-                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
+                                                        {/* Substitution product */}
+                                                        {subProd && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
+                                                                <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A' }}>
+                                                                    [{subProd.accounting_id || subProd.sku}] {subProd.name}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-
-                                                {/* Delivery note / Pareto Demanda */}
-                                                {exc.delivery_note && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#0369A1', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>📊 Demanda / Despacho: </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#0284C7', fontWeight: '700', backgroundColor: '#F0F9FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>
-                                                            {exc.delivery_note}
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                                {/* Substitution product */}
-                                                {subProd && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A' }}>
-                                                            [{subProd.accounting_id || subProd.sku}] {subProd.name}
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                                {/* Default helper badge if no notes */}
-                                                {!exc.nickname && !exc.picking_note && !exc.delivery_note && !subProd && (!exc.preferred_options || Object.keys(exc.preferred_options).length === 0) && (
-                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <span>⭐</span>
-                                                        <span>Producto habitual activo (Priorizado automáticamente en el buscador de pedidos)</span>
+                                                </div>
+                                                {!readOnly && (
+                                                    <div style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
+                                                        <button 
+                                                            onClick={() => {
+                                                                setEditingId(exc.id);
+                                                                setNewException({
+                                                                    product_id: exc.product_id,
+                                                                    nickname: exc.nickname,
+                                                                    picking_note: exc.picking_note,
+                                                                    substitution_product_id: exc.substitution_product_id || '',
+                                                                    delivery_note: exc.delivery_note && !exc.delivery_note.toLowerCase().includes('pareto demanda:') ? exc.delivery_note : '',
+                                                                    preferred_options: exc.preferred_options || {}
+                                                                });
+                                                                setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
+                                                                setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
+                                                                setIsAdding(true);
+                                                                scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                                                            }} 
+                                                            style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDelete(exc.id)} 
+                                                            style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
-                                        {!readOnly && (
-                                            <div style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
-                                                <button 
-                                                    onClick={() => {
-                                                        setEditingId(exc.id);
-                                                        setNewException({
-                                                            product_id: exc.product_id,
-                                                            nickname: exc.nickname,
-                                                            picking_note: exc.picking_note,
-                                                            substitution_product_id: exc.substitution_product_id || '',
-                                                            delivery_note: exc.delivery_note || '',
-                                                            preferred_options: exc.preferred_options || {}
-                                                        });
-                                                        setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
-                                                        setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
-                                                        setIsAdding(true);
-                                                        scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                                                    }} 
-                                                    style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                                >
-                                                    <Edit2 size={14} />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleDelete(exc.id)} 
-                                                    style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
         </div>
