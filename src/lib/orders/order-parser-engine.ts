@@ -26,7 +26,7 @@ export async function fetchGeminiExtraction(
   mimeType: string = 'application/pdf'
 ): Promise<any> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash-latest'];
+  const modelsToTry = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
   let resultText: string | null = null;
   let lastError: any = null;
 
