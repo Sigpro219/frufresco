@@ -69,7 +69,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                 if (opt.name.toLowerCase().includes('presentaci')) {
                     if (!values || values.length === 0) {
                         if (isBaseInKg) {
-                            values = [isEn ? 'Pound (500g)|500' : 'Libra (500g)|500'];
+                            values = [isEn ? 'Pound 500g|500' : 'Libra 500g|500'];
                         } else {
                             const defaultVal = product.web_unit || product.unit_of_measure || 'Unidad';
                             values = [defaultVal];
@@ -84,7 +84,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     if (!hasPresentationKey && isBaseInKg) {
         displayOptions = {
             ...displayOptions,
-            'Presentación': [isEn ? 'Pound (500g)|500' : 'Libra (500g)|500']
+            'Presentación': [isEn ? 'Pound 500g|500' : 'Libra 500g|500']
         };
     }
 
@@ -121,8 +121,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
             const unitName = product.web_unit || (isEn ? 'Pound' : 'Libra');
             const factor = product.web_conversion_factor || (isBaseInKg ? 0.5 : 1);
+            if (unitName.toLowerCase().includes('libra') || unitName.toLowerCase().includes('pound') || factor === 0.5) {
+                return `${unitName} 500g`;
+            }
             const formattedWeight = factor >= 1 ? `${factor} kg` : `${Math.round(factor * 1000)} g`;
-            return `${unitName} (~${formattedWeight})`;
+            return `${unitName} ~${formattedWeight}`;
         }
         if (val.includes('|')) {
             const parts = val.split('|');
@@ -132,13 +135,19 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             if (rawWeight) {
                 const grams = parseFloat(rawWeight);
                 if (!isNaN(grams) && grams > 0) {
+                    if (grams === 500 || rawUnit.toLowerCase().includes('libra') || rawUnit.toLowerCase().includes('pound')) {
+                        return `${unitName} 500g`;
+                    }
                     const kg = grams / 1000;
                     const formattedKg = kg % 1 === 0 ? kg.toString() : (isEn ? kg.toFixed(1) : kg.toFixed(1).replace('.', ','));
-                    return `${unitName} (~${formattedKg} kg)`;
+                    return `${unitName} ~${formattedKg} kg`;
                 }
-                return `${unitName} (${rawWeight})`;
+                return `${unitName} ~${rawWeight}`;
             }
             return unitName;
+        }
+        if (clean.includes('libra') || clean.includes('pound')) {
+            return isEn ? 'Pound 500g' : 'Libra 500g';
         }
         return val;
     };
@@ -147,7 +156,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const initialSelections: Record<string, string> = {};
     Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
         if (Array.isArray(values) && values.length > 0) {
-            const defaultUnit = isBaseInKg ? (isEn ? 'pound (500g)' : 'libra (500g)') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
+            const defaultUnit = isBaseInKg ? (isEn ? 'pound 500g' : 'libra 500g') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
             const sortedValues = values.slice().sort((valA, valB) => {
                 const weightA = getParsedWeight(valA);
                 const weightB = getParsedWeight(valB);
@@ -174,11 +183,11 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         }
     });
 
-    const defaultUnit = isBaseInKg ? (isEn ? 'pound (500g)' : 'libra (500g)') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
+    const defaultUnit = isBaseInKg ? (isEn ? 'pound 500g' : 'libra 500g') : (product.web_unit || product.unit_of_measure || '').toLowerCase();
     const isDefaultSelected = selectedPresentationVal?.toLowerCase() === defaultUnit;
     const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
     const activeConversionFactor = parsedWeight !== null ? parsedWeight : (isBaseInKg ? 0.5 : (product.web_conversion_factor || 1));
-    const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, isEn) : (isBaseInKg ? (isEn ? 'Libra (500g)' : 'Libra (500g)') : (product.web_unit || product.unit_of_measure));
+    const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, isEn) : (isBaseInKg ? (isEn ? 'Pound 500g' : 'Libra 500g') : (product.web_unit || product.unit_of_measure));
 
     // Solo considerar variantes que estén marcadas para mostrarse en web
     const visibleVariants = (product.variants || []).filter(v => (v as any).show_on_web !== false);

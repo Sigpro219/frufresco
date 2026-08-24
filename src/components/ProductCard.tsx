@@ -288,7 +288,7 @@ export default function ProductCard({ product }: { product: Product }) {
                                 const rawUnit = (product.web_unit || product.unit_of_measure || '').toLowerCase();
                                 const isKgUnit = ['kg', 'kilo', 'kilos'].includes(rawUnit);
                                 const conversionFactor = isKgUnit ? 0.5 : (product.web_conversion_factor || 1);
-                                const unitLabel = isKgUnit ? (locale === 'en' ? 'Pound (500g)' : 'Libra (500g)') : (product.web_unit || product.unit_of_measure || 'Un');
+                                const unitLabel = isKgUnit ? (locale === 'en' ? 'Pound 500g' : 'Libra 500g') : (product.web_unit || product.unit_of_measure || 'Un');
                                 const displayPrice = Math.ceil(((product.pricing_model_prices?.[0]?.price || product.base_price || 0) * conversionFactor) / 50) * 50;
                                 const originalDisplayPrice = product.campaign_info ? Math.ceil((product.campaign_info.originalPrice * conversionFactor) / 50) * 50 : displayPrice;
 
