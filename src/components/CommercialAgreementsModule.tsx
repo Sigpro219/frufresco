@@ -76,6 +76,7 @@ export default function CommercialAgreementsModule() {
     const [agreementItems, setAgreementItems] = useState<AgreementItem[]>([]);
     const [loadingItems, setLoadingItems] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [drawerSearchTerm, setDrawerSearchTerm] = useState('');
 
     // Renewal Modal State
     const [renewTarget, setRenewTarget] = useState<Agreement | null>(null);
@@ -1190,6 +1191,44 @@ export default function CommercialAgreementsModule() {
                             </div>
                         </div>
 
+                        {/* Drawer Search Bar */}
+                        <div style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar producto por nombre o código contable..."
+                                    value={drawerSearchTerm}
+                                    onChange={(e) => setDrawerSearchTerm(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.55rem 2rem 0.55rem 2.2rem',
+                                        borderRadius: '8px',
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        fontSize: '0.82rem',
+                                        outline: 'none'
+                                    }}
+                                />
+                                {drawerSearchTerm && (
+                                    <button
+                                        onClick={() => setDrawerSearchTerm('')}
+                                        style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                                {agreementItems.filter(item => {
+                                    if (!drawerSearchTerm.trim()) return true;
+                                    const q = drawerSearchTerm.toLowerCase().trim();
+                                    const name = (item.product_name || '').toLowerCase();
+                                    const accountingId = (item.products?.accounting_id || '').toString().toLowerCase();
+                                    return name.includes(q) || accountingId.includes(q);
+                                }).length} de {agreementItems.length}
+                            </span>
+                        </div>
+
                         {/* Drawer List Content */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
                             {loadingItems ? (
@@ -1197,46 +1236,68 @@ export default function CommercialAgreementsModule() {
                             ) : agreementItems.length === 0 ? (
                                 <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay ítems registrados en este acuerdo comercial.</div>
                             ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader }}>Cod. Contable</th>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader }}>Producto</th>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>U.M.</th>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Costo Base</th>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Precio Acordado</th>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>IVA</th>
-                                            <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {agreementItems.map(item => (
-                                            <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                <td style={{ padding: '0.75rem 0.5rem', color: THEME.colors.textSecondary, fontWeight: '500', fontSize: '0.85rem' }}>
-                                                    {item.products?.accounting_id || '---'}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
-                                                    {item.product_name}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                                    {item.products?.unit_of_measure || 'Kg'}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.85rem' }}>
-                                                    {formatMoney(item.cost_basis)}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.85rem' }}>
-                                                    {formatMoney(item.unit_price)}
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
-                                                    {item.iva_rate}%
-                                                </td>
-                                                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                                                    {Math.round(item.margin_percent * 10) / 10}%
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                (() => {
+                                    const filtered = agreementItems.filter(item => {
+                                        if (!drawerSearchTerm.trim()) return true;
+                                        const q = drawerSearchTerm.toLowerCase().trim();
+                                        const name = (item.product_name || '').toLowerCase();
+                                        const accountingId = (item.products?.accounting_id || '').toString().toLowerCase();
+                                        return name.includes(q) || accountingId.includes(q);
+                                    });
+
+                                    if (filtered.length === 0) {
+                                        return (
+                                            <div style={{ padding: '3rem 1rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                                <Search size={24} color="#94A3B8" style={{ margin: '0 auto 8px', display: 'block' }} />
+                                                <p style={{ fontWeight: 'bold', margin: '0 0 4px' }}>Sin coincidencias</p>
+                                                <p style={{ fontSize: '0.8rem', margin: 0 }}>No se encontró ningún producto para "{drawerSearchTerm}"</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader }}>Cod. Contable</th>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader }}>Producto</th>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>U.M.</th>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Costo Base</th>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Precio Acordado</th>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>IVA</th>
+                                                    <th style={{ padding: '0.5rem 0.5rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filtered.map(item => (
+                                                    <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: THEME.colors.textSecondary, fontWeight: '500', fontSize: '0.85rem' }}>
+                                                            {item.products?.accounting_id || '---'}
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
+                                                            {item.product_name}
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
+                                                            {item.products?.unit_of_measure || 'Kg'}
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.85rem' }}>
+                                                            {formatMoney(item.cost_basis)}
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                            {formatMoney(item.unit_price)}
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
+                                                            {item.iva_rate}%
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                                            {Math.round(item.margin_percent * 10) / 10}%
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    );
+                                })()
                             )}
                         </div>
 

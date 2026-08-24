@@ -4782,6 +4782,7 @@ function EmptyState({ text }: { text: string }) {
 function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose: () => void }) {
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         const fetchItems = async () => {
@@ -4812,16 +4813,31 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
 
     const agreementId = formatAgreementNumber(agreement.quote_number, agreement.created_at);
 
+    // Filtrar productos por nombre o por código contable
+    const filteredItems = useMemo(() => {
+        if (!searchQuery.trim()) return items;
+        const q = searchQuery.toLowerCase().trim();
+        return items.filter(item => {
+            const name = (item.products?.name || item.product_name || '').toLowerCase();
+            const accountingId = (item.products?.accounting_id || '').toString().toLowerCase();
+            return name.includes(q) || accountingId.includes(q);
+        });
+    }, [items, searchQuery]);
+
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid #E2E8F0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                {/* Header */}
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '850px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '1px solid #E2E8F0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                {/* Header con Ícono Lucide */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.2rem 2rem', borderBottom: '1px solid #F1F5F9', background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.2rem' }}>📜</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <FileText size={20} color="#0D7A57" strokeWidth={2.2} />
+                        </div>
                         <div>
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: '#1E293B' }}>Precios Congelados: {agreementId}</h3>
-                            <span style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios / Acuerdo Institucional activo</span>
+                            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1E293B' }}>Precios Congelados: {agreementId}</h3>
+                            <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <CheckCircle2 size={12} color="#0D7A57" /> Modelo de Precios / Acuerdo Institucional activo
+                            </span>
                         </div>
                     </div>
                     <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #E2E8F0', cursor: 'pointer', color: '#64748B', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
@@ -4830,10 +4846,75 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                 </div>
 
                 {/* Content */}
-                <div style={{ padding: '2rem', flex: 1 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', backgroundColor: '#F8FAFC', padding: '1rem 1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.8rem', color: '#475569' }}>
-                        <div><strong>Vigencia:</strong> {agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'} al {agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}</div>
-                        {agreement.model_snapshot_name && <div><strong>Modelo Base:</strong> {agreement.model_snapshot_name}</div>}
+                <div style={{ padding: '1.5rem 2rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                    {/* Vigencia & Metadatos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', backgroundColor: '#F8FAFC', padding: '0.85rem 1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', fontSize: '0.8rem', color: '#475569' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Calendar size={15} color="#0D7A57" />
+                            <span><strong>Vigencia:</strong> {agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'} al {agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                        </div>
+                        {agreement.model_snapshot_name && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Package size={15} color="#0D7A57" />
+                                <span><strong>Modelo Base:</strong> {agreement.model_snapshot_name}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* BUSCADOR DE PRODUCTOS (POR NOMBRE O CÓDIGO CONTABLE) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'space-between' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+                            <input
+                                type="text"
+                                placeholder="Buscar producto por nombre o código contable (ej: 1263, aguacate...)"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.65rem 2.2rem 0.65rem 2.4rem',
+                                    borderRadius: '12px',
+                                    border: '1.5px solid #E2E8F0',
+                                    fontSize: '0.82rem',
+                                    fontWeight: '600',
+                                    outline: 'none',
+                                    transition: 'all 0.2s',
+                                    backgroundColor: '#FFFFFF'
+                                }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = '#0D7A57';
+                                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = '#E2E8F0';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '10px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#94A3B8',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        padding: '4px'
+                                    }}
+                                    title="Limpiar búsqueda"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                            {filteredItems.length} {filteredItems.length === 1 ? 'producto' : 'productos'} {items.length !== filteredItems.length && `(de ${items.length})`}
+                        </span>
                     </div>
 
                     {loading ? (
@@ -4843,6 +4924,12 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                         </div>
                     ) : items.length === 0 ? (
                         <p style={{ textAlign: 'center', color: '#64748B', fontSize: '0.85rem', fontStyle: 'italic', padding: '2rem 0' }}>Este acuerdo no tiene productos vinculados.</p>
+                    ) : filteredItems.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '2.5rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px dashed #CBD5E1' }}>
+                            <Search size={28} color="#94A3B8" style={{ margin: '0 auto 8px', display: 'block' }} />
+                            <p style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: '800', color: '#334155' }}>No se encontraron coincidencias</p>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B' }}>No hay ningún producto con el nombre o código "{searchQuery}".</p>
+                        </div>
                     ) : (
                         <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
@@ -4856,7 +4943,7 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {items.map(item => {
+                                    {filteredItems.map(item => {
                                         const ivaPercent = item.iva_rate || 0;
                                         const basePrice = item.unit_price || 0;
                                         const ivaAmount = basePrice * (ivaPercent / 100);
@@ -4866,7 +4953,11 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                                             <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', color: '#334155' }}>
                                                 <td style={{ padding: '0.75rem 1rem', fontWeight: '700' }}>
                                                     {item.products?.name || 'Producto Desconocido'}
-                                                    {item.products?.accounting_id && <span style={{ display: 'block', fontSize: '0.6rem', color: '#94A3B8', fontWeight: 'normal', marginTop: '2px' }}>Cód. Contable: {item.products.accounting_id}</span>}
+                                                    {item.products?.accounting_id && (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.62rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px', fontWeight: '700', marginTop: '3px', width: 'fit-content' }}>
+                                                            Cód: {item.products.accounting_id}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td style={{ padding: '0.75rem 1rem', color: '#64748B' }}>{item.products?.unit_of_measure || 'un'}</td>
                                                 <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '600' }}>${basePrice.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -4882,8 +4973,11 @@ function AgreementDetailsModal({ agreement, onClose }: { agreement: any, onClose
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '1.2rem 2rem', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#F8FAFC' }}>
-                    <button onClick={onClose} style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', color: '#475569', fontWeight: '600', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                <div style={{ padding: '1rem 2rem', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
+                        Total en catálogo: {items.length} productos
+                    </span>
+                    <button onClick={onClose} style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', color: '#475569', fontWeight: '700', fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
                         Cerrar
                     </button>
                 </div>
