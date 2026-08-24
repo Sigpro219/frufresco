@@ -37,19 +37,25 @@ export default function AirportBoard() {
                 profiles:profile_id(id, company_name, contact_name, role, id_zr),
                 order_items(id, quantity, picked_quantity)
             `)
-            .in('status', ['approved', 'processing'])
+            .in('status', ['approved', 'processing', 'picking', 'loading', 'para_compra'])
             .order('updated_at', { ascending: false });
 
         if (orders) {
             const boardRows: BoardRow[] = orders.map((o: any) => {
-                const total = o.order_items.reduce((acc: number, i: any) => acc + (i.quantity || 0), 0);
-                const picked = o.order_items.reduce((acc: number, i: any) => acc + (i.picked_quantity || 0), 0);
+                const total = o.order_items?.reduce((acc: number, i: any) => acc + (i.quantity || 0), 0) || 0;
+                const picked = o.order_items?.reduce((acc: number, i: any) => acc + (i.picked_quantity || 0), 0) || 0;
                 const percent = total > 0 ? (picked / total) : 0;
 
                 let status: BoardRow['status'] = 'picking';
-                if (percent === 0) status = 'pending';
-                if (percent === 1) status = 'ready';
-                if (percent < 1 && new Date(o.updated_at).getTime() < Date.now() - 3600000) status = 'delayed'; // 1hr no move
+                if (o.status === 'loading') {
+                    status = 'loading';
+                } else if (percent === 1) {
+                    status = 'ready';
+                } else if (percent === 0) {
+                    status = 'pending';
+                } else if (percent < 1 && new Date(o.updated_at).getTime() < Date.now() - 3600000) {
+                    status = 'delayed'; // 1hr no move
+                }
 
                 // Get Zone Name safely
                 const zoneId = o.profiles?.id_zr?.toString() || '0';

@@ -11,6 +11,9 @@ const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, ''
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// Module-level token cache for GCP OAuth2 (valid for ~55 mins)
+let cachedOAuthToken: { token: string; expiresAt: number; projectId: string } | null = null;
+
 // This API serves as a proxy and data-transformer for the Google Maps Route Optimization API
 export async function POST(request: Request) {
     try {
@@ -183,13 +186,27 @@ export async function POST(request: Request) {
                 globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
                 globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
                 shipments: orders.map((o: any) => {
-                    const cratesCount = o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / avg_kg_per_crate) : 0);
+                    const isB2B = !!o.is_b2b || (o.type?.toLowerCase().includes('b2b') ?? false) || o.profiles?.role === 'b2b_client' || o.profiles?.role === 'b2b';
+
+                    // 1. Poka-Yoke Sanitization for Weights and Crates
+                    const rawWeight = parseFloat(o.total_weight_kg);
+                    const sanitizedWeight = Math.max(1, Math.ceil(isNaN(rawWeight) || rawWeight <= 0 ? 1 : rawWeight));
+                    const cratesCount = o.crates || Math.max(1, Math.ceil(sanitizedWeight / avg_kg_per_crate));
+                    
                     const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount);
                     // Cap the maximum delivery service duration at a realistic operational limit (max 60 minutes, min 5 minutes)
                     const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 60));
                     
                     const timeWindow = getOrderTimeWindow(o, targetDate);
                     const isRefrigerated = refrigeratedOrderIds.has(o.id);
+
+                    // 2. Poka-Yoke Sanitization for Coordinates (Bogotá & Sabana bounding box)
+                    let rawLat = parseFloat(o.latitude || o.profiles?.latitude);
+                    let rawLng = parseFloat(o.longitude || o.profiles?.longitude);
+                    if (isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0 || rawLat < 3.5 || rawLat > 6.0 || rawLng < -75.5 || rawLng > -73.0) {
+                        rawLat = 4.633653;
+                        rawLng = -74.160647;
+                    }
  
                     return {
                         pickups: [
@@ -199,18 +216,20 @@ export async function POST(request: Request) {
                         deliveries: [
                             { 
                                 arrivalLocation: { 
-                                    latitude: o.latitude || o.profiles?.latitude || 4.633653, 
-                                    longitude: o.longitude || o.profiles?.longitude || -74.160647 
+                                    latitude: rawLat, 
+                                    longitude: rawLng 
                                 },
                                 timeWindows: [timeWindow],
                                 duration: `${unloadingTime * 60}s`
                             }
                         ],
                         loadDemands: {
-                            "weight": { "amount": String(Math.ceil(o.total_weight_kg)) },
+                            "weight": { "amount": String(sanitizedWeight) },
                             "crates": { "amount": String(cratesCount) },
                             "refrigerated": { "amount": isRefrigerated ? "1" : "0" }
                         },
+                        // Strategic Pareto Priority: High penalty for B2B accounts, standard for B2C
+                        penaltyCost: isB2B ? 500000 : 1000,
                         label: String(o.id)
                     };
                 }),
@@ -267,9 +286,14 @@ export async function POST(request: Request) {
             let accessToken: string | null = null;
             let projectId = gcpProjectId || 'frufresco'; // fallback to frufresco project
 
-            if (hasServiceAccount) {
+            // Check if we have a valid cached OAuth2 token
+            if (cachedOAuthToken && cachedOAuthToken.expiresAt > Date.now() + 60000) {
+                accessToken = cachedOAuthToken.token;
+                projectId = cachedOAuthToken.projectId;
+                console.log("⚡ [Optimizer] Reusing cached GCP OAuth2 token (expires in", Math.round((cachedOAuthToken.expiresAt - Date.now()) / 1000), "s)");
+            } else if (hasServiceAccount) {
                 try {
-                    console.log("🔑 [Optimizer] Authenticating via GCP Service Account JSON...");
+                    console.log("🔑 [Optimizer] Generating fresh GCP OAuth2 token via Service Account JSON...");
                     const keyFileContent = fs.readFileSync(serviceAccountPath, 'utf8');
                     const keyData = JSON.parse(keyFileContent);
                     projectId = keyData.project_id || projectId;
@@ -321,7 +345,14 @@ export async function POST(request: Request) {
 
                     const tokenData = await tokenResponse.json();
                     accessToken = tokenData.access_token;
-                    console.log("🔑 [Optimizer] OAuth2 token generated successfully!");
+                    
+                    // Cache token for 55 minutes
+                    cachedOAuthToken = {
+                        token: tokenData.access_token,
+                        expiresAt: Date.now() + 3300 * 1000,
+                        projectId: projectId
+                    };
+                    console.log("🔑 [Optimizer] Fresh OAuth2 token generated and cached successfully!");
                 } catch (oauthErr: any) {
                     console.error("OAuth token generation failed, falling back to API Key if configured:", oauthErr);
                 }
