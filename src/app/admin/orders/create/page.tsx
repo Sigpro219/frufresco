@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { isInsidePolygon, Point } from '@/lib/geoUtils';
 import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
@@ -200,26 +200,6 @@ function CreateOrderContent() {
     const [clientSearch, setClientSearch] = useState('');
     const [focusedClientIndex, setFocusedClientIndex] = useState(-1);
 
-    // Client Exceptions (Product Nicknames & Notes) State
-    const [clientExceptions, setClientExceptions] = useState<any[]>([]);
-
-    useEffect(() => {
-        if (!selectedClient) {
-            setClientExceptions([]);
-            return;
-        }
-        async function fetchClientExceptions() {
-            const { data } = await supabase
-                .from('product_nicknames')
-                .select('*')
-                .eq('customer_id', selectedClient);
-            if (data) setClientExceptions(data);
-        }
-        fetchClientExceptions();
-    }, [selectedClient]);
-
-    const [focusedProductIndex, setFocusedProductIndex] = useState(-1);
-
     // B2C State
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
     const [clientSearchB2C, setClientSearchB2C] = useState('');
@@ -227,6 +207,64 @@ function CreateOrderContent() {
     const [loadingLastOrderB2C, setLoadingLastOrderB2C] = useState(false);
     const [focusedClientIndexB2C, setFocusedClientIndexB2C] = useState<number>(-1);
     const [guestInfo, setGuestInfo] = useState({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); // For B2C New
+
+    // Client Exceptions (Product Nicknames & Notes) and Frequent Demand History
+    const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+    const [clientFrequentProductMap, setClientFrequentProductMap] = useState<Record<string, { count: number; totalQty: number; nickname?: string }>>({});
+
+    const activeCustomerId = selectedClient || (clientType === 'B2C' && selectedClientB2C ? selectedClientB2C : null);
+
+    useEffect(() => {
+        if (!activeCustomerId) {
+            setClientExceptions([]);
+            setClientFrequentProductMap({});
+            return;
+        }
+        async function fetchClientData() {
+            try {
+                // 1. Fetch exceptions/nicknames
+                const { data: nicknames } = await supabase
+                    .from('product_nicknames')
+                    .select('*')
+                    .eq('customer_id', activeCustomerId);
+                if (nicknames) setClientExceptions(nicknames);
+
+                // 2. Fetch purchase history stats for this client
+                const { data: clientOrders } = await supabase
+                    .from('orders')
+                    .select('id')
+                    .eq('profile_id', activeCustomerId)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                
+                if (clientOrders && clientOrders.length > 0) {
+                    const orderIds = clientOrders.map(o => o.id);
+                    const { data: items } = await supabase
+                        .from('order_items')
+                        .select('product_id, quantity, nickname')
+                        .in('order_id', orderIds);
+                    
+                    if (items) {
+                        const freqMap: Record<string, { count: number; totalQty: number; nickname?: string }> = {};
+                        items.forEach(it => {
+                            if (!it.product_id) return;
+                            if (!freqMap[it.product_id]) {
+                                freqMap[it.product_id] = { count: 0, totalQty: 0, nickname: it.nickname || undefined };
+                            }
+                            freqMap[it.product_id].count += 1;
+                            freqMap[it.product_id].totalQty += (Number(it.quantity) || 0);
+                        });
+                        setClientFrequentProductMap(freqMap);
+                    }
+                }
+            } catch (err) {
+                console.warn('Error loading client purchase history frequency:', err);
+            }
+        }
+        fetchClientData();
+    }, [activeCustomerId]);
+
+    const [focusedProductIndex, setFocusedProductIndex] = useState(-1);
 
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
@@ -442,6 +480,7 @@ function CreateOrderContent() {
         nickname?: string;
         picking_note?: string;
         delivery_note?: string;
+        is_from_last_order?: boolean;
     }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
@@ -2333,11 +2372,65 @@ function CreateOrderContent() {
     };
 
     // Filters & Helpers
-    const filteredProducts = (!productSearch || productSearch.length < 2) ? [] : (products || []).filter(p =>
-        (p.name && p.name.toLowerCase().includes(productSearch.toLowerCase())) ||
-        (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase())) ||
-        (p.accounting_id && String(p.accounting_id).toLowerCase().includes(productSearch.toLowerCase()))
-    ).slice(0, 10);
+    const filteredProducts = useMemo(() => {
+        if (!productSearch || productSearch.trim().length < 2) return [];
+
+        const normalizeStr = (s: string) => (s || '')
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+
+        const cleanQuery = normalizeStr(productSearch);
+
+        // Filter products that match query by name, sku, accounting_id, or client exception nickname
+        const matched = (products || []).filter(p => {
+            const normName = normalizeStr(p.name);
+            const normSku = normalizeStr(p.sku);
+            const normAcc = normalizeStr(String(p.accounting_id || ''));
+            const exc = clientExceptions.find(e => e.product_id === p.id);
+            const normNickname = exc?.nickname ? normalizeStr(exc.nickname) : '';
+
+            return normName.includes(cleanQuery) ||
+                   normSku.includes(cleanQuery) ||
+                   normAcc.includes(cleanQuery) ||
+                   normNickname.includes(cleanQuery);
+        });
+
+        // Compute relevance / prioritization score for each product
+        return matched.sort((a, b) => {
+            const excA = clientExceptions.find(e => e.product_id === a.id);
+            const excB = clientExceptions.find(e => e.product_id === b.id);
+            const freqA = clientFrequentProductMap[a.id];
+            const freqB = clientFrequentProductMap[b.id];
+
+            let scoreA = 0;
+            let scoreB = 0;
+
+            // Prioritize client exceptions/nicknames (highest boost)
+            if (excA) scoreA += 1000;
+            if (excB) scoreB += 1000;
+
+            // Prioritize historical purchase frequency and volume
+            if (freqA) scoreA += (freqA.count * 100) + Math.min(freqA.totalQty, 500);
+            if (freqB) scoreB += (freqB.count * 100) + Math.min(freqB.totalQty, 500);
+
+            // Name match prefix boost
+            const normNameA = normalizeStr(a.name);
+            const normNameB = normalizeStr(b.name);
+            if (normNameA.startsWith(cleanQuery)) scoreA += 50;
+            if (normNameB.startsWith(cleanQuery)) scoreB += 50;
+            if (normNameA === cleanQuery) scoreA += 100;
+            if (normNameB === cleanQuery) scoreB += 100;
+
+            if (scoreB !== scoreA) {
+                return scoreB - scoreA;
+            }
+
+            // Fallback: alphabetical
+            return normNameA.localeCompare(normNameB);
+        }).slice(0, 12);
+    }, [productSearch, products, clientExceptions, clientFrequentProductMap]);
 
     const handleProductSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (filteredProducts.length === 0) return;
@@ -3620,19 +3713,23 @@ function CreateOrderContent() {
                                 }}>
                                     {filteredProducts.map((p, idx) => {
                                         const isScarcityLocked = Boolean(scarcityLockedMap[p.id]);
+                                        const exc = clientExceptions.find(e => e.product_id === p.id);
+                                        const freq = clientFrequentProductMap[p.id];
+                                        const isClientHabitual = Boolean(exc || freq);
+
                                         return (
                                             <div
                                                 key={p.id}
                                                 onClick={() => handleProductClick(p)}
                                                 onMouseEnter={() => setFocusedProductIndex(idx)}
                                                 style={{
-                                                    padding: '0.8rem 1rem',
+                                                    padding: '0.85rem 1rem',
                                                     cursor: isScarcityLocked ? 'not-allowed' : 'pointer',
                                                     borderBottom: '1px solid #F3F4F6',
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
                                                     alignItems: 'center',
-                                                    backgroundColor: isScarcityLocked ? '#FEF2F2' : (idx === focusedProductIndex ? '#EFF6FF' : 'white'),
+                                                    backgroundColor: isScarcityLocked ? '#FEF2F2' : (idx === focusedProductIndex ? '#EFF6FF' : (isClientHabitual ? '#F0FDF4' : 'white')),
                                                     opacity: isScarcityLocked ? 0.85 : 1
                                                 }}
                                             >
@@ -3640,6 +3737,22 @@ function CreateOrderContent() {
                                                     <span style={{ fontWeight: '700', color: isScarcityLocked ? '#991B1B' : '#111827' }}>
                                                         {p.name} <span style={{ fontSize: '0.8em', color: '#6B7280' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
                                                     </span>
+                                                    {isClientHabitual && (
+                                                        <span style={{ 
+                                                            fontSize: '0.7rem', 
+                                                            backgroundColor: '#DCFCE7', 
+                                                            color: '#15803D', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '999px', 
+                                                            fontWeight: '800', 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '4px',
+                                                            border: '1px solid #86EFAC'
+                                                        }}>
+                                                            ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                                        </span>
+                                                    )}
                                                     {isScarcityLocked && (
                                                         <span style={{ fontSize: '0.68rem', backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCA5A5', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                             <PackageX size={12} /> AGOTADO POR ESCASEZ

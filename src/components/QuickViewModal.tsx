@@ -117,12 +117,15 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     // Helper para extraer peso en Kg
     const getParsedWeight = (text: string): number | null => {
         if (!text) return null;
+        const clean = text.toLowerCase();
+        if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
+            return (product as any).web_conversion_factor || (isBaseInKg ? 0.5 : 1);
+        }
         if (text.includes('|')) {
             const parts = text.split('|');
             const grams = parseFloat(parts[1]);
             if (!isNaN(grams) && grams > 0) return grams / 1000;
         }
-        const clean = text.toLowerCase();
         const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
         if (kgMatch) {
             const val = parseFloat(kgMatch[1]);
@@ -140,6 +143,13 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     // Helper para formatear visualmente valores de opciones con peso en Kg
     const formatOptionDisplay = (val: string, isEn?: boolean): string => {
         if (!val) return '';
+        const clean = val.toLowerCase();
+        if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
+            const unitName = (product as any).web_unit || (isEn ? 'Pound' : 'Libra');
+            const factor = (product as any).web_conversion_factor || (isBaseInKg ? 0.5 : 1);
+            const formattedWeight = factor >= 1 ? `${factor} kg` : `${Math.round(factor * 1000)} g`;
+            return `${unitName} (~${formattedWeight})`;
+        }
         if (val.includes('|')) {
             const parts = val.split('|');
             const rawUnit = parts[0].trim();
@@ -214,7 +224,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     const activeConversionFactor = parsedWeight !== null ? parsedWeight : (isBaseInKg ? 0.5 : (product.web_conversion_factor || 1));
     const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : (isBaseInKg ? (locale === 'en' ? 'Pound (500g)' : 'Libra (500g)') : ((product as any).web_unit || product.unit_of_measure));
 
-    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
+    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
     const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;
     
     // Aplicar factor de conversión y redondeo a 50

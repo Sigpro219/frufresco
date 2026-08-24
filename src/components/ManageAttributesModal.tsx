@@ -125,7 +125,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
         const isPresentacion = attr?.name.toLowerCase().includes('presentaci');
 
         let finalVal = val;
-        if (isPresentacion) {
+        if (isPresentacion && val.toLowerCase() !== 'unidad web' && val.toLowerCase() !== 'unidadweb') {
             const grams = prompt(`⚠️ EQUIVALENCIA EN GRAMOS:\n\nIngrese la equivalencia en gramos para "${val}" (ej: 250):`);
             if (grams === null) return; // Operator clicked cancel
             const gramsNum = parseInt(grams.trim());
@@ -134,6 +134,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 return;
             }
             finalVal = `${val}|${gramsNum}`;
+        } else if (isPresentacion && (val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb')) {
+            finalVal = 'Unidad Web';
         }
 
         setLocalAttributes(localAttributes.map(a => {
@@ -440,22 +442,26 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
 
                                     <div style={{ backgroundColor: '#F9FAFB', padding: '8px 10px', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                            {sortSuggestedValues(attr.suggested_values || []).map(val => (
-                                                <span key={val} style={{ 
-                                                    display: 'inline-flex', alignItems: 'center', gap: '5px', 
-                                                    backgroundColor: 'white', border: '1.5px solid #E5E7EB', 
-                                                    padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
-                                                    fontWeight: '700', color: '#374151' 
-                                                }}>
-                                                     {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
-                                                    <button 
-                                                        onClick={() => handleRemoveValueLocal(attr.id, val)}
-                                                        style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}
-                                                    >
-                                                        <X size={12} />
-                                                    </button>
-                                                </span>
-                                            ))}
+                                            {sortSuggestedValues(attr.suggested_values || []).map(val => {
+                                                const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
+                                                return (
+                                                    <span key={val} style={{ 
+                                                        display: 'inline-flex', alignItems: 'center', gap: '5px', 
+                                                        backgroundColor: isWebUnit ? '#ECFDF5' : 'white', 
+                                                        border: isWebUnit ? '1.5px solid #10B981' : '1.5px solid #E5E7EB', 
+                                                        padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
+                                                        fontWeight: '700', color: isWebUnit ? '#047857' : '#374151' 
+                                                    }} title={isWebUnit ? 'Equivalencia dinámica: Hereda la Unidad Comercial Web y Factor en Kg configurados en la ficha del producto' : undefined}>
+                                                        {isWebUnit ? '🏷️ Unidad Web (Dinámica SKU)' : (val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val)}
+                                                        <button 
+                                                            onClick={() => handleRemoveValueLocal(attr.id, val)}
+                                                            style={{ background: 'none', border: 'none', color: isWebUnit ? '#059669' : '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
                                             <input 
                                                 ref={el => { inputRefs.current[attr.id] = el; }}
                                                 placeholder="+ Subcat..."

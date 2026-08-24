@@ -1404,38 +1404,49 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             
                                             {masterAttributes.some(a => a.name === opt.name) ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
-                                                    {sortSuggestedValues(masterAttributes.find(a => a.name === opt.name)?.values || []).map(val => (
-                                                        <label 
-                                                            key={val} 
-                                                            style={{ 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                gap: '8px', 
-                                                                fontSize: '0.9rem', 
-                                                                cursor: 'pointer', 
-                                                                padding: '6px 12px', 
-                                                                backgroundColor: opt.values.includes(val) ? '#EFF6FF' : '#F9FAFB', 
-                                                                borderRadius: '8px', 
-                                                                transition: 'all 0.2s',
-                                                                border: `1.5px solid ${opt.values.includes(val) ? '#3B82F6' : '#F3F4F6'}`,
-                                                                color: opt.values.includes(val) ? '#1E40AF' : '#4B5563',
-                                                                fontWeight: opt.values.includes(val) ? '800' : '500'
-                                                            }}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={opt.values.includes(val)}
-                                                                onChange={(e) => {
-                                                                    const newValues = e.target.checked
-                                                                        ? [...opt.values, val]
-                                                                        : opt.values.filter((v: string) => v !== val);
-                                                                    updateOptionValues(idx, newValues);
-                                                                }}
-                                                                style={{ width: '16px', height: '16px', accentColor: '#3B82F6' }}
-                                                            />
-                                                            {val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` : val}
-                                                        </label>
-                                                    ))}
+                                                    {sortSuggestedValues(masterAttributes.find(a => a.name === opt.name)?.values || []).map(val => {
+                                                        const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
+                                                        const webUnitName = formData.web_unit || 'Libra';
+                                                        const webFactorKg = formData.web_conversion_factor ?? (formData.unit_of_measure?.toLowerCase() === 'kg' ? 0.5 : 1);
+                                                        const webWeightText = webFactorKg >= 1 ? `${webFactorKg} kg` : `${Math.round(webFactorKg * 1000)} gr`;
+                                                        const displayLabel = isWebUnit 
+                                                            ? `🏷️ Unidad Web (${webUnitName} - ${webWeightText})`
+                                                            : (val.includes('|') ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` : val);
+
+                                                        return (
+                                                            <label 
+                                                                key={val} 
+                                                                style={{ 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    gap: '8px', 
+                                                                    fontSize: '0.9rem', 
+                                                                    cursor: 'pointer', 
+                                                                    padding: '6px 12px', 
+                                                                    backgroundColor: opt.values.includes(val) ? (isWebUnit ? '#ECFDF5' : '#EFF6FF') : (isWebUnit ? '#F0FDF4' : '#F9FAFB'), 
+                                                                    borderRadius: '8px', 
+                                                                    transition: 'all 0.2s', 
+                                                                    border: `1.5px solid ${opt.values.includes(val) ? (isWebUnit ? '#10B981' : '#3B82F6') : (isWebUnit ? '#A7F3D0' : '#F3F4F6')}`, 
+                                                                    color: opt.values.includes(val) ? (isWebUnit ? '#065F46' : '#1E40AF') : (isWebUnit ? '#047857' : '#4B5563'), 
+                                                                    fontWeight: opt.values.includes(val) ? '800' : '500' 
+                                                                }} 
+                                                                title={isWebUnit ? 'Hereda la Unidad Comercial Web y Factor en Kg configurados en la cabecera de este producto' : undefined}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={opt.values.includes(val)}
+                                                                    onChange={(e) => {
+                                                                        const newValues = e.target.checked
+                                                                            ? [...opt.values, val]
+                                                                            : opt.values.filter((v: string) => v !== val);
+                                                                        updateOptionValues(idx, newValues);
+                                                                    }}
+                                                                    style={{ width: '16px', height: '16px', accentColor: isWebUnit ? '#10B981' : '#3B82F6' }}
+                                                                />
+                                                                {displayLabel}
+                                                            </label>
+                                                        );
+                                                    })}
                                                 </div>
                                             ) : (
                                                 <div style={{ fontSize: '0.85rem', color: '#94A3B8', fontWeight: '600', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #D1D5DB', textAlign: 'center' }}>

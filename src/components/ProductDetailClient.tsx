@@ -91,12 +91,15 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     // Helper para extraer peso en Kg
     const getParsedWeight = (text: string): number | null => {
         if (!text) return null;
+        const clean = text.toLowerCase();
+        if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
+            return product.web_conversion_factor || (isBaseInKg ? 0.5 : 1);
+        }
         if (text.includes('|')) {
             const parts = text.split('|');
             const grams = parseFloat(parts[1]);
             if (!isNaN(grams) && grams > 0) return grams / 1000;
         }
-        const clean = text.toLowerCase();
         const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
         if (kgMatch) {
             const val = parseFloat(kgMatch[1]);
@@ -114,6 +117,13 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     // Helper para formatear visualmente valores de opciones con peso en Kg
     const formatOptionDisplay = (val: string, isEn?: boolean): string => {
         if (!val) return '';
+        const clean = val.toLowerCase();
+        if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
+            const unitName = product.web_unit || (isEn ? 'Pound' : 'Libra');
+            const factor = product.web_conversion_factor || (isBaseInKg ? 0.5 : 1);
+            const formattedWeight = factor >= 1 ? `${factor} kg` : `${Math.round(factor * 1000)} g`;
+            return `${unitName} (~${formattedWeight})`;
+        }
         if (val.includes('|')) {
             const parts = val.split('|');
             const rawUnit = parts[0].trim();
@@ -192,7 +202,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     const originalPriceWithAdjustment = originalBasePrice * (1 + adjustmentPercent / 100);
     const originalPrice = Math.ceil((originalPriceWithAdjustment * activeConversionFactor) / 50) * 50;
 
-    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb');
+    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
     const isPriceValid = (currentPrice || 0) > 0;
     const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? isPriceValid : (!!currentVariant && isPriceValid)) : isPriceValid;
 
