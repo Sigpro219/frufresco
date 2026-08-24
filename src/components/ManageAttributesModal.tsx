@@ -451,7 +451,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                         border: isWebUnit ? '1.5px solid #10B981' : '1.5px solid #E5E7EB', 
                                                         padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
                                                         fontWeight: '700', color: isWebUnit ? '#047857' : '#374151' 
-                                                    }} title={isWebUnit ? 'Equivalencia dinámica: Hereda la Unidad Comercial Web y Factor en Kg configurados en la ficha del producto' : undefined}>
+                                                    }} title={isWebUnit ? '🌐 EXCLUSIVO PARA TIENDA WEB / E-COMMERCE: Esta opción solo afecta el catálogo web. Al seleccionarla en un producto, hereda su unidad comercial web y factor en Kg para mostrarse a los clientes en la tienda virtual.' : undefined}>
                                                         {isWebUnit ? '🏷️ Unidad Web (Dinámica SKU)' : (val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val)}
                                                         <button 
                                                             onClick={() => handleRemoveValueLocal(attr.id, val)}

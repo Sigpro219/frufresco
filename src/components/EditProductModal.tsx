@@ -1430,7 +1430,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     color: opt.values.includes(val) ? (isWebUnit ? '#065F46' : '#1E40AF') : (isWebUnit ? '#047857' : '#4B5563'), 
                                                                     fontWeight: opt.values.includes(val) ? '800' : '500' 
                                                                 }} 
-                                                                title={isWebUnit ? 'Hereda la Unidad Comercial Web y Factor en Kg configurados en la cabecera de este producto' : undefined}
+                                                                title={isWebUnit ? `🌐 EXCLUSIVO PARA TIENDA WEB / E-COMMERCE: Al marcar esta casilla, el producto mostrará "${webUnitName} (${webWeightText})" como opción de compra para los clientes en la página web. Esto SOLO afecta la web y no altera pedidos ni operaciones institucionales B2B.` : undefined}
                                                             >
                                                                 <input
                                                                     type="checkbox"
