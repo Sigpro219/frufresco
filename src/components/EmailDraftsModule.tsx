@@ -1474,7 +1474,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleApproveDraft = async () => {
     if (!selectedDraft) return;
-    if (!overrideClientId) {
+    const clientId = selectedDraft.profile_id;
+    if (!clientId) {
       showToast('Por favor selecciona un cliente antes de aprobar la orden.', 'error');
       return;
     }
@@ -1501,14 +1502,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           };
         });
 
+      const matchedProfile = profiles.find(p => p.id === clientId);
+      const isB2C = matchedProfile?.role === 'b2c_client' || editableClientType === 'b2c_client';
+
       const payload = {
         draftId: selectedDraft.id,
-        clientId: overrideClientId,
+        clientId: clientId,
         clientType: isB2C ? 'b2c_client' : 'b2b_client',
         deliveryDate: deliveryDate,
-        deliverySlot: deliverySlot,
-        address: customAddress || selectedDraft.address || 'Bogotá',
-        notes: notes,
+        deliverySlot: editableDeliverySlot || 'AM',
+        address: editableAddress || selectedDraft.address || 'Bogotá',
+        notes: adminNotes || '',
         items: validItems,
         channel: 'email',
         originSource: 'email'
@@ -6129,7 +6133,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 {selectedDraft.status === 'pending' && (
                   <button 
                     id="btn-approve-draft"
-                    onClick={handleApproveDraft}
+                    onClick={handleApprove}
                     disabled={saving || hasUnmatchedItems}
                     style={{
                       padding: '0.75rem 1.5rem',
