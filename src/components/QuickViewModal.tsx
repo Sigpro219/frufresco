@@ -151,7 +151,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                 return `${unitName} 500g`;
             }
             const formattedWeight = factor >= 1 ? `${factor} kg` : `${Math.round(factor * 1000)} g`;
-            return `${unitName} ~${formattedWeight}`;
+            return `${unitName} ±${formattedWeight}`;
         }
         if (val.includes('|')) {
             const parts = val.split('|');
@@ -166,9 +166,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                     }
                     const kg = grams / 1000;
                     const formattedKg = kg % 1 === 0 ? kg.toString() : (isEn ? kg.toFixed(1) : kg.toFixed(1).replace('.', ','));
-                    return `${unitName} ~${formattedKg} kg`;
+                    return `${unitName} ±${formattedKg} kg`;
                 }
-                return `${unitName} ~${rawWeight}`;
+                return `${unitName} ±${rawWeight}`;
             }
             return unitName;
         }
