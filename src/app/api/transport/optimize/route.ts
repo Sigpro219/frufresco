@@ -208,7 +208,9 @@ export async function POST(request: Request) {
                 globalEndTime: new Date(`${targetDate}T${gEndStr}:00-05:00`).toISOString(),
                 shipments: orders.map((o: any) => {
                     const cratesCount = o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / avg_kg_per_crate) : 0);
-                    const unloadingTime = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount);
+                    const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount);
+                    // Cap the maximum delivery service duration at a realistic operational limit (max 60 minutes, min 5 minutes)
+                    const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 60));
                     
                     const timeWindow = getOrderTimeWindow(o, targetDate);
                     const isRefrigerated = refrigeratedOrderIds.has(o.id);
