@@ -279,8 +279,7 @@ export default function QuoteDetailPage() {
                             unit_price: priceWithTax,
                             variant_label: '',
                             nickname: qi.product_name || (qi.products?.name || ''),
-                            iva_rate: rate,
-                            iva_amount: Math.round(ivaAmount)
+                            unit: qi.products?.unit_of_measure || 'Kg'
                         };
                     });
 

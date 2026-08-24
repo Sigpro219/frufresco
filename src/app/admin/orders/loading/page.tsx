@@ -1528,10 +1528,6 @@ export default function OrderLoadingPage() {
 
             // Consolidador de Ítems (Bulk Upsert para Nuevos y Modificados)
             const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
-                const rate = item.products?.iva_rate !== null && item.products?.iva_rate !== undefined ? Number(item.products.iva_rate) : 19;
-                const itemTotal = (item.unit_price || 0) * item.quantity;
-                const ivaAmount = itemTotal * (rate / (100 + rate));
-
                 const baseItem: any = {
                     order_id: selectedOrder.id,
                     product_id: item.product_id,
@@ -1540,8 +1536,7 @@ export default function OrderLoadingPage() {
                     variant_label: item.variant_label,
                     selected_options: item.selected_options,
                     nickname: item.nickname || item.variant_label || null,
-                    iva_rate: rate,
-                    iva_amount: ivaAmount
+                    unit: item.unit || item.products?.unit_of_measure || 'Kg'
                 };
                 if (!item.isNew) {
                     baseItem.id = item.id;
