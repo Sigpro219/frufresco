@@ -54,8 +54,23 @@ const sortSuggestedValues = (values: string[]): string[] => {
 export default function EditProductModal({ product, allProducts, onClose, onSave, readOnly = false }: EditProductModalProps) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const initialWeight = () => {
+        if (product.weight_kg !== undefined && product.weight_kg !== null && !isNaN(Number(product.weight_kg))) {
+            return Number(product.weight_kg);
+        }
+        const extracted = extractWeight(product.name);
+        if (extracted !== null && extracted > 0) {
+            return extracted / 1000;
+        }
+        const u = (product.unit_of_measure || '').toLowerCase();
+        if (u === 'kg' || u === 'kilo' || u === 'kilos') return 1.0;
+        if (u === 'libra' || u === 'libras' || u === 'lb') return 0.5;
+        return 0.5;
+    };
+
     const [formData, setFormData] = useState<Product>({ 
         ...product,
+        weight_kg: initialWeight(),
         iva_rate: product.iva_rate ?? 19,
         utility_deviation_pct: product.utility_deviation_pct ?? 0,
         inherit_price: (product as any).inherit_price ?? false
@@ -455,6 +470,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 }, {}),
                 variants: variants,
                 iva_rate: formData.iva_rate,
+                weight_kg: formData.weight_kg !== undefined && formData.weight_kg !== null ? Number(formData.weight_kg) : 0.5,
                 display_name: formData.display_name,
                 web_unit: formData.web_unit,
                 web_conversion_factor: formData.web_conversion_factor,
@@ -938,16 +954,46 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         </div>
                     )}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '0.8rem' }}>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Unidad de Medida</label>
                             <select
                                 value={formData.unit_of_measure}
-                                onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })}
+                                onChange={(e) => {
+                                    const newUnit = e.target.value;
+                                    let newWeight = formData.weight_kg;
+                                    if (newUnit.toLowerCase() === 'kg') newWeight = 1.0;
+                                    else if (newUnit.toLowerCase() === 'libra') newWeight = 0.5;
+                                    setFormData({ ...formData, unit_of_measure: newUnit, weight_kg: newWeight });
+                                }}
                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '1rem', cursor: 'pointer' }}
                             >
                                 {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
                             </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', marginBottom: '4px' }}>Peso Log. (kg)</label>
+                            <input
+                                type="number"
+                                step="0.001"
+                                min="0.001"
+                                placeholder="Ej: 0.050"
+                                value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : ''}
+                                onChange={(e) => {
+                                    const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                    setFormData({ ...formData, weight_kg: val });
+                                }}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0.8rem', 
+                                    borderRadius: '8px', 
+                                    border: '2px solid #93C5FD', 
+                                    fontSize: '1rem', 
+                                    fontWeight: '800',
+                                    color: '#1E40AF',
+                                    backgroundColor: '#EFF6FF'
+                                }}
+                            />
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>IVA (%)</label>

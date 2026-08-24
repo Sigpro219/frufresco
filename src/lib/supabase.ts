@@ -92,6 +92,7 @@ export interface Product {
     description: string;
     base_price: number;
     unit_of_measure: string;
+    weight_kg?: number;
     display_name?: string;
     image_url: string;
     category: string;
@@ -120,7 +121,6 @@ export interface Product {
     description_en?: string | null;
     inherit_price?: boolean;
     is_verified_dev?: boolean;
-    tags?: string[];
     pricing_model_prices?: { price: number }[];
     campaign_info?: any;
 }

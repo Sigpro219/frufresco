@@ -1374,11 +1374,9 @@ export default function OrderLoadingPage() {
         setSelectedProductForVariant(product);
 
         // Find default unit conversions
-        const hasWebUnit = product.web_unit && product.web_conversion_factor;
-        const defaultUnit = hasWebUnit ? product.web_unit : (product.unit_of_measure || 'Kg');
-        const defaultFactor = hasWebUnit ? parseFloat(product.web_conversion_factor) || 1 : 1;
+        const defaultUnit = product.unit_of_measure || 'Kg';
         setSelectedUnit(defaultUnit);
-        setSelectedConversionFactor(defaultFactor);
+        setSelectedConversionFactor(1);
 
         setProductSearch('');
         setSearchResults([]);
@@ -3409,28 +3407,20 @@ export default function OrderLoadingPage() {
                 {selectedProductForVariant && (() => {
                     const exc = clientExceptions.find(e => e.product_id === selectedProductForVariant.id);
                     
-                    // Build full options list for unit selection (web_unit is first, if configured)
-                    const optionsList = [];
-                    const hasWebUnit = selectedProductForVariant.web_unit && selectedProductForVariant.web_conversion_factor;
+                    // Build options list for unit selection (strictly base units & operational conversions, excluding ecommerce units)
+                    const optionsList: { unit: string; factor: number; label: string }[] = [];
+                    const baseUnit = selectedProductForVariant.unit_of_measure || 'Kg';
                     
-                    if (hasWebUnit) {
-                        optionsList.push({
-                            unit: selectedProductForVariant.web_unit,
-                            factor: parseFloat(selectedProductForVariant.web_conversion_factor) || 1,
-                            label: `${selectedProductForVariant.web_unit} (${selectedProductForVariant.web_conversion_factor} ${selectedProductForVariant.unit_of_measure})`
-                        });
-                    }
-                    
-                    if (!hasWebUnit || selectedProductForVariant.unit_of_measure !== selectedProductForVariant.web_unit) {
-                        optionsList.push({
-                            unit: selectedProductForVariant.unit_of_measure || 'Kg',
-                            factor: 1,
-                            label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)`
-                        });
-                    }
+                    optionsList.push({
+                        unit: baseUnit,
+                        factor: 1,
+                        label: `${baseUnit} (Base)`
+                    });
                     
                     const itemConversions = conversions.filter(c => c.product_id === selectedProductForVariant.id);
                     itemConversions.forEach(c => {
+                        const fromLower = c.from_unit.toLowerCase();
+                        if (fromLower.includes('libra') || fromLower.includes('pound') || fromLower.includes('unidad web')) return;
                         const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === c.from_unit.toLowerCase());
                         if (!isDuplicate) {
                             optionsList.push({

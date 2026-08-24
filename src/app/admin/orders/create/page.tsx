@@ -441,15 +441,9 @@ function CreateOrderContent() {
 
             setModalQuantity('1');
 
-            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
-            const initialUnit = hasWebUnit ? selectedProductForModal.web_unit : (selectedProductForModal.unit_of_measure || 'Kg');
-            if (hasWebUnit) {
-                setModalUnit(selectedProductForModal.web_unit);
-                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
-            } else {
-                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
-                setModalFactor(1);
-            }
+            const baseUnit = selectedProductForModal.unit_of_measure || 'Kg';
+            setModalUnit(baseUnit);
+            setModalFactor(1);
 
             const initialOptions: Record<string, string> = {};
             if (selectedProductForModal.options_config) {
@@ -457,9 +451,12 @@ function CreateOrderContent() {
                     if (opt.name.toLowerCase().includes('presentaci')) {
                         const matchedValue = opt.values?.find((v: string) => {
                             const clean = v.includes('|') ? v.split('|')[0] : v;
-                            return clean.toLowerCase() === initialUnit.toLowerCase();
-                        }) || initialUnit;
-                        initialOptions[opt.name] = matchedValue;
+                            return clean.toLowerCase() === baseUnit.toLowerCase();
+                        }) || opt.values?.filter((v: string) => {
+                            const clean = v.toLowerCase();
+                            return !clean.includes('libra') && !clean.includes('pound') && !clean.includes('unidad web');
+                        })[0] || '';
+                        if (matchedValue) initialOptions[opt.name] = matchedValue;
                     }
                 });
             }
@@ -4287,17 +4284,21 @@ function CreateOrderContent() {
                     return null;
                 };
 
-                // Normalizar y prepend/sort las opciones configuradas del producto
+                // Normalizar y prepend/sort las opciones configuradas del producto para pedidos manuales
                 const normalizedOptionsConfig = (selectedProductForModal.options_config || []).map((opt: any) => {
                     let values = opt.values || [];
-                    if (opt.name.toLowerCase().includes('presentaci') && (selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure)) {
-                        const defaultVal = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
-                        if (!values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
+                    if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+                        values = values.filter((v: string) => {
+                            const clean = v.toLowerCase();
+                            return !clean.includes('libra') && !clean.includes('pound') && !clean.includes('unidad web');
+                        });
+                        const defaultVal = selectedProductForModal.unit_of_measure || 'Kg';
+                        if (values.length === 0 || !values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
                             values = [defaultVal, ...values];
                         }
                     }
                     
-                    const defaultUnit = (selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure || '').toLowerCase();
+                    const defaultUnit = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {
                         const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                         const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
@@ -4309,61 +4310,25 @@ function CreateOrderContent() {
                     return { ...opt, values: sortedValues };
                 });
 
-                // Build full options list for unit selection (web_unit is first, if configured)
-                const optionsList = [];
-                const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+                // Build options list for manual orders (strictly base units: Kg, Unidad, etc.)
+                const optionsList: { unit: string; factor: number; label: string }[] = [];
+                const baseUnit = selectedProductForModal.unit_of_measure || 'Kg';
                 
-                if (hasWebUnit) {
-                    optionsList.push({
-                        unit: selectedProductForModal.web_unit,
-                        factor: parseFloat(selectedProductForModal.web_conversion_factor) || 1,
-                        label: `${selectedProductForModal.web_unit} (${selectedProductForModal.web_conversion_factor} ${selectedProductForModal.unit_of_measure})`
-                    });
-                }
-                
-                if (!hasWebUnit || selectedProductForModal.unit_of_measure !== selectedProductForModal.web_unit) {
-                    optionsList.push({
-                        unit: selectedProductForModal.unit_of_measure || 'Kg',
-                        factor: 1,
-                        label: `${selectedProductForModal.unit_of_measure || 'Kg'} (Base)`
-                    });
-                }
+                optionsList.push({
+                    unit: baseUnit,
+                    factor: 1,
+                    label: `${baseUnit} (Base)`
+                });
                 
                 itemConversions.forEach(c => {
+                    const fromLower = c.from_unit.toLowerCase();
+                    if (fromLower.includes('libra') || fromLower.includes('pound') || fromLower.includes('unidad web')) return;
                     const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === c.from_unit.toLowerCase());
                     if (!isDuplicate) {
                         optionsList.push({
                             unit: c.from_unit,
                             factor: parseFloat(c.conversion_factor) || 1,
                             label: `${c.from_unit} (${c.conversion_factor} ${c.to_unit})`
-                        });
-                    }
-                });
-
-                // Escanear normalizedOptionsConfig para inyectar automáticamente todas las opciones de "Presentación" en optionsList
-                normalizedOptionsConfig.forEach((opt: any) => {
-                    if (opt.name.toLowerCase().includes('presentaci')) {
-                        opt.values.forEach((val: string) => {
-                            const cleanPresUnit = val.includes('|') ? val.split('|')[0] : val;
-                            const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === cleanPresUnit.toLowerCase());
-                            if (!isDuplicate) {
-                                let factor = 1;
-                                const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
-                                if (cleanPresUnit.toLowerCase() === defaultUnit.toLowerCase()) {
-                                    factor = parseFloat(selectedProductForModal.web_conversion_factor) || 1;
-                                } else {
-                                    const parsedWeight = getParsedWeight(cleanPresUnit);
-                                    if (parsedWeight !== null) {
-                                        factor = parsedWeight;
-                                    }
-                                }
-                                
-                                optionsList.push({
-                                    unit: cleanPresUnit,
-                                    factor: factor,
-                                    label: `${cleanPresUnit} (${factor} ${selectedProductForModal.unit_of_measure || 'Kg'})`
-                                });
-                            }
                         });
                     }
                 });
@@ -4544,26 +4509,22 @@ function CreateOrderContent() {
                                             const val = e.target.value;
                                             setSelectedOptions(prev => ({ ...prev, [opt.name]: val }));
                                             
-                                            // Lógica especial de sincronización bidireccional
                                             if (opt.name.toLowerCase().includes('presentaci')) {
-                                                if (val) {
-                                                    const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
-                                                    const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
-                                                    if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
-                                                        setModalUnit(defaultUnit);
-                                                        const defaultFactor = parseFloat(selectedProductForModal.web_conversion_factor) || 1;
-                                                        setModalFactor(defaultFactor);
+                                                const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
+                                                const defaultUnit = selectedProductForModal.unit_of_measure || 'Kg';
+                                                if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
+                                                    setModalUnit(defaultUnit);
+                                                    setModalFactor(1);
+                                                } else {
+                                                    const matchedUnit = optionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
+                                                    if (matchedUnit) {
+                                                        setModalUnit(matchedUnit.unit);
+                                                        setModalFactor(matchedUnit.factor);
                                                     } else {
-                                                        const matchedUnit = optionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
-                                                        if (matchedUnit) {
-                                                            setModalUnit(matchedUnit.unit);
-                                                            setModalFactor(matchedUnit.factor);
-                                                        } else {
-                                                            const parsedWeight = getParsedWeight(cleanUnit);
-                                                            if (parsedWeight !== null) {
-                                                                setModalUnit(cleanUnit);
-                                                                setModalFactor(parsedWeight);
-                                                            }
+                                                        const parsedWeight = getParsedWeight(cleanUnit);
+                                                        if (parsedWeight !== null) {
+                                                            setModalUnit(cleanUnit);
+                                                            setModalFactor(parsedWeight);
                                                         }
                                                     }
                                                 }
@@ -4679,7 +4640,7 @@ function CreateOrderContent() {
                                                         if (matchedValue) {
                                                             setSelectedOptions(prev => ({ ...prev, [opt.name]: matchedValue }));
                                                         } else {
-                                                            const defaultUnit = selectedProductForModal.web_unit || selectedProductForModal.unit_of_measure;
+                                                            const defaultUnit = selectedProductForModal.unit_of_measure || 'Kg';
                                                             if (selected.toLowerCase() === defaultUnit.toLowerCase()) {
                                                                 const matchedDefault = opt.values.find((val: string) => {
                                                                     const cleanVal = val.includes('|') ? val.split('|')[0] : val;
