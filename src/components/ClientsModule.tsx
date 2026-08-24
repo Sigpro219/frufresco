@@ -8412,7 +8412,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 )}
 
                                 {/* D. NOTAS Y ALIAS */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem' }}>
                                     <FormField 
                                         label="Nombre en Factura (Alias)" 
                                         value={newException.nickname} 
@@ -8420,10 +8420,16 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         placeholder="Ej: Papa Amarilla (Sin costo)"
                                     />
                                     <FormField 
-                                        label="Nota del cliente" 
+                                        label="Nota de Alistamiento / Picking" 
                                         value={newException.picking_note} 
                                         onChange={(v) => setNewException({...newException, picking_note: v})} 
                                         placeholder="Ej: Maduración: Pintón / Con etiqueta"
+                                    />
+                                    <FormField 
+                                        label="Demanda / Despacho" 
+                                        value={newException.delivery_note} 
+                                        onChange={(v) => setNewException({...newException, delivery_note: v})} 
+                                        placeholder="Ej: Pareto Demanda: 335 Kg"
                                     />
                                 </div>
 
@@ -8451,13 +8457,13 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 const origProd = getProductDetails(exc.product_id);
                                 const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
                                 return (
-                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                                         <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
                                             <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                         </div>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span>Original: {origProd?.name || '---'}</span>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ color: '#1E293B' }}>Original: {origProd?.name || '---'}</span>
                                                 <span style={{ color: '#94A3B8' }}>|</span>
                                                 <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
                                             </div>
@@ -8466,17 +8472,24 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
                                                 
                                                 {/* Nickname alias */}
-                                                {exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase() && (
-                                                    <div>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
-                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname}</span>
+                                                {exc.nickname && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🏷️ Nombre / Alias: </span>
+                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                            {exc.nickname}
+                                                            {origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase() && (
+                                                                <span style={{ marginLeft: '6px', fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
+                                                                    Alias Factura
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </div>
                                                 )}
 
                                                 {/* Preferred options (Standardized variants) */}
                                                 {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Variante: </span>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🎨 Variación Preferida: </span>
                                                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                                             {Object.entries(exc.preferred_options).map(([key, val]) => (
                                                                 <span key={key} style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', fontFamily: THEME.typography.fontFamilySecondary }}>
@@ -8489,9 +8502,19 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                                                 {/* Picking notes */}
                                                 {exc.picking_note && (
-                                                    <div>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nota del cliente: </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>📋 Alistamiento / Picking: </span>
                                                         <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Delivery note / Pareto Demanda */}
+                                                {exc.delivery_note && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#0369A1', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>📊 Demanda / Despacho: </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#0284C7', fontWeight: '700', backgroundColor: '#F0F9FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>
+                                                            {exc.delivery_note}
+                                                        </span>
                                                     </div>
                                                 )}
 
@@ -8499,9 +8522,17 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 {subProd && (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A' }}>
                                                             [{subProd.accounting_id || subProd.sku}] {subProd.name}
                                                         </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Default helper badge if no notes */}
+                                                {!exc.nickname && !exc.picking_note && !exc.delivery_note && !subProd && (!exc.preferred_options || Object.keys(exc.preferred_options).length === 0) && (
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span>⭐</span>
+                                                        <span>Producto habitual activo (Priorizado automáticamente en el buscador de pedidos)</span>
                                                     </div>
                                                 )}
                                             </div>
