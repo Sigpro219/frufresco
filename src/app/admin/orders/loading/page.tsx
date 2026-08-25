@@ -52,7 +52,11 @@ import {
     X,
     Printer,
     Zap,
-    Tag
+    Tag,
+    UserCheck,
+    User,
+    ArrowRight,
+    ShieldCheck
 } from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
@@ -528,6 +532,219 @@ export default function OrderLoadingPage() {
     const [selectedUnit, setSelectedUnit] = useState<string>('');
     const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
     const [focusedProductIndex, setFocusedProductIndex] = useState<number>(-1);
+
+    // Reassignment modal states
+    const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+    const [reassignStep, setReassignStep] = useState<'search' | 'confirm'>('search');
+    const [reassignSearch, setReassignSearch] = useState('');
+    const [reassignClientsList, setReassignClientsList] = useState<any[]>([]);
+    const [reassignLoadingClients, setReassignLoadingClients] = useState(false);
+    const [reassignSelectedClient, setReassignSelectedClient] = useState<any | null>(null);
+    const [reassignReason, setReassignReason] = useState('');
+    const [reassignConfirmedCheck, setReassignConfirmedCheck] = useState(false);
+    const [isReassigning, setIsReassigning] = useState(false);
+
+    const handleOpenReassignModal = async () => {
+        setIsReassignModalOpen(true);
+        setReassignStep('search');
+        setReassignSearch('');
+        setReassignSelectedClient(null);
+        setReassignReason('');
+        setReassignConfirmedCheck(false);
+
+        if (reassignClientsList.length === 0) {
+            setReassignLoadingClients(true);
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id, company_name, contact_name, nit, phone, contact_phone, email, address, latitude, longitude, role, parent_id, is_corporate_parent, classification')
+                    .in('role', ['b2b_client', 'b2c_client', 'client'])
+                    .order('company_name', { ascending: true });
+                if (!error && data) {
+                    setReassignClientsList(data);
+                }
+            } catch (err) {
+                console.error('Error fetching clients for reassignment:', err);
+            } finally {
+                setReassignLoadingClients(false);
+            }
+        }
+    };
+
+    const reassignParentMatrixIds = useMemo(() => {
+        const set = new Set<string>();
+        reassignClientsList.forEach(c => {
+            if (c.parent_id) {
+                set.add(c.parent_id);
+            }
+        });
+        return set;
+    }, [reassignClientsList]);
+
+    const reassignMatrixClientsMap = useMemo(() => {
+        const map = new Map<string, any>();
+        reassignClientsList.forEach(c => {
+            map.set(c.id, c);
+        });
+        return map;
+    }, [reassignClientsList]);
+
+    const filteredReassignClients = useMemo(() => {
+        if (!reassignSearch || reassignSearch.trim().length < 2) {
+            return reassignClientsList.filter(c => !c.is_corporate_parent && !reassignParentMatrixIds.has(c.id) && c.id !== selectedOrder?.user_id).slice(0, 15);
+        }
+        const query = reassignSearch.toLowerCase().trim();
+
+        // 1. Matched parent matrices
+        const matchedParentMatrixIds = new Set<string>();
+        reassignClientsList.forEach(c => {
+            if (reassignParentMatrixIds.has(c.id) || c.is_corporate_parent) {
+                const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
+                const nitMatch = (c.nit?.toString() || '').includes(query);
+                if (nameMatch || nitMatch) {
+                    matchedParentMatrixIds.add(c.id);
+                }
+            }
+        });
+
+        // 2. Deliverable clients (not a parent matrix, not current client)
+        const deliverableClients = reassignClientsList.filter(c => !reassignParentMatrixIds.has(c.id) && c.id !== selectedOrder?.user_id);
+
+        const directSearchedBranches: any[] = [];
+        const otherMatches: any[] = [];
+
+        deliverableClients.forEach(c => {
+            const isDirectBranch = Boolean(c.parent_id && matchedParentMatrixIds.has(c.parent_id));
+
+            const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
+            const nitMatch = (c.nit?.toString() || '').includes(query);
+            const contactMatch = (c.contact_name?.toLowerCase() || '').includes(query);
+            const addressMatch = (c.address?.toLowerCase() || '').includes(query);
+            const phoneMatch = (c.contact_phone?.toString() || c.phone?.toString() || '').includes(query);
+
+            if (isDirectBranch) {
+                directSearchedBranches.push({ ...c, isDirectSearchedBranch: true });
+            } else if (nameMatch || nitMatch || contactMatch || addressMatch || phoneMatch) {
+                otherMatches.push({ ...c, isDirectSearchedBranch: false });
+            }
+        });
+
+        directSearchedBranches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
+        otherMatches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
+
+        return [...directSearchedBranches, ...otherMatches].slice(0, 15);
+    }, [reassignClientsList, reassignSearch, reassignParentMatrixIds, selectedOrder]);
+
+    const handleExecuteReassignment = async () => {
+        if (!selectedOrder || !reassignSelectedClient) return;
+        if (!reassignReason.trim()) {
+            alert('Por favor indica el motivo o justificación de la reasignación para auditoría.');
+            return;
+        }
+        if (!reassignConfirmedCheck) {
+            alert('Debes marcar la casilla de confirmación para proceder con la reasignación.');
+            return;
+        }
+
+        setIsReassigning(true);
+        try {
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const nowDateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const operatorName = profile?.contact_name || (profile as any)?.email || currentUser?.email || 'Mesa de Control';
+
+            const auditNote = `[REASIGNACIÓN ${nowDateStr} ${nowTimeStr} por ${operatorName}]: Transferido de "${selectedOrder.customer_name}" (NIT: ${selectedOrder.customer_nit || 'N/A'}) a "${reassignSelectedClient.company_name || reassignSelectedClient.contact_name}" (NIT: ${reassignSelectedClient.nit || 'N/A'}). Motivo: ${reassignReason.trim()}`;
+
+            const updatedAdminNotes = `${selectedOrder.admin_notes || ''}\n${auditNote}`.trim();
+
+            const newAddress = reassignSelectedClient.address || selectedOrder.shipping_address || '';
+            const newLat = reassignSelectedClient.latitude || null;
+            const newLng = reassignSelectedClient.longitude || null;
+
+            // 1. Update orders table in Supabase
+            const { error: orderError } = await supabase
+                .from('orders')
+                .update({
+                    user_id: reassignSelectedClient.id,
+                    customer_name: reassignSelectedClient.company_name || reassignSelectedClient.contact_name,
+                    customer_nit: reassignSelectedClient.nit || null,
+                    customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone || null,
+                    customer_email: reassignSelectedClient.email || null,
+                    shipping_address: newAddress,
+                    latitude: newLat,
+                    longitude: newLng,
+                    geocoding_status: newLat && newLng ? 'SUCCESS' : 'PENDING',
+                    admin_notes: updatedAdminNotes
+                })
+                .eq('id', selectedOrder.id);
+
+            if (orderError) {
+                console.error('Error actualizando cliente en orders:', orderError);
+                throw new Error(`Error en orders: ${orderError.message}`);
+            }
+
+            // 2. Insert into order_audit_logs for immutable trace
+            const auditLog = {
+                order_id: selectedOrder.id,
+                changed_by: currentUser?.id || null,
+                change_type: 'client_reassignment',
+                reason: reassignReason.trim(),
+                old_data: {
+                    user_id: selectedOrder.user_id || selectedOrder.profiles?.id,
+                    customer_name: selectedOrder.customer_name,
+                    customer_nit: selectedOrder.customer_nit,
+                    customer_phone: selectedOrder.customer_phone,
+                    shipping_address: selectedOrder.shipping_address,
+                    latitude: selectedOrder.latitude,
+                    longitude: selectedOrder.longitude
+                },
+                new_data: {
+                    user_id: reassignSelectedClient.id,
+                    customer_name: reassignSelectedClient.company_name || reassignSelectedClient.contact_name,
+                    customer_nit: reassignSelectedClient.nit,
+                    customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone,
+                    shipping_address: newAddress,
+                    latitude: newLat,
+                    longitude: newLng
+                }
+            };
+            const { error: auditErr } = await supabase.from('order_audit_logs').insert([auditLog]);
+            if (auditErr) {
+                console.warn('⚠️ No se pudo registrar en order_audit_logs:', auditErr);
+            }
+
+            // 3. Update local state
+            const updatedOrder = {
+                ...selectedOrder,
+                user_id: reassignSelectedClient.id,
+                customer_name: reassignSelectedClient.company_name || reassignSelectedClient.contact_name,
+                customer_nit: reassignSelectedClient.nit || null,
+                customer_phone: reassignSelectedClient.phone || reassignSelectedClient.contact_phone || null,
+                customer_email: reassignSelectedClient.email || null,
+                shipping_address: newAddress,
+                latitude: newLat,
+                longitude: newLng,
+                profiles: reassignSelectedClient,
+                admin_notes: updatedAdminNotes
+            };
+
+            setSelectedOrder(updatedOrder);
+            setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, ...updatedOrder } : o));
+            setEditShippingAddress(newAddress);
+            setEditLatitude(newLat);
+            setEditLongitude(newLng);
+
+            setIsReassignModalOpen(false);
+
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(`✅ Pedido reasignado exitosamente a "${reassignSelectedClient.company_name || reassignSelectedClient.contact_name}" con registro de auditoría.`, 'success');
+            }
+        } catch (err: any) {
+            console.error('Error reasignando pedido:', err);
+            alert(`Error al reasignar el pedido: ${err.message || 'Error desconocido'}`);
+        } finally {
+            setIsReassigning(false);
+        }
+    };
 
     useEffect(() => {
         async function resolveContract() {
@@ -2819,12 +3036,38 @@ export default function OrderLoadingPage() {
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <div style={{ fontWeight: '700', color: '#334155', fontSize: '1rem' }}>
-                                            {selectedOrder.customer_name}
-                                            {selectedOrder.customer_nit && (
-                                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '500', marginLeft: '8px' }}>
-                                                    (NIT: {selectedOrder.customer_nit})
-                                                </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                            <div style={{ fontWeight: '700', color: '#334155', fontSize: '1rem' }}>
+                                                {selectedOrder.customer_name}
+                                                {selectedOrder.customer_nit && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '500', marginLeft: '8px' }}>
+                                                        (NIT: {selectedOrder.customer_nit})
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {editMode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleOpenReassignModal}
+                                                    style={{
+                                                        backgroundColor: '#EFF6FF',
+                                                        color: '#1D4ED8',
+                                                        border: '1.5px solid #93C5FD',
+                                                        borderRadius: '8px',
+                                                        padding: '3px 10px',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        transition: 'all 0.15s',
+                                                        boxShadow: '0 1px 2px rgba(37, 99, 235, 0.08)'
+                                                    }}
+                                                    title="Reasignar este pedido completo a otro cliente o sucursal con trazabilidad inmutable"
+                                                >
+                                                    <UserCheck size={12} strokeWidth={2} /> Reasignar Cliente / Sucursal
+                                                </button>
                                             )}
                                         </div>
                                         <div style={{ color: '#64748B', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -3995,6 +4238,351 @@ export default function OrderLoadingPage() {
                                 >
                                     <CheckCircle2 size={16} /> Confirmar Coordenadas GPS para este Pedido
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL DE REASIGNACIÓN DE CLIENTE / SUCURSAL CON DOBLE CONFIRMACIÓN */}
+                {isReassignModalOpen && selectedOrder && (
+                    <div 
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                            backdropFilter: 'blur(6px)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1200,
+                            padding: '1rem'
+                        }}
+                        onClick={() => !isReassigning && setIsReassignModalOpen(false)}
+                    >
+                        <div 
+                            style={{
+                                backgroundColor: 'white',
+                                borderRadius: '20px',
+                                width: '100%',
+                                maxWidth: '640px',
+                                maxHeight: '90vh',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                                border: '1px solid #CBD5E1'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Modal Header */}
+                            <div style={{
+                                padding: '1.25rem 1.75rem',
+                                borderBottom: '1px solid #E2E8F0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                backgroundColor: reassignStep === 'confirm' ? '#FFFBEB' : '#F8FAFC'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '12px',
+                                        backgroundColor: reassignStep === 'confirm' ? '#FEF3C7' : '#EFF6FF',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: reassignStep === 'confirm' ? '#D97706' : '#2563EB'
+                                    }}>
+                                        {reassignStep === 'confirm' ? <AlertTriangle size={20} /> : <UserCheck size={20} />}
+                                    </div>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#1E293B' }}>
+                                            {reassignStep === 'confirm' ? 'Confirmar Reasignación de Pedido' : `Reasignar Pedido ${getFriendlyOrderId(selectedOrder)}`}
+                                        </h3>
+                                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748B' }}>
+                                            {reassignStep === 'confirm' ? 'Paso 2 de 2: Doble verificación y justificación obligatoria' : 'Paso 1 de 2: Selecciona el nuevo cliente o sucursal'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => !isReassigning && setIsReassignModalOpen(false)}
+                                    disabled={isReassigning}
+                                    style={{
+                                        background: '#F1F5F9',
+                                        border: 'none',
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        fontSize: '1.1rem',
+                                        cursor: isReassigning ? 'not-allowed' : 'pointer',
+                                        color: '#64748B',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                {reassignStep === 'search' ? (
+                                    <>
+                                        {/* Current Client Banner */}
+                                        <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cliente / Sucursal Actual</div>
+                                            <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem', marginTop: '2px' }}>{selectedOrder.customer_name}</div>
+                                            <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>
+                                                NIT: {selectedOrder.customer_nit || 'N/A'} • {selectedOrder.shipping_address || 'Sin dirección registrada'}
+                                            </div>
+                                        </div>
+
+                                        {/* Search Box */}
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#1E293B', marginBottom: '6px' }}>
+                                                Buscar Nueva Empresa, Sucursal o NIT:
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                                <input 
+                                                    type="text"
+                                                    value={reassignSearch}
+                                                    onChange={(e) => setReassignSearch(e.target.value)}
+                                                    placeholder="Ej: Club del Comercio, Colsubsidio, Cafetería..."
+                                                    autoFocus
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '10px 12px 10px 38px',
+                                                        borderRadius: '10px',
+                                                        border: '1.5px solid #CBD5E1',
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: '600',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                                {reassignSearch && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReassignSearch('')}
+                                                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Results List */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
+                                            {reassignLoadingClients ? (
+                                                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748B', fontSize: '0.85rem' }}>
+                                                    <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#2563EB' }} />
+                                                    Cargando clientes y sucursales...
+                                                </div>
+                                            ) : filteredReassignClients.length === 0 ? (
+                                                <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.85rem' }}>
+                                                    No se encontraron clientes o sucursales con esa búsqueda.
+                                                </div>
+                                            ) : (
+                                                filteredReassignClients.map((client) => {
+                                                    const parentMatrix = client.parent_id ? reassignMatrixClientsMap.get(client.parent_id) : null;
+                                                    const isDirectBranch = Boolean(client.isDirectSearchedBranch && parentMatrix);
+
+                                                    return (
+                                                        <div
+                                                            key={client.id}
+                                                            onClick={() => {
+                                                                setReassignSelectedClient(client);
+                                                                setReassignStep('confirm');
+                                                            }}
+                                                            style={{
+                                                                padding: '0.85rem 1rem',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid #E2E8F0',
+                                                                backgroundColor: 'white',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s',
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.currentTarget.style.backgroundColor = '#F0FDF4';
+                                                                e.currentTarget.style.borderColor = '#86EFAC';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.currentTarget.style.backgroundColor = 'white';
+                                                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                                            }}
+                                                        >
+                                                            <div>
+                                                                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                    <span>{client.company_name || client.contact_name}</span>
+                                                                    {isDirectBranch && (
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 7px', borderRadius: '6px', fontWeight: '800', border: '1px solid #FFEDD5', textTransform: 'uppercase' }}>
+                                                                            Sucursal
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>
+                                                                    {isDirectBranch && parentMatrix && <span style={{ fontWeight: '700', color: '#475569' }}>Matriz: {parentMatrix.company_name} • </span>}
+                                                                    NIT: {client.nit || 'N/A'} • {client.address || 'Sin dirección'}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                                                {client.latitude && client.longitude ? (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', border: '1px solid #A7F3D0' }}>
+                                                                        GPS OK
+                                                                    </span>
+                                                                ) : null}
+                                                                <button
+                                                                    type="button"
+                                                                    style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer' }}
+                                                                >
+                                                                    Seleccionar →
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Step 2: Double Confirmation Screen */}
+                                        <div style={{ backgroundColor: '#FEF3C7', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #FCD34D' }}>
+                                            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#92400E', lineHeight: '1.4' }}>
+                                                ⚠️ <span style={{ textDecoration: 'underline' }}>{profile?.contact_name || (profile as any)?.email?.split('@')[0] || currentUser?.email?.split('@')[0] || 'Operador'}</span>, ¿estás seguro de que deseas reasignar este pedido a otro cliente?
+                                            </p>
+                                            <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#B45309', lineHeight: '1.3' }}>
+                                                Esta acción cambiará la titularidad comercial, los datos fiscales y la dirección de entrega asignada a este pedido, y quedará registrada de forma inmutable en el historial de auditoría.
+                                            </p>
+                                        </div>
+
+                                        {/* Comparison Origin -> Destination */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.75rem', alignItems: 'center' }}>
+                                            {/* Origen */}
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Origen (Actual)</div>
+                                                <div style={{ fontWeight: '800', color: '#334155', fontSize: '0.88rem', marginTop: '4px' }}>
+                                                    {selectedOrder.customer_name}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
+                                                    NIT: {selectedOrder.customer_nit || 'N/A'}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '3px' }}>
+                                                    {selectedOrder.shipping_address || 'Sin dirección'}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', justifyContent: 'center', color: '#0D7A57' }}>
+                                                <ArrowRight size={24} strokeWidth={2.5} />
+                                            </div>
+
+                                            {/* Destino */}
+                                            <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '12px', border: '1.5px solid #86EFAC' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Destino (Nuevo)</div>
+                                                <div style={{ fontWeight: '800', color: '#065F46', fontSize: '0.88rem', marginTop: '4px' }}>
+                                                    {reassignSelectedClient.company_name || reassignSelectedClient.contact_name}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '3px' }}>
+                                                    NIT: {reassignSelectedClient.nit || 'N/A'}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#047857', marginTop: '3px' }}>
+                                                    {reassignSelectedClient.address || 'Sin dirección registrada'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Reason Input */}
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#1E293B', marginBottom: '6px' }}>
+                                                Motivo o Justificación de la Reasignación <span style={{ color: '#EF4444' }}>*</span>:
+                                            </label>
+                                            <textarea 
+                                                value={reassignReason}
+                                                onChange={(e) => setReassignReason(e.target.value)}
+                                                rows={2}
+                                                placeholder="Ej: Se seleccionó una sucursal equivocada durante la toma de pedido comercial..."
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px 12px',
+                                                    borderRadius: '10px',
+                                                    border: '1.5px solid #CBD5E1',
+                                                    fontSize: '0.85rem',
+                                                    outline: 'none',
+                                                    resize: 'none',
+                                                    fontWeight: '600'
+                                                }}
+                                            />
+                                        </div>
+
+                                        {/* Security Checkbox */}
+                                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', padding: '0.75rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                            <input 
+                                                type="checkbox"
+                                                checked={reassignConfirmedCheck}
+                                                onChange={(e) => setReassignConfirmedCheck(e.target.checked)}
+                                                style={{ width: '18px', height: '18px', marginTop: '2px', cursor: 'pointer' }}
+                                            />
+                                            <span style={{ fontSize: '0.78rem', color: '#334155', fontWeight: '700', lineHeight: '1.3' }}>
+                                                Confirmo bajo mi responsabilidad que he verificado que este pedido debe entregarse al nuevo cliente / sucursal y asumo el registro de auditoría.
+                                            </span>
+                                        </label>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{ padding: '1rem 1.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                                {reassignStep === 'confirm' ? (
+                                    <>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setReassignStep('search')}
+                                            disabled={isReassigning}
+                                            style={{ padding: '9px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#475569', cursor: 'pointer', fontSize: '0.85rem' }}
+                                        >
+                                            ← Cambiar Selección
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={handleExecuteReassignment}
+                                            disabled={isReassigning || !reassignConfirmedCheck || reassignReason.trim().length < 4}
+                                            style={{
+                                                padding: '9px 24px',
+                                                borderRadius: '10px',
+                                                border: 'none',
+                                                backgroundColor: (reassignConfirmedCheck && reassignReason.trim().length >= 4) ? '#0D7A57' : '#94A3B8',
+                                                color: 'white',
+                                                fontWeight: '800',
+                                                cursor: (reassignConfirmedCheck && reassignReason.trim().length >= 4 && !isReassigning) ? 'pointer' : 'not-allowed',
+                                                fontSize: '0.85rem',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: (reassignConfirmedCheck && reassignReason.trim().length >= 4) ? '0 4px 6px -1px rgba(13, 122, 87, 0.3)' : 'none'
+                                            }}
+                                        >
+                                            {isReassigning ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                                            {isReassigning ? 'Reasignando...' : 'Confirmar Reasignación Inmediata'}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsReassignModalOpen(false)}
+                                            style={{ padding: '9px 20px', borderRadius: '10px', border: '1px solid #CBD5E1', backgroundColor: 'white', fontWeight: '700', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem' }}
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
