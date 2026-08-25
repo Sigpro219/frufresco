@@ -1099,8 +1099,22 @@ export default function CostMatrixPage() {
                     </div>
                 )}
 
-                {/* --- FILTERS & SEARCH ROW --- */}
-                <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* --- STICKY FILTERS & SEARCH ROW --- */}
+                <div style={{ 
+                    position: 'sticky',
+                    top: '85px',
+                    zIndex: 40,
+                    backgroundColor: '#F8FAFC',
+                    paddingTop: '0.6rem',
+                    paddingBottom: '0.6rem',
+                    marginBottom: '1rem',
+                    display: 'flex', 
+                    gap: '1rem', 
+                    alignItems: 'center', 
+                    flexWrap: 'wrap',
+                    backdropFilter: 'blur(12px)',
+                    borderBottom: '1px solid #E2E8F0'
+                }}>
                     {/* Search Bar Container */}
                     <div style={{ 
                         flex: '1 1 400px',
@@ -1278,7 +1292,6 @@ export default function CostMatrixPage() {
                         backgroundColor: 'white', 
                         borderRadius: '16px', 
                         boxShadow: '0 4px 20px rgba(0,0,0,0.05)', 
-                        overflow: 'hidden',
                         border: '1px solid #E5E7EB'
                     }}>
                         <style dangerouslySetInnerHTML={{__html: `
@@ -1287,6 +1300,35 @@ export default function CostMatrixPage() {
                                 box-sizing: border-box !important;
                             }
                             
+                            /* Encabezados TH STICKY bajo la barra de búsqueda (85px navbar + 62px barra = 147px) */
+                            .matrix-table thead th {
+                                position: sticky !important;
+                                top: 147px !important;
+                                z-index: 25 !important;
+                                background-color: #F9FAFB;
+                            }
+
+                            .matrix-table thead th.col-producto {
+                                left: 0 !important;
+                                z-index: 35 !important;
+                                background-color: #F9FAFB !important;
+                                box-shadow: 2px 0 5px rgba(0,0,0,0.03) !important;
+                            }
+
+                            .matrix-table thead th.col-costo {
+                                right: 160px !important;
+                                z-index: 35 !important;
+                                background-color: #F0FDF4 !important;
+                                box-shadow: -2px 0 5px rgba(0,0,0,0.03) !important;
+                            }
+
+                            .matrix-table thead th.col-tendencia {
+                                right: 0 !important;
+                                z-index: 35 !important;
+                                background-color: #F9FAFB !important;
+                                box-shadow: -2px 0 5px rgba(0,0,0,0.03) !important;
+                            }
+
                             /* Reglas estrictas para evitar que Tendencia y Costo se solapen NUNCA */
                             .col-tendencia { 
                                 width: 160px !important; 
@@ -1310,7 +1352,9 @@ export default function CostMatrixPage() {
                                 
                                 /* Ajuste estricto de anclaje para portátiles grandes */
                                 .col-costo { width: 145px !important; min-width: 145px !important; max-width: 145px !important; right: 135px !important; }
+                                .matrix-table thead th.col-costo { right: 135px !important; }
                                 .col-tendencia { width: 135px !important; min-width: 135px !important; max-width: 135px !important; right: 0 !important; }
+                                .matrix-table thead th.col-tendencia { right: 0 !important; }
                                 
                                 /* Achicar elementos internos para que quepan */
                                 .col-costo input { width: 65px !important; padding: 0.3rem !important; font-size: 0.8rem !important; }
@@ -1323,7 +1367,9 @@ export default function CostMatrixPage() {
                                 
                                 /* Ajuste estricto de anclaje para portátiles estándar */
                                 .col-costo { width: 130px !important; min-width: 130px !important; max-width: 130px !important; right: 120px !important; }
+                                .matrix-table thead th.col-costo { right: 120px !important; }
                                 .col-tendencia { width: 120px !important; min-width: 120px !important; max-width: 120px !important; right: 0 !important; }
+                                .matrix-table thead th.col-tendencia { right: 0 !important; }
                                 .col-costo input { width: 55px !important; }
                             }
 
@@ -1355,11 +1401,6 @@ export default function CostMatrixPage() {
                                             style={{ 
                                                 padding: '1.2rem 1.5rem', 
                                                 minWidth: '250px', 
-                                                position: 'sticky', 
-                                                left: 0, 
-                                                backgroundColor: '#F9FAFB', 
-                                                zIndex: 10,
-                                                boxShadow: '2px 0 5px rgba(0,0,0,0.02)',
                                                 cursor: 'pointer',
                                                 userSelect: 'none'
                                             }}
@@ -1383,15 +1424,10 @@ export default function CostMatrixPage() {
                                                 minWidth: '160px', 
                                                 width: '160px',
                                                 borderLeft: '2px solid #E5E7EB',
-                                                backgroundColor: '#F0FDF4',
                                                 textAlign: 'center',
                                                 verticalAlign: 'middle',
                                                 cursor: 'pointer',
-                                                userSelect: 'none',
-                                                position: 'sticky',
-                                                right: '160px',
-                                                zIndex: 6,
-                                                boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
+                                                userSelect: 'none'
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
@@ -1407,11 +1443,6 @@ export default function CostMatrixPage() {
                                                 minWidth: '160px', 
                                                 width: '160px',
                                                 borderLeft: '2px solid #E5E7EB',
-                                                position: 'sticky',
-                                                right: 0,
-                                                backgroundColor: '#F9FAFB',
-                                                zIndex: 6,
-                                                boxShadow: '-2px 0 5px rgba(0,0,0,0.02)',
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
                                                 textAlign: 'center',
@@ -1436,7 +1467,17 @@ export default function CostMatrixPage() {
                                             <Fragment key={p.id}>
                                                 {showCategoryHeader && (
                                                     <tr style={{ backgroundColor: '#F3F4F6' }}>
-                                                        <td colSpan={12} style={{ padding: '0.6rem 1.5rem', fontWeight: '900', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase' }}>
+                                                        <td colSpan={12} style={{ 
+                                                            padding: '0.6rem 1.5rem', 
+                                                            fontWeight: '900', 
+                                                            fontSize: '0.75rem', 
+                                                            color: '#4B5563', 
+                                                            textTransform: 'uppercase',
+                                                            backgroundColor: '#F3F4F6',
+                                                            position: 'sticky',
+                                                            left: 0,
+                                                            zIndex: 10
+                                                        }}>
                                                             📂 {CATEGORY_MAP[p.category]?.toUpperCase() || p.category}
                                                         </td>
                                                     </tr>
