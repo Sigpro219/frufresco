@@ -24,12 +24,16 @@ import {
     AlertCircle,
     ArrowUpRight,
     ArrowDownRight,
-    Layers
+    Layers,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Sun,
+    Info
 } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
-import { useAuth } from '@/lib/authContext';
 import * as XLSX from 'xlsx';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -251,7 +255,6 @@ function ManualCostInput({ productId, onSave, savingId, currentManual, cellState
 }
 
 export default function CostMatrixPage() {
-    const { profile } = useAuth();
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Purchase[]>>({});
@@ -259,9 +262,13 @@ export default function CostMatrixPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todas');
     const [savingId, setSavingId] = useState<string | null>(null);
+    const [showHelp, setShowHelp] = useState(false);
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
+    const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [batchProgress, setBatchProgress] = useState(0);
     const [isAuthorizing, setIsAuthorizing] = useState(false);
+    const [sortField, setSortField] = useState<'name' | 'last_price' | 'cost' | 'trend' | null>(null);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importing, setImporting] = useState(false);
     const [importError, setImportError] = useState('');
@@ -333,52 +340,21 @@ export default function CostMatrixPage() {
             const manualCost = parseFloat(cost);
             if (isNaN(manualCost)) return;
 
-            const userTag = profile?.contact_name || (profile as any)?.full_name || (profile as any)?.email || 'Administrador Comercial';
-            const currentProd = products.find(p => p.id === productId);
-            const prevOverride = manualOverrides[productId]?.manual_cost;
-            const previousCost = prevOverride || calculateSmartCost(productId);
-            const nowIso = new Date().toISOString();
-
             const { error } = await supabase
                 .from('commercial_cost_matrix')
                 .upsert({
                     product_id: productId,
                     manual_cost: manualCost,
-                    updated_at: nowIso,
-                    updated_by: userTag,
+                    updated_at: new Date().toISOString(),
+                    updated_by: 'AI-DELTA-AUTO',
                     is_active: true
                 });
 
             if (error) throw error;
-
-            // Registrar trazabilidad en el módulo de Auditoría
-            try {
-                await supabase.from('audit_logs').insert({
-                    collaborator_name: userTag,
-                    action: 'UPDATE_products',
-                    module: 'PRODUCTS',
-                    table_name: 'commercial_cost_matrix',
-                    record_id: productId,
-                    details: {
-                        sku: currentProd?.sku || '-',
-                        name: currentProd?.name || 'Producto',
-                        accounting_id: currentProd?.accounting_id || null,
-                        source: 'Matriz Comercial Delta (Manual)',
-                        changes: {
-                            manual_cost: {
-                                old: previousCost ? `$${Math.round(previousCost).toLocaleString('es-CO')}` : 'Sin Costo',
-                                new: `$${Math.round(manualCost).toLocaleString('es-CO')}`
-                            }
-                        }
-                    }
-                });
-            } catch (auditErr) {
-                console.warn('⚠️ No se pudo registrar evento de auditoría:', auditErr);
-            }
             
             setManualOverrides(prev => ({
                 ...prev,
-                [productId]: { manual_cost: manualCost, updated_at: nowIso }
+                [productId]: { manual_cost: manualCost }
             }));
 
             setTimeout(() => setSavingId(null), 2000);
@@ -393,7 +369,6 @@ export default function CostMatrixPage() {
         
         setIsAuthorizing(true);
         setBatchProgress(0);
-        const userTag = profile?.contact_name || (profile as any)?.full_name || (profile as any)?.email || 'Administrador Comercial';
         
         try {
             const toAuthorize = products.filter(p => {
@@ -408,7 +383,6 @@ export default function CostMatrixPage() {
                 return;
             }
 
-            const nowIso = new Date().toISOString();
             for (let i = 0; i < toAuthorize.length; i++) {
                 const p = toAuthorize[i];
                 const smart = calculateSmartCost(p.id);
@@ -416,34 +390,12 @@ export default function CostMatrixPage() {
                 await supabase.from('commercial_cost_matrix').upsert({
                     product_id: p.id,
                     manual_cost: smart,
-                    updated_at: nowIso,
-                    updated_by: userTag,
+                    updated_at: new Date().toISOString(),
+                    updated_by: 'AI-DELTA-AUTO',
                     is_active: true
                 });
 
                 setBatchProgress(Math.round(((i + 1) / toAuthorize.length) * 100));
-            }
-
-            // Registrar evento de auditoría consolidado
-            try {
-                await supabase.from('audit_logs').insert({
-                    collaborator_name: userTag,
-                    action: 'UPDATE_products',
-                    module: 'PRODUCTS',
-                    table_name: 'commercial_cost_matrix',
-                    details: {
-                        name: `Autorización Inteligente IA Delta (${toAuthorize.length} SKUs)`,
-                        source: 'Protocolo CI-Delta v2',
-                        changes: {
-                            autorizacion_masiva: {
-                                old: 'Sugerencias Pendientes',
-                                new: `${toAuthorize.length} costos sugeridos autorizados`
-                            }
-                        }
-                    }
-                });
-            } catch (auditErr) {
-                console.warn('⚠️ Error registrando auditoría de autorización masiva:', auditErr);
             }
 
             await fetchData();
@@ -639,8 +591,22 @@ export default function CostMatrixPage() {
         };
     };
 
+    const handleSort = (field: 'name' | 'last_price' | 'cost' | 'trend') => {
+        if (sortField === field) {
+            if (sortOrder === 'asc') {
+                setSortOrder('desc');
+            } else {
+                setSortField(null);
+                setSortOrder('asc');
+            }
+        } else {
+            setSortField(field);
+            setSortOrder('asc');
+        }
+    };
+
     const handleExport = () => {
-        const data = filteredProducts.map(p => {
+        const data = sortedProducts.map(p => {
             const hist = purchaseHistory[p.id] || [];
             const smart = calculateSmartCost(p.id);
             const manual = manualOverrides[p.id]?.manual_cost;
@@ -776,36 +742,11 @@ export default function CostMatrixPage() {
                 throw new Error('No se encontraron filas válidas con ID/SKU y la columna NUEVO_COSTO diligenciada.');
             }
 
-            const userTag = profile?.contact_name || (profile as any)?.full_name || (profile as any)?.email || 'Administrador Comercial';
-
             for (let i = 0; i < updatesToPerform.length; i += 50) {
                 const batch = updatesToPerform.slice(i, i + 50);
                 const { error: upsertErr } = await supabase.from('commercial_cost_matrix').upsert(batch);
                 if (upsertErr) throw upsertErr;
                 updatedCount += batch.length;
-            }
-
-            // Registrar evento de auditoría de Carga Masiva
-            try {
-                await supabase.from('audit_logs').insert({
-                    collaborator_name: userTag,
-                    action: 'UPDATE_products',
-                    module: 'PRODUCTS',
-                    table_name: 'commercial_cost_matrix',
-                    details: {
-                        name: `Carga Masiva de Costos Excel (${updatedCount} SKUs)`,
-                        source: 'Carga Masiva Excel (.xlsx)',
-                        file_name: importFile.name,
-                        changes: {
-                            carga_masiva: {
-                                old: 'Costos Anteriores',
-                                new: `${updatedCount} SKUs actualizados con nuevo costo y vigencia`
-                            }
-                        }
-                    }
-                });
-            } catch (auditErr) {
-                console.warn('⚠️ No se pudo registrar auditoría de carga masiva:', auditErr);
             }
 
             setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos correctamente.`);
@@ -845,6 +786,40 @@ export default function CostMatrixPage() {
         if (lifecycleFilter === 'vencido') return lifecycle.status === 'VENCIDO' || lifecycle.status === 'SIN_REFERENCIA';
 
         return true;
+    });
+
+    const sortedProducts = [...filteredProducts].sort((a, b) => {
+        if (!sortField) return 0;
+        
+        if (sortField === 'name') {
+            const comp = a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+            return sortOrder === 'asc' ? comp : -comp;
+        }
+
+        if (sortField === 'last_price') {
+            const priceA = purchaseHistory[a.id]?.[0]?.normalized_price || 0;
+            const priceB = purchaseHistory[b.id]?.[0]?.normalized_price || 0;
+            return sortOrder === 'asc' ? priceA - priceB : priceB - priceA;
+        }
+
+        if (sortField === 'cost') {
+            const costA = manualOverrides[a.id]?.manual_cost || calculateSmartCost(a.id) || 0;
+            const costB = manualOverrides[b.id]?.manual_cost || calculateSmartCost(b.id) || 0;
+            return sortOrder === 'asc' ? costA - costB : costB - costA;
+        }
+
+        if (sortField === 'trend') {
+            const getTrend = (pId: string) => {
+                const hist = purchaseHistory[pId] || [];
+                if (hist.length < 2 || !hist[1]?.normalized_price) return 0;
+                return ((hist[0].normalized_price - hist[1].normalized_price) / hist[1].normalized_price) * 100;
+            };
+            const trendA = getTrend(a.id);
+            const trendB = getTrend(b.id);
+            return sortOrder === 'asc' ? trendA - trendB : trendB - trendA;
+        }
+
+        return 0;
     });
 
     const stats = {
@@ -1114,7 +1089,7 @@ export default function CostMatrixPage() {
                         </p>
                     </div>
                 ) : (
-                    /* --- ENTERPRISE DATA GRID CARD --- */
+                    /* --- ENTERPRISE DATA GRID CARD WITH INNER SCROLL & PINNED STICKY HEADERS --- */
                     <div style={{ 
                         backgroundColor: THEME.colors.surface, 
                         borderRadius: THEME.radius.xl, 
@@ -1124,7 +1099,7 @@ export default function CostMatrixPage() {
                         flexDirection: 'column',
                         overflow: 'hidden'
                     }}>
-                        {/* INTEGRATED DATA GRID HEADER TOOLBAR */}
+                        {/* STICKY TOOLBAR (Search & Quick Filters) */}
                         <div style={{ 
                             padding: '0.9rem 1.25rem', 
                             borderBottom: `1px solid ${THEME.colors.border}`, 
@@ -1133,7 +1108,8 @@ export default function CostMatrixPage() {
                             justifyContent: 'space-between',
                             alignItems: 'center',
                             gap: '1rem',
-                            flexWrap: 'wrap'
+                            flexWrap: 'wrap',
+                            zIndex: 10
                         }}>
                             {/* Search & Quick Lifecycle Chips */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: '1 1 500px', flexWrap: 'wrap' }}>
@@ -1337,51 +1313,148 @@ export default function CostMatrixPage() {
                             </div>
                         </div>
 
-                        {/* DATA TABLE CONTAINER (Sticky first column) */}
-                        <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
-                                <thead>
+                        {/* DATA TABLE CONTAINER (Inner scroll with pinned sticky header) */}
+                        <div style={{ 
+                            maxHeight: 'calc(100vh - 280px)', 
+                            minHeight: '450px',
+                            overflowY: 'auto', 
+                            overflowX: 'auto', 
+                            width: '100%', 
+                            WebkitOverflowScrolling: 'touch',
+                            position: 'relative'
+                        }}>
+                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', minWidth: '1050px' }}>
+                                <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
                                     <tr style={{ 
                                         backgroundColor: '#F8FAFC', 
-                                        borderBottom: `1px solid ${THEME.colors.border}`,
                                         color: THEME.colors.textSecondary,
                                         fontSize: '0.68rem',
                                         fontWeight: '800',
                                         textTransform: 'uppercase',
                                         letterSpacing: '0.05em'
                                     }}>
-                                        <th style={{ padding: '0.75rem 1.25rem', width: '280px', position: 'sticky', left: 0, backgroundColor: '#F8FAFC', zIndex: 10 }}>
-                                            Producto / Categoría
+                                        {/* Sticky Top-Left Intersection: Producto / Categoría */}
+                                        <th 
+                                            onClick={() => handleSort('name')}
+                                            style={{ 
+                                                padding: '0.85rem 1.25rem', 
+                                                width: '280px', 
+                                                position: 'sticky', 
+                                                top: 0,
+                                                left: 0, 
+                                                backgroundColor: '#F8FAFC', 
+                                                zIndex: 25,
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
+                                                borderBottom: `1.5px solid ${THEME.colors.border}`,
+                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.04)'
+                                            }}
+                                        >
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: sortField === 'name' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                <span>Producto / Categoría</span>
+                                                {sortField === 'name' ? (
+                                                    sortOrder === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUpDown size={12} style={{ opacity: 0.6 }} />
+                                                )}
+                                            </div>
                                         </th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '100px' }}>Última</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 2</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 3</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 4</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 5</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 6</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 7</th>
-                                        <th style={{ padding: '0.75rem 0.8rem', textAlign: 'center', width: '85px' }}>Compra 8</th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '160px', backgroundColor: '#F1F5F9' }}>
-                                            Costo Base FruFresco
+
+                                        {/* Sortable: Última Compra */}
+                                        <th 
+                                            onClick={() => handleSort('last_price')}
+                                            style={{ 
+                                                padding: '0.85rem 0.8rem', 
+                                                textAlign: 'center', 
+                                                width: '100px', 
+                                                cursor: 'pointer', 
+                                                userSelect: 'none',
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: `1.5px solid ${THEME.colors.border}`
+                                            }}
+                                        >
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color: sortField === 'last_price' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                <span>Última</span>
+                                                {sortField === 'last_price' ? (
+                                                    sortOrder === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUpDown size={12} style={{ opacity: 0.5 }} />
+                                                )}
+                                            </div>
                                         </th>
-                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '100px' }}>Tendencia</th>
+
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 2</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 3</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 4</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 5</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 6</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 7</th>
+                                        <th style={{ padding: '0.85rem 0.8rem', textAlign: 'center', width: '85px', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>Compra 8</th>
+
+                                        {/* Sortable: Costo Base FruFresco */}
+                                        <th 
+                                            onClick={() => handleSort('cost')}
+                                            style={{ 
+                                                padding: '0.85rem 1rem', 
+                                                textAlign: 'center', 
+                                                width: '160px', 
+                                                backgroundColor: '#F1F5F9',
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
+                                                borderBottom: `1.5px solid ${THEME.colors.border}`
+                                            }}
+                                        >
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color: sortField === 'cost' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                <span>Costo Base FruFresco</span>
+                                                {sortField === 'cost' ? (
+                                                    sortOrder === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUpDown size={12} style={{ opacity: 0.5 }} />
+                                                )}
+                                            </div>
+                                        </th>
+
+                                        {/* Sortable: Tendencia */}
+                                        <th 
+                                            onClick={() => handleSort('trend')}
+                                            style={{ 
+                                                padding: '0.85rem 1rem', 
+                                                textAlign: 'center', 
+                                                width: '100px', 
+                                                cursor: 'pointer', 
+                                                userSelect: 'none',
+                                                backgroundColor: '#F8FAFC',
+                                                borderBottom: `1.5px solid ${THEME.colors.border}`
+                                            }}
+                                        >
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color: sortField === 'trend' ? THEME.colors.primary : THEME.colors.textSecondary }}>
+                                                <span>Tendencia</span>
+                                                {sortField === 'trend' ? (
+                                                    sortOrder === 'asc' ? <ArrowUp size={13} strokeWidth={2.5} /> : <ArrowDown size={13} strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUpDown size={12} style={{ opacity: 0.5 }} />
+                                                )}
+                                            </div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredProducts.map((p, idx) => {
+                                    {sortedProducts.map((p, idx) => {
                                         const hist = purchaseHistory[p.id] || [];
                                         const manual = manualOverrides[p.id];
                                         const cellState = getCostCellState(p.id);
                                         const lifecycle = getProductCostLifecycle(p.id);
                                         const currentManual = manual?.manual_cost;
 
-                                        const isFirstOfCategory = idx === 0 || filteredProducts[idx - 1].category !== p.category;
+                                        // Category separator row only when not custom-sorted across categories
+                                        const showCategorySeparator = !sortField || sortField === 'name';
+                                        const isFirstOfCategory = showCategorySeparator && (idx === 0 || sortedProducts[idx - 1].category !== p.category);
 
                                         return (
                                             <Fragment key={p.id}>
                                                 {isFirstOfCategory && (
-                                                    <tr style={{ backgroundColor: '#F1F5F9', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        <td colSpan={11} style={{ padding: '0.5rem 1.25rem', fontWeight: '900', fontSize: '0.72rem', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    <tr style={{ backgroundColor: '#F1F5F9' }}>
+                                                        <td colSpan={11} style={{ padding: '0.5rem 1.25rem', fontWeight: '900', fontSize: '0.72rem', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                 <Folder size={14} color={THEME.colors.primary} />
                                                                 <span>{CATEGORY_MAP[p.category]?.toUpperCase() || p.category}</span>
@@ -1390,18 +1463,18 @@ export default function CostMatrixPage() {
                                                     </tr>
                                                 )}
                                                 <tr style={{ 
-                                                    borderBottom: `1px solid ${THEME.colors.border}`, 
                                                     backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA',
                                                     transition: 'background-color 0.15s'
                                                 }}>
-                                                    {/* Sticky Product Cell */}
+                                                    {/* Sticky Left Product Cell */}
                                                     <td style={{ 
                                                         padding: '0.85rem 1.25rem', 
                                                         position: 'sticky', 
                                                         left: 0, 
                                                         backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA',
                                                         zIndex: 5,
-                                                        boxShadow: '2px 0 5px -2px rgba(0,0,0,0.03)'
+                                                        boxShadow: '2px 0 5px -2px rgba(0,0,0,0.03)',
+                                                        borderBottom: `1px solid ${THEME.colors.border}`
                                                     }}>
                                                         <div style={{ fontWeight: '800', fontSize: '0.88rem', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
                                                             {p.name}
@@ -1439,7 +1512,7 @@ export default function CostMatrixPage() {
                                                         const dateStr = purchase?.created_at ? safeFormatDate(purchase.created_at, 'dd MMM', '') : '';
 
                                                         return (
-                                                            <td key={colIdx} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                            <td key={colIdx} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                                 {price ? (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                                                         <span style={{ 
@@ -1467,7 +1540,7 @@ export default function CostMatrixPage() {
                                                     })}
 
                                                     {/* Editable Base Cost Cell */}
-                                                    <td style={{ padding: '0.65rem 0.8rem', backgroundColor: '#F8FAFC', verticalAlign: 'middle' }}>
+                                                    <td style={{ padding: '0.65rem 0.8rem', backgroundColor: '#F8FAFC', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                         <ManualCostInput 
                                                             productId={p.id}
                                                             onSave={handleSaveManualCost}
@@ -1478,7 +1551,7 @@ export default function CostMatrixPage() {
                                                     </td>
 
                                                     {/* Trend Indicator Cell */}
-                                                    <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                         {hist.length >= 2 ? (() => {
                                                             const diff = ((hist[0].normalized_price - hist[1].normalized_price) / hist[1].normalized_price) * 100;
                                                             const isUp = diff > 0.5;
@@ -1646,69 +1719,198 @@ export default function CostMatrixPage() {
             )}
 
             {/* --- MODAL: ESTRATEGIA ALGORÍTMICA --- */}
+            {/* --- SMART METHODOLOGY MODAL (PROTOCOLO CI-DELTA) --- */}
             {isSmartModalOpen && (
                 <div style={{
                     position: 'fixed',
                     inset: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    backdropFilter: 'blur(4px)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(6px)',
                     zIndex: 9999,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '1rem'
+                    padding: '1.5rem',
+                    fontFamily: THEME.typography.fontFamilyMain || 'system-ui, sans-serif'
                 }}>
                     <div style={{
-                        backgroundColor: THEME.colors.surface,
-                        borderRadius: THEME.radius.xl,
-                        maxWidth: '540px',
+                        backgroundColor: 'white',
+                        borderRadius: '24px',
+                        maxWidth: '920px',
                         width: '100%',
-                        padding: '2rem',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        padding: '2.5rem',
+                        position: 'relative',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
                         textAlign: 'left'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Brain size={22} color={THEME.colors.primary} />
-                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
-                                    Algoritmo de Precios FruFresco
-                                </h3>
+                        {/* Close button */}
+                        <button 
+                            onClick={() => {
+                                setIsSmartModalOpen(false);
+                                setSelectedProductForModal(null);
+                            }}
+                            style={{ 
+                                position: 'absolute', 
+                                top: '1.5rem', 
+                                right: '1.5rem', 
+                                border: 'none', 
+                                background: '#F3F4F6', 
+                                borderRadius: '50%',
+                                width: '36px',
+                                height: '36px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer', 
+                                color: '#6B7280',
+                                transition: 'all 0.2s'
+                            }}
+                            title="Cerrar"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        {/* Modal Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginBottom: '2rem' }}>
+                            <div style={{ 
+                                backgroundColor: '#DBEAFE', 
+                                padding: '1rem', 
+                                borderRadius: '18px', 
+                                color: '#1E40AF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                <Brain size={36} />
                             </div>
-                            <button
-                                onClick={() => setIsSmartModalOpen(false)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary }}
-                            >
-                                <X size={20} />
-                            </button>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <h2 style={{ margin: 0, fontSize: '1.7rem', fontWeight: '900', color: '#111827', letterSpacing: '-0.02em' }}>
+                                        Protocolo CI-Delta (Costo Inteligente)
+                                    </h2>
+                                    <span style={{ 
+                                        backgroundColor: '#EFF6FF', 
+                                        color: '#2563EB', 
+                                        fontSize: '0.72rem', 
+                                        fontWeight: '800', 
+                                        padding: '3px 8px', 
+                                        borderRadius: '6px',
+                                        border: '1px solid #BFDBFE'
+                                    }}>
+                                        v2.0 AI-Delta
+                                    </span>
+                                </div>
+                                <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontWeight: '600', fontSize: '0.92rem' }}>
+                                    Metodología de Suavizado Exponencial Adaptativo y Calibración Comercial
+                                </p>
+                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.84rem', color: THEME.colors.textSecondary, lineHeight: '1.5' }}>
-                            <p style={{ margin: 0 }}>
-                                El motor analiza las últimas 8 órdenes de compra normalizadas a la unidad de medida estándar del SKU y pondera las señales bajo 3 factores:
-                            </p>
-                            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                                <strong style={{ color: THEME.colors.textMain }}>1. Frescura Temporal:</strong> Compras registradas en los últimos 7 días tienen una ponderación del 50% al 80%.
+                        {selectedProductForModal && (
+                            <div style={{ marginBottom: '2rem', padding: '1.2rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
+                                <div style={{ fontWeight: '800', color: '#374151' }}>Análisis Maestro para: <span style={{ color: '#2563EB' }}>{selectedProductForModal.name}</span></div>
+                                <div style={{ fontSize: '0.85rem', color: '#6B7280' }}>ID ERP: {selectedProductForModal.accounting_id || '—'} | SKU: {selectedProductForModal.sku} | Cat: {CATEGORY_MAP[selectedProductForModal.category] || selectedProductForModal.category}</div>
                             </div>
-                            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                                <strong style={{ color: THEME.colors.textMain }}>2. Sensibilidad a la Volatilidad:</strong> Variaciones bruscas (&gt;10%) priorizan el precio más reciente para proteger el margen bruto.
+                        )}
+
+                        {/* Top 2 Columns: Time Decay & Reactive + SVG Chart */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '2rem', marginBottom: '2.2rem' }}>
+                            <div>
+                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
+                                    <Clock size={20} color="#3B82F6" /> 1. Factor de Frescura (Time-Decay)
+                                </h4>
+                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: 0 }}>
+                                    El sistema evalúa la antigüedad de la última compra. Si el dato tiene <b>menos de 7 días</b>, se le otorga confianza plena (Alpha = 0.5). A partir del día 8, el sistema aplica una <b>degradación de confianza del 5% diario</b> para proteger el margen contra la inflación acumulada.
+                                </p>
+
+                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
+                                    <Cpu size={20} color="#10B981" /> 2. Modo Reactivo vs. Estable
+                                </h4>
+                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: 0 }}>
+                                    Si detectamos un cambio brusco (mayor al 10%) entre las últimas dos compras, el algoritmo incrementa su sensibilidad <b>(Alpha = 0.8)</b> para recalibrar el costo de inmediato. En mercados estables, mantiene la inercia para filtrar el ruido.
+                                </p>
                             </div>
-                            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                                <strong style={{ color: THEME.colors.textMain }}>3. Ciclo de Vida:</strong> Alertas automáticas para SKUs sin señal de compra en más de 14 días.
+
+                            {/* Impact Curve SVG Card */}
+                            <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                <h4 style={{ color: '#111827', fontWeight: '900', textAlign: 'center', margin: '0 0 0.8rem 0', fontSize: '0.92rem' }}>
+                                    Impacto en la Curva CI
+                                </h4>
+                                <div style={{ height: '130px', width: '100%', position: 'relative' }}>
+                                    <svg width="100%" height="100%" viewBox="0 0 100 50">
+                                        {/* Reference Line */}
+                                        <line x1="0" y1="40" x2="100" y2="40" stroke="#E2E8F0" strokeWidth="0.5" />
+                                        {/* Raw Price Line (Jagged) */}
+                                        <path d="M 0 40 L 20 10 L 40 45 L 60 15 L 80 40 L 100 20" fill="none" stroke="#CBD5E1" strokeWidth="1.2" strokeDasharray="2" />
+                                        {/* Smart Cost Line (Smooth Bezier) */}
+                                        <path d="M 0 40 Q 20 20, 40 30 Q 60 20, 80 30 T 100 25" fill="none" stroke="#2563EB" strokeWidth="2.8" />
+                                        <circle cx="100" cy="25" r="3.5" fill="#2563EB" />
+                                        <circle cx="100" cy="25" r="1.5" fill="white" />
+                                    </svg>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid #F1F5F9' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>
+                                        <div style={{ width: '12px', height: '0px', borderBottom: '2px dashed #CBD5E1' }}></div> Precio Real
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: '800', color: '#2563EB' }}>
+                                        <div style={{ width: '12px', height: '3px', backgroundColor: '#2563EB', borderRadius: '2px' }}></div> Costo Smart
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: '0.8rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748B', fontStyle: 'italic', lineHeight: '1.3' }}>
+                                    "Promedio Ponderado adaptativo por relevancia temporal y volatilidad de mercado."
+                                </div>
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                        {/* Bottom 2 Columns: Seasonality & Governance */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '2rem', borderTop: '1px solid #F1F5F9', paddingTop: '1.8rem' }}>
+                            <div>
+                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
+                                    <Sun size={20} color="#F59E0B" /> 3. Agente de Cosecha (Seasonality)
+                                </h4>
+                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: '0 0 1.5rem 0' }}>
+                                    El CI-Delta analiza 15 meses de historia para detectar ciclos de abundancia. Si el costo actual es un 10% menor al histórico del mismo mes del año anterior, el sistema marca el producto como <b>"Temporada de Cosecha"</b> para priorizar su aprovisionamiento.
+                                </p>
+
+                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
+                                    <ShieldAlert size={20} color="#EF4444" /> 4. Peritaje y Ciclo de Vida
+                                </h4>
+                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: 0 }}>
+                                    Cuando no se reciben órdenes de compra por más de <b>14 a 30 días</b>, el sistema marca el costo como <b>Vencido / Requiere Cotización</b>. Toda entrada manual o carga masiva reinicia el ciclo de vida a 0 días.
+                                </p>
+                            </div>
+
+                            {/* Governance & Revisoría Card */}
+                            <div style={{ backgroundColor: '#FFF7ED', padding: '1.5rem', borderRadius: '16px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                                    Estatus Peritaje Comercial
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#C2410C', fontWeight: '900', fontSize: '1.1rem' }}>
+                                    <ShieldAlert size={24} /> Auditable para Revisoría
+                                </div>
+                                <div style={{ fontSize: '0.82rem', color: '#9A3412', marginTop: '0.8rem', lineHeight: '1.5', fontWeight: '500' }}>
+                                    Basado en el modelo de Holt-Winters simplificado. Las señales manuales y cargas masivas de Excel se integran con peso prioritario sobre la inercia del algoritmo y quedan trazadas en la bitácora de auditoría.
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', borderTop: '1px solid #F1F5F9', paddingTop: '1.5rem' }}>
                             <button
                                 onClick={() => setIsSmartModalOpen(false)}
                                 style={{
-                                    padding: '0.65rem 1.4rem',
+                                    padding: '0.75rem 1.8rem',
                                     backgroundColor: THEME.colors.primary,
                                     color: 'white',
                                     borderRadius: THEME.radius.md,
                                     border: 'none',
                                     fontWeight: '800',
-                                    fontSize: '0.85rem',
-                                    cursor: 'pointer'
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(22, 101, 52, 0.2)',
+                                    transition: 'all 0.2s ease'
                                 }}
                             >
                                 Entendido
