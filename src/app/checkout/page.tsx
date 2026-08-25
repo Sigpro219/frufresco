@@ -994,7 +994,7 @@ export default function CheckoutPage() {
                                     : (locale === 'es' ? 'Repetir última compra' : 'Repeat last order')}
                             </button>
                             <Link
-                                href="/"
+                                href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`}
                                 style={{
                                     padding: '0.55rem 1rem',
                                     borderRadius: '12px',
@@ -1020,7 +1020,7 @@ export default function CheckoutPage() {
                                     e.currentTarget.style.borderColor = '#E2E8F0';
                                 }}
                             >
-                                <ArrowLeft size={14} strokeWidth={2} />
+                                <ShoppingBag size={14} strokeWidth={2} color="var(--primary)" />
                                 {locale === 'es' ? 'Seguir comprando' : 'Continue shopping'}
                             </Link>
                             {items.length > 0 && (
@@ -1122,7 +1122,8 @@ export default function CheckoutPage() {
                                 </button>
                             </div>
 
-                            <Link href="/" className="btn-premium" style={{ display: 'inline-flex', marginTop: '1.5rem', padding: '0.8rem 2rem' }}>
+                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} className="btn-premium" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '1.5rem', padding: '0.8rem 2rem' }}>
+                                <ShoppingBag size={18} strokeWidth={2} />
                                 {t.exploreProducts}
                             </Link>
                         </div>
