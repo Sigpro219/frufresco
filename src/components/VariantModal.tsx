@@ -42,7 +42,6 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
     const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
-    const [showCustomInput, setShowCustomInput] = useState<Record<number, boolean>>({});
 
     useEffect(() => {
         async function fetchMasterAttributes() {
@@ -311,81 +310,29 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                             {options.map((opt, idx) => (
                                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '250px 1fr 40px', gap: '1.25rem', alignItems: 'start', backgroundColor: 'white', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
                                     <div>
-                                        {(() => {
-                                            const isCustomName = opt.name && !masterAttributes.some(ma => ma.name === opt.name);
-                                            const isCustom = showCustomInput[idx] || isCustomName;
-
-                                            if (isCustom) {
-                                                return (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                                            <input
-                                                                id={`attr-name-${idx}`}
-                                                                type="text"
-                                                                placeholder="Nombre del Atributo (Ej: Madurez)"
-                                                                value={opt.name}
-                                                                onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') {
-                                                                        e.preventDefault();
-                                                                        document.getElementById(`attr-values-${idx}`)?.focus();
-                                                                    } else if (e.key === 'ArrowDown') {
-                                                                        e.preventDefault();
-                                                                        const next = document.getElementById(`attr-name-${idx + 1}`);
-                                                                        if (next) (next as any).focus();
-                                                                    } else if (e.key === 'ArrowUp') {
-                                                                        e.preventDefault();
-                                                                        const prev = document.getElementById(`attr-name-${idx - 1}`);
-                                                                        if (prev) (prev as any).focus();
-                                                                    }
-                                                                }}
-                                                                style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem' }}
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setShowCustomInput(prev => ({ ...prev, [idx]: false }));
-                                                                    updateOption(idx, '', '');
-                                                                }}
-                                                                style={{ padding: '0.6rem 0.8rem', backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 'bold' }}
-                                                                title="Seleccionar de la lista"
-                                                            >
-                                                                📋
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-
-                                            return (
-                                                <select
-                                                    id={`attr-name-${idx}`}
-                                                    value={opt.name}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val === '__custom__') {
-                                                            setShowCustomInput(prev => ({ ...prev, [idx]: true }));
-                                                            updateOption(idx, '', '');
-                                                        } else {
-                                                            updateOption(idx, val, '');
-                                                        }
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            document.getElementById(`attr-values-${idx}`)?.focus();
-                                                        }
-                                                    }}
-                                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
-                                                >
-                                                    <option value="">Seleccionar Atributo...</option>
-                                                    {masterAttributes.map(ma => (
-                                                        <option key={ma.name} value={ma.name}>{ma.name}</option>
-                                                    ))}
-                                                    <option value="__custom__">✍️ Atributo Personalizado...</option>
-                                                </select>
-                                            );
-                                        })()}
+                                        <select
+                                            id={`attr-name-${idx}`}
+                                            value={opt.name}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                updateOption(idx, val, '');
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    document.getElementById(`attr-values-${idx}`)?.focus();
+                                                }
+                                            }}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
+                                        >
+                                            <option value="">Seleccionar Atributo...</option>
+                                            {masterAttributes.map(ma => (
+                                                <option key={ma.name} value={ma.name}>{ma.name}</option>
+                                            ))}
+                                            {opt.name && !masterAttributes.some(ma => ma.name === opt.name) && (
+                                                <option value={opt.name}>{opt.name}</option>
+                                            )}
+                                        </select>
                                     </div>
 
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
