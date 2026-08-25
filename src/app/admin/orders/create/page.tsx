@@ -42,7 +42,12 @@ import {
     Maximize2,
     Minimize2,
     Pencil,
-    PackageX
+    PackageX,
+    ShieldCheck,
+    Tag,
+    Zap,
+    AlertCircle,
+    FileCheck
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
@@ -726,6 +731,8 @@ function CreateOrderContent() {
 
                     if (isValid) {
                         activeAgreement = data;
+                    } else {
+                        expired = true;
                     }
                 }
             }
@@ -2715,7 +2722,7 @@ function CreateOrderContent() {
                                                                 gap: '4px',
                                                                 width: 'fit-content'
                                                             }}>
-                                                                <span>🏷️ {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Modelo: ${activePricingModel?.name || 'General Institucional'}`}</span>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Tag size={13} strokeWidth={2} /> {activePricingModel?.is_agreement ? `Acuerdo: ${activePricingModel.name}` : `Modelo: ${activePricingModel?.name || 'General Institucional'}`}</span>
                                                                 {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                             </div>
                                                         )}
@@ -2918,7 +2925,7 @@ function CreateOrderContent() {
                                                                     alignItems: 'center',
                                                                     gap: '4px'
                                                                 }}>
-                                                                    <span>🏷️ {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Tag size={13} strokeWidth={2} /> {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
                                                                     {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
                                                                 </div>
                                                             )}
@@ -4029,69 +4036,102 @@ function CreateOrderContent() {
                                                             {item.variant_label && (
                                                                 <span 
                                                                     onClick={() => startEditingCartItem(idx)}
-                                                                    style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer' }}
-                                                                    title="Haz clic para editar variaciones"
+                                                                    style={{ 
+                                                                        fontWeight: '600', 
+                                                                        color: '#0891B2', 
+                                                                        fontSize: '0.8em', 
+                                                                        backgroundColor: '#ECFEFF', 
+                                                                        padding: '2px 6px', 
+                                                                        borderRadius: '4px', 
+                                                                        cursor: 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px',
+                                                                        border: '1px solid #CFFAFE'
+                                                                    }}
+                                                                    title="Parametrización Operativa: Atributos y especificaciones técnicas estandarizadas para el costeo, inventario y cubicaje."
                                                                 >
+                                                                    <Settings size={11} strokeWidth={2} />
                                                                     {item.variant_label}
                                                                 </span>
                                                             )}
                                                             {item.picking_note && (
-                                                                <span style={{ fontWeight: '600', color: '#D97706', fontSize: '0.8em', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FCD34D' }}>
+                                                                <span 
+                                                                    style={{ 
+                                                                        fontWeight: '600', 
+                                                                        color: '#B45309', 
+                                                                        fontSize: '0.8em', 
+                                                                        backgroundColor: '#FEF3C7', 
+                                                                        padding: '2px 6px', 
+                                                                        borderRadius: '4px', 
+                                                                        border: '1px solid #FCD34D',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px',
+                                                                        cursor: 'help'
+                                                                    }}
+                                                                    title="Requerimiento del Cliente: Instrucción comercial u observación de picking solicitada por el cliente."
+                                                                >
+                                                                    <FileText size={11} strokeWidth={2} />
                                                                     Nota: {item.picking_note}
-                                                                </span>
-                                                            )}
-                                                            {item.delivery_note && (
-                                                                <span style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.8em', backgroundColor: '#EEF2FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #C7D2FE' }}>
-                                                                    Entr: {item.delivery_note}
                                                                 </span>
                                                             )}
                                                             {/* Pricing Source Badge */}
                                                             {campaignPrices[item.product.id] ? (
-                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                    ⚡ {campaignPrices[item.product.id].name} ({campaignPrices[item.product.id].type === 'fixed_price' ? 'Precio Fijo' : `${campaignPrices[item.product.id].value > 0 ? '+' : ''}${campaignPrices[item.product.id].value}%`})
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FCA5A5' }}>
+                                                                    <Zap size={11} strokeWidth={2} /> {campaignPrices[item.product.id].name} ({campaignPrices[item.product.id].type === 'fixed_price' ? 'Precio Fijo' : `${campaignPrices[item.product.id].value > 0 ? '+' : ''}${campaignPrices[item.product.id].value}%`})
                                                                 </span>
-                                                            ) : contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (() => {
+                                                            ) : contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null && contractPrices[item.product.id] > 0 ? (() => {
                                                                 const isAgreement = activePricingModel?.is_agreement;
                                                                 const hasCustomPrice = customPriceIds.has(item.product.id);
                                                                 if (isAgreement) {
                                                                     if (hasCustomPrice) {
                                                                         return (
-                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                Tarifa Acuerdo
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #86EFAC' }}>
+                                                                                <ShieldCheck size={11} strokeWidth={2} /> Dentro de acuerdo
                                                                             </span>
                                                                         );
                                                                     } else {
-                                                                        const currentProfile = clients.find(c => c.id === selectedClient);
-                                                                        const hasB2BModel = !!(currentProfile?.pricing_model_id || (currentProfile?.parent_id && clients.find(c => c.id === currentProfile.parent_id)?.pricing_model_id));
                                                                         return (
-                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                {hasB2BModel ? 'Fuera de Acuerdo (B2B)' : 'Fuera de Acuerdo (B2C)'}
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #E2E8F0' }}>
+                                                                                <Building2 size={11} strokeWidth={2} /> General Institucional
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                } else if (isContractExpired) {
+                                                                    return (
+                                                                        <span style={{ fontSize: '0.75rem', backgroundColor: '#FFFBEB', color: '#B45309', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                            <AlertTriangle size={11} strokeWidth={2} /> General Institucional (Acuerdo Vencido)
+                                                                        </span>
+                                                                    );
+                                                                } else if (clientType === 'B2B' || Boolean(selectedClient)) {
+                                                                    if (hasCustomPrice) {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #BAE6FD' }}>
+                                                                                <FileCheck size={11} strokeWidth={2} /> Tarifa Contrato
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #E2E8F0' }}>
+                                                                                <Building2 size={11} strokeWidth={2} /> General Institucional
                                                                             </span>
                                                                         );
                                                                     }
                                                                 } else {
-                                                                    if (hasCustomPrice) {
-                                                                        return (
-                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                Tarifa Contrato
-                                                                            </span>
-                                                                        );
-                                                                    } else {
-                                                                        const isB2B = clientType === 'B2B' || Boolean(selectedClient);
-                                                                        return (
-                                                                            <span style={{ fontSize: '0.75rem', backgroundColor: isB2B ? '#ECFDF5' : '#FFF7ED', color: isB2B ? '#047857' : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                                {isB2B ? (activePricingModel?.name || 'General Institucional') : 'Tarifa B2C (Defecto)'}
-                                                                            </span>
-                                                                        );
-                                                                    }
+                                                                    return (
+                                                                        <span style={{ fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FED7AA' }}>
+                                                                            <Tag size={11} strokeWidth={2} /> Tarifa B2C
+                                                                        </span>
+                                                                    );
                                                                 }
                                                             })() : (item.price && item.price > 0) || (item.product?.base_price && item.product.base_price > 0) ? (
-                                                                <span style={{ fontSize: '0.75rem', backgroundColor: (clientType === 'B2B' || Boolean(selectedClient)) ? '#ECFDF5' : '#FFF7ED', color: (clientType === 'B2B' || Boolean(selectedClient)) ? '#047857' : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                    {(clientType === 'B2B' || Boolean(selectedClient)) ? (activePricingModel?.name || 'General Institucional') : 'Tarifa B2C (Defecto)'}
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#FFFBEB' : '#F1F5F9') : '#FFF7ED', color: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#B45309' : '#475569') : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', border: `1px solid ${isContractExpired ? '#FDE68A' : '#E2E8F0'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    {(clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? <><AlertTriangle size={11} strokeWidth={2} /> General Institucional (Acuerdo Vencido)</> : <><Building2 size={11} strokeWidth={2} /> General Institucional</>) : <><Tag size={11} strokeWidth={2} /> Tarifa B2C</>}
                                                                 </span>
                                                             ) : (
-                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                    ⚠️ Sin Precio
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FCA5A5' }}>
+                                                                    <AlertCircle size={11} strokeWidth={2} /> Sin Precio
                                                                 </span>
                                                             )}
                                                         </div>
@@ -4638,8 +4678,8 @@ function CreateOrderContent() {
                                     <div style={{ flex: '1 1 auto', minWidth: '220px' }}>
                                         {exc ? (
                                             <>
-                                                <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#B45309', letterSpacing: '0.05em' }}>
-                                                    📌 Requerimientos del Cliente:
+                                                <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#B45309', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <FileText size={12} strokeWidth={2} /> REQUERIMIENTOS DEL CLIENTE:
                                                 </div>
                                                 {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
                                                     <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
@@ -4702,10 +4742,13 @@ function CreateOrderContent() {
                                         cursor: 'pointer',
                                         padding: 0,
                                         fontSize: 'inherit',
-                                        textDecoration: 'underline'
+                                        textDecoration: 'underline',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
                                     }}
                                 >
-                                    ⚙️ Editar Variantes
+                                    <Settings size={12} strokeWidth={2} /> Editar Variantes
                                 </button>
                                 <span>|</span>
                                 <button
@@ -4720,10 +4763,13 @@ function CreateOrderContent() {
                                         cursor: 'pointer',
                                         padding: 0,
                                         fontSize: 'inherit',
-                                        textDecoration: 'underline'
+                                        textDecoration: 'underline',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
                                     }}
                                 >
-                                    ⚙️ Editar Equivalencias
+                                    <RefreshCw size={12} strokeWidth={2} /> Editar Equivalencias
                                 </button>
                             </div>
 
