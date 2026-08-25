@@ -2618,53 +2618,50 @@ function CreateOrderContent() {
         if (clientSearch.length < 2) return [];
         const query = clientSearch.toLowerCase().trim();
 
-        // 1. Filter out pure Casa Matriz (profiles that have child branches and are not deliverable points)
+        // 1. Identify which Parent Matrices match the search query (e.g. "CLUB DEL COMERCIO DE BOGOTA", "COLSUBSIDIO")
+        const matchedParentMatrixIds = new Set<string>();
+        clients.forEach(c => {
+            if (parentMatrixIds.has(c.id)) {
+                const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
+                const nitMatch = (c.nit?.toString() || '').includes(query);
+                if (nameMatch || nitMatch) {
+                    matchedParentMatrixIds.add(c.id);
+                }
+            }
+        });
+
+        // 2. Filter out pure Casa Matriz (profiles that have child branches and are not deliverable points)
         const deliverableClients = clients.filter(c => !parentMatrixIds.has(c.id));
 
-        // 2. Find matches on branch info or parent matrix info
-        const matches = deliverableClients.filter(c => {
+        // Group A: Direct Sucursales belonging to the searched matrix (MUST show [Sucursal] badge and appear at top)
+        const directSearchedBranches: any[] = [];
+        // Group B: Other matching deliverable clients (independent companies or branches of other matrices) -> NO badge
+        const otherMatches: any[] = [];
+
+        deliverableClients.forEach(c => {
+            const isDirectBranch = Boolean(c.parent_id && matchedParentMatrixIds.has(c.parent_id));
+
             const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
             const nitMatch = (c.nit?.toString() || '').includes(query);
             const contactMatch = (c.contact_name?.toLowerCase() || '').includes(query);
             const addressMatch = (c.address?.toLowerCase() || '').includes(query);
             const phoneMatch = (c.contact_phone?.toString() || '').includes(query);
-            
-            let parentMatch = false;
-            if (c.parent_id) {
-                const parent = matrixClientsMap.get(c.parent_id);
-                if (parent) {
-                    parentMatch = (parent.company_name?.toLowerCase() || '').includes(query) ||
-                                  (parent.nit?.toString() || '').includes(query);
-                }
+
+            if (isDirectBranch) {
+                directSearchedBranches.push({ ...c, isDirectSearchedBranch: true });
+            } else if (nameMatch || nitMatch || contactMatch || addressMatch || phoneMatch) {
+                otherMatches.push({ ...c, isDirectSearchedBranch: false });
             }
-
-            return nameMatch || nitMatch || contactMatch || addressMatch || phoneMatch || parentMatch;
         });
 
-        // 3. Partition: Sucursales (has parent_id) vs Independientes (no parent_id)
-        const sucursales = matches.filter(c => Boolean(c.parent_id));
-        const independientes = matches.filter(c => !c.parent_id);
+        // Sort direct branches alphabetically
+        directSearchedBranches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
 
-        // 4. Sort sucursales:
-        // Priority A: Sucursales whose parent matrix name matches the search query
-        // Priority B: Alphabetical order
-        sucursales.sort((a, b) => {
-            const parentA = a.parent_id ? matrixClientsMap.get(a.parent_id)?.company_name || '' : '';
-            const parentB = b.parent_id ? matrixClientsMap.get(b.parent_id)?.company_name || '' : '';
-            
-            const aParentMatches = parentA.toLowerCase().includes(query);
-            const bParentMatches = parentB.toLowerCase().includes(query);
+        // Sort other matches alphabetically
+        otherMatches.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
 
-            if (aParentMatches && !bParentMatches) return -1;
-            if (!aParentMatches && bParentMatches) return 1;
-
-            return (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' });
-        });
-
-        independientes.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
-
-        return [...sucursales, ...independientes].slice(0, 10);
-    }, [clients, clientSearch, parentMatrixIds, matrixClientsMap]);
+        return [...directSearchedBranches, ...otherMatches].slice(0, 10);
+    }, [clients, clientSearch, parentMatrixIds]);
 
     const getSelectedClientDetails = () => clients.find(c => c.id === selectedClient);
 
@@ -2893,6 +2890,7 @@ function CreateOrderContent() {
                                                     {filteredClients.map((c, idx) => {
                                                         const parentMatrix = c.parent_id ? matrixClientsMap.get(c.parent_id) : null;
                                                         const isFocused = idx === focusedClientIndex;
+                                                        const isDirectBranch = Boolean(c.isDirectSearchedBranch && parentMatrix);
 
                                                         return (
                                                             <div
@@ -2916,23 +2914,23 @@ function CreateOrderContent() {
                                                                 <div>
                                                                     <div style={{ fontWeight: isFocused ? '900' : '700', color: isFocused ? '#1E3A8A' : '#1F2937', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                                         <span>{c.company_name}</span>
-                                                                        {parentMatrix && (
+                                                                        {isDirectBranch && (
                                                                             <span style={{ 
                                                                                 fontSize: '0.7rem', 
-                                                                                backgroundColor: isFocused ? '#BFDBFE' : '#F1F5F9', 
-                                                                                color: isFocused ? '#1E40AF' : '#475569', 
+                                                                                backgroundColor: isFocused ? '#BFDBFE' : '#FFF7ED', 
+                                                                                color: isFocused ? '#1E40AF' : '#C2410C', 
                                                                                 padding: '1px 6px', 
                                                                                 borderRadius: '4px', 
-                                                                                fontWeight: '700',
-                                                                                border: '1px solid #E2E8F0' 
+                                                                                fontWeight: '800',
+                                                                                border: `1px solid ${isFocused ? '#93C5FD' : '#FFEDD5'}` 
                                                                             }}>
                                                                                 Sucursal
                                                                             </span>
                                                                         )}
                                                                     </div>
                                                                     <div style={{ fontSize: '0.8rem', fontWeight: isFocused ? '600' : 'normal', color: isFocused ? '#2563EB' : '#6B7280', marginTop: '2px' }}>
-                                                                        {parentMatrix && <span style={{ color: isFocused ? '#1D4ED8' : '#64748B', fontWeight: '600' }}>Matriz: {parentMatrix.company_name} • </span>}
-                                                                        NIT: {c.nit || parentMatrix?.nit || 'N/A'} • {c.address || 'Sin dirección registrada'}
+                                                                        {isDirectBranch && parentMatrix && <span style={{ color: isFocused ? '#1D4ED8' : '#64748B', fontWeight: '600' }}>Matriz: {parentMatrix.company_name} • </span>}
+                                                                        NIT: {c.nit || (isDirectBranch && parentMatrix?.nit) || 'N/A'} • {c.address || 'Sin dirección registrada'}
                                                                     </div>
                                                                 </div>
                                                             </div>

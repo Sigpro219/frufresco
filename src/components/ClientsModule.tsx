@@ -3765,8 +3765,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
         window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank');
     };
 
-    const isMatriz = isB2B && (data.is_corporate_parent === true || (data as any).classification === 'matriz' || !data.parent_id);
-    const isRealBranch = isB2B && !!data.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
+    const isSucursal = isB2B && Boolean(profileData?.parent_id);
+    const isMatriz = isB2B && !profileData?.parent_id && (profileData?.is_corporate_parent === true || (profileData as any)?.classification === 'matriz' || (branchCount !== undefined && branchCount > 0));
 
     const isVerifiedDev = profileData?.is_verified_dev || (profileData?.tags && profileData?.tags.includes('verified_dev'));
 
@@ -3786,7 +3786,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 borderRadius: THEME.radius.lg, 
                 padding: '2rem', 
                 boxShadow: THEME.shadow.md,
-                border: isMatriz ? '2px solid #1E3A8A' : `1px solid ${THEME.colors.border}`,
+                border: isMatriz ? '2px solid #1E3A8A' : isSucursal ? '2px solid #FB923C' : `1px solid ${THEME.colors.border}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1.5rem',
@@ -3845,7 +3845,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             <Building2 size={12} strokeWidth={2} /> {branchCount} {branchCount === 1 ? 'Sucursal' : 'Sucursales'}
                         </span>
                     )}
-                    {!isMatriz && (
+                    {isSucursal && (
+                        <span style={{ fontSize: '0.62rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '0.35rem 0.7rem', borderRadius: '8px', fontWeight: '900', border: '1px solid #FFEDD5', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <MapPin size={10} strokeWidth={2} /> SUCURSAL
+                        </span>
+                    )}
+                    {!isMatriz && !isSucursal && (
                         <div style={{ 
                             padding: '0.4rem 0.8rem',
                             borderRadius: '8px',
@@ -4405,14 +4410,14 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
         }
     }
 
-    const isMatriz = isB2B && (client.is_corporate_parent === true || (client as any).classification === 'matriz' || !client.parent_id);
-    const isRealBranch = isB2B && !!client.parent_id && (isInheritedAgreement || agreementStatus !== 'none');
+    const isSucursal = isB2B && Boolean(client.parent_id);
+    const isMatriz = isB2B && !client.parent_id && (client.is_corporate_parent === true || (client as any).classification === 'matriz' || (branchCount !== undefined && branchCount > 0));
 
     return (
         <tr 
             style={{ 
                 borderBottom: `1px solid ${THEME.colors.border}`, 
-                borderLeft: isMatriz ? '4px solid #1E3A8A' : isRealBranch ? '4px solid #EA580C' : '4px solid transparent',
+                borderLeft: isMatriz ? '4px solid #1E3A8A' : isSucursal ? '4px solid #EA580C' : '4px solid transparent',
                 backgroundColor: isMatriz ? '#F8FAFC' : 'transparent',
                 transition: 'background 0.2s', 
                 cursor: 'pointer' 
@@ -4486,8 +4491,10 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                         </span>
                                     )}
                                 </>
-                            ) : isRealBranch ? (
-                                <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>
+                            ) : isSucursal ? (
+                                <span style={{ fontSize: '0.62rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', border: '1px solid #FFEDD5', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                    <MapPin size={10} strokeWidth={2} /> SUCURSAL
+                                </span>
                             ) : null}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
                             <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
