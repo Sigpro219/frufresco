@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Fragment, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2, RefreshCw, FileSpreadsheet, Download, AlertTriangle, FileText } from 'lucide-react';
+import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2, RefreshCw, FileSpreadsheet, Download, AlertTriangle, FileText, Minus } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
@@ -876,45 +876,148 @@ export default function CostMatrixPage() {
         return sortOrder === 'asc' ? <TrendingUp size={14} style={{ marginLeft: '4px' }} /> : <TrendingDown size={14} style={{ marginLeft: '4px' }} />;
     };
 
-    const Sparkline = ({ data }: { data: Purchase[] }) => {
-        if (data.length < 2) return <div style={{ height: '30px' }} />;
-        
+    const Sparkline = ({ data, productId }: { data: Purchase[]; productId?: string }) => {
+        if (!data || data.length === 0) {
+            return (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ 
+                        fontSize: '0.65rem', 
+                        color: '#94A3B8', 
+                        fontWeight: '700',
+                        backgroundColor: '#F8FAFC',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        border: '1px dashed #CBD5E1'
+                    }}>
+                        Sin Historial
+                    </span>
+                </div>
+            );
+        }
+
+        if (data.length === 1) {
+            return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                    <div style={{ width: '32px', height: '2px', backgroundColor: '#CBD5E1', borderRadius: '1px' }} />
+                    <span style={{ 
+                        fontSize: '0.68rem', 
+                        color: '#64748B', 
+                        fontWeight: '800',
+                        backgroundColor: '#F1F5F9',
+                        border: '1px solid #E2E8F0',
+                        padding: '2px 6px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px'
+                    }}>
+                        <Minus size={11} /> Base
+                    </span>
+                </div>
+            );
+        }
+
+        // Orden cronológico (de la más antigua a la más reciente)
         const prices = data.map(d => d.normalized_price).reverse();
         const min = Math.min(...prices);
         const max = Math.max(...prices);
         const range = max - min || 1;
-        
-        const points = prices.map((p, i) => {
-            const x = (i / (prices.length - 1)) * 100;
-            const y = 100 - ((p - min) / range) * 80 - 10;
-            return `${x},${y}`;
-        }).join(' ');
 
-        const trend = (prices[prices.length - 1] - prices[0]) / prices[0];
-        const color = trend > 0.05 ? '#EF4444' : trend < -0.05 ? '#10B981' : '#64748B';
+        // Puntos normalizados con margen superior e inferior para que el trazo y el punto no se corten
+        const points = prices.map((p, i) => {
+            const x = (i / (prices.length - 1)) * 88 + 6;
+            const y = 80 - ((p - min) / range) * 60;
+            return { x, y };
+        });
+
+        const trend = (prices[prices.length - 1] - prices[0]) / (prices[0] || 1);
+        const trendPercent = Math.abs(trend * 100);
+        const isUp = trend > 0.01;
+        const isDown = trend < -0.01;
+        const isNeutral = !isUp && !isDown;
+
+        const themeColor = isUp ? '#EF4444' : isDown ? '#10B981' : '#64748B';
+        const bgColor = isUp ? '#FEF2F2' : isDown ? '#ECFDF5' : '#F1F5F9';
+        const borderColor = isUp ? '#FECACA' : isDown ? '#A7F3D0' : '#E2E8F0';
+        const gradId = `spark-grad-${productId || Math.random().toString(36).substring(2, 7)}`;
+
+        // Curva Bezier suave (Catmull-Rom spline / Cubic Spline)
+        let pathD = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[i === 0 ? i : i - 1];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[i + 2] || p2;
+
+            const cp1x = p1.x + (p2.x - p0.x) / 6;
+            const cp1y = p1.y + (p2.y - p0.y) / 6;
+
+            const cp2x = p2.x - (p3.x - p1.x) / 6;
+            const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+            pathD += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+        }
+
+        const lastPoint = points[points.length - 1];
+        const firstPoint = points[0];
+        const areaD = `${pathD} L ${lastPoint.x.toFixed(1)},100 L ${firstPoint.x.toFixed(1)},100 Z`;
 
         return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', justifyContent: 'center' }}>
-                <svg width="60" height="30" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <polyline
-                        fill="none"
-                        stroke={color}
-                        strokeWidth="10"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        points={points}
-                    />
-                </svg>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center', padding: '0 0.1rem' }}>
+                {/* SVG Waveform con Área Sombreada y Nodo Pulsante */}
+                <div style={{ width: '62px', height: '26px', position: 'relative' }}>
+                    <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                        <defs>
+                            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={themeColor} stopOpacity="0.3" />
+                                <stop offset="100%" stopColor={themeColor} stopOpacity="0.0" />
+                            </linearGradient>
+                        </defs>
+                        
+                        {/* Relleno translúcido del área inferior */}
+                        <path d={areaD} fill={`url(#${gradId})`} />
+                        
+                        {/* Línea curva suave */}
+                        <path
+                            d={pathD}
+                            fill="none"
+                            stroke={themeColor}
+                            strokeWidth="6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+
+                        {/* Punto luminoso de la última compra registrada */}
+                        <circle cx={lastPoint.x} cy={lastPoint.y} r="7" fill={themeColor} opacity="0.3" />
+                        <circle cx={lastPoint.x} cy={lastPoint.y} r="4" fill={themeColor} />
+                        <circle cx={lastPoint.x} cy={lastPoint.y} r="1.8" fill="white" />
+                    </svg>
+                </div>
+
+                {/* Micro-Badge con Icono Lucide y Porcentaje */}
                 <div style={{ 
-                    fontSize: '0.75rem', 
+                    fontSize: '0.72rem', 
                     fontWeight: '900', 
-                    color: color,
+                    color: themeColor,
+                    backgroundColor: bgColor,
+                    border: `1px solid ${borderColor}`,
+                    padding: '2px 5px',
+                    borderRadius: '6px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.2rem',
-                    minWidth: '45px'
+                    gap: '2px',
+                    minWidth: '50px',
+                    justifyContent: 'center',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                    lineHeight: 1.2
                 }}>
-                    {trend > 0 ? '+' : ''}{(trend * 100).toFixed(0)}%
+                    {isUp && <TrendingUp size={11} strokeWidth={3} />}
+                    {isDown && <TrendingDown size={11} strokeWidth={3} />}
+                    {isNeutral && <Minus size={11} strokeWidth={3} />}
+                    <span>
+                        {isUp ? '+' : isDown ? '-' : ''}
+                        {trendPercent > 999 ? '>999%' : `${trendPercent.toFixed(trendPercent < 10 ? 1 : 0)}%`}
+                    </span>
                 </div>
             </div>
         );
@@ -1777,7 +1880,7 @@ export default function CostMatrixPage() {
                                                         zIndex: 5,
                                                         boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
                                                     }}>
-                                                        <Sparkline data={history} />
+                                                        <Sparkline data={history} productId={p.id} />
                                                     </td>
                                                 </tr>
                                             </Fragment>
