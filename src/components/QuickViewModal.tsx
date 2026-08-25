@@ -263,7 +263,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     };
 
     const getFormattedName = () => {
-        const optionString = Object.entries(selections)
+        const sortedEntries = Object.entries(selections).sort(([keyA], [keyB]) => keyA.localeCompare(keyB, undefined, { sensitivity: 'base' }));
+        const optionString = sortedEntries
             .map(([key, value]) => {
                 const rawKey = key.toLowerCase();
                 const displayKey = (rawKey.includes('madura') || rawKey.includes('madurez'))

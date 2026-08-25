@@ -1494,7 +1494,8 @@ function CreateOrderContent() {
 
     const confirmModalAdd = () => {
         if (!selectedProductForModal) return;
-        const optionValues = Object.values(selectedOptions).filter(v => v);
+        const sortedOptionKeys = Object.keys(selectedOptions).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const optionValues = sortedOptionKeys.filter(k => selectedOptions[k]).map(k => selectedOptions[k]);
         const variantLabel = optionValues.length > 0 ? optionValues.map(v => String(v).includes('|') ? `${String(v).split('|')[0]} (${String(v).split('|')[1]} gr)` : v).join(', ') : undefined;
         const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
         
@@ -4375,8 +4376,11 @@ function CreateOrderContent() {
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
                 const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
-                // Normalizar y prepend/sort las opciones configuradas del producto para pedidos manuales
-                const normalizedOptionsConfig = (selectedProductForModal.options_config || []).map((opt: any) => {
+                // Normalizar y ordenar alfabéticamente los atributos por su nombre (A-Z)
+                const normalizedOptionsConfig = (selectedProductForModal.options_config || [])
+                    .slice()
+                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((opt: any) => {
                     let values: string[] = opt.values || [];
                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                     const isKgProduct = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';

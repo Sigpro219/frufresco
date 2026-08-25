@@ -23,7 +23,10 @@ interface VariantModalProps {
 }
 
 export default function VariantModal({ product, onClose, onSave, onUploadImage, readOnly = false }: VariantModalProps) {
-    const [options, setOptions] = useState<any[]>(product.options_config || []);
+    const [options, setOptions] = useState<any[]>(() => {
+        const raw = product.options_config || [];
+        return raw.slice().sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+    });
     const [variants, setVariants] = useState<Variant[]>(() => {
         const raw = product.variants || [];
         const seen = new Set<string>();
@@ -134,12 +137,13 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
     const handleSave = async () => {
         setIsSaving(true);
-        const mappedOptions = options.map(opt => {
-            return {
+        const mappedOptions = options
+            .filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0)
+            .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+            .map(opt => ({
                 name: opt.name,
                 values: opt.values
-            };
-        });
+            }));
 
         // Garantizar unicidad absoluta de SKUs para evitar violar la restricción unique de base de datos
         const seenSkus = new Set<string>();

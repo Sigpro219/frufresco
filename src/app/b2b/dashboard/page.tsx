@@ -455,10 +455,14 @@ export default function B2BDashboard() {
             return;
         }
 
-        // Construir nombre con variantes (ej: "Lulo (Maduro, Grande)")
+        // Construir nombre con variantes canónicas (ej: "Lulo (Maduro, Grande)")
         const baseName = locale === 'en' ? (product.name_en || product.name) : product.name;
         let finalName = baseName;
-        const optionValues = Object.values(selectedOptions).filter(v => v);
+        const sortedOptionKeys = Object.keys(selectedOptions).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const optionValues = sortedOptionKeys.filter(k => selectedOptions[k]).map(k => {
+            const v = selectedOptions[k];
+            return String(v).includes('|') ? `${String(v).split('|')[0]} (${String(v).split('|')[1]} gr)` : v;
+        });
         if (optionValues.length > 0) {
             finalName = `${baseName} (${optionValues.join(', ')})`;
         }
@@ -3680,7 +3684,10 @@ export default function B2BDashboard() {
                         {/* Variantes / Opciones */}
                         {selectedProductForModal.options_config && Array.isArray(selectedProductForModal.options_config) && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-                                {selectedProductForModal.options_config.map((opt: any, optIdx: number) => (
+                                {selectedProductForModal.options_config
+                                    .slice()
+                                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                                    .map((opt: any, optIdx: number) => (
                                     <div key={opt.name}>
                                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
                                             {opt.name}

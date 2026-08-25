@@ -82,27 +82,26 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [showParentResults, setShowParentResults] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const parseInitialOptions = (prod: any) => {
+        let list: any[] = [];
         if (Array.isArray(prod.options_config) && prod.options_config.length > 0) {
-            return prod.options_config.map((opt: any) => ({
+            list = prod.options_config.map((opt: any) => ({
                 name: opt.name || '',
                 values: Array.isArray(opt.values) ? opt.values : []
             }));
-        }
-        if (prod.options) {
+        } else if (prod.options) {
             if (Array.isArray(prod.options) && prod.options.length > 0) {
-                return prod.options.map((opt: any) => ({
+                list = prod.options.map((opt: any) => ({
                     name: opt.name || '',
                     values: Array.isArray(opt.values) ? opt.values : []
                 }));
-            }
-            if (typeof prod.options === 'object' && Object.keys(prod.options).length > 0) {
-                return Object.entries(prod.options).map(([name, values]) => ({
+            } else if (typeof prod.options === 'object' && Object.keys(prod.options).length > 0) {
+                list = Object.entries(prod.options).map(([name, values]) => ({
                     name,
                     values: Array.isArray(values) ? values : []
                 }));
             }
         }
-        return [];
+        return list.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
     };
 
     const [previewUrl, setPreviewUrl] = useState<string | null>(product.image_url);
@@ -456,14 +455,17 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 inventory_group: formData.inventory_group,
                 purchase_sublist: formData.purchase_sublist,
                 utility_deviation_pct: formData.utility_deviation_pct || 0,
-                options_config: options.filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0).map(opt => {
-                    const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
-                    return {
-                        name: opt.name,
-                        values: opt.values,
-                        show_on_web: attr ? attr.show_on_web !== false : true
-                    };
-                }),
+                options_config: options
+                    .filter(opt => opt.name && Array.isArray(opt.values) && opt.values.length > 0)
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map(opt => {
+                        const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
+                        return {
+                            name: opt.name,
+                            values: opt.values,
+                            show_on_web: attr ? attr.show_on_web !== false : true
+                        };
+                    }),
                 options: options.reduce((acc: any, opt: any) => {
                     if (opt.name && Array.isArray(opt.values) && opt.values.length > 0) {
                         acc[opt.name] = opt.values;
