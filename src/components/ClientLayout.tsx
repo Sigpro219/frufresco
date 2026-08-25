@@ -6,6 +6,7 @@ import Footer from '@/components/Footer';
 import Navbar from '@/components/Navbar';
 import HelpDeskWidget from '@/components/HelpDeskWidget';
 import PQRFloatingWidget from '@/components/PQRFloatingWidget';
+import FloatingCartBar from '@/components/FloatingCartBar';
 import { Providers } from '@/app/providers';
 import { Suspense } from 'react';
 
@@ -21,6 +22,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {!isOpsOrAdmin && !isPrintPage && <GlobalBanner />}
                 {!pathname?.startsWith('/ops') && !isPrintPage && <Navbar />}
                 {children}
+                {!isOpsOrAdmin && !isPrintPage && <FloatingCartBar />}
                 {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && <Footer />}
             </Suspense>
             {isOpsOrAdmin && !isPrintPage && (

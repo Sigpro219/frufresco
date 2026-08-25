@@ -65,35 +65,64 @@ export default function FloatingCartBar() {
     return (
         <aside 
             aria-label="Resumen flotante de carrito de compra"
+            className="floating-cart-bar-root"
             style={{
                 position: 'fixed',
                 bottom: '20px',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 990,
-                width: 'calc(100% - 32px)',
-                maxWidth: isMinimized ? 'auto' : '680px',
+                width: 'calc(100% - 24px)',
+                maxWidth: isMinimized ? 'max-content' : '720px',
                 pointerEvents: 'none',
                 transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
             }}
         >
+            <style dangerouslySetInnerHTML={{__html: `
+                @keyframes floatBump {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.03); }
+                    100% { transform: scale(1); }
+                }
+                @media (max-width: 600px) {
+                    .floating-cart-bar-root {
+                        bottom: 12px !important;
+                        width: calc(100% - 16px) !important;
+                    }
+                    .floating-cart-inner {
+                        padding: 8px 12px !important;
+                        border-radius: 18px !important;
+                        gap: 8px !important;
+                    }
+                    .floating-cart-hide-mobile {
+                        display: none !important;
+                    }
+                    .floating-cart-metric-label {
+                        font-size: 0.55rem !important;
+                    }
+                    .floating-cart-metric-val {
+                        font-size: 0.82rem !important;
+                    }
+                }
+            `}} />
             <div 
+                className="floating-cart-inner"
                 style={{
                     pointerEvents: 'auto',
-                    backgroundColor: 'rgba(6, 78, 59, 0.95)',
+                    backgroundColor: 'rgba(6, 78, 59, 0.96)',
                     backdropFilter: 'blur(16px)',
                     WebkitBackdropFilter: 'blur(16px)',
-                    border: '1.5px solid rgba(255, 255, 255, 0.18)',
-                    borderRadius: isMinimized ? '999px' : '24px',
-                    boxShadow: '0 20px 40px -10px rgba(6, 78, 59, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.2)',
-                    padding: isMinimized ? '8px 18px' : '10px 14px 10px 18px',
+                    border: '1.5px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: isMinimized ? '999px' : '22px',
+                    boxShadow: '0 20px 35px -8px rgba(6, 78, 59, 0.55), 0 4px 12px rgba(0, 0, 0, 0.25)',
+                    padding: isMinimized ? '8px 16px' : '10px 14px 10px 18px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '12px',
                     color: 'white',
-                    transform: animateBump ? 'scale(1.02)' : 'scale(1)',
-                    transition: 'transform 0.2s ease, padding 0.3s ease, border-radius 0.3s ease'
+                    animation: animateBump ? 'floatBump 0.4s ease' : 'none',
+                    transition: 'padding 0.3s ease, border-radius 0.3s ease'
                 }}
             >
                 {isMinimized ? (
@@ -136,7 +165,7 @@ export default function FloatingCartBar() {
                         {/* Summary Metrics */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                             {/* Shopping Icon */}
-                            <div style={{
+                            <div className="floating-cart-hide-mobile" style={{
                                 backgroundColor: 'rgba(255, 255, 255, 0.12)',
                                 width: '38px',
                                 height: '38px',
@@ -152,7 +181,7 @@ export default function FloatingCartBar() {
 
                             {/* 1. Referencias Únicas */}
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{
+                                <span className="floating-cart-metric-label" style={{
                                     fontSize: '0.62rem',
                                     color: '#A7F3D0',
                                     fontWeight: '800',
@@ -164,16 +193,16 @@ export default function FloatingCartBar() {
                                 }}>
                                     <Package size={10} strokeWidth={2.5} /> Refs. Únicas
                                 </span>
-                                <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#FFFFFF', lineHeight: '1.2' }}>
-                                    {items.length} {items.length === 1 ? 'referencia' : 'referencias'}
+                                <span className="floating-cart-metric-val" style={{ fontSize: '0.92rem', fontWeight: '800', color: '#FFFFFF', lineHeight: '1.2' }}>
+                                    {items.length} {items.length === 1 ? 'ref' : 'refs'}
                                 </span>
                             </div>
 
-                            <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 255, 255, 0.18)' }} />
+                            <div className="floating-cart-hide-mobile" style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 255, 255, 0.18)' }} />
 
                             {/* 2. Peso Total */}
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{
+                                <span className="floating-cart-metric-label" style={{
                                     fontSize: '0.62rem',
                                     color: '#A7F3D0',
                                     fontWeight: '800',
@@ -185,7 +214,7 @@ export default function FloatingCartBar() {
                                 }}>
                                     <Scale size={10} strokeWidth={2.5} /> Peso Total
                                 </span>
-                                <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#6EE7B7', lineHeight: '1.2' }}>
+                                <span className="floating-cart-metric-val" style={{ fontSize: '0.92rem', fontWeight: '800', color: '#6EE7B7', lineHeight: '1.2' }}>
                                     {formattedWeight} Kg
                                 </span>
                             </div>
@@ -194,7 +223,7 @@ export default function FloatingCartBar() {
 
                             {/* 3. Total Estimado */}
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{
+                                <span className="floating-cart-metric-label" style={{
                                     fontSize: '0.62rem',
                                     color: '#FDE047',
                                     fontWeight: '800',
@@ -206,7 +235,7 @@ export default function FloatingCartBar() {
                                 }}>
                                     <Sparkles size={10} strokeWidth={2.5} /> Total Estimado
                                 </span>
-                                <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#FDE047', lineHeight: '1.2' }}>
+                                <span className="floating-cart-metric-val" style={{ fontSize: '1.05rem', fontWeight: '900', color: '#FDE047', lineHeight: '1.2' }}>
                                     {formattedPrice}
                                 </span>
                             </div>
