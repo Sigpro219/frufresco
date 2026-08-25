@@ -36,6 +36,26 @@ const formatNumberWithDots = (val: number) => {
     return Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
+const safeGetValidDate = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    try {
+        const d = dateVal instanceof Date ? dateVal : new Date(dateVal);
+        return isNaN(d.getTime()) ? null : d;
+    } catch {
+        return null;
+    }
+};
+
+const safeFormatDate = (dateVal: any, pattern: string, fallback: string = '—'): string => {
+    const validDate = safeGetValidDate(dateVal);
+    if (!validDate) return fallback;
+    try {
+        return format(validDate, pattern, { locale: es });
+    } catch {
+        return fallback;
+    }
+};
+
 function StatCard({ label, value, subValue, trend, color, bg = 'white', icon, onClick, active }: any) {
     return (
         <div 
@@ -329,7 +349,8 @@ export default function CostMatrixPage() {
         const latest = history[0];
         const previous = history[1];
         
-        const daysSinceLast = differenceInDays(new Date(), new Date(latest.created_at));
+        const latestDate = safeGetValidDate(latest.created_at);
+        const daysSinceLast = latestDate ? differenceInDays(new Date(), latestDate) : 0;
         let alpha = 0.5;
 
         if (daysSinceLast > 7) {
@@ -352,9 +373,10 @@ export default function CostMatrixPage() {
         let signalSource: 'COMPRAS' | 'MANUAL' | 'SIN_SEÑAL' = 'SIN_SEÑAL';
         let currentCost: number | null = null;
 
-        if (hist[0] && manual?.updated_at) {
-            const histDate = new Date(hist[0].created_at);
-            const manualDate = new Date(manual.updated_at);
+        const histDate = hist[0]?.created_at ? safeGetValidDate(hist[0].created_at) : null;
+        const manualDate = manual?.updated_at ? safeGetValidDate(manual.updated_at) : null;
+
+        if (histDate && manualDate) {
             if (histDate >= manualDate) {
                 latestSignalDate = histDate;
                 signalSource = 'COMPRAS';
@@ -364,19 +386,19 @@ export default function CostMatrixPage() {
                 signalSource = 'MANUAL';
                 currentCost = manual.manual_cost;
             }
-        } else if (hist[0]) {
-            latestSignalDate = new Date(hist[0].created_at);
+        } else if (histDate) {
+            latestSignalDate = histDate;
             signalSource = 'COMPRAS';
             currentCost = hist[0].normalized_price;
-        } else if (manual?.updated_at) {
-            latestSignalDate = new Date(manual.updated_at);
+        } else if (manualDate) {
+            latestSignalDate = manualDate;
             signalSource = 'MANUAL';
             currentCost = manual.manual_cost;
         } else if (manual?.manual_cost) {
             currentCost = manual.manual_cost;
         }
 
-        if (!latestSignalDate || currentCost === null || currentCost <= 0) {
+        if (!latestSignalDate || isNaN(latestSignalDate.getTime()) || currentCost === null || currentCost <= 0) {
             return {
                 daysOld: 999,
                 status: 'SIN_REFERENCIA' as const,
@@ -391,7 +413,8 @@ export default function CostMatrixPage() {
             };
         }
 
-        const daysOld = differenceInDays(new Date(), latestSignalDate);
+        const daysOld = Math.max(0, differenceInDays(new Date(), latestSignalDate));
+        const formattedDate = safeFormatDate(latestSignalDate, 'yyyy-MM-dd', 'N/A');
         
         if (daysOld <= 7) {
             return {
@@ -401,7 +424,7 @@ export default function CostMatrixPage() {
                 statusColor: '#059669',
                 statusBg: '#ECFDF5',
                 sourceLabel: signalSource === 'COMPRAS' ? 'Orden Compra' : 'Carga Manual',
-                signalDateFormatted: format(latestSignalDate, 'yyyy-MM-dd'),
+                signalDateFormatted: formattedDate,
                 isExpired: false,
                 isDueSoon: false,
                 currentCost
@@ -414,7 +437,7 @@ export default function CostMatrixPage() {
                 statusColor: '#D97706',
                 statusBg: '#FFFBEB',
                 sourceLabel: signalSource === 'COMPRAS' ? 'Orden Compra' : 'Carga Manual',
-                signalDateFormatted: format(latestSignalDate, 'yyyy-MM-dd'),
+                signalDateFormatted: formattedDate,
                 isExpired: false,
                 isDueSoon: true,
                 currentCost
@@ -427,7 +450,7 @@ export default function CostMatrixPage() {
                 statusColor: '#DC2626',
                 statusBg: '#FEF2F2',
                 sourceLabel: signalSource === 'COMPRAS' ? 'Orden Compra' : 'Carga Manual',
-                signalDateFormatted: format(latestSignalDate, 'yyyy-MM-dd'),
+                signalDateFormatted: formattedDate,
                 isExpired: true,
                 isDueSoon: false,
                 currentCost
@@ -506,7 +529,7 @@ export default function CostMatrixPage() {
                 'Costo Sugerido IA': Math.round(smart),
                 'Costo Manual': manual ? Math.round(manual) : 'N/A',
                 'Última Compra': hist[0] ? Math.round(hist[0].normalized_price) : 0,
-                'Fecha Última Compra': hist[0] ? format(new Date(hist[0].created_at), 'yyyy-MM-dd') : 'N/A',
+                'Fecha Última Compra': hist[0]?.created_at ? safeFormatDate(hist[0].created_at, 'yyyy-MM-dd', 'N/A') : 'N/A',
                 'Días Antigüedad Costo': lifecycle.daysOld === 999 ? 'N/A' : lifecycle.daysOld,
                 'Estado Ciclo de Vida': lifecycle.statusLabel,
                 'Origen Señal': lifecycle.sourceLabel
@@ -516,7 +539,7 @@ export default function CostMatrixPage() {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Matriz de Costos");
-        XLSX.writeFile(wb, `Frufresco_CostMatrix_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+        XLSX.writeFile(wb, `Frufresco_CostMatrix_${safeFormatDate(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
     // Plantilla 1: Catálogo Completo
@@ -542,7 +565,7 @@ export default function CostMatrixPage() {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Catalogo_Completo");
-        XLSX.writeFile(wb, `Plantilla_Costos_Completa_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+        XLSX.writeFile(wb, `Plantilla_Costos_Completa_${safeFormatDate(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
     // Plantilla 2: Costos Vencidos / Por Vencer (Foco Lean Kanban)
@@ -572,7 +595,7 @@ export default function CostMatrixPage() {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Costos_Vencidos_Por_Vencer");
-        XLSX.writeFile(wb, `Plantilla_Costos_Vencidos_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+        XLSX.writeFile(wb, `Plantilla_Costos_Vencidos_${safeFormatDate(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
     const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -812,7 +835,10 @@ export default function CostMatrixPage() {
         if (hist.length < 5) return 'neutral';
         
         const currentMonth = new Date().getMonth();
-        const sameMonthHistory = hist.filter(h => new Date(h.created_at).getMonth() === currentMonth);
+        const sameMonthHistory = hist.filter(h => {
+            const d = safeGetValidDate(h.created_at);
+            return d ? d.getMonth() === currentMonth : false;
+        });
         
         if (sameMonthHistory.length > 1) {
             const avgHist = sameMonthHistory.reduce((a, b) => a + b.normalized_price, 0) / sameMonthHistory.length;
@@ -1662,7 +1688,7 @@ export default function CostMatrixPage() {
                                                                                 )}
                                                                             </div>
                                                                             <div style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: 'bold' }}>
-                                                                                {format(new Date(purchase ? purchase.created_at : mOverride.updated_at), 'dd MMM', { locale: es })}
+                                                                                {safeFormatDate(purchase?.created_at || mOverride?.updated_at || mOverride?.created_at, 'dd MMM', '—')}
                                                                             </div>
                                                                         </div>
                                                                     ) : (
