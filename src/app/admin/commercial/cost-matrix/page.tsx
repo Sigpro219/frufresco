@@ -28,7 +28,13 @@ import {
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    Minus
+    Minus,
+    Award,
+    Leaf,
+    Sparkles,
+    Tag,
+    Sun,
+    Info
 } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
@@ -658,6 +664,24 @@ export default function CostMatrixPage() {
         }
 
         return (latest.normalized_price * alpha) + (previous.normalized_price * (1 - alpha));
+    };
+
+    const getHarvestStatus = (productId: string) => {
+        const hist = purchaseHistory[productId] || [];
+        if (hist.length < 4) return 'neutral';
+        
+        const currentMonth = new Date().getMonth();
+        const sameMonthHistory = hist.filter(h => {
+            const d = safeGetValidDate(h.created_at);
+            return d ? d.getMonth() === currentMonth : false;
+        });
+        
+        if (sameMonthHistory.length > 1) {
+            const avgHist = sameMonthHistory.reduce((a, b) => a + b.normalized_price, 0) / sameMonthHistory.length;
+            if (hist[0].normalized_price < avgHist * 0.9) return 'harvest';
+            if (hist[0].normalized_price > avgHist * 1.1) return 'risk';
+        }
+        return 'neutral';
     };
 
     const getProductCostLifecycle = (productId: string) => {
@@ -1751,8 +1775,28 @@ export default function CostMatrixPage() {
                                                         boxShadow: '2px 0 5px -2px rgba(0,0,0,0.03)',
                                                         borderBottom: `1px solid ${THEME.colors.border}`
                                                     }}>
-                                                        <div style={{ fontWeight: '800', fontSize: '0.88rem', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
-                                                            {p.name}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ fontWeight: '800', fontSize: '0.88rem', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
+                                                                {p.name}
+                                                            </span>
+                                                            {(() => {
+                                                                const harvestStatus = getHarvestStatus(p.id);
+                                                                if (harvestStatus === 'harvest') {
+                                                                    return (
+                                                                        <span title="Temporada de Cosecha: Abundancia estacional y precios favorables">
+                                                                            <Leaf size={14} color="#10B981" />
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                if (harvestStatus === 'risk') {
+                                                                    return (
+                                                                        <span title="Alerta de Escasez: Históricamente los precios suben este mes">
+                                                                            <ShieldAlert size={14} color="#EF4444" />
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })()}
                                                         </div>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
                                                             {p.accounting_id && (
@@ -1774,45 +1818,79 @@ export default function CostMatrixPage() {
                                                                 alignItems: 'center',
                                                                 gap: '3px'
                                                             }}>
-                                                                <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: lifecycle.statusColor }} />
+                                                                {lifecycle.status === 'VIGENTE' && <CheckCircle2 size={10} color={lifecycle.statusColor} />}
+                                                                {lifecycle.status === 'POR_VENCER' && <Clock size={10} color={lifecycle.statusColor} />}
+                                                                {(lifecycle.status === 'VENCIDO' || lifecycle.status === 'SIN_REFERENCIA') && <AlertTriangle size={10} color={lifecycle.statusColor} />}
                                                                 {lifecycle.statusLabel}
                                                             </span>
                                                         </div>
                                                     </td>
 
                                                     {/* Purchase History Columns 1 to 8 */}
-                                                    {[0, 1, 2, 3, 4, 5, 6, 7].map((colIdx) => {
-                                                        const purchase = hist[colIdx];
-                                                        const price = purchase ? Math.round(purchase.normalized_price) : null;
-                                                        const dateStr = purchase?.created_at ? safeFormatDate(purchase.created_at, 'dd MMM', '') : '';
+                                                    {(() => {
+                                                        const validPrices = hist.map(h => h.normalized_price).filter(priceVal => priceVal > 0);
+                                                        const minPrice = validPrices.length > 1 ? Math.min(...validPrices) : null;
 
-                                                        return (
-                                                            <td key={colIdx} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                                {price ? (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                                        <span style={{ 
-                                                                            fontSize: '0.82rem', 
-                                                                            fontWeight: '700', 
-                                                                            fontFamily: 'monospace', 
-                                                                            color: colIdx === 0 ? THEME.colors.primary : THEME.colors.textMain,
-                                                                            backgroundColor: colIdx === 0 ? '#ECFDF5' : 'transparent',
-                                                                            padding: colIdx === 0 ? '2px 6px' : '0',
-                                                                            borderRadius: '6px'
-                                                                        }}>
-                                                                            ${formatNumber(price)}
-                                                                        </span>
-                                                                        {dateStr && (
-                                                                            <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: '500' }}>
-                                                                                {dateStr}
+                                                        return [0, 1, 2, 3, 4, 5, 6, 7].map((colIdx) => {
+                                                            const purchase = hist[colIdx];
+                                                            const price = purchase ? Math.round(purchase.normalized_price) : null;
+                                                            const dateStr = purchase?.created_at ? safeFormatDate(purchase.created_at, 'dd MMM', '') : '';
+                                                            const isBestPrice = purchase && minPrice !== null && Math.abs(purchase.normalized_price - minPrice) < 0.01;
+
+                                                            return (
+                                                                <td key={colIdx} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                                    {price ? (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                                            <span style={{ 
+                                                                                fontSize: '0.82rem', 
+                                                                                fontWeight: '700', 
+                                                                                fontFamily: 'monospace', 
+                                                                                color: isBestPrice ? '#15803D' : (colIdx === 0 ? THEME.colors.primary : THEME.colors.textMain),
+                                                                                backgroundColor: isBestPrice ? '#DCFCE7' : (colIdx === 0 ? '#ECFDF5' : 'transparent'),
+                                                                                border: isBestPrice ? '1px solid #86EFAC' : (colIdx === 0 ? '1px solid #A7F3D0' : 'none'),
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '6px',
+                                                                                position: 'relative',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                boxShadow: isBestPrice ? '0 1px 3px rgba(34, 197, 94, 0.15)' : 'none'
+                                                                            }}>
+                                                                                ${formatNumber(price)}
+                                                                                {isBestPrice && (
+                                                                                    <span 
+                                                                                        style={{ 
+                                                                                            position: 'absolute', 
+                                                                                            top: '-7px', 
+                                                                                            right: '-7px', 
+                                                                                            backgroundColor: '#FEF08A', 
+                                                                                            border: '1px solid #FACC15', 
+                                                                                            borderRadius: '50%', 
+                                                                                            width: '16px', 
+                                                                                            height: '16px', 
+                                                                                            display: 'flex', 
+                                                                                            alignItems: 'center', 
+                                                                                            justifyContent: 'center', 
+                                                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.12)' 
+                                                                                        }} 
+                                                                                        title="Mejor precio histórico registrado en compras"
+                                                                                    >
+                                                                                        <Award size={10} color="#854D0E" strokeWidth={2.8} />
+                                                                                    </span>
+                                                                                )}
                                                                             </span>
-                                                                        )}
-                                                                    </div>
-                                                                ) : (
-                                                                    <span style={{ color: '#CBD5E1', fontSize: '0.85rem' }}>—</span>
-                                                                )}
-                                                            </td>
-                                                        );
-                                                    })}
+                                                                            {dateStr && (
+                                                                                <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: '500' }}>
+                                                                                    {dateStr}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span style={{ color: '#CBD5E1', fontSize: '0.85rem' }}>—</span>
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        });
+                                                    })()}
 
                                                     {/* Editable Base Cost Cell */}
                                                     <td style={{ padding: '0.65rem 0.8rem', backgroundColor: '#F8FAFC', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
