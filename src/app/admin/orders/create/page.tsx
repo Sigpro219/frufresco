@@ -1149,6 +1149,17 @@ function CreateOrderContent() {
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
         const baseQty = parseFloat((qty * resolvedFactor).toFixed(3));
 
+        // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
+        const isWeightProd = (product.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+        const minAllowedKg = isWeightProd 
+            ? (product.weight_kg !== undefined && product.weight_kg !== null ? Number(product.weight_kg) : 0.1)
+            : null;
+
+        if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
+            showToast(`La cantidad mínima de venta para ${product.name} es de ${formatNumber(minAllowedKg, 2)} kg`, 'error');
+            return;
+        }
+
         if (!bypassDuplicateCheck) {
             const cleanLabel = (finalLabel || '').trim().toLowerCase();
             const cleanUnit = (resolvedUnit || '').trim().toLowerCase();
@@ -1432,11 +1443,43 @@ function CreateOrderContent() {
     const confirmModalAdd = () => {
         if (!selectedProductForModal) return;
         const optionValues = Object.values(selectedOptions).filter(v => v);
-        const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
+        const variantLabel = optionValues.length > 0 ? optionValues.map(v => String(v).includes('|') ? `${String(v).split('|')[0]} (${String(v).split('|')[1]} gr)` : v).join(', ') : undefined;
         const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
-        const resolvedFactor = modalFactor || 1;
-        const resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
+        
+        let resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
+        let resolvedFactor = modalFactor || (selectedProductForModal.weight_kg ? Number(selectedProductForModal.weight_kg) : 1);
+
+        Object.entries(selectedOptions).forEach(([optName, optVal]) => {
+            if (optName.toLowerCase().includes('presentaci') && optVal) {
+                const strVal = String(optVal);
+                if (strVal.includes('|')) {
+                    const [base, gr] = strVal.split('|');
+                    resolvedUnit = `${base} de ${gr} gr`;
+                    const pw = parseFloat(gr);
+                    if (!isNaN(pw) && pw > 0) resolvedFactor = pw / 1000;
+                } else {
+                    resolvedUnit = strVal;
+                }
+            }
+        });
+
         const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(3));
+
+        // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
+        const isWeightProd = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+        const minAllowedKg = isWeightProd 
+            ? (selectedProductForModal.weight_kg !== undefined && selectedProductForModal.weight_kg !== null ? Number(selectedProductForModal.weight_kg) : 0.1)
+            : null;
+
+        if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
+            showToast(`La cantidad mínima de venta para este producto es de ${formatNumber(minAllowedKg, 2)} kg`, 'error');
+            const qtyInput = document.getElementById('modal-qty-input');
+            if (qtyInput) {
+                (qtyInput as HTMLElement).focus();
+                (qtyInput as HTMLInputElement).select();
+            }
+            return;
+        }
 
         if (editingStagedItemId !== null) {
             const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
@@ -1500,8 +1543,8 @@ function CreateOrderContent() {
                 qtyNum, 
                 variantLabel, 
                 selectedOptions,
-                modalUnit,
-                modalFactor
+                resolvedUnit,
+                resolvedFactor
             );
             closeProductModal();
         }
@@ -4305,8 +4348,8 @@ function CreateOrderContent() {
                             return !clean.includes('libra') && !clean.includes('pound') && !clean.includes('unidad web');
                         });
                         const defaultVal = selectedProductForModal.unit_of_measure || 'Kg';
-                        if (values.length === 0 || !values.some((v: string) => v.toLowerCase() === defaultVal.toLowerCase() || v.toLowerCase().startsWith(defaultVal.toLowerCase() + '|'))) {
-                            values = [defaultVal, ...values];
+                        if (values.length === 0) {
+                            values = [defaultVal];
                         }
                     }
                     
@@ -4360,6 +4403,35 @@ function CreateOrderContent() {
                         }
                     }
                 };
+
+                // Determine dynamic unit label and factor from presentation / selectedOptions
+                let dynamicUnitLabel = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
+                let dynamicUnitFactor = modalFactor || (selectedProductForModal.weight_kg ? Number(selectedProductForModal.weight_kg) : 1);
+
+                Object.entries(selectedOptions).forEach(([optName, optVal]) => {
+                    if (optName.toLowerCase().includes('presentaci') && optVal) {
+                        const strVal = String(optVal);
+                        if (strVal.includes('|')) {
+                            const [base, gr] = strVal.split('|');
+                            dynamicUnitLabel = `${base} de ${gr} gr`;
+                        } else {
+                            dynamicUnitLabel = strVal;
+                        }
+                        const pw = getParsedWeight(strVal);
+                        if (pw !== null) {
+                            dynamicUnitFactor = pw;
+                        }
+                    }
+                });
+
+                const parsedModalQty = parseFloat(String(modalQuantity).replace(',', '.')) || 0;
+                const calculatedTotalKg = parsedModalQty * dynamicUnitFactor;
+
+                const isWeightProduct = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+                const minSaleLimitKg = isWeightProduct 
+                    ? (selectedProductForModal.weight_kg !== undefined && selectedProductForModal.weight_kg !== null ? Number(selectedProductForModal.weight_kg) : 0.1) 
+                    : null;
+                const hasSpecialMinSale = minSaleLimitKg !== null && minSaleLimitKg > 0.1;
 
                 return (
                     <div style={{
@@ -4434,27 +4506,65 @@ function CreateOrderContent() {
                                 )}
                             </div>
 
-                            {/* CLIENT CUSTOM REQUIREMENT INFO BOX */}
-                            {exc && (
+                            {/* CLIENT CUSTOM REQUIREMENT & MIN SALE BANNER */}
+                            {(exc || hasSpecialMinSale) && (
                                 <div style={{
                                     backgroundColor: '#FEF3C7',
                                     border: '1px solid #FCD34D',
-                                    borderRadius: '12px',
-                                    padding: '0.8rem 1.2rem',
-                                    margin: '0.5rem 0 1rem 0',
+                                    borderRadius: '14px',
+                                    padding: '0.85rem 1.3rem',
+                                    margin: '0.5rem 0 1.2rem 0',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '1.2rem',
+                                    flexWrap: 'wrap',
                                     textAlign: 'left',
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.82rem',
                                     color: '#92400E',
                                     lineHeight: '1.4'
                                 }}>
-                                    <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
-                                        📌 Requerimientos del Cliente:
+                                    {/* Left: Requerimientos del cliente */}
+                                    <div style={{ flex: '1 1 auto', minWidth: '220px' }}>
+                                        {exc ? (
+                                            <>
+                                                <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                                                    📌 Requerimientos del Cliente:
+                                                </div>
+                                                {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
+                                                    <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
+                                                )}
+                                                {exc.picking_note && (
+                                                    <div><strong>Nota del cliente:</strong> {exc.picking_note}</div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div style={{ fontWeight: '800', color: '#92400E', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Info size={16} style={{ color: '#D97706' }} />
+                                                <span>Restricción Logística y Comercial</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
-                                        <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
-                                    )}
-                                    {exc.picking_note && (
-                                        <div><strong>Nota del cliente:</strong> {exc.picking_note}</div>
+
+                                    {/* Right: Cantidad Mínima Prominente */}
+                                    {hasSpecialMinSale && (
+                                        <div style={{
+                                            backgroundColor: '#FFFBEB',
+                                            color: '#92400E',
+                                            border: '1.5px solid #F59E0B',
+                                            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.15)',
+                                            padding: '8px 16px',
+                                            borderRadius: '10px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            marginLeft: 'auto'
+                                        }}>
+                                            <Info size={18} style={{ color: '#D97706', flexShrink: 0 }} />
+                                            <span>Cantidad mínima: <strong style={{ color: '#78350F', fontSize: '0.95rem' }}>{formatNumber(minSaleLimitKg, 2)} kg</strong></span>
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -4565,18 +4675,42 @@ function CreateOrderContent() {
                                         }}
                                     >
                                         <option value="">Seleccionar {opt.name}...</option>
-                                        {opt.values?.map((val: string) => (
-                                            <option key={val} value={val}>{val}</option>
-                                        ))}
+                                        {opt.values?.map((val: string) => {
+                                            const displayVal = val.includes('|') 
+                                                ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` 
+                                                : val;
+                                            return (
+                                                <option key={val} value={val}>{displayVal}</option>
+                                            );
+                                        })}
                                     </select>
                                 </div>
                             ))}
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Cantidad
-                                    </label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                            Cantidad
+                                        </label>
+                                        {hasSpecialMinSale && (
+                                            <span style={{
+                                                backgroundColor: '#FFFBEB',
+                                                color: '#B45309',
+                                                border: '1px solid #FDE68A',
+                                                padding: '2px 8px',
+                                                borderRadius: '12px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '800',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                <Info size={12} style={{ color: '#D97706' }} />
+                                                Mín. {formatNumber(minSaleLimitKg, 2)} kg
+                                            </span>
+                                        )}
+                                    </div>
                                     <input
                                         id="modal-qty-input"
                                         autoComplete="off"
@@ -4627,9 +4761,29 @@ function CreateOrderContent() {
                                 </div>
 
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Unidad de Medida
-                                    </label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                            Unidad de Medida
+                                        </label>
+                                        {parsedModalQty > 0 && dynamicUnitFactor > 0 && (
+                                            <span style={{
+                                                backgroundColor: '#ECFDF5',
+                                                color: '#065F46',
+                                                border: '1px solid #A7F3D0',
+                                                padding: '2px 8px',
+                                                borderRadius: '12px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                            }}>
+                                                <Scale size={13} style={{ color: '#059669' }} />
+                                                <span>Total: {formatNumber(calculatedTotalKg, 2)} kg</span>
+                                            </span>
+                                        )}
+                                    </div>
                                     {optionsList.length > 1 ? (
                                         <select
                                             id="modal-unit-select"
@@ -4707,7 +4861,7 @@ function CreateOrderContent() {
                                         <input
                                             readOnly
                                             type="text"
-                                            value={selectedProductForModal.unit_of_measure}
+                                            value={dynamicUnitLabel}
                                             style={{
                                                 width: '100%',
                                                 padding: '0.7rem 0.8rem',
@@ -4716,7 +4870,7 @@ function CreateOrderContent() {
                                                 fontWeight: '700',
                                                 fontSize: '1.1rem',
                                                 backgroundColor: '#F3F4F6',
-                                                color: '#4B5563',
+                                                color: '#1E293B',
                                                 textAlign: 'center',
                                                 outline: 'none'
                                             }}

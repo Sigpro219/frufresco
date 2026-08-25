@@ -422,52 +422,91 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                             const matchedAttribute = masterAttributes.find(ma => ma.name === opt.name);
                                             if (!matchedAttribute || !matchedAttribute.suggested_values || matchedAttribute.suggested_values.length === 0) return null;
 
+                                            const customValues = opt.values.filter((v: string) => !matchedAttribute.suggested_values.includes(v));
+
                                             return (
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                                                    {matchedAttribute.suggested_values.slice().sort((a: string, b: string) => {
-                                                        const cleanA = a.includes('|') ? a.split('|')[0] : a;
-                                                        const cleanB = b.includes('|') ? b.split('|')[0] : b;
-                                                        return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
-                                                    }).map((val: string) => {
-                                                        const isChecked = opt.values.includes(val);
-                                                        return (
-                                                            <label 
-                                                                key={val} 
-                                                                style={{ 
-                                                                    display: 'inline-flex', 
-                                                                    alignItems: 'center', 
-                                                                    gap: '6px', 
-                                                                    backgroundColor: isChecked ? '#EFF6FF' : '#F3F4F6', 
-                                                                    color: isChecked ? '#1E40AF' : '#4B5563',
-                                                                    border: isChecked ? '1px solid #BFDBFE' : '1px solid #E5E7EB',
-                                                                    padding: '4px 10px', 
-                                                                    borderRadius: '20px', 
-                                                                    cursor: 'pointer', 
-                                                                    fontSize: '0.78rem',
-                                                                    fontWeight: '600',
-                                                                    transition: 'all 0.15s',
-                                                                    userSelect: 'none'
-                                                                }}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={isChecked}
-                                                                    onChange={(e) => {
-                                                                        const checked = e.target.checked;
-                                                                        let newVals;
-                                                                        if (checked) {
-                                                                            newVals = [...opt.values, val];
-                                                                        } else {
-                                                                            newVals = opt.values.filter(v => v !== val);
-                                                                        }
-                                                                        updateOption(idx, opt.name, newVals.join(', '));
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                                                    {customValues.length > 0 && (
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#B45309' }}>Personalizados:</span>
+                                                            {customValues.map((cVal: string) => (
+                                                                <span 
+                                                                    key={cVal}
+                                                                    style={{
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '6px',
+                                                                        backgroundColor: '#FEF3C7',
+                                                                        color: '#92400E',
+                                                                        border: '1px solid #FCD34D',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '16px',
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: '700'
                                                                     }}
-                                                                    style={{ cursor: 'pointer' }}
-                                                                />
-                                                                {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
-                                                            </label>
-                                                        );
-                                                    })}
+                                                                >
+                                                                    <span>{cVal.includes('|') ? `${cVal.split('|')[0]} (${cVal.split('|')[1]} gr)` : cVal}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const newVals = opt.values.filter((v: string) => v !== cVal);
+                                                                            updateOption(idx, opt.name, newVals.join(', '));
+                                                                        }}
+                                                                        style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontWeight: '900', padding: 0, fontSize: '0.85rem' }}
+                                                                        title="Eliminar este valor"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                        {matchedAttribute.suggested_values.slice().sort((a: string, b: string) => {
+                                                            const cleanA = a.includes('|') ? a.split('|')[0] : a;
+                                                            const cleanB = b.includes('|') ? b.split('|')[0] : b;
+                                                            return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
+                                                        }).map((val: string) => {
+                                                            const isChecked = opt.values.includes(val);
+                                                            return (
+                                                                <label 
+                                                                    key={val} 
+                                                                    style={{ 
+                                                                        display: 'inline-flex', 
+                                                                        alignItems: 'center', 
+                                                                        gap: '6px', 
+                                                                        backgroundColor: isChecked ? '#EFF6FF' : '#F3F4F6', 
+                                                                        color: isChecked ? '#1E40AF' : '#4B5563',
+                                                                        border: isChecked ? '1px solid #BFDBFE' : '1px solid #E5E7EB',
+                                                                        padding: '4px 10px', 
+                                                                        borderRadius: '20px', 
+                                                                        cursor: 'pointer', 
+                                                                        fontSize: '0.78rem',
+                                                                        fontWeight: '600',
+                                                                        transition: 'all 0.15s',
+                                                                        userSelect: 'none'
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={(e) => {
+                                                                            const checked = e.target.checked;
+                                                                            let newVals;
+                                                                            if (checked) {
+                                                                                newVals = [...opt.values, val];
+                                                                            } else {
+                                                                                newVals = opt.values.filter(v => v !== val);
+                                                                            }
+                                                                            updateOption(idx, opt.name, newVals.join(', '));
+                                                                        }}
+                                                                        style={{ cursor: 'pointer' }}
+                                                                    />
+                                                                    {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             );
                                         })()}

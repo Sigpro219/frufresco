@@ -55,21 +55,23 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const initialWeight = () => {
+        const u = (product.unit_of_measure || '').toLowerCase();
         if (product.weight_kg !== undefined && product.weight_kg !== null && !isNaN(Number(product.weight_kg))) {
             return Number(product.weight_kg);
+        }
+        if (u === 'kg' || u === 'kilo' || u === 'kilos') {
+            return 0.1;
         }
         const extracted = extractWeight(product.name);
         if (extracted !== null && extracted > 0) {
             return extracted / 1000;
         }
-        const u = (product.unit_of_measure || '').toLowerCase();
-        if (u === 'kg' || u === 'kilo' || u === 'kilos') return 1.0;
-        if (u === 'libra' || u === 'libras' || u === 'lb') return 0.5;
-        return 0.5;
+        return 1.0;
     };
 
     const [formData, setFormData] = useState<Product>({ 
         ...product,
+        unit_of_measure: product.unit_of_measure?.toLowerCase() === 'unidad' ? 'Unidad' : 'Kg',
         weight_kg: initialWeight(),
         iva_rate: product.iva_rate ?? 19,
         utility_deviation_pct: product.utility_deviation_pct ?? 0,
@@ -443,7 +445,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 name: formData.name,
                 sku: formData.sku,
                 category: formData.category,
-                unit_of_measure: formData.unit_of_measure,
+                unit_of_measure: formData.unit_of_measure?.toLowerCase() === 'unidad' ? 'Unidad' : 'Kg',
                 description: formData.description,
                 min_inventory_level: formData.min_inventory_level,
                 is_active: formData.is_active,
@@ -470,7 +472,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 }, {}),
                 variants: variants,
                 iva_rate: formData.iva_rate,
-                weight_kg: formData.weight_kg !== undefined && formData.weight_kg !== null ? Number(formData.weight_kg) : 0.5,
+                weight_kg: formData.weight_kg !== undefined && formData.weight_kg !== null ? Number(formData.weight_kg) : (formData.unit_of_measure?.toLowerCase() === 'unidad' ? 1.0 : 0.1),
                 display_name: formData.display_name,
                 web_unit: formData.web_unit,
                 web_conversion_factor: formData.web_conversion_factor,
@@ -956,44 +958,83 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '0.8rem' }}>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Unidad de Medida</label>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>
+                                Unidad de Medida Compras
+                            </label>
                             <select
-                                value={formData.unit_of_measure}
+                                value={formData.unit_of_measure?.toLowerCase() === 'unidad' ? 'Unidad' : 'Kg'}
                                 onChange={(e) => {
                                     const newUnit = e.target.value;
                                     let newWeight = formData.weight_kg;
-                                    if (newUnit.toLowerCase() === 'kg') newWeight = 1.0;
-                                    else if (newUnit.toLowerCase() === 'libra') newWeight = 0.5;
+                                    if (newUnit === 'Kg') {
+                                        newWeight = (formData.weight_kg !== undefined && formData.weight_kg > 0 && formData.weight_kg <= 10) ? formData.weight_kg : 0.1;
+                                    } else {
+                                        newWeight = (formData.weight_kg !== undefined && formData.weight_kg > 0) ? formData.weight_kg : 1.0;
+                                    }
                                     setFormData({ ...formData, unit_of_measure: newUnit, weight_kg: newWeight });
                                 }}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '1rem', cursor: 'pointer' }}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '1rem', cursor: 'pointer', fontWeight: '700', color: '#111827' }}
                             >
-                                {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                <option value="Kg">Kg (Por Peso / Granel)</option>
+                                <option value="Unidad">Unidad (Discreto / Empacado)</option>
                             </select>
                         </div>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', marginBottom: '4px' }}>Peso Log. (kg)</label>
-                            <input
-                                type="number"
-                                step="0.001"
-                                min="0.001"
-                                placeholder="Ej: 0.050"
-                                value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : ''}
-                                onChange={(e) => {
-                                    const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
-                                    setFormData({ ...formData, weight_kg: val });
-                                }}
-                                style={{ 
-                                    width: '100%', 
-                                    padding: '0.8rem', 
-                                    borderRadius: '8px', 
-                                    border: '2px solid #93C5FD', 
-                                    fontSize: '1rem', 
-                                    fontWeight: '800',
-                                    color: '#1E40AF',
-                                    backgroundColor: '#EFF6FF'
-                                }}
-                            />
+                            {formData.unit_of_measure?.toLowerCase() === 'unidad' ? (
+                                <>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', marginBottom: '4px' }} title="Peso físico de 1 unidad para logística y cubicaje de camiones">
+                                        Peso Log. (kg/und)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.001"
+                                        min="0.001"
+                                        placeholder="Ej: 0.050"
+                                        value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                            setFormData({ ...formData, weight_kg: val });
+                                        }}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.8rem', 
+                                            borderRadius: '8px', 
+                                            border: '2px solid #93C5FD', 
+                                            fontSize: '1rem', 
+                                            fontWeight: '800',
+                                            color: '#1E40AF',
+                                            backgroundColor: '#EFF6FF'
+                                        }}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#D97706', marginBottom: '4px' }} title="Cantidad mínima obligatoria en pedidos (default: 0.1 kg = 100g)">
+                                        Cant. Mínima Venta (kg)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0.01"
+                                        placeholder="0.1"
+                                        value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : 0.1}
+                                        onChange={(e) => {
+                                            const val = e.target.value === '' ? 0.1 : parseFloat(e.target.value);
+                                            setFormData({ ...formData, weight_kg: val });
+                                        }}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.8rem', 
+                                            borderRadius: '8px', 
+                                            border: '2px solid #FCD34D', 
+                                            fontSize: '1rem', 
+                                            fontWeight: '800',
+                                            color: '#B45309',
+                                            backgroundColor: '#FFFBEB'
+                                        }}
+                                    />
+                                </>
+                            )}
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>IVA (%)</label>
@@ -1448,9 +1489,48 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 VALORES POSIBLES
                                             </label>
                                             
-                                            {masterAttributes.some(a => a.name === opt.name) ? (
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
-                                                    {sortSuggestedValues(masterAttributes.find(a => a.name === opt.name)?.values || []).map(val => {
+                                            {masterAttributes.some(a => a.name === opt.name) ? (() => {
+                                                const masterAttr = masterAttributes.find(a => a.name === opt.name);
+                                                const customVals = masterAttr ? opt.values.filter((v: string) => !masterAttr.values.includes(v)) : [];
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {customVals.length > 0 && (
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', backgroundColor: '#FFFBEB', padding: '8px 12px', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                                                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#B45309' }}>Valores Personalizados:</span>
+                                                                {customVals.map((cVal: string) => (
+                                                                    <span 
+                                                                        key={cVal}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '6px',
+                                                                            backgroundColor: '#FEF3C7',
+                                                                            color: '#92400E',
+                                                                            border: '1px solid #FCD34D',
+                                                                            padding: '3px 8px',
+                                                                            borderRadius: '16px',
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: '700'
+                                                                        }}
+                                                                    >
+                                                                        <span>{cVal.includes('|') ? `${cVal.split('|')[0]} (${cVal.split('|')[1]} gr)` : cVal}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const newVals = opt.values.filter((v: string) => v !== cVal);
+                                                                                updateOptionValues(idx, newVals);
+                                                                            }}
+                                                                            style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontWeight: '900', padding: 0, fontSize: '0.85rem' }}
+                                                                            title="Eliminar este valor"
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
+                                                            {sortSuggestedValues(masterAttr?.values || []).map(val => {
                                                         const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
                                                         const webUnitName = formData.web_unit || 'Libra';
                                                         const webFactorKg = formData.web_conversion_factor ?? (formData.unit_of_measure?.toLowerCase() === 'kg' ? 0.5 : 1);
@@ -1493,8 +1573,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                             </label>
                                                         );
                                                     })}
-                                                </div>
-                                            ) : (
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })() : (
                                                 <div style={{ fontSize: '0.85rem', color: '#94A3B8', fontWeight: '600', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #D1D5DB', textAlign: 'center' }}>
                                                     Selecciona una variable de la lista para activar las opciones.
                                                 </div>
