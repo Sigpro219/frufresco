@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Fragment, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2, RefreshCw, FileSpreadsheet, Download, AlertTriangle, FileText } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
@@ -337,9 +337,101 @@ export default function CostMatrixPage() {
         return (latest.normalized_price * alpha) + (previous.normalized_price * (1 - alpha));
     };
 
+    const getProductCostLifecycle = (productId: string) => {
+        const hist = purchaseHistory[productId] || [];
+        const manual = manualOverrides[productId];
+        
+        let latestSignalDate: Date | null = null;
+        let signalSource: 'COMPRAS' | 'MANUAL' | 'SIN_SEÑAL' = 'SIN_SEÑAL';
+        let currentCost: number | null = null;
+
+        if (hist[0] && manual?.updated_at) {
+            const histDate = new Date(hist[0].created_at);
+            const manualDate = new Date(manual.updated_at);
+            if (histDate >= manualDate) {
+                latestSignalDate = histDate;
+                signalSource = 'COMPRAS';
+                currentCost = hist[0].normalized_price;
+            } else {
+                latestSignalDate = manualDate;
+                signalSource = 'MANUAL';
+                currentCost = manual.manual_cost;
+            }
+        } else if (hist[0]) {
+            latestSignalDate = new Date(hist[0].created_at);
+            signalSource = 'COMPRAS';
+            currentCost = hist[0].normalized_price;
+        } else if (manual?.updated_at) {
+            latestSignalDate = new Date(manual.updated_at);
+            signalSource = 'MANUAL';
+            currentCost = manual.manual_cost;
+        } else if (manual?.manual_cost) {
+            currentCost = manual.manual_cost;
+        }
+
+        if (!latestSignalDate || currentCost === null || currentCost <= 0) {
+            return {
+                daysOld: 999,
+                status: 'SIN_REFERENCIA' as const,
+                statusLabel: '❌ Sin Referencia',
+                statusColor: '#DC2626',
+                statusBg: '#FEF2F2',
+                sourceLabel: 'Sin Registro',
+                signalDateFormatted: 'N/A',
+                isExpired: true,
+                isDueSoon: false,
+                currentCost: currentCost || 0
+            };
+        }
+
+        const daysOld = differenceInDays(new Date(), latestSignalDate);
+        
+        if (daysOld <= 7) {
+            return {
+                daysOld,
+                status: 'VIGENTE' as const,
+                statusLabel: `🟢 Vigente (${daysOld}d)`,
+                statusColor: '#059669',
+                statusBg: '#ECFDF5',
+                sourceLabel: signalSource === 'COMPRAS' ? 'Orden Compra' : 'Carga Manual',
+                signalDateFormatted: format(latestSignalDate, 'yyyy-MM-dd'),
+                isExpired: false,
+                isDueSoon: false,
+                currentCost
+            };
+        } else if (daysOld <= 14) {
+            return {
+                daysOld,
+                status: 'POR_VENCER' as const,
+                statusLabel: `🟡 Por Vencer (${daysOld}d)`,
+                statusColor: '#D97706',
+                statusBg: '#FFFBEB',
+                sourceLabel: signalSource === 'COMPRAS' ? 'Orden Compra' : 'Carga Manual',
+                signalDateFormatted: format(latestSignalDate, 'yyyy-MM-dd'),
+                isExpired: false,
+                isDueSoon: true,
+                currentCost
+            };
+        } else {
+            return {
+                daysOld,
+                status: 'VENCIDO' as const,
+                statusLabel: `🔴 Vencido (${daysOld}d)`,
+                statusColor: '#DC2626',
+                statusBg: '#FEF2F2',
+                sourceLabel: signalSource === 'COMPRAS' ? 'Orden Compra' : 'Carga Manual',
+                signalDateFormatted: format(latestSignalDate, 'yyyy-MM-dd'),
+                isExpired: true,
+                isDueSoon: false,
+                currentCost
+            };
+        }
+    };
+
     const getCostCellState = (productId: string) => {
         const smart = calculateSmartCost(productId);
         const manual = manualOverrides[productId];
+        const lifecycle = getProductCostLifecycle(productId);
         
         if (!manual) {
             if (smart === 0) {
@@ -361,15 +453,12 @@ export default function CostMatrixPage() {
             }
         }
         
-        const daysSinceUpdate = differenceInDays(new Date(), new Date(manual.updated_at));
-        const isOutdated = daysSinceUpdate >= 15;
-        
-        if (isOutdated) {
+        if (lifecycle.isExpired) {
             return {
                 bg: '#FEF3C7',
                 text: '#92400E',
                 border: '1px solid #F59E0B',
-                badge: `⚠️ Desactualizado`,
+                badge: `⚠️ Desactualizado (+${lifecycle.daysOld}d)`,
                 labelColor: '#D97706'
             };
         }
@@ -389,7 +478,7 @@ export default function CostMatrixPage() {
             bg: '#E3F2FD',
             text: '#1565C0',
             border: '1px solid #64B5F6',
-            badge: '✍️ Manual Vigente',
+            badge: `✍️ Manual Vigente (${lifecycle.daysOld}d)`,
             labelColor: '#2196F3'
         };
     };
@@ -399,16 +488,21 @@ export default function CostMatrixPage() {
             const hist = purchaseHistory[p.id] || [];
             const smart = calculateSmartCost(p.id);
             const manual = manualOverrides[p.id]?.manual_cost;
+            const lifecycle = getProductCostLifecycle(p.id);
             
             return {
                 'accounting_id': p.accounting_id || '',
+                'SKU': p.sku || '',
                 'Producto': p.name,
                 'Categoría': CATEGORY_MAP[p.category] || p.category,
                 'Unidad': p.unit_of_measure,
                 'Costo Sugerido IA': Math.round(smart),
                 'Costo Manual': manual ? Math.round(manual) : 'N/A',
                 'Última Compra': hist[0] ? Math.round(hist[0].normalized_price) : 0,
-                'Fecha Última': hist[0] ? format(new Date(hist[0].created_at), 'yyyy-MM-dd') : 'N/A'
+                'Fecha Última Compra': hist[0] ? format(new Date(hist[0].created_at), 'yyyy-MM-dd') : 'N/A',
+                'Días Antigüedad Costo': lifecycle.daysOld === 999 ? 'N/A' : lifecycle.daysOld,
+                'Estado Ciclo de Vida': lifecycle.statusLabel,
+                'Origen Señal': lifecycle.sourceLabel
             };
         });
 
@@ -418,23 +512,60 @@ export default function CostMatrixPage() {
         XLSX.writeFile(wb, `Frufresco_CostMatrix_${format(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
-    const handleExportTemplate = () => {
+    // Plantilla 1: Catálogo Completo
+    const handleExportTemplateAll = () => {
         const data = products.map(p => {
             const currentManual = manualOverrides[p.id]?.manual_cost || 0;
+            const lifecycle = getProductCostLifecycle(p.id);
             return {
                 'accounting_id': p.accounting_id || '',
+                'SKU': p.sku || '',
                 'Producto': p.name || '',
+                'Categoría': CATEGORY_MAP[p.category] || p.category || '',
                 'Unidad': p.unit_of_measure || '',
-                'Costo Actual': currentManual ? Math.round(currentManual) : 0,
+                'Costo Actual': currentManual ? Math.round(currentManual) : (lifecycle.currentCost ? Math.round(lifecycle.currentCost) : 0),
                 'Nuevo Costo': '',
-                'Fecha Última Actualización': manualOverrides[p.id]?.updated_at ? format(new Date(manualOverrides[p.id].updated_at), 'yyyy-MM-dd') : 'Sin Registro'
+                'Días Antigüedad': lifecycle.daysOld === 999 ? 'N/A' : lifecycle.daysOld,
+                'Estado Ciclo de Vida': lifecycle.statusLabel,
+                'Origen Señal': lifecycle.sourceLabel,
+                'Fecha Señal': lifecycle.signalDateFormatted
             };
         });
 
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Plantilla de Costos");
-        XLSX.writeFile(wb, `Plantilla_Costos_Frufresco_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "Catalogo_Completo");
+        XLSX.writeFile(wb, `Plantilla_Costos_Completa_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    };
+
+    // Plantilla 2: Costos Vencidos / Por Vencer (Foco Lean Kanban)
+    const handleExportTemplateDue = () => {
+        const dueProducts = products.filter(p => {
+            const lifecycle = getProductCostLifecycle(p.id);
+            return lifecycle.isExpired || lifecycle.isDueSoon || lifecycle.status === 'SIN_REFERENCIA';
+        });
+
+        const data = dueProducts.map(p => {
+            const currentManual = manualOverrides[p.id]?.manual_cost || 0;
+            const lifecycle = getProductCostLifecycle(p.id);
+            return {
+                'accounting_id': p.accounting_id || '',
+                'SKU': p.sku || '',
+                'Producto': p.name || '',
+                'Categoría': CATEGORY_MAP[p.category] || p.category || '',
+                'Unidad': p.unit_of_measure || '',
+                'Costo Actual': currentManual ? Math.round(currentManual) : (lifecycle.currentCost ? Math.round(lifecycle.currentCost) : 0),
+                'Nuevo Costo': '',
+                'Días Antigüedad': lifecycle.daysOld === 999 ? 'Sin Referencia' : lifecycle.daysOld,
+                'Estado Ciclo de Vida': lifecycle.statusLabel,
+                'Acción Requerida': lifecycle.status === 'SIN_REFERENCIA' ? 'Cotizar Urgente' : (lifecycle.isExpired ? 'Recotizar Inmediato' : 'Actualizar Próximo')
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Costos_Vencidos_Por_Vencer");
+        XLSX.writeFile(wb, `Plantilla_Costos_Vencidos_${format(new Date(), 'yyyyMMdd')}.xlsx`);
     };
 
     const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -463,40 +594,106 @@ export default function CostMatrixPage() {
                     const ws = wb.Sheets[wsname];
                     const rawData = XLSX.utils.sheet_to_json(ws);
                     
-                    if (rawData.length === 0) {
-                        throw new Error('El archivo está vacío.');
+                    if (!rawData || rawData.length === 0) {
+                        throw new Error('El archivo Excel está vacío o no contiene filas de datos.');
                     }
                     
-                    const productMap: Record<number, Product> = {};
+                    // Lookups rápidos por accounting_id, SKU y nombre normalizado
+                    const byAccId: Record<number, Product> = {};
+                    const bySku: Record<string, Product> = {};
+                    const byName: Record<string, Product> = {};
+
                     products.forEach(p => {
-                        if (p.accounting_id !== undefined && p.accounting_id !== null) {
-                            productMap[p.accounting_id] = p;
+                        if (p.accounting_id !== undefined && p.accounting_id !== null && !isNaN(Number(p.accounting_id))) {
+                            byAccId[Number(p.accounting_id)] = p;
+                        }
+                        if (p.sku) {
+                            bySku[p.sku.trim().toUpperCase()] = p;
+                        }
+                        if (p.name) {
+                            byName[p.name.trim().toLowerCase()] = p;
                         }
                     });
-                    
+
+                    // Helper para sanitizar y extraer números reales de Excel ("$ 15.000", "15.000", "15000,50", " 15000 ")
+                    const parseCleanCost = (raw: any): number | null => {
+                        if (raw === undefined || raw === null) return null;
+                        if (typeof raw === 'number') {
+                            return isNaN(raw) || raw <= 0 ? null : raw;
+                        }
+                        let str = String(raw).trim();
+                        if (!str || str === '' || str === 'N/A' || str === '-' || str.toLowerCase() === 'sin registro' || str.toLowerCase() === 'n/d') return null;
+                        
+                        // Remover signos de moneda, COP y espacios
+                        str = str.replace(/[\$\sCOPcop]/g, '');
+                        
+                        // Formato de miles colombiano ej: "15.000" o "1.500.000"
+                        if (/^\d{1,3}(\.\d{3})+(\,\d+)?$/.test(str)) {
+                            str = str.replace(/\./g, '').replace(',', '.');
+                        } else if (/^\d+(\,\d+)$/.test(str)) {
+                            // "1500,50" -> "1500.50"
+                            str = str.replace(',', '.');
+                        } else {
+                            // Remoción general de comas
+                            str = str.replace(/,/g, '');
+                        }
+
+                        const num = parseFloat(str);
+                        return isNaN(num) || num <= 0 ? null : num;
+                    };
+
                     const upsertData: any[] = [];
                     let processedCount = 0;
-                    
+                    const nowIso = new Date().toISOString();
+
                     for (const row of rawData as any[]) {
-                        const accIdRaw = row['accounting_id'] ?? row['ACCOUNTING_ID'] ?? row['ID ERP'] ?? row['ID_ERP'] ?? row['CODIGO_CONTABLE'] ?? row['Codigo Contable'];
-                        const newCostRaw = row['Nuevo Costo'] ?? row['Nuevo_Costo'] ?? row['Costo'] ?? row['Nuevo costo'] ?? row['Costo Manual'] ?? row['costo_manual'];
+                        const keys = Object.keys(row);
+                        const findVal = (...aliases: string[]) => {
+                            for (const a of aliases) {
+                                const exactKey = keys.find(k => k.trim().toLowerCase() === a.toLowerCase());
+                                if (exactKey !== undefined && row[exactKey] !== undefined && row[exactKey] !== null && row[exactKey] !== '') {
+                                    return row[exactKey];
+                                }
+                            }
+                            return null;
+                        };
+
+                        const accIdRaw = findVal('accounting_id', 'id erp', 'id_erp', 'codigo_contable', 'código contable', 'codigo contable', 'id contable', 'codigo');
+                        const skuRaw = findVal('sku', 'codigo_sku', 'código_sku', 'item_code', 'referencia');
+                        const nameRaw = findVal('producto', 'nombre', 'name', 'product_name', 'descripcion', 'artículo', 'articulo');
                         
-                        if (accIdRaw === undefined || accIdRaw === null) continue;
-                        
-                        const accId = parseInt(accIdRaw.toString().trim());
-                        if (isNaN(accId)) continue;
-                        
-                        if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
-                        
-                        const newCost = parseFloat(newCostRaw.toString().replace(',', '.').trim());
-                        if (isNaN(newCost) || newCost < 0) continue;
-                        
-                        const prod = productMap[accId];
-                        if (prod) {
+                        let matchedProduct: Product | undefined;
+                        if (accIdRaw !== null) {
+                            const accNum = parseInt(String(accIdRaw).replace(/\D/g, ''));
+                            if (!isNaN(accNum) && byAccId[accNum]) {
+                                matchedProduct = byAccId[accNum];
+                            }
+                        }
+                        if (!matchedProduct && skuRaw !== null) {
+                            const cleanSku = String(skuRaw).trim().toUpperCase();
+                            if (bySku[cleanSku]) matchedProduct = bySku[cleanSku];
+                        }
+                        if (!matchedProduct && nameRaw !== null) {
+                            const cleanName = String(nameRaw).trim().toLowerCase();
+                            if (byName[cleanName]) matchedProduct = byName[cleanName];
+                        }
+
+                        if (!matchedProduct) continue;
+
+                        // Buscar costo con prioridad en 'Nuevo Costo', fallback a 'Costo Actual' / 'Costo'
+                        const newCostRaw = findVal('nuevo costo', 'nuevo_costo', 'costo nuevo', 'costo_nuevo', 'nuevo');
+                        const currentCostRaw = findVal('costo actual', 'costo_actual', 'costo', 'costo manual', 'costo_manual', 'precio', 'cost');
+
+                        let finalCost = parseCleanCost(newCostRaw);
+                        if (finalCost === null) {
+                            finalCost = parseCleanCost(currentCostRaw);
+                        }
+
+                        if (finalCost !== null && finalCost > 0) {
                             upsertData.push({
-                                product_id: prod.id,
-                                manual_cost: newCost,
-                                updated_at: new Date().toISOString(),
+                                product_id: matchedProduct.id,
+                                manual_cost: finalCost,
+                                updated_at: nowIso, // Reinicia el ciclo de vida del costo a 0 días
                                 updated_by: 'EXCEL-BULK-UPDATE',
                                 is_active: true
                             });
@@ -505,7 +702,7 @@ export default function CostMatrixPage() {
                     }
                     
                     if (upsertData.length === 0) {
-                        throw new Error('No se encontraron registros válidos para actualizar. Verifica que las columnas "accounting_id" (o "ID ERP") y "Nuevo Costo" (o "Costo") contengan valores numéricos válidos.');
+                        throw new Error('No se encontraron registros válidos para actualizar. Asegúrate de que las filas incluyan el "accounting_id" (o Nombre de Producto) y un valor numérico de costo mayor a 0 (ej: 15000 o $ 15.000).');
                     }
                     
                     const batchSize = 50;
@@ -513,12 +710,12 @@ export default function CostMatrixPage() {
                         const batch = upsertData.slice(i, i + batchSize);
                         const { error } = await supabase
                             .from('commercial_cost_matrix')
-                            .upsert(batch);
+                            .upsert(batch, { onConflict: 'product_id' });
                         
                         if (error) throw error;
                     }
                     
-                    setImportSuccess(`¡Actualización masiva completada! Se procesaron ${processedCount} productos con éxito.`);
+                    setImportSuccess(`¡Actualización masiva completada! Se actualizaron ${processedCount} productos con nueva fecha de vigencia (Ciclo de Vida reiniciado hoy).`);
                     await fetchData();
                     setImportFile(null);
                 } catch (err: any) {
@@ -589,12 +786,9 @@ export default function CostMatrixPage() {
             const hist = purchaseHistory[p.id] || [];
             return hist.length >= 2 && hist[0].normalized_price < hist[1].normalized_price;
         }).length,
-        pendingCost: products.filter(p => !manualOverrides[p.id] && calculateSmartCost(p.id) === 0).length,
-        expiringSoon: products.filter(p => {
-            const m = manualOverrides[p.id];
-            if (!m) return true;
-            return differenceInDays(new Date(), new Date(m.updated_at)) >= 15;
-        }).length
+        pendingCost: products.filter(p => getProductCostLifecycle(p.id).status === 'SIN_REFERENCIA').length,
+        expiringSoon: products.filter(p => getProductCostLifecycle(p.id).isExpired || getProductCostLifecycle(p.id).isDueSoon).length,
+        vigentes: products.filter(p => getProductCostLifecycle(p.id).status === 'VIGENTE').length
     };
 
     const getHarvestStatus = (productId: string) => {
@@ -761,15 +955,15 @@ export default function CostMatrixPage() {
                             height: '42px',
                             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
                         }}>
-                            <span style={{ fontWeight: '950', fontSize: '0.65rem', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Carga Masiva:</span>
+                            <span style={{ fontWeight: '950', fontSize: '0.65rem', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Plantillas:</span>
                             
-                            {/* Download template icon-button */}
+                            {/* Download full catalog template */}
                             <button 
-                                onClick={handleExportTemplate}
-                                title="Descargar Plantilla Excel"
+                                onClick={handleExportTemplateAll}
+                                title="Descargar Plantilla Catálogo Completo (.xlsx)"
                                 style={{ 
-                                    width: '32px',
                                     height: '32px',
+                                    padding: '0 0.6rem',
                                     borderRadius: '8px', 
                                     border: 'none', 
                                     backgroundColor: '#EFF6FF', 
@@ -777,43 +971,73 @@ export default function CostMatrixPage() {
                                     cursor: 'pointer', 
                                     display: 'flex', 
                                     alignItems: 'center', 
-                                    justifyContent: 'center',
+                                    gap: '4px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
                                     transition: 'all 0.2s'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
                             >
-                                <TrendingDown size={16} />
+                                <Download size={14} /> Completa
                             </button>
 
-                            {/* Upload file icon-button */}
+                            {/* Download due / expired template */}
+                            <button 
+                                onClick={handleExportTemplateDue}
+                                title="Descargar Plantilla solo SKUs Vencidos o Por Vencer (.xlsx)"
+                                style={{ 
+                                    height: '32px',
+                                    padding: '0 0.6rem',
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    backgroundColor: '#FEF3C7', 
+                                    color: '#92400E', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '4px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FDE68A'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF3C7'}
+                            >
+                                <Clock size={14} /> Vencidos ({stats.expiringSoon + stats.pendingCost})
+                            </button>
+
+                            {/* Upload file button */}
                             <button 
                                 onClick={() => setIsImportModalOpen(true)}
                                 title="Subir Archivo Excel (Cargar Costos)"
                                 style={{ 
-                                    width: '32px',
                                     height: '32px',
+                                    padding: '0 0.7rem',
                                     borderRadius: '8px', 
                                     border: 'none', 
-                                    backgroundColor: '#F5F3FF', 
-                                    color: '#6D28D9', 
+                                    backgroundColor: '#8B5CF6', 
+                                    color: 'white', 
                                     cursor: 'pointer', 
                                     display: 'flex', 
                                     alignItems: 'center', 
-                                    justifyContent: 'center',
-                                    transition: 'all 0.2s'
+                                    gap: '4px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 2px 4px rgba(139, 92, 246, 0.2)'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
                             >
-                                <TrendingUp size={16} />
+                                <TrendingUp size={14} /> Cargar Excel
                             </button>
                         </div>
 
                         <button onClick={handleExport}
                             style={{ 
                                 padding: '0 1.2rem', 
-                                height: '42px',
+                                height: '42px', 
                                 borderRadius: '12px', 
                                 border: '1px solid #A7F3D0', 
                                 backgroundColor: '#ECFDF5', 
@@ -1244,29 +1468,31 @@ export default function CostMatrixPage() {
                                                             </span>
                                                         </div>
                                                         {(() => {
-                                                            const m = manualOverrides[p.id];
-                                                            const isOutdated = !m || differenceInDays(new Date(), new Date(m.updated_at)) >= 15;
-                                                            if (isOutdated) {
-                                                                return (
-                                                                    <div style={{ marginTop: '0.3rem' }}>
-                                                                        <span style={{ 
-                                                                            fontSize: '0.65rem', 
-                                                                            color: '#B45309', 
-                                                                            backgroundColor: '#FEF3C7', 
-                                                                            padding: '2px 6px', 
-                                                                            borderRadius: '6px', 
-                                                                            fontWeight: '800',
-                                                                            border: '1px solid #FCD34D',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '4px'
-                                                                        }}>
-                                                                            <Clock size={12} /> Desactualizado (+15d)
-                                                                        </span>
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            return null;
+                                                            const lifecycle = getProductCostLifecycle(p.id);
+                                                            return (
+                                                                <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                    <span style={{ 
+                                                                        fontSize: '0.65rem', 
+                                                                        color: lifecycle.statusColor, 
+                                                                        backgroundColor: lifecycle.statusBg, 
+                                                                        padding: '2px 7px', 
+                                                                        borderRadius: '6px', 
+                                                                        fontWeight: '800',
+                                                                        border: `1px solid ${lifecycle.statusColor}33`,
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px'
+                                                                    }}>
+                                                                        {lifecycle.status === 'VIGENTE' && <CheckCircle2 size={11} />}
+                                                                        {lifecycle.status === 'POR_VENCER' && <Clock size={11} />}
+                                                                        {(lifecycle.status === 'VENCIDO' || lifecycle.status === 'SIN_REFERENCIA') && <AlertTriangle size={11} />}
+                                                                        {lifecycle.statusLabel}
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: '600' }}>
+                                                                        • {lifecycle.sourceLabel}
+                                                                    </span>
+                                                                </div>
+                                                            );
                                                         })()}
                                                     </td>
                                                     
@@ -1595,6 +1821,55 @@ export default function CostMatrixPage() {
                                     ✅ {importSuccess}
                                 </div>
                             )}
+
+                            {/* Template Download Shortcuts in Modal */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #E2E8F0', marginBottom: '1.2rem' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    📥 ¿Necesitas la plantilla base? Descárgala aquí:
+                                </span>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                                    <button
+                                        type="button"
+                                        onClick={handleExportTemplateAll}
+                                        style={{
+                                            padding: '0.55rem 0.8rem',
+                                            backgroundColor: 'white',
+                                            border: '1px solid #CBD5E1',
+                                            borderRadius: '8px',
+                                            color: '#1E293B',
+                                            fontSize: '0.76rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <Download size={13} color="#2563EB" /> Catálogo Completo (.xlsx)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleExportTemplateDue}
+                                        style={{
+                                            padding: '0.55rem 0.8rem',
+                                            backgroundColor: '#FEF3C7',
+                                            border: '1px solid #FCD34D',
+                                            borderRadius: '8px',
+                                            color: '#92400E',
+                                            fontSize: '0.76rem',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <Clock size={13} color="#D97706" /> Solo Vencidos ({stats.expiringSoon + stats.pendingCost})
+                                    </button>
+                                </div>
+                            </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 <div style={{ border: '2px dashed #DDD6FE', padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', backgroundColor: '#F9F5FF' }}>
