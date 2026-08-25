@@ -1071,8 +1071,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     </div>
                                     <input
                                         type="number"
-                                        step="0.01"
-                                        min="0.01"
+                                        step="0.001"
+                                        min="0.001"
                                         placeholder="0.1"
                                         value={formData.weight_kg !== undefined && formData.weight_kg !== null ? formData.weight_kg : 0.1}
                                         onChange={(e) => {

@@ -131,6 +131,20 @@ const getParsedWeight = (text: string): number | null => {
     return null;
 };
 
+export const formatWeightKg = (val: number | null | undefined): string => {
+    if (val === null || val === undefined || isNaN(val)) return '0';
+    const num = Number(val);
+    const rounded3 = Math.round(num * 1000) / 1000;
+    // Dynamic precision: 3 decimals only for fractional eighths/125g multiples (0.125, 0.375...), otherwise clean 2 decimals max without trailing zeros
+    const hasThirdDecimal = Math.round(num * 100) / 100 !== rounded3;
+    const maxDecimals = hasThirdDecimal ? 3 : 2;
+    
+    return rounded3.toLocaleString('es-CO', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxDecimals
+    });
+};
+
 const getProductMinSaleKg = (product: any): number | null => {
     if (!product) return null;
     const isWeightProd = (product.unit_of_measure || 'Kg').toLowerCase() === 'kg';
@@ -142,9 +156,15 @@ const getProductMinSaleKg = (product: any): number | null => {
 
     const presentationWeights: number[] = [];
 
+    // Also check product name for discrete weight specification (e.g., "Arandano extra bandeja x125 gr" -> 0.125 kg)
+    const nameWeight = getParsedWeight(product.name);
+    if (nameWeight !== null && nameWeight > 0) {
+        presentationWeights.push(nameWeight);
+    }
+
     if (Array.isArray(product.options_config)) {
         product.options_config.forEach((opt: any) => {
-            if (opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad') || opt.name.toLowerCase().includes('tamaño'))) {
+            if (opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad') || opt.name.toLowerCase().includes('tamaño') || opt.name.toLowerCase().includes('gramaje'))) {
                 (opt.values || []).forEach((val: string) => {
                     const pw = getParsedWeight(val);
                     if (pw !== null && pw > 0) {
@@ -1208,7 +1228,7 @@ function CreateOrderContent() {
         // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
         const minAllowedKg = getProductMinSaleKg(product);
         if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
-            showToast(`La cantidad mínima de venta para ${product.name} es de ${formatNumber(minAllowedKg, 2)} kg`, 'error');
+            showToast(`La cantidad mínima de venta para ${product.name} es de ${formatWeightKg(minAllowedKg)} kg`, 'error');
             return;
         }
 
@@ -1532,7 +1552,7 @@ function CreateOrderContent() {
         const minAllowedKg = getProductMinSaleKg(selectedProductForModal);
 
         if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
-            showToast(`La cantidad mínima de venta para este producto es de ${formatNumber(minAllowedKg, 2)} kg`, 'error');
+            showToast(`La cantidad mínima de venta para este producto es de ${formatWeightKg(minAllowedKg)} kg`, 'error');
             const qtyInput = document.getElementById('modal-qty-input');
             if (qtyInput) {
                 (qtyInput as HTMLElement).focus();
@@ -4638,24 +4658,24 @@ function CreateOrderContent() {
 
                                     {/* Right: Cantidad Mínima Prominente */}
                                     {hasSpecialMinSale && (
-                                        <div style={{
-                                            backgroundColor: '#FFFBEB',
-                                            color: '#92400E',
-                                            border: '1.5px solid #F59E0B',
-                                            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.15)',
-                                            padding: '8px 16px',
-                                            borderRadius: '10px',
-                                            fontSize: '0.85rem',
-                                            fontWeight: '800',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            marginLeft: 'auto'
-                                        }}>
-                                            <Info size={18} style={{ color: '#D97706', flexShrink: 0 }} />
-                                            <span>Cantidad mínima: <strong style={{ color: '#78350F', fontSize: '0.95rem' }}>{formatNumber(minSaleLimitKg, 2)} kg</strong></span>
-                                        </div>
-                                    )}
+                                         <div style={{
+                                             backgroundColor: '#FFFBEB',
+                                             color: '#92400E',
+                                             border: '1.5px solid #F59E0B',
+                                             boxShadow: '0 2px 6px rgba(245, 158, 11, 0.15)',
+                                             padding: '8px 16px',
+                                             borderRadius: '10px',
+                                             fontSize: '0.85rem',
+                                             fontWeight: '800',
+                                             display: 'inline-flex',
+                                             alignItems: 'center',
+                                             gap: '8px',
+                                             marginLeft: 'auto'
+                                         }}>
+                                             <Info size={18} style={{ color: '#D97706', flexShrink: 0 }} />
+                                             <span>Cantidad mínima: <strong style={{ color: '#78350F', fontSize: '0.95rem' }}>{formatWeightKg(minSaleLimitKg)} kg</strong></span>
+                                         </div>
+                                     )}
                                 </div>
                             )}
 
@@ -4797,7 +4817,7 @@ function CreateOrderContent() {
                                                 gap: '4px'
                                             }}>
                                                 <Info size={12} style={{ color: '#D97706' }} />
-                                                Mín. {formatNumber(minSaleLimitKg, 2)} kg
+                                                Mín. {formatWeightKg(minSaleLimitKg)} kg
                                             </span>
                                         )}
                                     </div>
@@ -4885,7 +4905,7 @@ function CreateOrderContent() {
                                                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                             }}>
                                                 <Scale size={13} style={{ color: '#059669' }} />
-                                                <span>Total: {formatNumber(calculatedTotalKg, 2)} kg</span>
+                                                <span>Total: {formatWeightKg(calculatedTotalKg)} kg</span>
                                             </span>
                                         )}
                                     </div>
