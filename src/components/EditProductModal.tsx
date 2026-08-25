@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
-import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus } from 'lucide-react';
+import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, HelpCircle, Info, Scale, Package, Truck, X, BookOpen } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 
@@ -54,6 +54,7 @@ const sortSuggestedValues = (values: string[]): string[] => {
 export default function EditProductModal({ product, allProducts, onClose, onSave, readOnly = false }: EditProductModalProps) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [showUnitGuideModal, setShowUnitGuideModal] = useState(false);
     const initialWeight = () => {
         const u = (product.unit_of_measure || '').toLowerCase();
         if (product.weight_kg !== undefined && product.weight_kg !== null && !isNaN(Number(product.weight_kg))) {
@@ -960,9 +961,27 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '0.8rem' }}>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>
-                                Unidad de Medida Compras
-                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: '700', color: '#374151', margin: 0 }}>
+                                    Unidad de Medida Compras
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUnitGuideModal(true)}
+                                    title="¿Cómo funciona? Haz clic para ver la guía explicativa"
+                                    style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        color: '#3B82F6'
+                                    }}
+                                >
+                                    <HelpCircle size={14} />
+                                </button>
+                            </div>
                             <select
                                 value={formData.unit_of_measure?.toLowerCase() === 'unidad' ? 'Unidad' : 'Kg'}
                                 onChange={(e) => {
@@ -984,9 +1003,27 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <div>
                             {formData.unit_of_measure?.toLowerCase() === 'unidad' ? (
                                 <>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', marginBottom: '4px' }} title="Peso físico de 1 unidad para logística y cubicaje de camiones">
-                                        Peso Log. (kg/und)
-                                    </label>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: '800', color: '#2563EB', margin: 0 }}>
+                                            Peso Log. (kg/und)
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUnitGuideModal(true)}
+                                            title="Peso físico unitario para cubicaje de camiones"
+                                            style={{
+                                                border: 'none',
+                                                background: 'transparent',
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                color: '#2563EB'
+                                            }}
+                                        >
+                                            <Info size={14} />
+                                        </button>
+                                    </div>
                                     <input
                                         type="number"
                                         step="0.001"
@@ -1011,9 +1048,27 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 </>
                             ) : (
                                 <>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#D97706', marginBottom: '4px' }} title="Cantidad mínima obligatoria en pedidos (default: 0.1 kg = 100g)">
-                                        Cant. Mínima Venta (kg)
-                                    </label>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: '800', color: '#D97706', margin: 0 }}>
+                                            Cant. Mínima Venta (kg)
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUnitGuideModal(true)}
+                                            title="Cantidad mínima permitida en pedidos (default: 0.1 kg = 100g)"
+                                            style={{
+                                                border: 'none',
+                                                background: 'transparent',
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                color: '#D97706'
+                                            }}
+                                        >
+                                            <Info size={14} />
+                                        </button>
+                                    </div>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -1052,6 +1107,111 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             </select>
                         </div>
                     </div>
+
+                    {/* TARJETA INFORMATIVA REACTIVA SEGÚN UNIDAD SELECCIONADA */}
+                    {formData.unit_of_measure?.toLowerCase() === 'unidad' ? (
+                        <div style={{
+                            marginTop: '0.75rem',
+                            padding: '0.75rem 1rem',
+                            borderRadius: '10px',
+                            backgroundColor: '#EFF6FF',
+                            border: '1.5px solid #BFDBFE',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '10px',
+                            fontSize: '0.78rem',
+                            color: '#1E40AF',
+                            lineHeight: '1.45',
+                            boxShadow: '0 1px 3px rgba(30, 64, 175, 0.05)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <Package size={18} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div>
+                                    <div style={{ fontWeight: '800', color: '#1D4ED8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Modo UNIDAD (Conteo / Presentación Discreta)
+                                    </div>
+                                    <div style={{ marginTop: '2px', color: '#1E3A8A' }}>
+                                        • <strong>En Pedidos:</strong> Exige números enteros (1, 2, 3... bandejas o unidades), bloqueando decimales.
+                                        <br />
+                                        • <strong>Peso Logístico ({formData.weight_kg ?? 1.0} kg/und):</strong> Peso unitario estimado usado exclusivamente para cubicaje y cálculo de carga en los camiones de despacho.
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowUnitGuideModal(true)}
+                                style={{
+                                    flexShrink: 0,
+                                    padding: '4px 10px',
+                                    backgroundColor: '#DBEAFE',
+                                    border: '1px solid #93C5FD',
+                                    borderRadius: '6px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    color: '#1E40AF',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                <HelpCircle size={13} />
+                                Ver Guía
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{
+                            marginTop: '0.75rem',
+                            padding: '0.75rem 1rem',
+                            borderRadius: '10px',
+                            backgroundColor: '#FFFBEB',
+                            border: '1.5px solid #FDE68A',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '10px',
+                            fontSize: '0.78rem',
+                            color: '#92400E',
+                            lineHeight: '1.45',
+                            boxShadow: '0 1px 3px rgba(245, 158, 11, 0.05)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <Scale size={18} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div>
+                                    <div style={{ fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Modo KILOGRAMOS (Venta Continua a Granel)
+                                    </div>
+                                    <div style={{ marginTop: '2px', color: '#78350F' }}>
+                                        • <strong>En Pedidos:</strong> Permite ingresar cantidades con decimales (ej: 0,5 kg, 1,25 kg).
+                                        <br />
+                                        • <strong>Cant. Mínima Venta ({formData.weight_kg ?? 0.1} kg):</strong> Límite mínimo de venta. Si el producto tiene presentaciones físicas (ej. Mango 550g), el sistema calcula el límite dinámico para no vender menos de una fruta.
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowUnitGuideModal(true)}
+                                style={{
+                                    flexShrink: 0,
+                                    padding: '4px 10px',
+                                    backgroundColor: '#FEF3C7',
+                                    border: '1px solid #FCD34D',
+                                    borderRadius: '6px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    color: '#B45309',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                            >
+                                <HelpCircle size={13} />
+                                Ver Guía
+                            </button>
+                        </div>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                         <div>
@@ -1756,6 +1916,187 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     </footer>
                 </form>
             </div>
+
+            {/* MODAL GUÍA INTERACTIVA DE UNIDADES DE MEDIDA */}
+            {showUnitGuideModal && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                        backdropFilter: 'blur(6px)',
+                        zIndex: 10001,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem'
+                    }}
+                    onClick={() => setShowUnitGuideModal(false)}
+                >
+                    <div
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: '18px',
+                            maxWidth: '720px',
+                            width: '100%',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            overflow: 'hidden',
+                            animation: 'modalSlideUp 0.2s ease-out'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div style={{
+                            padding: '1.25rem 1.5rem',
+                            borderBottom: '1px solid #E5E7EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    backgroundColor: '#EEF2FF',
+                                    padding: '8px',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BookOpen size={20} color="#4F46E5" />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#111827' }}>
+                                        Guía de Unidades de Medida y Logística
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#6B7280' }}>
+                                        ¿Qué sucede en el sistema según la unidad de compra seleccionada?
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowUnitGuideModal(false)}
+                                style={{
+                                    border: 'none',
+                                    backgroundColor: '#F3F4F6',
+                                    padding: '6px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    color: '#6B7280',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Body Comparison */}
+                        <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                            {/* Card Kg */}
+                            <div style={{
+                                backgroundColor: '#FFFBEB',
+                                border: '2px solid #FCD34D',
+                                borderRadius: '14px',
+                                padding: '1.2rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '10px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ backgroundColor: '#FEF3C7', padding: '6px', borderRadius: '8px', color: '#D97706' }}>
+                                        <Scale size={20} />
+                                    </div>
+                                    <span style={{ fontWeight: '900', fontSize: '1rem', color: '#B45309' }}>
+                                        Kg (Por Peso / Granel)
+                                    </span>
+                                </div>
+
+                                <div style={{ fontSize: '0.82rem', color: '#78350F', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: '1.45' }}>
+                                    <div>
+                                        <strong>🛒 Compras / Proveedor:</strong>
+                                        <div style={{ color: '#92400E' }}>El insumo se compra, costea y factura por kilogramos (peso continuo).</div>
+                                    </div>
+                                    <div>
+                                        <strong>📝 Captura de Pedidos:</strong>
+                                        <div style={{ color: '#92400E' }}>Permite a los clientes u operadores ingresar <strong>decimales</strong> (ej. <code>0,5 kg</code>, <code>1,25 kg</code>).</div>
+                                    </div>
+                                    <div>
+                                        <strong>🛡️ Cant. Mínima Venta (kg):</strong>
+                                        <div style={{ color: '#92400E' }}>Por defecto <strong>0,1 kg</strong> (100g). Evita pedidos de $0 o microfracciones inviables. Si el producto tiene frutas indivisibles (ej. Mango Tommy de 550g), el sistema protegerá para que no se pida menos del peso de la fruta.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card Unidad */}
+                            <div style={{
+                                backgroundColor: '#EFF6FF',
+                                border: '2px solid #93C5FD',
+                                borderRadius: '14px',
+                                padding: '1.2rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '10px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ backgroundColor: '#DBEAFE', padding: '6px', borderRadius: '8px', color: '#2563EB' }}>
+                                        <Package size={20} />
+                                    </div>
+                                    <span style={{ fontWeight: '900', fontSize: '1rem', color: '#1D4ED8' }}>
+                                        Unidad (Discreto / Presentación)
+                                    </span>
+                                </div>
+
+                                <div style={{ fontSize: '0.82rem', color: '#1E3A8A', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: '1.45' }}>
+                                    <div>
+                                        <strong>📦 Compras / Proveedor:</strong>
+                                        <div style={{ color: '#1E40AF' }}>El insumo se compra por conteo de piezas o empaques cerrados (bandejas, cajas, atados).</div>
+                                    </div>
+                                    <div>
+                                        <strong>📝 Captura de Pedidos:</strong>
+                                        <div style={{ color: '#1E40AF' }}>Exige <strong>números enteros estrictos</strong> (<code>1</code>, <code>2</code>, <code>3...</code>). Bloquea la entrada de decimales.</div>
+                                    </div>
+                                    <div>
+                                        <strong>🚚 Peso Logístico (kg/und):</strong>
+                                        <div style={{ color: '#1E40AF' }}>Peso físico estimado de 1 unidad (ej. <code>0,050 kg</code>). Se usa <strong>exclusivamente para cubicaje de camiones</strong> y cálculo de carga en despacho.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '1rem 1.5rem',
+                            borderTop: '1px solid #E5E7EB',
+                            backgroundColor: '#F8FAFC',
+                            display: 'flex',
+                            justifyContent: 'flex-end'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowUnitGuideModal(false)}
+                                style={{
+                                    padding: '0.6rem 1.5rem',
+                                    backgroundColor: '#111827',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: '700',
+                                    fontSize: '0.88rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Entendido
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
