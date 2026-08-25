@@ -2247,32 +2247,48 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
-                            {packagingFeeEnabled && packagingFeeAmount > 0 && (
+                            {packagingFeeEnabled && (
                                 <div style={{ 
                                     marginTop: '0.6rem',
                                     marginBottom: '0.8rem',
                                     padding: '0.75rem 1rem', 
-                                    backgroundColor: '#F0FDF4', 
+                                    backgroundColor: includePackagingFee ? '#F0FDF4' : '#F8FAFC', 
                                     borderRadius: '14px', 
-                                    border: '1.5px solid #A7F3D0',
+                                    border: includePackagingFee ? '1.5px solid #A7F3D0' : '1px solid #E2E8F0',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     gap: '4px',
-                                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.05)'
+                                    boxShadow: includePackagingFee ? '0 2px 8px rgba(16, 185, 129, 0.05)' : 'none',
+                                    transition: 'all 0.2s ease'
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ color: '#047857', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <Package size={14} style={{ color: '#059669', display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Empaque e Inocuidad ({packagingFeePercentage}%):
-                                        </span>
-                                        <span style={{ fontWeight: '900', color: '#047857', fontSize: '0.88rem' }}>
-                                            +${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}{locale === 'en' ? ' COP' : ''}
-                                        </span>
-                                    </div>
-                                    {packagingFeeNote && (
-                                        <span style={{ fontSize: '0.68rem', color: '#065F46', opacity: 0.9, lineHeight: '1.35', fontWeight: '500' }}>
-                                            {packagingFeeNote}
-                                        </span>
-                                    )}
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            id="packaging-fee-checkbox"
+                                            checked={includePackagingFee} 
+                                            onChange={(e) => setIncludePackagingFee(e.target.checked)}
+                                            style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ color: includePackagingFee ? '#047857' : '#334155', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Package size={14} style={{ color: includePackagingFee ? '#059669' : '#64748B', display: 'inline', verticalAlign: 'middle' }} /> Empaque en bolsas plásticas ({packagingFeePercentage}%):
+                                                </span>
+                                                <span style={{ fontWeight: '900', color: includePackagingFee ? '#047857' : '#94A3B8', fontSize: '0.88rem' }}>
+                                                    {includePackagingFee 
+                                                        ? `+$${packagingFeeAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })} COP`
+                                                        : '$0 COP'
+                                                    }
+                                                </span>
+                                            </div>
+                                            <p style={{ margin: '3px 0 0 0', fontSize: '0.72rem', color: includePackagingFee ? '#065F46' : '#64748B', opacity: 0.9, lineHeight: '1.35', fontWeight: '500' }}>
+                                                {includePackagingFee 
+                                                    ? (packagingFeeNote || 'Para garantizar la inocuidad, higiene y conservación de tus alimentos frescos, todos los pedidos se entregan empacados en bolsas plásticas.')
+                                                    : '🌱 Entrega en empaque ecológico / canastilla propia (Sin recargo).'
+                                                }
+                                            </p>
+                                        </div>
+                                    </label>
                                 </div>
                             )}
 
