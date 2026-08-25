@@ -197,14 +197,38 @@ export default function CheckoutPage() {
             const savedEmail = localStorage.getItem('checkout_email');
             const savedPhone = localStorage.getItem('checkout_phone');
             const savedNotes = localStorage.getItem('checkout_specialNotes');
+            const savedName = localStorage.getItem('checkout_name');
+            const savedAddress = localStorage.getItem('checkout_address');
+            const savedAddressDetails = localStorage.getItem('checkout_address_details');
+            const savedPayment = localStorage.getItem('checkout_payment_method');
+            const savedIsGift = localStorage.getItem('checkout_is_gift');
+            const savedRecipientName = localStorage.getItem('checkout_recipient_name');
+            const savedRecipientPhone = localStorage.getItem('checkout_recipient_phone');
+            const savedBeneficiaryIdx = localStorage.getItem('checkout_selected_beneficiary_idx');
+            const savedLat = localStorage.getItem('checkout_latitude');
+            const savedLng = localStorage.getItem('checkout_longitude');
 
             if (savedId) setIdentification(savedId);
             if (savedEmail) setEmail(savedEmail);
             if (savedPhone) setPhone(savedPhone);
             if (savedNotes) setSpecialNotes(savedNotes);
+            if (savedAddressDetails) setAddressDetails(savedAddressDetails);
+            if (savedPayment === 'wompi' || savedPayment === 'contra_entrega') {
+                setPaymentMethod(savedPayment);
+            }
+            if (savedIsGift === 'true') {
+                setIsGiftForRecipient(true);
+            }
+            if (savedRecipientName) setRecipientName(savedRecipientName);
+            if (savedRecipientPhone) setRecipientPhone(savedRecipientPhone);
+            if (savedBeneficiaryIdx !== null && savedBeneficiaryIdx !== undefined && savedBeneficiaryIdx !== '') {
+                setSelectedBeneficiaryIdx(savedBeneficiaryIdx === 'new' ? 'new' : parseInt(savedBeneficiaryIdx));
+            }
+            if (savedLat && savedLng) {
+                setLatitude(parseFloat(savedLat));
+                setLongitude(parseFloat(savedLng));
+            }
 
-            const savedName = localStorage.getItem('checkout_name');
-            const savedAddress = localStorage.getItem('checkout_address');
             const isLuis = savedName && savedName.includes('Luis Fernando');
             const isCalle127 = savedAddress && savedAddress.includes('Calle 127');
 
@@ -247,6 +271,31 @@ export default function CheckoutPage() {
         localStorage.setItem('checkout_address', val);
     };
 
+    const handleAddressDetailsChange = (val: string) => {
+        setAddressDetails(val);
+        localStorage.setItem('checkout_address_details', val);
+    };
+
+    const handleRecipientNameChange = (val: string) => {
+        setRecipientName(val);
+        localStorage.setItem('checkout_recipient_name', val);
+    };
+
+    const handleRecipientPhoneChange = (val: string) => {
+        setRecipientPhone(val);
+        localStorage.setItem('checkout_recipient_phone', val);
+    };
+
+    const handleGiftToggle = (val: boolean) => {
+        setIsGiftForRecipient(val);
+        localStorage.setItem('checkout_is_gift', val ? 'true' : 'false');
+    };
+
+    const handlePaymentMethodChange = (val: 'wompi' | 'contra_entrega') => {
+        setPaymentMethod(val);
+        localStorage.setItem('checkout_payment_method', val);
+    };
+
     const handleNotesChange = (val: string) => {
         setSpecialNotes(val);
         setNotesJustSaved(false);
@@ -262,6 +311,18 @@ export default function CheckoutPage() {
             paymentSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     };
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if (latitude !== null && longitude !== null) {
+                localStorage.setItem('checkout_latitude', latitude.toString());
+                localStorage.setItem('checkout_longitude', longitude.toString());
+            } else if (isMounted && latitude === null && longitude === null) {
+                localStorage.removeItem('checkout_latitude');
+                localStorage.removeItem('checkout_longitude');
+            }
+        }
+    }, [latitude, longitude, isMounted]);
 
     useEffect(() => {
         if (date) {
@@ -755,6 +816,11 @@ export default function CheckoutPage() {
                 console.log('3️⃣ Contra entrega selected. Redirecting directly to success result page...');
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('checkout_specialNotes');
+                    localStorage.removeItem('checkout_is_gift');
+                    localStorage.removeItem('checkout_recipient_name');
+                    localStorage.removeItem('checkout_recipient_phone');
+                    localStorage.removeItem('checkout_address_details');
+                    localStorage.removeItem('checkout_selected_beneficiary_idx');
                 }
                 clearCart();
                 router.push(`/checkout/result?reference=${orderData.id}&sequence=${orderData.sequence_id}&created_at=${encodeURIComponent(orderData.created_at)}&status=cod_success`);
@@ -819,6 +885,11 @@ export default function CheckoutPage() {
 
             if (typeof window !== 'undefined') {
                 localStorage.removeItem('checkout_specialNotes');
+                localStorage.removeItem('checkout_is_gift');
+                localStorage.removeItem('checkout_recipient_name');
+                localStorage.removeItem('checkout_recipient_phone');
+                localStorage.removeItem('checkout_address_details');
+                localStorage.removeItem('checkout_selected_beneficiary_idx');
             }
             clearCart();
             window.location.href = wompiUrl;
@@ -1518,7 +1589,7 @@ export default function CheckoutPage() {
                                     <input
                                         type="checkbox"
                                         checked={isGiftForRecipient}
-                                        onChange={(e) => setIsGiftForRecipient(e.target.checked)}
+                                        onChange={(e) => handleGiftToggle(e.target.checked)}
                                         style={{
                                             width: '20px',
                                             height: '20px',
@@ -1566,10 +1637,11 @@ export default function CheckoutPage() {
                                                     type="button"
                                                     onClick={() => {
                                                         setSelectedBeneficiaryIdx('new');
-                                                        setRecipientName('');
-                                                        setRecipientPhone('');
-                                                        setAddress('');
-                                                        setAddressDetails('');
+                                                        localStorage.setItem('checkout_selected_beneficiary_idx', 'new');
+                                                        handleRecipientNameChange('');
+                                                        handleRecipientPhoneChange('');
+                                                        handleAddressChange('');
+                                                        handleAddressDetailsChange('');
                                                         setLatitude(null);
                                                         setLongitude(null);
                                                     }}
@@ -1593,18 +1665,18 @@ export default function CheckoutPage() {
                                                         type="button"
                                                         onClick={() => {
                                                             setSelectedBeneficiaryIdx(idx);
-                                                            setRecipientName(b.name || '');
-                                                            setRecipientPhone(b.phone || '');
+                                                            localStorage.setItem('checkout_selected_beneficiary_idx', idx.toString());
+                                                            handleRecipientNameChange(b.name || '');
+                                                            handleRecipientPhoneChange(b.phone || '');
                                                             if (b.address) {
-                                                                setAddress(b.address);
-                                                                localStorage.setItem('checkout_address', b.address);
+                                                                handleAddressChange(b.address);
                                                             }
                                                             if (b.latitude && b.longitude) {
                                                                 setLatitude(parseFloat(b.latitude));
                                                                 setLongitude(parseFloat(b.longitude));
                                                             }
                                                             if (b.address_details) {
-                                                                setAddressDetails(b.address_details);
+                                                                handleAddressDetailsChange(b.address_details);
                                                             }
                                                         }}
                                                         style={{
@@ -1651,7 +1723,7 @@ export default function CheckoutPage() {
                                                         <input
                                                             type="text"
                                                             value={recipientName}
-                                                            onChange={(e) => setRecipientName(e.target.value)}
+                                                            onChange={(e) => handleRecipientNameChange(e.target.value)}
                                                             placeholder={locale === 'es' ? 'Ej: Juan Pérez (Mamá / Amigo)' : 'e.g. John Doe'}
                                                             style={{
                                                                 width: '100%',
@@ -1679,7 +1751,7 @@ export default function CheckoutPage() {
                                                         <input
                                                             type="tel"
                                                             value={recipientPhone}
-                                                            onChange={(e) => setRecipientPhone(e.target.value)}
+                                                            onChange={(e) => handleRecipientPhoneChange(e.target.value)}
                                                             placeholder={locale === 'es' ? 'Ej: 3001234567' : 'e.g. 3001234567'}
                                                             style={{
                                                                 width: '100%',
@@ -1892,10 +1964,7 @@ export default function CheckoutPage() {
                                                         type="text"
                                                         placeholder={locale === 'es' ? "Apto, Interior, Torre, Nombre del Edificio o Conjunto (Opcional)" : "Apt, Suite, Unit, Building (Optional)"}
                                                         value={addressDetails}
-                                                        onChange={(e) => {
-                                                            setAddressDetails(e.target.value);
-                                                            localStorage.setItem('checkout_address_details', e.target.value);
-                                                        }}
+                                                        onChange={(e) => handleAddressDetailsChange(e.target.value)}
                                                         style={{ 
                                                             width: '100%', 
                                                             padding: '0.55rem 1rem 0.55rem 2.5rem', 
@@ -2114,10 +2183,7 @@ export default function CheckoutPage() {
                                             type="text"
                                             placeholder="Apto, Interior, Torre, Nombre del Edificio o Conjunto (Opcional)"
                                             value={addressDetails}
-                                            onChange={(e) => {
-                                                setAddressDetails(e.target.value);
-                                                localStorage.setItem('checkout_address_details', e.target.value);
-                                            }}
+                                            onChange={(e) => handleAddressDetailsChange(e.target.value)}
                                             style={{ 
                                                 width: '100%', 
                                                 padding: '0.55rem 1rem 0.55rem 2.5rem', 
@@ -2198,7 +2264,13 @@ export default function CheckoutPage() {
                                     </span>
                                 </div>
                                 <textarea
-                                    placeholder={isGiftForRecipient ? "Ej: Dejar en portería y decir que es un regalo de parte de German Higuera" : t.specialNotesPlaceholder}
+                                    placeholder={
+                                        isGiftForRecipient 
+                                            ? (locale === 'es' 
+                                                ? `Ej: Dejar en portería y decir que es un regalo de parte de ${name.trim() || 'un amigo'}`
+                                                : `e.g. Leave with doorman and say it is a gift from ${name.trim() || 'a friend'}`)
+                                            : t.specialNotesPlaceholder
+                                    }
                                     value={specialNotes}
                                     onChange={(e) => handleNotesChange(e.target.value.slice(0, 150))}
                                     onKeyDown={(e) => {
@@ -2398,7 +2470,7 @@ export default function CheckoutPage() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {/* Opción Wompi */}
                                     <div 
-                                        onClick={() => setPaymentMethod('wompi')}
+                                        onClick={() => handlePaymentMethodChange('wompi')}
                                         style={{
                                             display: 'flex',
                                             alignItems: 'center',
@@ -2440,7 +2512,7 @@ export default function CheckoutPage() {
 
                                     {/* Opción Contra Entrega */}
                                     <div 
-                                        onClick={() => setPaymentMethod('contra_entrega')}
+                                        onClick={() => handlePaymentMethodChange('contra_entrega')}
                                         style={{
                                             display: 'flex',
                                             alignItems: 'center',
