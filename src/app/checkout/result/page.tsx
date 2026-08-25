@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/cartContext';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import { Copy, Check, CheckCircle2, Clock, XCircle, Banknote, ShoppingBag } from 'lucide-react';
+import { Copy, Check, CheckCircle2, Clock, XCircle, Banknote, ShoppingBag, Sparkles } from 'lucide-react';
 
 function ResultContent() {
     const searchParams = useSearchParams();
@@ -195,6 +195,46 @@ function ResultContent() {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Tarjeta de Activación de Cuenta Post-Pago (Opcional para el cliente) */}
+            {(status === 'success' || codStatus === 'cod_success') && (
+                <div style={{
+                    backgroundColor: '#F0FDF4',
+                    border: '1.5px dashed #86EFAC',
+                    borderRadius: '20px',
+                    padding: '1.4rem 1.6rem',
+                    marginBottom: '2rem',
+                    textAlign: 'left'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                        <Sparkles size={20} color="#16A34A" />
+                        <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '800', color: '#166534', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                            ¿Deseas activar tu cuenta para tus próximas compras?
+                        </h4>
+                    </div>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.82rem', color: '#15803D', lineHeight: '1.45' }}>
+                        Crea una contraseña opcional para consultar el rastreo en vivo de tu entrega, descargar facturas y repetir tus compras con un solo clic.
+                    </p>
+                    <Link 
+                        href="/auth/login" 
+                        style={{ 
+                            backgroundColor: '#15803D', 
+                            color: 'white', 
+                            padding: '0.6rem 1.25rem', 
+                            fontSize: '0.82rem', 
+                            borderRadius: '12px', 
+                            fontWeight: '800', 
+                            textDecoration: 'none', 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(21, 128, 61, 0.2)'
+                        }}
+                    >
+                        <Sparkles size={14} /> Activar Cuenta / Ingresar al Portal
+                    </Link>
                 </div>
             )}
 

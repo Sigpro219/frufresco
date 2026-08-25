@@ -41,7 +41,8 @@ import {
     Gift,
     UserCheck,
     FileText,
-    Banknote
+    Banknote,
+    Building2
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
@@ -59,6 +60,9 @@ export default function CheckoutPage() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
+    const [addressDetails, setAddressDetails] = useState('');
+    const [includePackagingFee, setIncludePackagingFee] = useState(true);
+    const [acceptHabeasData, setAcceptHabeasData] = useState(true);
     const [date, setDate] = useState('');
     const [minOrder, setMinOrder] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -180,7 +184,7 @@ export default function CheckoutPage() {
         fetchPackagingSettings();
     }, []);
 
-    const packagingFeeAmount = packagingFeeEnabled ? Math.round(totalPrice * (packagingFeePercentage / 100)) : 0;
+    const packagingFeeAmount = (packagingFeeEnabled && includePackagingFee) ? Math.round(totalPrice * (packagingFeePercentage / 100)) : 0;
     // Redondear el total final de compra hacia abajo al próximo múltiplo de 50 (beneficio al usuario)
     const rawTotal = totalPrice + packagingFeeAmount;
     const finalOrderTotal = Math.floor(rawTotal / 50) * 50;
@@ -668,6 +672,7 @@ export default function CheckoutPage() {
             // Sanitize coordinates to ensure they fit DECIMAL(10,8)
             const safeLat = latitude ? parseFloat(latitude.toFixed(8)) : null;
             const safeLng = longitude ? parseFloat(longitude.toFixed(8)) : null;
+            const fullShippingAddress = addressDetails.trim() ? `${address} - ${addressDetails.trim()}` : address;
 
             const clientNotesHeader = isGiftForRecipient 
                 ? `[COMPRADOR / FACTURACIÓN: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[DESTINATARIO / RECIBE EN PUERTA: ${recipientName} | Tel: ${recipientPhone}]`
@@ -679,7 +684,7 @@ export default function CheckoutPage() {
                 type: isB2B ? 'b2b_client' : 'b2c_client',
                 status: 'pending_approval',
                 delivery_date: date,
-                shipping_address: address,
+                shipping_address: fullShippingAddress,
                 subtotal: roundedSubtotal,
                 tax: roundedTaxAmount,
                 total: finalOrderTotal,
@@ -711,7 +716,7 @@ export default function CheckoutPage() {
                         phone,
                         email,
                         identification,
-                        address,
+                        address: fullShippingAddress,
                         latitude: safeLat,
                         longitude: safeLng,
                         is_gift: isGiftForRecipient,
@@ -1563,6 +1568,10 @@ export default function CheckoutPage() {
                                                         setSelectedBeneficiaryIdx('new');
                                                         setRecipientName('');
                                                         setRecipientPhone('');
+                                                        setAddress('');
+                                                        setAddressDetails('');
+                                                        setLatitude(null);
+                                                        setLongitude(null);
                                                     }}
                                                     style={{
                                                         padding: '4px 10px',
@@ -1593,6 +1602,9 @@ export default function CheckoutPage() {
                                                             if (b.latitude && b.longitude) {
                                                                 setLatitude(parseFloat(b.latitude));
                                                                 setLongitude(parseFloat(b.longitude));
+                                                            }
+                                                            if (b.address_details) {
+                                                                setAddressDetails(b.address_details);
                                                             }
                                                         }}
                                                         style={{
@@ -1626,245 +1638,504 @@ export default function CheckoutPage() {
                                     )}
 
                                     {(beneficiaries.length === 0 || selectedBeneficiaryIdx !== null) && (
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                {locale === 'es' ? 'Nombre de quien recibe *' : 'Recipient Full Name *'}
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: '#059669', pointerEvents: 'none' }}>
-                                                    <User size={15} />
+                                        <>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                        {locale === 'es' ? 'Nombre de quien recibe *' : 'Recipient Full Name *'}
+                                                    </label>
+                                                    <div style={{ position: 'relative' }}>
+                                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: '#059669', pointerEvents: 'none' }}>
+                                                            <User size={15} />
+                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            value={recipientName}
+                                                            onChange={(e) => setRecipientName(e.target.value)}
+                                                            placeholder={locale === 'es' ? 'Ej: Juan Pérez (Mamá / Amigo)' : 'e.g. John Doe'}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '0.55rem 1rem 0.55rem 2.5rem',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid #A7F3D0',
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: '500',
+                                                                backgroundColor: 'white',
+                                                                outline: 'none',
+                                                                fontFamily: 'var(--font-outfit), sans-serif'
+                                                            }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <input
-                                                    type="text"
-                                                    value={recipientName}
-                                                    onChange={(e) => setRecipientName(e.target.value)}
-                                                    placeholder={locale === 'es' ? 'Ej: Juan Pérez (Mamá / Amigo)' : 'e.g. John Doe'}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.55rem 1rem 0.55rem 2.5rem',
-                                                        borderRadius: '12px',
-                                                        border: '1px solid #A7F3D0',
-                                                        fontSize: '0.85rem',
-                                                        fontWeight: '500',
-                                                        backgroundColor: 'white',
-                                                        outline: 'none',
-                                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
 
-                                        <div>
-                                            <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                {locale === 'es' ? 'Celular de quien recibe *' : 'Recipient Phone *'}
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: '#059669', pointerEvents: 'none' }}>
-                                                    <Phone size={15} />
+                                                <div>
+                                                    <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                        {locale === 'es' ? 'Celular de quien recibe *' : 'Recipient Phone *'}
+                                                    </label>
+                                                    <div style={{ position: 'relative' }}>
+                                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: '#059669', pointerEvents: 'none' }}>
+                                                            <Phone size={15} />
+                                                        </div>
+                                                        <input
+                                                            type="tel"
+                                                            value={recipientPhone}
+                                                            onChange={(e) => setRecipientPhone(e.target.value)}
+                                                            placeholder={locale === 'es' ? 'Ej: 3001234567' : 'e.g. 3001234567'}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '0.55rem 1rem 0.55rem 2.5rem',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid #A7F3D0',
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: '500',
+                                                                backgroundColor: 'white',
+                                                                outline: 'none',
+                                                                fontFamily: 'var(--font-outfit), sans-serif'
+                                                            }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <input
-                                                    type="tel"
-                                                    value={recipientPhone}
-                                                    onChange={(e) => setRecipientPhone(e.target.value)}
-                                                    placeholder={locale === 'es' ? 'Ej: 3001234567' : 'e.g. 3001234567'}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.55rem 1rem 0.55rem 2.5rem',
-                                                        borderRadius: '12px',
-                                                        border: '1px solid #A7F3D0',
-                                                        fontSize: '0.85rem',
-                                                        fontWeight: '500',
-                                                        backgroundColor: 'white',
-                                                        outline: 'none',
-                                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                                    }}
-                                                />
                                             </div>
-                                        </div>
-                                    </div>
+
+                                            {/* Dirección de Entrega del Destinatario */}
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                    {locale === 'es' ? 'Dirección de Entrega del Destinatario *' : 'Recipient Delivery Address *'}
+                                                </label>
+                                                <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
+                                                    <div style={{ 
+                                                        position: 'absolute', 
+                                                        left: '12px', 
+                                                        top: 0, 
+                                                        bottom: 0, 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        color: '#059669', 
+                                                        pointerEvents: 'none' 
+                                                    }}>
+                                                        <MapPin size={15} />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder={locale === 'es' ? "Ej: Calle 140 # 19-35, Apto 402" : "e.g. 123 Main St"}
+                                                        value={address}
+                                                        onChange={(e) => handleAddressChange(e.target.value)}
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
+                                                            borderRadius: '12px', 
+                                                            border: '1px solid #A7F3D0', 
+                                                            fontSize: '0.85rem', 
+                                                            fontWeight: '500', 
+                                                            backgroundColor: 'white', 
+                                                            color: '#111827',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                                            outline: 'none' 
+                                                        }}
+                                                        className="checkout-input-modern"
+                                                    />
+                                                </div>
+
+                                                {/* GPS Capture Flow Destinatario */}
+                                                {address.trim().length > 3 && !latitude && (
+                                                    <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                                        <button
+                                                            onClick={handleGetLocation}
+                                                            type="button"
+                                                            className="btn-glass"
+                                                            style={{ 
+                                                                fontSize: '0.75rem', 
+                                                                background: 'rgba(5, 150, 105, 0.08)', 
+                                                                color: '#047857', 
+                                                                border: '1px solid rgba(5, 150, 105, 0.2)', 
+                                                                padding: '0.7rem', 
+                                                                borderRadius: '12px', 
+                                                                cursor: 'pointer',
+                                                                fontWeight: '800',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '8px',
+                                                            }}
+                                                            disabled={isGettingLocation}
+                                                        >
+                                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                            {t.currentLocation}
+                                                        </button>
+
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (!latitude && address.trim().length > 5) {
+                                                                    setIsGettingLocation(true);
+                                                                    if (window.google && window.google.maps && window.google.maps.Geocoder) {
+                                                                        const geocoder = new window.google.maps.Geocoder();
+                                                                        geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results, status) => {
+                                                                            setIsGettingLocation(false);
+                                                                            if (status === 'OK' && results && results[0]) {
+                                                                                setLatitude(results[0].geometry.location.lat());
+                                                                                setLongitude(results[0].geometry.location.lng());
+                                                                            }
+                                                                            setShowMapPicker(true);
+                                                                        });
+                                                                    } else {
+                                                                        setIsGettingLocation(false);
+                                                                        setShowMapPicker(true);
+                                                                    }
+                                                                } else {
+                                                                    setShowMapPicker(true);
+                                                                }
+                                                            }}
+                                                            type="button"
+                                                            className="btn-glass"
+                                                            style={{ 
+                                                                fontSize: '0.75rem', 
+                                                                background: 'white', 
+                                                                color: '#065F46', 
+                                                                border: '1px solid #A7F3D0', 
+                                                                padding: '0.7rem', 
+                                                                borderRadius: '12px', 
+                                                                cursor: 'pointer',
+                                                                fontWeight: '800',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '8px'
+                                                            }}
+                                                            disabled={isGettingLocation}
+                                                        >
+                                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />} {t.selectOnMap}
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {latitude && (() => {
+                                                    const isCustomerOutOfZone = outOfZone && !isB2B;
+                                                    return (
+                                                        <div style={{ 
+                                                            marginTop: '0.6rem', 
+                                                            padding: '0.75rem 1rem', 
+                                                            backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
+                                                            display: 'flex', 
+                                                            alignItems: 'flex-start', 
+                                                            justifyContent: 'space-between', 
+                                                            gap: '12px',
+                                                            borderRadius: '12px',
+                                                            border: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#A7F3D0'}`,
+                                                            boxShadow: '0 1px 4px rgba(22, 101, 52, 0.05)'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                                                                <div style={{
+                                                                    width: '28px',
+                                                                    height: '28px',
+                                                                    borderRadius: '50%',
+                                                                    backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0,
+                                                                    marginTop: '1px'
+                                                                }}>
+                                                                    {isCustomerOutOfZone ? (
+                                                                        <MapPin size={15} color="#D97706" strokeWidth={2} />
+                                                                    ) : (
+                                                                        <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ flex: 1 }}>
+                                                                    <p style={{ 
+                                                                        fontSize: '0.78rem', 
+                                                                        color: isCustomerOutOfZone ? '#92400E' : '#166534', 
+                                                                        margin: 0, 
+                                                                        fontWeight: '600',
+                                                                        lineHeight: '1.4',
+                                                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                                                    }}>
+                                                                        {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => { setLatitude(null); setLongitude(null); }}
+                                                                style={{ 
+                                                                    background: 'none', 
+                                                                    border: 'none', 
+                                                                    color: isCustomerOutOfZone ? '#D97706' : '#059669', 
+                                                                    cursor: 'pointer', 
+                                                                    paddingTop: '2px',
+                                                                    fontWeight: '700',
+                                                                    fontSize: '0.75rem'
+                                                                }}
+                                                            >
+                                                                {t.change}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                {/* Complemento de Dirección Destinatario */}
+                                                <div style={{ position: 'relative', marginTop: '0.6rem' }}>
+                                                    <div style={{ 
+                                                        position: 'absolute', 
+                                                        left: '12px', 
+                                                        top: 0, 
+                                                        bottom: 0, 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        color: '#059669', 
+                                                        opacity: 0.7, 
+                                                        pointerEvents: 'none' 
+                                                    }}>
+                                                        <Building2 size={15} />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder={locale === 'es' ? "Apto, Interior, Torre, Nombre del Edificio o Conjunto (Opcional)" : "Apt, Suite, Unit, Building (Optional)"}
+                                                        value={addressDetails}
+                                                        onChange={(e) => {
+                                                            setAddressDetails(e.target.value);
+                                                            localStorage.setItem('checkout_address_details', e.target.value);
+                                                        }}
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
+                                                            borderRadius: '12px', 
+                                                            border: '1px solid #A7F3D0', 
+                                                            fontSize: '0.85rem', 
+                                                            fontWeight: '500', 
+                                                            backgroundColor: 'white', 
+                                                            color: '#111827',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                                            outline: 'none' 
+                                                        }}
+                                                        className="checkout-input-modern"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             )}
 
-                            {/* 5. Dirección de Entrega (Del Destinatario o Propia) */}
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                    {isGiftForRecipient 
-                                        ? (locale === 'es' ? 'Dirección de Entrega del Destinatario *' : 'Recipient Delivery Address *')
-                                        : (locale === 'es' ? 'Dirección de Entrega *' : 'Delivery Address *')}
-                                </label>
-                                <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
-                                    <div style={{ 
-                                        position: 'absolute', 
-                                        left: '12px', 
-                                        top: 0, 
-                                        bottom: 0, 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
-                                        opacity: 0.5, 
-                                        pointerEvents: 'none' 
-                                    }}>
-                                        {isProfileMatched && !isGiftForRecipient ? <LockIcon size={14} /> : <MapPin size={15} />}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder={isGiftForRecipient ? "Ej: Calle 140 # 19-35, Apto 402" : "Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"}
-                                        value={isProfileMatched && !isGiftForRecipient ? maskedAddress : address}
-                                        onChange={(e) => handleAddressChange(e.target.value)}
-                                        readOnly={isProfileMatched && !isGiftForRecipient}
-                                        style={{ 
-                                            width: '100%', 
-                                            padding: '0.55rem 1rem 0.55rem 2.5rem', 
-                                            borderRadius: '12px', 
-                                            border: isProfileMatched && !isGiftForRecipient ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
-                                            fontSize: '0.85rem', 
-                                            fontWeight: '500', 
-                                            backgroundColor: isProfileMatched && !isGiftForRecipient ? '#F3F4F6' : 'white', 
-                                            color: isProfileMatched && !isGiftForRecipient ? '#6B7280' : '#111827',
-                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                            fontFamily: 'var(--font-outfit), sans-serif',
-                                            outline: 'none' 
-                                        }}
-                                        className="checkout-input-modern"
-                                    />
-                                </div>
-
-                                {/* GPS Capture Flow */}
-                                {address.trim().length > 3 && !latitude && (
-                                    <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                                        <button
-                                            onClick={handleGetLocation}
-                                            type="button"
-                                            className="btn-glass"
-                                            style={{ 
-                                                fontSize: '0.75rem', 
-                                                background: 'rgba(37, 99, 235, 0.05)', 
-                                                color: '#2563EB', 
-                                                border: '1px solid rgba(37, 99, 235, 0.1)', 
-                                                padding: '0.7rem', 
-                                                borderRadius: '12px', 
-                                                cursor: 'pointer',
-                                                fontWeight: '800',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px',
-                                            }}
-                                            disabled={isGettingLocation}
-                                        >
-                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
-                                            {t.currentLocation}
-                                        </button>
-
-                                        <button 
-                                            onClick={() => {
-                                                if (!latitude && address.trim().length > 5) {
-                                                    setIsGettingLocation(true);
-                                                    if (window.google && window.google.maps && window.google.maps.Geocoder) {
-                                                        const geocoder = new window.google.maps.Geocoder();
-                                                        geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results, status) => {
-                                                            setIsGettingLocation(false);
-                                                            if (status === 'OK' && results && results[0]) {
-                                                                setLatitude(results[0].geometry.location.lat());
-                                                                setLongitude(results[0].geometry.location.lng());
-                                                            }
-                                                            setShowMapPicker(true);
-                                                        });
-                                                    } else {
-                                                        setIsGettingLocation(false);
-                                                        setShowMapPicker(true);
-                                                    }
-                                                } else {
-                                                    setShowMapPicker(true);
-                                                }
-                                            }}
-                                            type="button"
-                                            className="btn-glass"
-                                            style={{ 
-                                                fontSize: '0.75rem', 
-                                                background: 'rgba(0,0,0,0.03)', 
-                                                color: 'var(--text-main)', 
-                                                border: '1px solid rgba(0,0,0,0.05)', 
-                                                padding: '0.7rem', 
-                                                borderRadius: '12px', 
-                                                cursor: 'pointer',
-                                                fontWeight: '800',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px'
-                                            }}
-                                            disabled={isGettingLocation}
-                                        >
-                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />} {t.selectOnMap}
-                                        </button>
-                                    </div>
-                                )}
-
-                                {latitude && (() => {
-                                    const isCustomerOutOfZone = outOfZone && !isB2B;
-                                    return (
+                            {/* 5. Dirección de Entrega (Entrega Directa al Comprador) */}
+                            {!isGiftForRecipient && (
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                        {locale === 'es' ? 'Dirección de Entrega *' : 'Delivery Address *'}
+                                    </label>
+                                    <div style={{ position: 'relative', marginBottom: '0.4rem' }}>
                                         <div style={{ 
-                                            marginTop: '0.6rem', 
-                                            padding: '0.75rem 1rem', 
-                                            backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
+                                            position: 'absolute', 
+                                            left: '12px', 
+                                            top: 0, 
+                                            bottom: 0, 
                                             display: 'flex', 
-                                            alignItems: 'flex-start', 
-                                            justifyContent: 'space-between',
-                                            gap: '12px',
-                                            borderRadius: '12px',
-                                            border: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#DCFCE7'}`,
-                                            boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
+                                            alignItems: 'center', 
+                                            color: isProfileMatched ? '#3B82F6' : 'var(--primary)', 
+                                            opacity: 0.5, 
+                                            pointerEvents: 'none' 
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
-                                                <div style={{
-                                                    width: '28px',
-                                                    height: '28px',
-                                                    borderRadius: '50%',
-                                                    backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
+                                            {isProfileMatched ? <LockIcon size={14} /> : <MapPin size={15} />}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
+                                            value={isProfileMatched ? maskedAddress : address}
+                                            onChange={(e) => handleAddressChange(e.target.value)}
+                                            readOnly={isProfileMatched}
+                                            style={{ 
+                                                width: '100%', 
+                                                padding: '0.55rem 1rem 0.55rem 2.5rem', 
+                                                borderRadius: '12px', 
+                                                border: isProfileMatched ? '1px dashed #93C5FD' : '1px solid #E2E8F0', 
+                                                fontSize: '0.85rem', 
+                                                fontWeight: '500', 
+                                                backgroundColor: isProfileMatched ? '#F3F4F6' : 'white', 
+                                                color: isProfileMatched ? '#6B7280' : '#111827',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                outline: 'none' 
+                                            }}
+                                            className="checkout-input-modern"
+                                        />
+                                    </div>
+
+                                    {/* GPS Capture Flow */}
+                                    {address.trim().length > 3 && !latitude && (
+                                        <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                            <button
+                                                onClick={handleGetLocation}
+                                                type="button"
+                                                className="btn-glass"
+                                                style={{ 
+                                                    fontSize: '0.75rem', 
+                                                    background: 'rgba(37, 99, 235, 0.05)', 
+                                                    color: '#2563EB', 
+                                                    border: '1px solid rgba(37, 99, 235, 0.1)', 
+                                                    padding: '0.7rem', 
+                                                    borderRadius: '12px', 
+                                                    cursor: 'pointer',
+                                                    fontWeight: '800',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    flexShrink: 0,
-                                                    marginTop: '1px'
-                                                }}>
-                                                    {isCustomerOutOfZone ? (
-                                                        <MapPin size={15} color="#D97706" strokeWidth={2} />
-                                                    ) : (
-                                                        <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
-                                                    )}
-                                                </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <p style={{ 
-                                                        fontSize: '0.78rem', 
-                                                        color: isCustomerOutOfZone ? '#92400E' : '#166534', 
-                                                        margin: 0, 
-                                                        fontWeight: '600',
-                                                        lineHeight: '1.4',
-                                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                                    }}>
-                                                        {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <button 
-                                                onClick={() => { setLatitude(null); setLongitude(null); }}
-                                                style={{ 
-                                                    background: 'none', 
-                                                    border: 'none', 
-                                                    color: isCustomerOutOfZone ? '#D97706' : '#059669', 
-                                                    cursor: 'pointer', 
-                                                    paddingTop: '2px'
+                                                    gap: '8px',
                                                 }}
+                                                disabled={isGettingLocation}
                                             >
-                                                {t.change}
+                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                                {t.currentLocation}
+                                            </button>
+
+                                            <button 
+                                                onClick={() => {
+                                                    if (!latitude && address.trim().length > 5) {
+                                                        setIsGettingLocation(true);
+                                                        if (window.google && window.google.maps && window.google.maps.Geocoder) {
+                                                            const geocoder = new window.google.maps.Geocoder();
+                                                            geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results, status) => {
+                                                                setIsGettingLocation(false);
+                                                                if (status === 'OK' && results && results[0]) {
+                                                                    setLatitude(results[0].geometry.location.lat());
+                                                                    setLongitude(results[0].geometry.location.lng());
+                                                                }
+                                                                setShowMapPicker(true);
+                                                            });
+                                                        } else {
+                                                            setIsGettingLocation(false);
+                                                            setShowMapPicker(true);
+                                                        }
+                                                    } else {
+                                                        setShowMapPicker(true);
+                                                    }
+                                                }}
+                                                type="button"
+                                                className="btn-glass"
+                                                style={{ 
+                                                    fontSize: '0.75rem', 
+                                                    background: 'rgba(0,0,0,0.03)', 
+                                                    color: 'var(--text-main)', 
+                                                    border: '1px solid rgba(0,0,0,0.05)', 
+                                                    padding: '0.7rem', 
+                                                    borderRadius: '12px', 
+                                                    cursor: 'pointer',
+                                                    fontWeight: '800',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '8px'
+                                                }}
+                                                disabled={isGettingLocation}
+                                            >
+                                                {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />} {t.selectOnMap}
                                             </button>
                                         </div>
-                                    );
-                                })()}
-                            </div>
+                                    )}
+
+                                    {latitude && (() => {
+                                        const isCustomerOutOfZone = outOfZone && !isB2B;
+                                        return (
+                                            <div style={{ 
+                                                marginTop: '0.6rem', 
+                                                padding: '0.75rem 1rem', 
+                                                backgroundColor: isCustomerOutOfZone ? '#FEFCE8' : '#F0FDF4', 
+                                                display: 'flex', 
+                                                alignItems: 'flex-start', 
+                                                justifyContent: 'space-between', 
+                                                gap: '12px',
+                                                borderRadius: '12px',
+                                                border: `1px solid ${isCustomerOutOfZone ? '#FDE68A' : '#DCFCE7'}`,
+                                                boxShadow: isCustomerOutOfZone ? '0 1px 4px rgba(217, 119, 6, 0.05)' : '0 1px 4px rgba(22, 101, 52, 0.05)'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                                                    <div style={{
+                                                        width: '28px',
+                                                        height: '28px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: isCustomerOutOfZone ? '#FEF3C7' : '#DCFCE7',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                        marginTop: '1px'
+                                                    }}>
+                                                        {isCustomerOutOfZone ? (
+                                                            <MapPin size={15} color="#D97706" strokeWidth={2} />
+                                                        ) : (
+                                                            <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+                                                        )}
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <p style={{ 
+                                                            fontSize: '0.78rem', 
+                                                            color: isCustomerOutOfZone ? '#92400E' : '#166534', 
+                                                            margin: 0, 
+                                                            fontWeight: '600',
+                                                            lineHeight: '1.4',
+                                                            fontFamily: 'var(--font-outfit), sans-serif'
+                                                        }}>
+                                                            {isCustomerOutOfZone ? t.locationOutOfZone : t.locationVerified}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => { setLatitude(null); setLongitude(null); }}
+                                                    style={{ 
+                                                        background: 'none', 
+                                                        border: 'none', 
+                                                        color: isCustomerOutOfZone ? '#D97706' : '#059669', 
+                                                        cursor: 'pointer', 
+                                                        paddingTop: '2px'
+                                                    }}
+                                                >
+                                                    {t.change}
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Complemento de Dirección: Apto, Torre, Conjunto o Edificio */}
+                                    <div style={{ position: 'relative', marginTop: '0.6rem' }}>
+                                        <div style={{ 
+                                            position: 'absolute', 
+                                            left: '12px', 
+                                            top: 0, 
+                                            bottom: 0, 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            color: '#64748B', 
+                                            opacity: 0.6, 
+                                            pointerEvents: 'none' 
+                                        }}>
+                                            <Building2 size={15} />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Apto, Interior, Torre, Nombre del Edificio o Conjunto (Opcional)"
+                                            value={addressDetails}
+                                            onChange={(e) => {
+                                                setAddressDetails(e.target.value);
+                                                localStorage.setItem('checkout_address_details', e.target.value);
+                                            }}
+                                            style={{ 
+                                                width: '100%', 
+                                                padding: '0.55rem 1rem 0.55rem 2.5rem', 
+                                                borderRadius: '12px', 
+                                                border: '1px solid #E2E8F0', 
+                                                fontSize: '0.85rem', 
+                                                fontWeight: '500', 
+                                                backgroundColor: 'white', 
+                                                color: '#111827',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                outline: 'none' 
+                                            }}
+                                            className="checkout-input-modern"
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: '800', fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>
