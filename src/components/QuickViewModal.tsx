@@ -234,7 +234,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
     const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : (isBaseInKg ? (locale === 'en' ? 'Pound 500g' : 'Libra 500g') : ((product as any).web_unit || product.unit_of_measure));
 
     const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
-    const isAvailable = product.variants && product.variants.length > 0 ? (isDefaultSelected || isSelectedPresentationLibra ? true : !!currentVariant) : true;
+    const isAvailable = product.variants && product.variants.length > 0 ? (isSelectedPresentationLibra ? true : !!currentVariant) : true;
     
     // Aplicar factor de conversión y redondeo a 50
     const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || product.base_price || 0) : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
@@ -580,7 +580,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             <button
                                 onClick={() => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
                                     const step = isWeightUnit ? 0.5 : 1;
                                     const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
                                     setQuantity(newQty);
@@ -601,32 +601,52 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             >−</button>
                             <input
                                 type="text"
+                                inputMode={((product.unit_of_measure || '').toLowerCase() === 'kg' && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg')) ? "decimal" : "numeric"}
                                 value={inputValue}
                                 onChange={(e) => {
                                     const val = e.target.value;
+                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
+
                                     if (val === '') {
                                         setInputValue('');
                                         setQuantity(0);
                                         return;
                                     }
-                                    const cleanVal = val.replace(',', '.');
-                                    if (/^\d*\.?\d*$/.test(cleanVal)) {
-                                        setInputValue(val);
-                                        const num = parseFloat(cleanVal);
+
+                                    if (!isWeightUnit) {
+                                        const cleanInt = val.replace(/[^0-9]/g, '');
+                                        setInputValue(cleanInt);
+                                        const num = parseInt(cleanInt, 10);
                                         if (!isNaN(num) && num > 0) {
                                             setQuantity(num);
+                                        }
+                                    } else {
+                                        const cleanVal = val.replace(/[^0-9.,]/g, '').replace(',', '.');
+                                        if (/^\d*\.?\d*$/.test(cleanVal)) {
+                                            setInputValue(val);
+                                            const num = parseFloat(cleanVal);
+                                            if (!isNaN(num) && num > 0) {
+                                                setQuantity(num);
+                                            }
                                         }
                                     }
                                 }}
                                 onBlur={() => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
                                     const step = isWeightUnit ? 0.5 : 1;
                                     if (quantity <= 0) {
                                         setQuantity(step);
                                         setInputValue(String(step).replace('.', ','));
                                     } else {
-                                        setInputValue(String(quantity).replace('.', ','));
+                                        if (!isWeightUnit) {
+                                            const intVal = Math.max(1, Math.round(quantity));
+                                            setQuantity(intVal);
+                                            setInputValue(String(intVal));
+                                        } else {
+                                            setInputValue(String(quantity).replace('.', ','));
+                                        }
                                     }
                                 }}
                                 style={{
@@ -643,7 +663,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             <button
                                 onClick={() => {
                                     const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
+                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
                                     const step = isWeightUnit ? 0.5 : 1;
                                     const newQty = parseFloat((quantity + step).toFixed(2));
                                     setQuantity(newQty);

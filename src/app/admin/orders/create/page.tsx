@@ -1516,6 +1516,16 @@ function CreateOrderContent() {
         });
 
         const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(3));
+        const isDiscreteUnit = !['kg', 'kilo', 'kilos'].includes((resolvedUnit || '').trim().toLowerCase());
+        if (isDiscreteUnit && (!Number.isInteger(qtyNum) || qtyNum < 1)) {
+            showToast('Para esta presentación la cantidad debe ser un número entero (1, 2, 3...)', 'error');
+            const qtyInput = document.getElementById('modal-qty-input');
+            if (qtyInput) {
+                (qtyInput as HTMLElement).focus();
+                (qtyInput as HTMLInputElement).select();
+            }
+            return;
+        }
 
         // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
         const minAllowedKg = getProductMinSaleKg(selectedProductForModal);
@@ -4469,6 +4479,7 @@ function CreateOrderContent() {
                     }
                 });
 
+                const isDiscreteUnit = !['kg', 'kilo', 'kilos'].includes((dynamicUnitLabel || '').trim().toLowerCase());
                 const parsedModalQty = parseFloat(String(modalQuantity).replace(',', '.')) || 0;
                 const calculatedTotalKg = parsedModalQty * dynamicUnitFactor;
 
@@ -4757,10 +4768,16 @@ function CreateOrderContent() {
                                         id="modal-qty-input"
                                         autoComplete="off"
                                         type="text"
+                                        inputMode={isDiscreteUnit ? "numeric" : "decimal"}
                                         value={modalQuantity}
                                         onChange={(e) => {
-                                            const val = e.target.value.replace(',', '.');
-                                            setModalQuantity(val);
+                                            if (isDiscreteUnit) {
+                                                const val = e.target.value.replace(/[^0-9]/g, '');
+                                                setModalQuantity(val);
+                                            } else {
+                                                const val = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
+                                                setModalQuantity(val);
+                                            }
                                         }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
@@ -4792,11 +4809,20 @@ function CreateOrderContent() {
                                         onBlur={(e) => {
                                             e.target.style.borderColor = '#E2E8F0';
                                             e.target.style.boxShadow = 'none';
-                                            const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
-                                            if (isNaN(parsed) || parsed <= 0) {
-                                                setModalQuantity('1');
+                                            if (isDiscreteUnit) {
+                                                const parsed = parseInt(String(modalQuantity).replace(/[^0-9]/g, ''), 10);
+                                                if (isNaN(parsed) || parsed <= 0) {
+                                                    setModalQuantity('1');
+                                                } else {
+                                                    setModalQuantity(String(parsed));
+                                                }
                                             } else {
-                                                setModalQuantity(String(parsed));
+                                                const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
+                                                if (isNaN(parsed) || parsed <= 0) {
+                                                    setModalQuantity('1');
+                                                } else {
+                                                    setModalQuantity(String(parsed));
+                                                }
                                             }
                                         }}
                                     />

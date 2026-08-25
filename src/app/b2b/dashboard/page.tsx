@@ -441,6 +441,20 @@ export default function B2BDashboard() {
             ? (parseFloat(modalQuantity.replace(',', '.')) || 1)
             : Number(modalQuantity) || 1;
 
+        let resolvedUnit = product.unit_of_measure || 'Kg';
+        Object.entries(selectedOptions).forEach(([k, v]) => {
+            if (k.toLowerCase().includes('presentaci') && v) {
+                resolvedUnit = String(v).includes('|') ? String(v).split('|')[0] : String(v);
+            }
+        });
+        const isDiscreteUnit = !['kg', 'kilo', 'kilos'].includes(resolvedUnit.trim().toLowerCase());
+        if (isDiscreteUnit && (!Number.isInteger(numericModalQty) || numericModalQty < 1)) {
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast('Para esta presentación la cantidad debe ser un número entero (1, 2, 3...)', 'error');
+            }
+            return;
+        }
+
         // Construir nombre con variantes (ej: "Lulo (Maduro, Grande)")
         const baseName = locale === 'en' ? (product.name_en || product.name) : product.name;
         let finalName = baseName;
@@ -1203,7 +1217,7 @@ export default function B2BDashboard() {
                 </div>
 
                 {/* SANDBOX MODE BANNER FOR EMPLOYEES */}
-                {!simulatedClientId && (profile?.profile_type === 'employee' || profile?.role === 'COORDINADOR ADMINISTRATIVO') && (
+                {!simulatedClientId && ((profile as any)?.profile_type === 'employee' || profile?.role === 'COORDINADOR ADMINISTRATIVO') && (
                     <div style={{
                         padding: '1rem 1.25rem',
                         marginBottom: '1.25rem',
@@ -3706,123 +3720,154 @@ export default function B2BDashboard() {
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
-                            <button
-                                onClick={() => {
-                                    const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
-                                    const next = Math.max(0.5, Math.round((current - 1) * 10) / 10);
-                                    setModalQuantity(String(next).replace('.', ','));
-                                }}
-                                style={{
-                                    width: '44px', height: '44px',
-                                    borderRadius: '50%',
-                                    border: '1px solid #CBD5E1',
-                                    backgroundColor: 'white',
-                                    fontSize: '1.4rem',
-                                    fontWeight: '900',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#334155'
-                                }}
-                            >−</button>
+                        {(() => {
+                            let resolvedUnit = selectedProductForModal.unit_of_measure || 'Kg';
+                            Object.entries(selectedOptions).forEach(([k, v]) => {
+                                if (k.toLowerCase().includes('presentaci') && v) {
+                                    resolvedUnit = String(v).includes('|') ? String(v).split('|')[0] : String(v);
+                                }
+                            });
+                            const isDiscreteUnit = !['kg', 'kilo', 'kilos'].includes(resolvedUnit.trim().toLowerCase());
 
-                            <div style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '6px', 
-                                border: '2px solid var(--primary)', 
-                                borderRadius: '14px', 
-                                padding: '0.4rem 0.9rem', 
-                                backgroundColor: '#F0FDF4',
-                                boxShadow: '0 2px 8px rgba(4, 120, 87, 0.1)'
-                            }}>
-                                <input
-                                    ref={modalInputRef}
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={String(modalQuantity)}
-                                    onChange={(e) => {
-                                        const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
-                                        setModalQuantity(val);
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Tab' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            modalConfirmBtnRef.current?.focus();
-                                        } else if (e.key === 'Tab' && e.shiftKey) {
-                                            e.preventDefault();
-                                            const hasOptions = selectedProductForModal.options_config && 
-                                                Array.isArray(selectedProductForModal.options_config) && 
-                                                selectedProductForModal.options_config.length > 0;
-                                            if (hasOptions && firstOptionSelectRef.current) {
-                                                firstOptionSelectRef.current.focus();
-                                            } else {
-                                                modalCancelBtnRef.current?.focus();
-                                            }
-                                        } else if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            confirmModalAdd();
-                                        } else if (e.key === 'Escape') {
-                                            e.preventDefault();
-                                            setSelectedProductForModal(null);
-                                        } else if (e.key === 'ArrowUp') {
-                                            e.preventDefault();
+                            return (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
+                                    <button
+                                        onClick={() => {
                                             const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
-                                            const next = Math.round((current + 1) * 10) / 10;
+                                            const step = isDiscreteUnit ? 1 : 0.5;
+                                            const next = Math.max(step, Math.round((current - step) * 10) / 10);
                                             setModalQuantity(String(next).replace('.', ','));
-                                        } else if (e.key === 'ArrowDown') {
-                                            e.preventDefault();
-                                            const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
-                                            const next = Math.max(0.5, Math.round((current - 1) * 10) / 10);
-                                            setModalQuantity(String(next).replace('.', ','));
-                                        }
-                                    }}
-                                    onBlur={() => {
-                                        const str = String(modalQuantity);
-                                        const num = parseFloat(str.replace(',', '.')) || 1;
-                                        setModalQuantity(String(num).replace('.', ','));
-                                    }}
-                                    style={{
-                                        width: '75px',
-                                        border: 'none',
-                                        fontSize: '1.4rem',
-                                        fontWeight: '900',
-                                        color: 'var(--primary)',
-                                        textAlign: 'center',
-                                        outline: 'none',
-                                        backgroundColor: 'transparent',
-                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                    }}
-                                />
-                                <span style={{ fontSize: '1.05rem', fontWeight: '800', color: '#047857' }}>
-                                    {selectedProductForModal.unit_of_measure || 'Kg'}
-                                </span>
-                            </div>
+                                        }}
+                                        style={{
+                                            width: '44px', height: '44px',
+                                            borderRadius: '50%',
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: 'white',
+                                            fontSize: '1.4rem',
+                                            fontWeight: '900',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#334155'
+                                        }}
+                                    >−</button>
 
-                            <button
-                                onClick={() => {
-                                    const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
-                                    const next = Math.round((current + 1) * 10) / 10;
-                                    setModalQuantity(String(next).replace('.', ','));
-                                }}
-                                style={{
-                                    width: '44px', height: '44px',
-                                    borderRadius: '50%',
-                                    border: 'none',
-                                    backgroundColor: 'var(--primary)',
-                                    color: 'white',
-                                    fontSize: '1.4rem',
-                                    fontWeight: '900',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(13, 122, 87, 0.25)'
-                                }}
-                            >+</button>
-                        </div>
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '6px', 
+                                        border: '2px solid var(--primary)', 
+                                        borderRadius: '14px', 
+                                        padding: '0.4rem 0.9rem', 
+                                        backgroundColor: '#F0FDF4',
+                                        boxShadow: '0 2px 8px rgba(4, 120, 87, 0.1)'
+                                    }}>
+                                        <input
+                                            ref={modalInputRef}
+                                            type="text"
+                                            inputMode={isDiscreteUnit ? "numeric" : "decimal"}
+                                            value={String(modalQuantity)}
+                                            onChange={(e) => {
+                                                if (isDiscreteUnit) {
+                                                    const val = e.target.value.replace(/[^0-9]/g, '');
+                                                    setModalQuantity(val);
+                                                } else {
+                                                    const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
+                                                    setModalQuantity(val);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Tab' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    modalConfirmBtnRef.current?.focus();
+                                                } else if (e.key === 'Tab' && e.shiftKey) {
+                                                    e.preventDefault();
+                                                    const hasOptions = selectedProductForModal.options_config && 
+                                                        Array.isArray(selectedProductForModal.options_config) && 
+                                                        selectedProductForModal.options_config.length > 0;
+                                                    if (hasOptions && firstOptionSelectRef.current) {
+                                                        firstOptionSelectRef.current.focus();
+                                                    } else {
+                                                        modalCancelBtnRef.current?.focus();
+                                                    }
+                                                } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    confirmModalAdd();
+                                                } else if (e.key === 'Escape') {
+                                                    e.preventDefault();
+                                                    setSelectedProductForModal(null);
+                                                } else if (e.key === 'ArrowUp') {
+                                                    e.preventDefault();
+                                                    const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                                    const step = isDiscreteUnit ? 1 : 0.5;
+                                                    const next = Math.round((current + step) * 10) / 10;
+                                                    setModalQuantity(String(next).replace('.', ','));
+                                                } else if (e.key === 'ArrowDown') {
+                                                    e.preventDefault();
+                                                    const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                                    const step = isDiscreteUnit ? 1 : 0.5;
+                                                    const next = Math.max(step, Math.round((current - step) * 10) / 10);
+                                                    setModalQuantity(String(next).replace('.', ','));
+                                                }
+                                            }}
+                                            onBlur={() => {
+                                                if (isDiscreteUnit) {
+                                                    const str = String(modalQuantity).replace(/[^0-9]/g, '');
+                                                    const num = parseInt(str, 10);
+                                                    if (isNaN(num) || num < 1) {
+                                                        setModalQuantity('1');
+                                                    } else {
+                                                        setModalQuantity(String(num));
+                                                    }
+                                                } else {
+                                                    const str = String(modalQuantity);
+                                                    const num = parseFloat(str.replace(',', '.')) || 1;
+                                                    setModalQuantity(String(num).replace('.', ','));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '75px',
+                                                border: 'none',
+                                                fontSize: '1.4rem',
+                                                fontWeight: '900',
+                                                color: 'var(--primary)',
+                                                textAlign: 'center',
+                                                outline: 'none',
+                                                backgroundColor: 'transparent',
+                                                fontFamily: 'var(--font-outfit), sans-serif'
+                                            }}
+                                        />
+                                        <span style={{ fontSize: '1.05rem', fontWeight: '800', color: '#047857' }}>
+                                            {resolvedUnit}
+                                        </span>
+                                    </div>
+
+                                    <button
+                                        onClick={() => {
+                                            const current = typeof modalQuantity === 'string' ? (parseFloat(modalQuantity.replace(',', '.')) || 1) : modalQuantity;
+                                            const step = isDiscreteUnit ? 1 : 0.5;
+                                            const next = Math.round((current + step) * 10) / 10;
+                                            setModalQuantity(String(next).replace('.', ','));
+                                        }}
+                                        style={{
+                                            width: '44px', height: '44px',
+                                            borderRadius: '50%',
+                                            border: 'none',
+                                            backgroundColor: 'var(--primary)',
+                                            color: 'white',
+                                            fontSize: '1.4rem',
+                                            fontWeight: '900',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 4px 10px rgba(13, 122, 87, 0.25)'
+                                        }}
+                                    >+</button>
+                                </div>
+                            );
+                        })()}
 
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button
