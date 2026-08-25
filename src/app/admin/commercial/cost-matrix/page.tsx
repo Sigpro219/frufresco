@@ -28,8 +28,7 @@ import {
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    Sun,
-    Info
+    Minus
 } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
@@ -150,6 +149,236 @@ function StatCard({ label, value, subValue, trend, color, bg = THEME.colors.surf
     );
 }
 
+function Sparkline({ data, productId }: { data: Purchase[], productId?: string }) {
+    if (!data || data.length === 0) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ 
+                    fontSize: '0.65rem', 
+                    color: '#94A3B8', 
+                    fontWeight: '700',
+                    backgroundColor: '#F8FAFC',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    border: '1px dashed #E2E8F0'
+                }}>
+                    Sin Historial
+                </span>
+            </div>
+        );
+    }
+
+    if (data.length === 1) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
+                <div style={{ width: '28px', height: '2px', backgroundColor: '#CBD5E1', borderRadius: '1px' }} />
+                <span style={{ 
+                    fontSize: '0.68rem', 
+                    color: THEME.colors.textSecondary, 
+                    fontWeight: '800',
+                    backgroundColor: '#F1F5F9',
+                    border: '1px solid #E2E8F0',
+                    padding: '2px 6px',
+                    borderRadius: '6px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px'
+                }}>
+                    <Minus size={10} /> Base
+                </span>
+            </div>
+        );
+    }
+
+    // Cronológico (del más antiguo al más reciente)
+    const prices = data.map(d => d.normalized_price).reverse();
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min || 1;
+
+    // Puntos normalizados con margen superior e inferior
+    const points = prices.map((p, i) => {
+        const x = (i / (prices.length - 1)) * 88 + 6;
+        const y = 80 - ((p - min) / range) * 60;
+        return { x, y };
+    });
+
+    const trend = (prices[prices.length - 1] - prices[0]) / (prices[0] || 1);
+    const trendPercent = Math.abs(trend * 100);
+    const isUp = trend > 0.005;
+    const isDown = trend < -0.005;
+    const isNeutral = !isUp && !isDown;
+
+    const themeColor = isUp ? '#DC2626' : isDown ? THEME.colors.primary : THEME.colors.textSecondary;
+    const bgColor = isUp ? '#FEF2F2' : isDown ? '#ECFDF5' : '#F1F5F9';
+    const borderColor = isUp ? '#FECACA' : isDown ? '#A7F3D0' : '#E2E8F0';
+    const gradId = `spark-grad-${productId ? productId.replace(/[^a-zA-Z0-9]/g, '') : Math.random().toString(36).substring(2, 7)}`;
+
+    // Curva Bezier suave (Cubic Spline)
+    let pathD = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+    for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i === 0 ? i : i - 1];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[i + 2] || p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        pathD += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.x.toFixed(1)}`;
+    }
+
+    const lastPoint = points[points.length - 1];
+    const firstPoint = points[0];
+    const areaD = `${pathD} L ${lastPoint.x.toFixed(1)},100 L ${firstPoint.x.toFixed(1)},100 Z`;
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center', padding: '0 0.1rem' }}>
+            {/* SVG Waveform con Área Sombreada y Nodo Pulsante */}
+            <div style={{ width: '64px', height: '26px', position: 'relative' }}>
+                <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                    <defs>
+                        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={themeColor} stopOpacity="0.25" />
+                            <stop offset="100%" stopColor={themeColor} stopOpacity="0.0" />
+                        </linearGradient>
+                    </defs>
+                    
+                    {/* Relleno translúcido */}
+                    <path d={areaD} fill={`url(#${gradId})`} />
+                    
+                    {/* Línea curva suave */}
+                    <path
+                        d={pathD}
+                        fill="none"
+                        stroke={themeColor}
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+
+                    {/* Nodo focal de la última compra */}
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="7" fill={themeColor} opacity="0.25" />
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="4" fill={themeColor} />
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="1.8" fill="white" />
+                </svg>
+            </div>
+
+            {/* Micro-Badge con Icono Lucide y Porcentaje */}
+            <div style={{ 
+                fontSize: '0.72rem', 
+                fontWeight: '900', 
+                color: themeColor,
+                backgroundColor: bgColor,
+                border: `1px solid ${borderColor}`,
+                padding: '2px 6px',
+                borderRadius: '6px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                minWidth: '56px',
+                justifyContent: 'center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                lineHeight: 1.2,
+                fontFamily: 'monospace'
+            }}>
+                {isUp && <TrendingUp size={11} strokeWidth={3} />}
+                {isDown && <TrendingDown size={11} strokeWidth={3} />}
+                {isNeutral && <Minus size={11} strokeWidth={3} />}
+                <span>
+                    {isUp ? '+' : isDown ? '-' : ''}
+                    {trendPercent > 999 ? '>999%' : `${trendPercent.toFixed(trendPercent < 10 ? 1 : 0)}%`}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function ActionTooltip({ 
+    children, 
+    title, 
+    description, 
+    badge, 
+    badgeColor = '#38BDF8',
+    icon 
+}: { 
+    children: React.ReactNode; 
+    title: string; 
+    description: string; 
+    badge?: string; 
+    badgeColor?: string;
+    icon?: React.ReactNode;
+}) {
+    const [visible, setVisible] = useState(false);
+
+    return (
+        <div 
+            style={{ position: 'relative', display: 'inline-flex' }}
+            onMouseEnter={() => setVisible(true)}
+            onMouseLeave={() => setVisible(false)}
+        >
+            {children}
+            {visible && (
+                <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 9px)',
+                    right: 0,
+                    width: '275px',
+                    backgroundColor: '#0F172A',
+                    color: '#F8FAFC',
+                    borderRadius: '12px',
+                    padding: '0.8rem 0.95rem',
+                    boxShadow: '0 15px 30px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+                    zIndex: 1000,
+                    pointerEvents: 'none',
+                    textAlign: 'left',
+                    fontFamily: THEME.typography.fontFamilyMain || 'system-ui, sans-serif'
+                }}>
+                    {/* Indicador de flecha */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '-5px',
+                        right: '24px',
+                        width: '10px',
+                        height: '10px',
+                        backgroundColor: '#0F172A',
+                        borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                        transform: 'rotate(45deg)'
+                    }} />
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.35rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: '800', fontSize: '0.82rem', color: '#FFFFFF' }}>
+                            {icon}
+                            <span>{title}</span>
+                        </div>
+                        {badge && (
+                            <span style={{
+                                fontSize: '0.62rem',
+                                fontWeight: '900',
+                                color: badgeColor,
+                                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                border: `1px solid ${badgeColor}33`,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                {badge}
+                            </span>
+                        )}
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.74rem', color: '#94A3B8', lineHeight: '1.45', fontWeight: '500' }}>
+                        {description}
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function ManualCostInput({ productId, onSave, savingId, currentManual, cellState }: any) {
     const [val, setVal] = useState(currentManual ? String(currentManual) : '');
     const isSaved = savingId === productId;
@@ -262,9 +491,7 @@ export default function CostMatrixPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todas');
     const [savingId, setSavingId] = useState<string | null>(null);
-    const [showHelp, setShowHelp] = useState(false);
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
-    const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [batchProgress, setBatchProgress] = useState(0);
     const [isAuthorizing, setIsAuthorizing] = useState(false);
     const [sortField, setSortField] = useState<'name' | 'last_price' | 'cost' | 'trend' | null>(null);
@@ -906,121 +1133,161 @@ export default function CostMatrixPage() {
                         </p>
                     </div>
 
-                    {/* Unified Actions Toolbar */}
+                    {/* Unified Actions Toolbar with Rich Tooltips */}
                     <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <button 
-                            onClick={handleAuthorizeAll}
-                            disabled={isAuthorizing}
-                            style={{
-                                padding: '0.65rem 1.25rem',
-                                backgroundColor: THEME.colors.primary,
-                                color: 'white',
-                                borderRadius: THEME.radius.md,
-                                fontWeight: '800',
-                                fontSize: '0.84rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                border: 'none',
-                                cursor: isAuthorizing ? 'not-allowed' : 'pointer',
-                                boxShadow: '0 2px 8px rgba(13, 122, 87, 0.25)',
-                                transition: 'all 0.2s',
-                                fontFamily: THEME.typography.fontFamilySecondary
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                        <ActionTooltip
+                            title="Autorización Inteligente"
+                            badge="IA Delta v2"
+                            badgeColor="#34D399"
+                            icon={<Brain size={15} color="#34D399" />}
+                            description="Aplica en lote el costo calculado por el algoritmo de suavizado exponencial adaptativo a todos los productos pendientes o desalineados."
                         >
-                            <Brain size={16} /> 
-                            {isAuthorizing ? `Autorizando (${batchProgress}%)...` : 'Autorización Inteligente'}
-                        </button>
+                            <button 
+                                onClick={handleAuthorizeAll}
+                                disabled={isAuthorizing}
+                                style={{
+                                    padding: '0.65rem 1.25rem',
+                                    backgroundColor: THEME.colors.primary,
+                                    color: 'white',
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '800',
+                                    fontSize: '0.84rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    border: 'none',
+                                    cursor: isAuthorizing ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 2px 8px rgba(13, 122, 87, 0.25)',
+                                    transition: 'all 0.2s',
+                                    fontFamily: THEME.typography.fontFamilySecondary
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                            >
+                                <Brain size={16} /> 
+                                {isAuthorizing ? `Autorizando (${batchProgress}%)...` : 'Autorización Inteligente'}
+                            </button>
+                        </ActionTooltip>
 
-                        <button
-                            onClick={handleExportTemplateAll}
-                            style={{
-                                padding: '0.65rem 1rem',
-                                backgroundColor: THEME.colors.surface,
-                                color: THEME.colors.textMain,
-                                borderRadius: THEME.radius.md,
-                                fontWeight: '700',
-                                fontSize: '0.82rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.45rem',
-                                border: `1px solid ${THEME.colors.border}`,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
-                            onMouseLeave={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
+                        <ActionTooltip
+                            title="Plantilla Catálogo Base"
+                            badge="Excel Masivo"
+                            badgeColor="#60A5FA"
+                            icon={<Download size={15} color="#60A5FA" />}
+                            description="Descarga el Excel oficial (.xlsx) con los 278 SKUs del catálogo, sus ID contables (ERP) y los costos vigentes listos para actualizar."
                         >
-                            <Download size={15} color={THEME.colors.primary} /> Plantilla Base
-                        </button>
+                            <button
+                                onClick={handleExportTemplateAll}
+                                style={{
+                                    padding: '0.65rem 1rem',
+                                    backgroundColor: THEME.colors.surface,
+                                    color: THEME.colors.textMain,
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '700',
+                                    fontSize: '0.82rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                onMouseLeave={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
+                            >
+                                <Download size={15} color={THEME.colors.primary} /> Plantilla Base
+                            </button>
+                        </ActionTooltip>
 
-                        <button
-                            onClick={handleExportTemplateExpired}
-                            style={{
-                                padding: '0.65rem 1rem',
-                                backgroundColor: '#FFFBEB',
-                                color: '#92400E',
-                                borderRadius: THEME.radius.md,
-                                fontWeight: '700',
-                                fontSize: '0.82rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.45rem',
-                                border: '1px solid #FDE68A',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                        <ActionTooltip
+                            title="Plantilla de Vencidos"
+                            badge="Prioridad Alta"
+                            badgeColor="#FBBF24"
+                            icon={<Clock size={15} color="#FBBF24" />}
+                            description="Descarga únicamente los SKUs sin compras recientes o cuyos precios superaron su ciclo de vida útil (14 a 30 días) para cotización urgente."
                         >
-                            <Clock size={15} color="#D97706" /> Vencidos ({stats.expiringSoon + stats.pendingCost})
-                        </button>
+                            <button
+                                onClick={handleExportTemplateExpired}
+                                style={{
+                                    padding: '0.65rem 1rem',
+                                    backgroundColor: '#FFFBEB',
+                                    color: '#92400E',
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '700',
+                                    fontSize: '0.82rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    border: '1px solid #FDE68A',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <Clock size={15} color="#D97706" /> Vencidos ({stats.expiringSoon + stats.pendingCost})
+                            </button>
+                        </ActionTooltip>
 
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            style={{
-                                padding: '0.65rem 1.1rem',
-                                backgroundColor: THEME.colors.surface,
-                                color: THEME.colors.primary,
-                                borderRadius: THEME.radius.md,
-                                fontWeight: '800',
-                                fontSize: '0.82rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.45rem',
-                                border: `1px solid ${THEME.colors.primary}`,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = THEME.colors.surface;
-                            }}
+                        <ActionTooltip
+                            title="Importación Masiva"
+                            badge="Carga Rápida"
+                            badgeColor="#34D399"
+                            icon={<Upload size={15} color="#34D399" />}
+                            description="Sube una plantilla Excel diligenciada para actualizar costos en lote. Reinicia el ciclo de vida a 0 días y deja registro en auditoría."
                         >
-                            <Upload size={15} /> Cargar Excel
-                        </button>
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                style={{
+                                    padding: '0.65rem 1.1rem',
+                                    backgroundColor: THEME.colors.surface,
+                                    color: THEME.colors.primary,
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '800',
+                                    fontSize: '0.82rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    border: `1px solid ${THEME.colors.primary}`,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = THEME.colors.surface;
+                                }}
+                            >
+                                <Upload size={15} /> Cargar Excel
+                            </button>
+                        </ActionTooltip>
 
-                        <button
-                            onClick={handleExport}
-                            style={{
-                                padding: '0.65rem 1.1rem',
-                                backgroundColor: THEME.colors.surface,
-                                color: THEME.colors.textSecondary,
-                                borderRadius: THEME.radius.md,
-                                fontWeight: '700',
-                                fontSize: '0.82rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.45rem',
-                                border: `1px solid ${THEME.colors.border}`,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                        <ActionTooltip
+                            title="Consolidado de Matriz"
+                            badge="Reporte Matriz"
+                            badgeColor="#A78BFA"
+                            icon={<BarChart3 size={15} color="#A78BFA" />}
+                            description="Genera una exportación integral con el desglose histórico de compras (1 a 8), tendencias porcentuales, costos activos y estados de vigencia."
                         >
-                            <BarChart3 size={15} /> Exportar Reporte
-                        </button>
+                            <button
+                                onClick={handleExport}
+                                style={{
+                                    padding: '0.65rem 1.1rem',
+                                    backgroundColor: THEME.colors.surface,
+                                    color: THEME.colors.textSecondary,
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '700',
+                                    fontSize: '0.82rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <BarChart3 size={15} /> Exportar Reporte
+                            </button>
+                        </ActionTooltip>
                     </div>
                 </div>
 
@@ -1270,25 +1537,33 @@ export default function CostMatrixPage() {
                                 </div>
 
                                 {/* Strategy Selector Button */}
-                                <button 
-                                    onClick={() => setIsSmartModalOpen(true)}
-                                    style={{ 
-                                        height: '38px',
-                                        padding: '0 0.8rem', 
-                                        borderRadius: THEME.radius.md, 
-                                        border: `1px solid ${THEME.colors.border}`, 
-                                        backgroundColor: THEME.colors.primaryLight, 
-                                        color: THEME.colors.primary, 
-                                        fontWeight: '800', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '0.4rem',
-                                        cursor: 'pointer',
-                                        fontSize: '0.78rem'
-                                    }}
+                                <ActionTooltip
+                                    title="Protocolo CI-Delta"
+                                    badge="Instructivo"
+                                    badgeColor="#38BDF8"
+                                    icon={<Brain size={14} color="#38BDF8" />}
+                                    description="Abre el instructivo completo del modelo de cálculo adaptativo, curvas Holt-Winters y políticas de auditoría."
                                 >
-                                    <Brain size={14} /> Algoritmo FruFresco
-                                </button>
+                                    <button 
+                                        onClick={() => setIsSmartModalOpen(true)}
+                                        style={{ 
+                                            height: '38px',
+                                            padding: '0 0.8rem', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1px solid ${THEME.colors.border}`, 
+                                            backgroundColor: THEME.colors.primaryLight, 
+                                            color: THEME.colors.primary, 
+                                            fontWeight: '800', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '0.4rem',
+                                            cursor: 'pointer',
+                                            fontSize: '0.78rem'
+                                        }}
+                                    >
+                                        <Brain size={14} /> Algoritmo FruFresco
+                                    </button>
+                                </ActionTooltip>
 
                                 {/* Refresh button */}
                                 <button 
@@ -1323,7 +1598,7 @@ export default function CostMatrixPage() {
                             WebkitOverflowScrolling: 'touch',
                             position: 'relative'
                         }}>
-                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', minWidth: '1050px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', minWidth: '1120px' }}>
                                 <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
                                     <tr style={{ 
                                         backgroundColor: '#F8FAFC', 
@@ -1414,13 +1689,13 @@ export default function CostMatrixPage() {
                                             </div>
                                         </th>
 
-                                        {/* Sortable: Tendencia */}
+                                        {/* Sortable: Tendencia con Sparkline */}
                                         <th 
                                             onClick={() => handleSort('trend')}
                                             style={{ 
                                                 padding: '0.85rem 1rem', 
                                                 textAlign: 'center', 
-                                                width: '100px', 
+                                                width: '150px', 
                                                 cursor: 'pointer', 
                                                 userSelect: 'none',
                                                 backgroundColor: '#F8FAFC',
@@ -1550,25 +1825,9 @@ export default function CostMatrixPage() {
                                                         />
                                                     </td>
 
-                                                    {/* Trend Indicator Cell */}
+                                                    {/* Trend Indicator Cell with Interactive Sparkline */}
                                                     <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        {hist.length >= 2 ? (() => {
-                                                            const diff = ((hist[0].normalized_price - hist[1].normalized_price) / hist[1].normalized_price) * 100;
-                                                            const isUp = diff > 0.5;
-                                                            const isDown = diff < -0.5;
-                                                            const color = isUp ? '#DC2626' : (isDown ? THEME.colors.primary : THEME.colors.textSecondary);
-
-                                                            return (
-                                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: color, fontWeight: '800', fontSize: '0.78rem', fontFamily: 'monospace' }}>
-                                                                    {isUp && <ArrowUpRight size={14} strokeWidth={2.5} />}
-                                                                    {isDown && <ArrowDownRight size={14} strokeWidth={2.5} />}
-                                                                    {!isUp && !isDown && <span>—</span>}
-                                                                    {Math.abs(diff) >= 0.5 && `${Math.abs(diff).toFixed(1)}%`}
-                                                                </div>
-                                                            );
-                                                        })() : (
-                                                            <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
-                                                        )}
+                                                        <Sparkline data={hist} productId={p.id} />
                                                     </td>
                                                 </tr>
                                             </Fragment>
@@ -1719,198 +1978,69 @@ export default function CostMatrixPage() {
             )}
 
             {/* --- MODAL: ESTRATEGIA ALGORÍTMICA --- */}
-            {/* --- SMART METHODOLOGY MODAL (PROTOCOLO CI-DELTA) --- */}
             {isSmartModalOpen && (
                 <div style={{
                     position: 'fixed',
                     inset: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(6px)',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    backdropFilter: 'blur(4px)',
                     zIndex: 9999,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '1.5rem',
-                    fontFamily: THEME.typography.fontFamilyMain || 'system-ui, sans-serif'
+                    padding: '1rem'
                 }}>
                     <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '24px',
-                        maxWidth: '920px',
+                        backgroundColor: THEME.colors.surface,
+                        borderRadius: THEME.radius.xl,
+                        maxWidth: '540px',
                         width: '100%',
-                        maxHeight: '90vh',
-                        overflowY: 'auto',
-                        padding: '2.5rem',
-                        position: 'relative',
-                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        padding: '2rem',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
                         textAlign: 'left'
                     }}>
-                        {/* Close button */}
-                        <button 
-                            onClick={() => {
-                                setIsSmartModalOpen(false);
-                                setSelectedProductForModal(null);
-                            }}
-                            style={{ 
-                                position: 'absolute', 
-                                top: '1.5rem', 
-                                right: '1.5rem', 
-                                border: 'none', 
-                                background: '#F3F4F6', 
-                                borderRadius: '50%',
-                                width: '36px',
-                                height: '36px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer', 
-                                color: '#6B7280',
-                                transition: 'all 0.2s'
-                            }}
-                            title="Cerrar"
-                        >
-                            <X size={20} />
-                        </button>
-
-                        {/* Modal Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', marginBottom: '2rem' }}>
-                            <div style={{ 
-                                backgroundColor: '#DBEAFE', 
-                                padding: '1rem', 
-                                borderRadius: '18px', 
-                                color: '#1E40AF',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}>
-                                <Brain size={36} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Brain size={22} color={THEME.colors.primary} />
+                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
+                                    Algoritmo de Precios FruFresco
+                                </h3>
                             </div>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                    <h2 style={{ margin: 0, fontSize: '1.7rem', fontWeight: '900', color: '#111827', letterSpacing: '-0.02em' }}>
-                                        Protocolo CI-Delta (Costo Inteligente)
-                                    </h2>
-                                    <span style={{ 
-                                        backgroundColor: '#EFF6FF', 
-                                        color: '#2563EB', 
-                                        fontSize: '0.72rem', 
-                                        fontWeight: '800', 
-                                        padding: '3px 8px', 
-                                        borderRadius: '6px',
-                                        border: '1px solid #BFDBFE'
-                                    }}>
-                                        v2.0 AI-Delta
-                                    </span>
-                                </div>
-                                <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontWeight: '600', fontSize: '0.92rem' }}>
-                                    Metodología de Suavizado Exponencial Adaptativo y Calibración Comercial
-                                </p>
+                            <button
+                                onClick={() => setIsSmartModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.84rem', color: THEME.colors.textSecondary, lineHeight: '1.5' }}>
+                            <p style={{ margin: 0 }}>
+                                El motor analiza las últimas 8 órdenes de compra normalizadas a la unidad de medida estándar del SKU y pondera las señales bajo 3 factores:
+                            </p>
+                            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                <strong style={{ color: THEME.colors.textMain }}>1. Frescura Temporal:</strong> Compras registradas en los últimos 7 días tienen una ponderación del 50% al 80%.
+                            </div>
+                            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                <strong style={{ color: THEME.colors.textMain }}>2. Sensibilidad a la Volatilidad:</strong> Variaciones bruscas (&gt;10%) priorizan el precio más reciente para proteger el margen bruto.
+                            </div>
+                            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                <strong style={{ color: THEME.colors.textMain }}>3. Ciclo de Vida:</strong> Alertas automáticas para SKUs sin señal de compra en más de 14 días.
                             </div>
                         </div>
 
-                        {selectedProductForModal && (
-                            <div style={{ marginBottom: '2rem', padding: '1.2rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
-                                <div style={{ fontWeight: '800', color: '#374151' }}>Análisis Maestro para: <span style={{ color: '#2563EB' }}>{selectedProductForModal.name}</span></div>
-                                <div style={{ fontSize: '0.85rem', color: '#6B7280' }}>ID ERP: {selectedProductForModal.accounting_id || '—'} | SKU: {selectedProductForModal.sku} | Cat: {CATEGORY_MAP[selectedProductForModal.category] || selectedProductForModal.category}</div>
-                            </div>
-                        )}
-
-                        {/* Top 2 Columns: Time Decay & Reactive + SVG Chart */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '2rem', marginBottom: '2.2rem' }}>
-                            <div>
-                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
-                                    <Clock size={20} color="#3B82F6" /> 1. Factor de Frescura (Time-Decay)
-                                </h4>
-                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: 0 }}>
-                                    El sistema evalúa la antigüedad de la última compra. Si el dato tiene <b>menos de 7 días</b>, se le otorga confianza plena (Alpha = 0.5). A partir del día 8, el sistema aplica una <b>degradación de confianza del 5% diario</b> para proteger el margen contra la inflación acumulada.
-                                </p>
-
-                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-                                    <Cpu size={20} color="#10B981" /> 2. Modo Reactivo vs. Estable
-                                </h4>
-                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: 0 }}>
-                                    Si detectamos un cambio brusco (mayor al 10%) entre las últimas dos compras, el algoritmo incrementa su sensibilidad <b>(Alpha = 0.8)</b> para recalibrar el costo de inmediato. En mercados estables, mantiene la inercia para filtrar el ruido.
-                                </p>
-                            </div>
-
-                            {/* Impact Curve SVG Card */}
-                            <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <h4 style={{ color: '#111827', fontWeight: '900', textAlign: 'center', margin: '0 0 0.8rem 0', fontSize: '0.92rem' }}>
-                                    Impacto en la Curva CI
-                                </h4>
-                                <div style={{ height: '130px', width: '100%', position: 'relative' }}>
-                                    <svg width="100%" height="100%" viewBox="0 0 100 50">
-                                        {/* Reference Line */}
-                                        <line x1="0" y1="40" x2="100" y2="40" stroke="#E2E8F0" strokeWidth="0.5" />
-                                        {/* Raw Price Line (Jagged) */}
-                                        <path d="M 0 40 L 20 10 L 40 45 L 60 15 L 80 40 L 100 20" fill="none" stroke="#CBD5E1" strokeWidth="1.2" strokeDasharray="2" />
-                                        {/* Smart Cost Line (Smooth Bezier) */}
-                                        <path d="M 0 40 Q 20 20, 40 30 Q 60 20, 80 30 T 100 25" fill="none" stroke="#2563EB" strokeWidth="2.8" />
-                                        <circle cx="100" cy="25" r="3.5" fill="#2563EB" />
-                                        <circle cx="100" cy="25" r="1.5" fill="white" />
-                                    </svg>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid #F1F5F9' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>
-                                        <div style={{ width: '12px', height: '0px', borderBottom: '2px dashed #CBD5E1' }}></div> Precio Real
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: '800', color: '#2563EB' }}>
-                                        <div style={{ width: '12px', height: '3px', backgroundColor: '#2563EB', borderRadius: '2px' }}></div> Costo Smart
-                                    </div>
-                                </div>
-                                <div style={{ marginTop: '0.8rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748B', fontStyle: 'italic', lineHeight: '1.3' }}>
-                                    "Promedio Ponderado adaptativo por relevancia temporal y volatilidad de mercado."
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Bottom 2 Columns: Seasonality & Governance */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '2rem', borderTop: '1px solid #F1F5F9', paddingTop: '1.8rem' }}>
-                            <div>
-                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
-                                    <Sun size={20} color="#F59E0B" /> 3. Agente de Cosecha (Seasonality)
-                                </h4>
-                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: '0 0 1.5rem 0' }}>
-                                    El CI-Delta analiza 15 meses de historia para detectar ciclos de abundancia. Si el costo actual es un 10% menor al histórico del mismo mes del año anterior, el sistema marca el producto como <b>"Temporada de Cosecha"</b> para priorizar su aprovisionamiento.
-                                </p>
-
-                                <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
-                                    <ShieldAlert size={20} color="#EF4444" /> 4. Peritaje y Ciclo de Vida
-                                </h4>
-                                <p style={{ fontSize: '0.88rem', color: '#4B5563', lineHeight: '1.6', margin: 0 }}>
-                                    Cuando no se reciben órdenes de compra por más de <b>14 a 30 días</b>, el sistema marca el costo como <b>Vencido / Requiere Cotización</b>. Toda entrada manual o carga masiva reinicia el ciclo de vida a 0 días.
-                                </p>
-                            </div>
-
-                            {/* Governance & Revisoría Card */}
-                            <div style={{ backgroundColor: '#FFF7ED', padding: '1.5rem', borderRadius: '16px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                                    Estatus Peritaje Comercial
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#C2410C', fontWeight: '900', fontSize: '1.1rem' }}>
-                                    <ShieldAlert size={24} /> Auditable para Revisoría
-                                </div>
-                                <div style={{ fontSize: '0.82rem', color: '#9A3412', marginTop: '0.8rem', lineHeight: '1.5', fontWeight: '500' }}>
-                                    Basado en el modelo de Holt-Winters simplificado. Las señales manuales y cargas masivas de Excel se integran con peso prioritario sobre la inercia del algoritmo y quedan trazadas en la bitácora de auditoría.
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', borderTop: '1px solid #F1F5F9', paddingTop: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                             <button
                                 onClick={() => setIsSmartModalOpen(false)}
                                 style={{
-                                    padding: '0.75rem 1.8rem',
+                                    padding: '0.65rem 1.4rem',
                                     backgroundColor: THEME.colors.primary,
                                     color: 'white',
                                     borderRadius: THEME.radius.md,
                                     border: 'none',
                                     fontWeight: '800',
-                                    fontSize: '0.9rem',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(22, 101, 52, 0.2)',
-                                    transition: 'all 0.2s ease'
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
                                 }}
                             >
                                 Entendido
