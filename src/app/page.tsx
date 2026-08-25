@@ -11,6 +11,7 @@ import { Suspense } from 'react';
 import ProductGridContainer from '../components/ProductGridContainer';
 import ProductSkeleton from '../components/ProductSkeleton';
 import HeroActions from '../components/HeroActions';
+import ReorderHeroBanner from '../components/ReorderHeroBanner';
 
 export const revalidate = 60; // Auto-revalidate every 60s fallback, plus on-demand revalidation
 
@@ -414,6 +415,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             <div style={{ display: 'flex', justifyContent: 'inherit' }} className="hero-actions-wrapper">
               <HeroActions t={t} isB2bEnabled={isB2bEnabled} />
             </div>
+            <ReorderHeroBanner />
           </div>
         </div>
 

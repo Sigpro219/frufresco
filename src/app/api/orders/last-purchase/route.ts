@@ -16,16 +16,17 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url);
         const profileId = (searchParams.get('profile_id') || '').trim();
-        const email = (searchParams.get('email') || '').trim();
+        const email = (searchParams.get('email') || '').trim().toLowerCase();
         const phone = (searchParams.get('phone') || '').replace(/\D/g, '');
         const identification = (searchParams.get('identification') || '').trim();
+        const targetOrderId = (searchParams.get('target_order_id') || '').trim();
 
         if (!profileId && !email && !phone && !identification) {
             return NextResponse.json({ error: 'Debes ingresar tu correo, teléfono o cédula/NIT para buscar tu compra anterior.' }, { status: 400 });
         }
 
         const isValidUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-        const candidateOrders: any[] = [];
+        const candidateOrdersMap = new Map<string, any>();
 
         // 1. Intentar por profile_id si es un UUID válido
         if (profileId && isValidUuid(profileId)) {
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
                 .eq('profile_id', profileId)
                 .order('created_at', { ascending: false })
                 .limit(5);
-            if (data) candidateOrders.push(...data);
+            if (data) data.forEach((o: any) => candidateOrdersMap.set(o.id, o));
         }
 
         // 2. Buscar perfiles coincidentes por email, nit o teléfono, y traer sus pedidos
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
                     .in('profile_id', pids)
                     .order('created_at', { ascending: false })
                     .limit(5);
-                if (data) candidateOrders.push(...data);
+                if (data) data.forEach((o: any) => candidateOrdersMap.set(o.id, o));
             }
         }
 
@@ -75,32 +76,38 @@ export async function GET(request: Request) {
             if (filterParts.length > 0) {
                 notesQuery = notesQuery.or(filterParts.join(','));
                 const { data } = await notesQuery.order('created_at', { ascending: false }).limit(5);
-                if (data) candidateOrders.push(...data);
+                if (data) data.forEach((o: any) => candidateOrdersMap.set(o.id, o));
             }
         }
 
+        const candidateOrders = Array.from(candidateOrdersMap.values());
+
         // Ordenar candidatos por fecha descendente
         candidateOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        const lastOrder = candidateOrders[0] || null;
-
-        if (!lastOrder) {
+        
+        if (candidateOrders.length === 0) {
             return NextResponse.json({ error: 'No encontramos compras anteriores asociadas a tus datos.' }, { status: 404 });
         }
 
-        // Consultar los ítems del último pedido (nota: product_name no existe en la base de datos)
+        // Seleccionar pedido objetivo: target_order_id si existe o el más reciente
+        const selectedOrder = targetOrderId 
+            ? candidateOrders.find(o => o.id === targetOrderId) || candidateOrders[0]
+            : candidateOrders[0];
+
+        // Consultar los ítems del pedido seleccionado
         const { data: orderItems, error: itemsErr } = await supabase
             .from('order_items')
             .select('product_id, quantity')
-            .eq('order_id', lastOrder.id);
+            .eq('order_id', selectedOrder.id);
 
         if (itemsErr || !orderItems || orderItems.length === 0) {
-            return NextResponse.json({ error: 'El último pedido no contiene productos registrados.' }, { status: 404 });
+            return NextResponse.json({ error: 'El pedido seleccionado no contiene productos registrados.' }, { status: 404 });
         }
 
         // Consultar SIEMPRE LOS PRECIOS ACTUALES DE HOY en el catálogo activo
         const productIds = orderItems.map((i: any) => i.product_id).filter(Boolean);
         if (productIds.length === 0) {
-            return NextResponse.json({ error: 'Los productos de tu última compra no están disponibles actualmente.' }, { status: 404 });
+            return NextResponse.json({ error: 'Los productos de tu compra anterior no están disponibles actualmente.' }, { status: 404 });
         }
 
         // Modelo por defecto B2C: Clientes Hogar
@@ -150,11 +157,19 @@ export async function GET(request: Request) {
             }
         }
 
+        // Micro-Historial: Tomar los 3 pedidos más recientes
+        const recentOrders = candidateOrders.slice(0, 3).map((o: any) => ({
+            id: o.id,
+            created_at: o.created_at,
+            total: o.total
+        }));
+
         return NextResponse.json({
             success: true,
-            order_id: lastOrder.id,
-            created_at: lastOrder.created_at,
-            items: itemsToImport
+            order_id: selectedOrder.id,
+            created_at: selectedOrder.created_at,
+            items: itemsToImport,
+            recent_orders: recentOrders
         });
 
     } catch (err: any) {
