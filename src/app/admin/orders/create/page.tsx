@@ -4341,15 +4341,24 @@ function CreateOrderContent() {
 
                 // Normalizar y prepend/sort las opciones configuradas del producto para pedidos manuales
                 const normalizedOptionsConfig = (selectedProductForModal.options_config || []).map((opt: any) => {
-                    let values = opt.values || [];
-                    if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+                    let values: string[] = opt.values || [];
+                    const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                    const isKgProduct = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+
+                    if (isPresentation) {
                         values = values.filter((v: string) => {
                             const clean = v.toLowerCase();
                             return !clean.includes('libra') && !clean.includes('pound') && !clean.includes('unidad web');
                         });
-                        const defaultVal = selectedProductForModal.unit_of_measure || 'Kg';
-                        if (values.length === 0) {
-                            values = [defaultVal];
+                        
+                        // Si el producto se compra en KG, asegurar siempre que 'Kg' sea la primera opción
+                        if (isKgProduct) {
+                            const hasKg = values.some(v => v.toLowerCase() === 'kg' || v.toLowerCase().startsWith('kg|'));
+                            if (!hasKg) {
+                                values = ['Kg', ...values];
+                            }
+                        } else if (values.length === 0) {
+                            values = [selectedProductForModal.unit_of_measure || 'Unidad'];
                         }
                     }
                     
@@ -4357,8 +4366,18 @@ function CreateOrderContent() {
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {
                         const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
                         const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
-                        if (cleanA.toLowerCase() === defaultUnit) return -1;
-                        if (cleanB.toLowerCase() === defaultUnit) return 1;
+                        
+                        // 'Kg' o unidad base siempre al inicio si es producto por peso
+                        if (cleanA.toLowerCase() === defaultUnit && cleanB.toLowerCase() !== defaultUnit) return -1;
+                        if (cleanB.toLowerCase() === defaultUnit && cleanA.toLowerCase() !== defaultUnit) return 1;
+
+                        // Ordenar numéricamente por gramaje extraído
+                        const weightA = getParsedWeight(valA);
+                        const weightB = getParsedWeight(valB);
+                        if (weightA !== null && weightB !== null) {
+                            if (weightA !== weightB) return weightA - weightB;
+                        }
+                        
                         return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
                     });
                     
