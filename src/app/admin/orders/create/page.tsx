@@ -109,6 +109,62 @@ const getAccountingIdDisplay = (product: any) => {
     return product.id || '';
 };
 
+const getParsedWeight = (text: string): number | null => {
+    if (!text) return null;
+    if (text.includes('|')) {
+        const parts = text.split('|');
+        const grams = parseFloat(parts[1]);
+        if (!isNaN(grams) && grams > 0) return grams / 1000;
+    }
+    const clean = text.toLowerCase();
+    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
+    if (kgMatch) {
+        const val = parseFloat(kgMatch[1]);
+        if (!isNaN(val) && val > 0) return val;
+    }
+    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
+    if (gMatch) {
+        const val = parseFloat(gMatch[1]);
+        if (!isNaN(val) && val > 0) return val / 1000;
+    }
+    if (clean.includes('libra') || clean.includes('lb')) return 0.5;
+    return null;
+};
+
+const getProductMinSaleKg = (product: any): number | null => {
+    if (!product) return null;
+    const isWeightProd = (product.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+    if (!isWeightProd) return null;
+
+    let minKg = product.weight_kg !== undefined && product.weight_kg !== null && Number(product.weight_kg) > 0
+        ? Number(product.weight_kg)
+        : 0.1;
+
+    const presentationWeights: number[] = [];
+
+    if (Array.isArray(product.options_config)) {
+        product.options_config.forEach((opt: any) => {
+            if (opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad') || opt.name.toLowerCase().includes('tamaño'))) {
+                (opt.values || []).forEach((val: string) => {
+                    const pw = getParsedWeight(val);
+                    if (pw !== null && pw > 0) {
+                        presentationWeights.push(pw);
+                    }
+                });
+            }
+        });
+    }
+
+    if (presentationWeights.length > 0) {
+        const minVariantWeight = Math.min(...presentationWeights);
+        if (minVariantWeight > minKg) {
+            minKg = minVariantWeight;
+        }
+    }
+
+    return minKg;
+};
+
 function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1150,11 +1206,7 @@ function CreateOrderContent() {
         const baseQty = parseFloat((qty * resolvedFactor).toFixed(3));
 
         // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
-        const isWeightProd = (product.unit_of_measure || 'Kg').toLowerCase() === 'kg';
-        const minAllowedKg = isWeightProd 
-            ? (product.weight_kg !== undefined && product.weight_kg !== null ? Number(product.weight_kg) : 0.1)
-            : null;
-
+        const minAllowedKg = getProductMinSaleKg(product);
         if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
             showToast(`La cantidad mínima de venta para ${product.name} es de ${formatNumber(minAllowedKg, 2)} kg`, 'error');
             return;
@@ -1466,10 +1518,7 @@ function CreateOrderContent() {
         const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(3));
 
         // Poka-Yoke: Validar cantidad mínima de venta para productos por peso
-        const isWeightProd = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';
-        const minAllowedKg = isWeightProd 
-            ? (selectedProductForModal.weight_kg !== undefined && selectedProductForModal.weight_kg !== null ? Number(selectedProductForModal.weight_kg) : 0.1)
-            : null;
+        const minAllowedKg = getProductMinSaleKg(selectedProductForModal);
 
         if (minAllowedKg !== null && baseQty < minAllowedKg - 0.0001) {
             showToast(`La cantidad mínima de venta para este producto es de ${formatNumber(minAllowedKg, 2)} kg`, 'error');
@@ -4316,29 +4365,6 @@ function CreateOrderContent() {
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
                 const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
-                // Helper to extract weight in Kg from text
-                const getParsedWeight = (text: string): number | null => {
-                    if (!text) return null;
-                    if (text.includes('|')) {
-                        const parts = text.split('|');
-                        const grams = parseFloat(parts[1]);
-                        if (!isNaN(grams) && grams > 0) return grams / 1000;
-                    }
-                    const clean = text.toLowerCase();
-                    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
-                    if (kgMatch) {
-                        const val = parseFloat(kgMatch[1]);
-                        if (!isNaN(val) && val > 0) return val;
-                    }
-                    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
-                    if (gMatch) {
-                        const val = parseFloat(gMatch[1]);
-                        if (!isNaN(val) && val > 0) return val / 1000;
-                    }
-                    if (clean.includes('libra') || clean.includes('lb')) return 0.5;
-                    return null;
-                };
-
                 // Normalizar y prepend/sort las opciones configuradas del producto para pedidos manuales
                 const normalizedOptionsConfig = (selectedProductForModal.options_config || []).map((opt: any) => {
                     let values: string[] = opt.values || [];
@@ -4446,10 +4472,7 @@ function CreateOrderContent() {
                 const parsedModalQty = parseFloat(String(modalQuantity).replace(',', '.')) || 0;
                 const calculatedTotalKg = parsedModalQty * dynamicUnitFactor;
 
-                const isWeightProduct = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';
-                const minSaleLimitKg = isWeightProduct 
-                    ? (selectedProductForModal.weight_kg !== undefined && selectedProductForModal.weight_kg !== null ? Number(selectedProductForModal.weight_kg) : 0.1) 
-                    : null;
+                const minSaleLimitKg = getProductMinSaleKg(selectedProductForModal);
                 const hasSpecialMinSale = minSaleLimitKg !== null && minSaleLimitKg > 0.1;
 
                 return (
