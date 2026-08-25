@@ -61,6 +61,13 @@ const translateDetailsKey = (key: string) => {
     if (k === 'category') return 'Categoría';
     if (k === 'unit_of_measure') return 'Unidad de Medida';
     if (k === 'image_url') return 'URL de Imagen';
+    if (k === 'manual_cost' || k === 'cost' || k === 'costo') return 'Costo Manual';
+    if (k === 'smart_cost') return 'Costo Sugerido IA';
+    if (k === 'accounting_id') return 'ID Contable';
+    if (k === 'source') return 'Origen';
+    if (k === 'file_name') return 'Archivo Excel';
+    if (k === 'carga_masiva') return 'Carga Masiva';
+    if (k === 'autorizacion_masiva') return 'Autorización Masiva';
     return key;
 };
 
