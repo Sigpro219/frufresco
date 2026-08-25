@@ -5,7 +5,8 @@ import { useCart } from '../../lib/cartContext';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Map } from '@vis.gl/react-google-maps';
+import { Map, useMap } from '@vis.gl/react-google-maps';
+import { Polygon } from '@/components/admin/GeofencingManager';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
 import { DEFAULT_CUTOFF_HOUR } from '../../lib/constants';
@@ -50,6 +51,15 @@ import dynamic from 'next/dynamic';
 
 const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), { ssr: false });
 
+function MapController({ center }: { center: { lat: number; lng: number } | null }) {
+    const map = useMap();
+    useEffect(() => {
+        if (!map || !center || !center.lat || !center.lng) return;
+        map.panTo(center);
+    }, [map, center]);
+    return null;
+}
+
 export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart, updateItemQuantity, addItem } = useCart();
     const [isMounted, setIsMounted] = useState(false);
@@ -78,6 +88,7 @@ export default function CheckoutPage() {
     const [isRegisteringRejection, setIsRegisteringRejection] = useState(false);
     const [showMapPicker, setShowMapPicker] = useState(false);
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
+    const [b2bGeofence, setB2bGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
     const [specialNotes, setSpecialNotes] = useState('');
     const [notesJustSaved, setNotesJustSaved] = useState(false);
@@ -157,6 +168,7 @@ export default function CheckoutPage() {
     const roundedSubtotal = Math.round(totalPrice - roundedTaxAmount);
 
     const isB2B = profile?.role === 'b2b_client';
+    const activeGeofence = isB2B ? (b2bGeofence.length > 0 ? b2bGeofence : b2cGeofence) : b2cGeofence;
 
     const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(true);
     const [packagingFeePercentage, setPackagingFeePercentage] = useState(3);
@@ -464,11 +476,26 @@ export default function CheckoutPage() {
     }, [email, identification, phone, matchedProfileId, unlockedEmail, unlockedId, unlockedPhone]);
 
     useEffect(() => {
-        async function fetchGeofence() {
-            const { data } = await supabase.from('app_settings').select('value').eq('key', 'geofence_b2c_poly').single();
-            if (data) setB2cGeofence(JSON.parse(data.value));
+        async function fetchGeofences() {
+            try {
+                const { data } = await supabase.from('app_settings')
+                    .select('key, value')
+                    .in('key', ['geofence_b2c_poly', 'geofence_b2b_poly']);
+                if (data) {
+                    data.forEach((row) => {
+                        if (row.key === 'geofence_b2c_poly' && row.value) {
+                            try { setB2cGeofence(JSON.parse(row.value)); } catch (e) {}
+                        }
+                        if (row.key === 'geofence_b2b_poly' && row.value) {
+                            try { setB2bGeofence(JSON.parse(row.value)); } catch (e) {}
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Error fetching geofences:', err);
+            }
         }
-        fetchGeofence();
+        fetchGeofences();
 
         const testCoordsHandler = (e: any) => {
             if (e.detail?.lat && e.detail?.lng) {
@@ -495,11 +522,11 @@ export default function CheckoutPage() {
 
     // Perform validation whenever coordinates change
     useEffect(() => {
-        if (latitude && longitude && b2cGeofence.length > 0) {
-            const inside = isInsidePolygon({ lat: latitude, lng: longitude }, b2cGeofence);
+        if (latitude && longitude && activeGeofence.length > 0) {
+            const inside = isInsidePolygon({ lat: latitude, lng: longitude }, activeGeofence);
             setOutOfZone(!inside);
         }
-    }, [latitude, longitude, b2cGeofence]);
+    }, [latitude, longitude, activeGeofence]);
 
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
@@ -2685,68 +2712,143 @@ export default function CheckoutPage() {
                         </div>
                         
                         <div style={{ flex: 1, position: 'relative' }}>
+                            {/* Badge sutil de zona de cobertura */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '14px',
+                                left: '14px',
+                                zIndex: 2,
+                                backgroundColor: 'rgba(255, 255, 255, 0.94)',
+                                backdropFilter: 'blur(8px)',
+                                padding: '6px 14px',
+                                borderRadius: '12px',
+                                border: '1px solid #E2E8F0',
+                                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontFamily: 'var(--font-outfit), sans-serif',
+                                pointerEvents: 'none'
+                            }}>
+                                <div style={{
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#10B981',
+                                    boxShadow: '0 0 0 3px rgba(16, 185, 129, 0.25)'
+                                }} />
+                                <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#065F46' }}>
+                                    {locale === 'es' ? 'Zona de Cobertura (Área Verde)' : 'Delivery Coverage Zone'}
+                                </span>
+                            </div>
 
-                                <Map
-                                    defaultCenter={{ lat: latitude || 4.6097, lng: longitude || -74.0817 }} // Uses geocoded address or Bogota
-                                    defaultZoom={15}
-                                    mapId="DEMO_MAP_ID"
-                                    onCenterChanged={(e) => {
-                                        const center = e.map.getCenter();
-                                        if (center) {
-                                            setLatitude(center.lat());
-                                            setLongitude(center.lng());
-                                        }
-                                    }}
-                                >
-                                    {/* Visual center helper */}
-                                    <div style={{
-                                        position: 'absolute', top: '50%', left: '50%',
-                                        transform: 'translate(-50%, -100%)', zIndex: 1,
-                                        pointerEvents: 'none',
-                                        filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.3))'
+                            <Map
+                                defaultCenter={{ lat: latitude || 4.6097, lng: longitude || -74.0817 }} // Uses geocoded address or Bogota
+                                defaultZoom={15}
+                                mapId="DEMO_MAP_ID"
+                                gestureHandling={'greedy'}
+                                onCenterChanged={(e) => {
+                                    const center = e.map.getCenter();
+                                    if (center) {
+                                        setLatitude(center.lat());
+                                        setLongitude(center.lng());
+                                    }
+                                }}
+                            >
+                                <MapController center={latitude && longitude ? { lat: latitude, lng: longitude } : null} />
+
+                                {/* Polígono Sutil de Cobertura */}
+                                {activeGeofence && activeGeofence.length > 0 && (
+                                    <Polygon 
+                                        paths={activeGeofence}
+                                        fillColor="#10B981"
+                                        fillOpacity={0.14}
+                                        strokeColor="#10B981"
+                                        strokeWeight={2}
+                                        strokeOpacity={0.85}
+                                        clickable={false}
+                                    />
+                                )}
+
+                                {/* Visual center helper */}
+                                <div style={{
+                                    position: 'absolute', top: '50%', left: '50%',
+                                    transform: 'translate(-50%, -100%)', zIndex: 1,
+                                    pointerEvents: 'none',
+                                    filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.3))'
+                                }}>
+                                    <div style={{ 
+                                        backgroundColor: (outOfZone && !isB2B) ? '#EF4444' : 'var(--primary)', 
+                                        color: 'white', 
+                                        padding: '8px', 
+                                        borderRadius: '50% 50% 50% 0',
+                                        transform: 'rotate(-45deg)',
+                                        width: '40px',
+                                        height: '40px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        border: '3px solid white',
+                                        transition: 'background-color 0.25s ease'
                                     }}>
-                                        <div style={{ 
-                                            backgroundColor: 'var(--primary)', 
-                                            color: 'white', 
-                                            padding: '8px', 
-                                            borderRadius: '50% 50% 50% 0',
-                                            transform: 'rotate(-45deg)',
-                                            width: '40px',
-                                            height: '40px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            border: '3px solid white'
-                                        }}>
-                                            <div style={{ transform: 'rotate(45deg)' }}>
-                                                <MapPin size={20} fill="white" />
-                                            </div>
+                                        <div style={{ transform: 'rotate(45deg)' }}>
+                                            <MapPin size={20} fill="white" />
                                         </div>
                                     </div>
-                                </Map>
+                                </div>
+                            </Map>
                         </div>
 
-                        <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '2rem', borderTop: '1px solid var(--border)' }}>
-                            <div style={{ marginRight: 'auto' }}>
-                                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{locale === 'es' ? 'Coordenadas Detectadas' : 'Detected Coordinates'}</p>
-                                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '700', fontFamily: 'monospace' }}>
-                                    {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
-                                </p>
+                        <div style={{ padding: '1.25rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1.5rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                            <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                                <div>
+                                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{locale === 'es' ? 'Coordenadas Detectadas' : 'Detected Coordinates'}</p>
+                                    <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-main)', fontWeight: '700', fontFamily: 'monospace' }}>
+                                        {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
+                                    </p>
+                                </div>
+                                {latitude && longitude && activeGeofence.length > 0 && (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 12px',
+                                        borderRadius: '99px',
+                                        backgroundColor: (outOfZone && !isB2B) ? '#FEF2F2' : '#ECFDF5',
+                                        border: `1px solid ${(outOfZone && !isB2B) ? '#FECACA' : '#A7F3D0'}`,
+                                        color: (outOfZone && !isB2B) ? '#DC2626' : '#059669',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                    }}>
+                                        {(outOfZone && !isB2B) ? (
+                                            <>
+                                                <AlertCircle size={14} color="#DC2626" />
+                                                <span>{locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 size={14} color="#059669" />
+                                                <span>{locale === 'es' ? '¡Dentro de Cobertura!' : 'Within Coverage Area!'}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <button 
                                 onClick={() => setShowMapPicker(false)}
                                 className="btn-premium"
                                 style={{ 
-                                    padding: '1rem 2.5rem', 
+                                    padding: '0.85rem 2.25rem', 
                                     borderRadius: 'var(--radius-full)', 
                                     fontWeight: '900',
-                                    fontSize: '1rem',
+                                    fontSize: '0.95rem',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '10px'
                                 }}
                             >
-                                <CheckCircle2 size={20} /> {locale === 'es' ? 'Confirmar Ubicación' : 'Confirm Location'}
+                                <CheckCircle2 size={18} /> {locale === 'es' ? 'Confirmar Ubicación' : 'Confirm Location'}
                             </button>
                         </div>
                     </div>
