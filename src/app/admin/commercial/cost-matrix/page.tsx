@@ -36,36 +36,42 @@ const formatNumberWithDots = (val: number) => {
     return Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: any) {
+function StatCard({ label, value, subValue, trend, color, bg = 'white', icon, onClick, active }: any) {
     return (
-        <div style={{ 
-            backgroundColor: bg, 
-            padding: '0.6rem 1rem', 
-            borderRadius: '16px', 
-            border: '1px solid #E2E8F0', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '0.2rem', 
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', 
-            transition: 'all 0.3s ease',
-            position: 'relative',
-            overflow: 'hidden'
-        }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-4px)';
-            e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.05)';
-        }} onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.02)';
-        }}>
+        <div 
+            onClick={onClick}
+            style={{ 
+                backgroundColor: bg, 
+                padding: '0.6rem 1rem', 
+                borderRadius: '16px', 
+                border: active ? `2px solid ${color}` : '1px solid #E2E8F0', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '0.2rem', 
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', 
+                transition: 'all 0.2s ease',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: onClick ? 'pointer' : 'default'
+            }} 
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.05)';
+            }} 
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.02)';
+            }}
+        >
             <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05, transform: 'scale(3)', color: color }}>
                 {icon}
             </div>
-            <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+            <span style={{ fontSize: '0.68rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
-                <span style={{ fontSize: '1.4rem', fontWeight: '900', color: color, letterSpacing: '-0.03em' }}>
+                <span style={{ fontSize: '1.35rem', fontWeight: '900', color: color, letterSpacing: '-0.03em' }}>
                     {trend === 'up' && '▲ '}{trend === 'down' && '▼ '}{value}
                 </span>
-                {subValue && <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{subValue}</span>}
+                {subValue && <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#94A3B8' }}>{subValue}</span>}
             </div>
         </div>
     );
@@ -171,6 +177,7 @@ export default function CostMatrixPage() {
     const [importError, setImportError] = useState('');
     const [importSuccess, setImportSuccess] = useState('');
     const [importFile, setImportFile] = useState<File | null>(null);
+    const [lifecycleFilter, setLifecycleFilter] = useState<'all' | 'vigente' | 'por_vencer' | 'vencido'>('all');
 
     useEffect(() => {
         fetchData();
@@ -747,6 +754,14 @@ export default function CostMatrixPage() {
     const filteredProducts = products.filter(p => {
         const matchesCategory = selectedCategory === 'Todas' || p.category === selectedCategory;
         
+        // Filtro rápido de ciclo de vida (Todos, Vigentes, Por Vencer, Vencidos)
+        if (lifecycleFilter !== 'all') {
+            const lc = getProductCostLifecycle(p.id);
+            if (lifecycleFilter === 'vigente' && lc.status !== 'VIGENTE') return false;
+            if (lifecycleFilter === 'por_vencer' && lc.status !== 'POR_VENCER') return false;
+            if (lifecycleFilter === 'vencido' && !(lc.isExpired || lc.status === 'SIN_REFERENCIA')) return false;
+        }
+
         const searchParts = searchTerm.toLowerCase().split(',').map(s => s.trim()).filter(s => s);
         if (searchParts.length === 0) return matchesCategory;
 
@@ -758,7 +773,8 @@ export default function CostMatrixPage() {
             return (
                 p.name.toLowerCase().includes(part) || 
                 p.sku?.toLowerCase().includes(part) ||
-                p.keywords?.toLowerCase().includes(part)
+                p.keywords?.toLowerCase().includes(part) ||
+                (p.accounting_id && String(p.accounting_id).includes(part))
             );
         });
 
@@ -1058,14 +1074,16 @@ export default function CostMatrixPage() {
                     </div>
                 </div>
 
-                {/* --- DASHBOARD LINE (Stats Bar) --- */}
+                {/* --- DASHBOARD LINE (Interactive KPI Stats Bar) --- */}
                 {!loading && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.8rem', marginBottom: '1rem' }}>
                         <StatCard 
-                            label="Productos Analizados" 
+                            label="Catálogo Analizado" 
                             value={stats.totalSKU} 
                             color="#334155" 
                             icon={<Cpu size={20} />} 
+                            onClick={() => setLifecycleFilter('all')}
+                            active={lifecycleFilter === 'all'}
                         />
                         <StatCard 
                             label="Tendencia Global" 
@@ -1089,244 +1107,317 @@ export default function CostMatrixPage() {
                             icon={<TrendingDown size={20} />}
                         />
                         <StatCard 
-                            label="Precios Desactualizados (15d+)" 
-                            value={stats.expiringSoon} 
-                            subValue={stats.pendingCost > 0 ? `⚠️ ${stats.pendingCost} Sin Costo` : 'Al día'}
+                            label="Precios Desactualizados" 
+                            value={stats.expiringSoon + stats.pendingCost} 
+                            subValue={stats.pendingCost > 0 ? `⚠️ ${stats.pendingCost} Sin Costo` : 'Recotizar'}
                             color="#C2410C" 
                             bg="#FFF7ED"
                             icon={<ShieldAlert size={20} />} 
+                            onClick={() => setLifecycleFilter(lifecycleFilter === 'vencido' ? 'all' : 'vencido')}
+                            active={lifecycleFilter === 'vencido'}
                         />
                     </div>
                 )}
 
-                {/* --- STICKY FILTERS & SEARCH ROW --- */}
-                <div style={{ 
-                    position: 'sticky',
-                    top: '85px',
-                    zIndex: 40,
-                    backgroundColor: '#F8FAFC',
-                    paddingTop: '0.6rem',
-                    paddingBottom: '0.6rem',
-                    marginBottom: '1rem',
-                    display: 'flex', 
-                    gap: '1rem', 
-                    alignItems: 'center', 
-                    flexWrap: 'wrap',
-                    backdropFilter: 'blur(12px)',
-                    borderBottom: '1px solid #E2E8F0'
-                }}>
-                    {/* Search Bar Container */}
-                    <div style={{ 
-                        flex: '1 1 400px',
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        backgroundColor: 'white', 
-                        borderRadius: '12px', 
-                        border: '1px solid #E2E8F0', 
-                        padding: '0 1.2rem', 
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', 
-                        gap: '0.8rem',
-                        transition: 'all 0.3s ease'
-                    }} onFocusCapture={(e) => e.currentTarget.style.borderColor = '#0EA5E9'}>
-                        <Search size={18} color="#94A3B8" />
-                        <input 
-                            type="text"
-                            placeholder="Buscar productos por nombre, ID contable, keywords o tags (@tag)..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{ 
-                                width: '100%', 
-                                padding: '0.7rem 0', 
-                                border: 'none', 
-                                outline: 'none', 
-                                fontSize: '0.95rem', 
-                                fontWeight: '600',
-                                color: '#1E293B',
-                                background: 'transparent'
-                            }}
-                        />
-                        {searchTerm && (
-                            <button 
-                                onClick={() => setSearchTerm('')}
-                                style={{ border: 'none', background: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex' }}
-                            >
-                                <X size={20} />
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Filter controls row */}
-                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                         {/* Strategy Selector Button */}
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0', height: '42px' }}>
-                            <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Estrategia:</span>
-                            <button 
-                                onClick={() => setIsSmartModalOpen(true)}
-                                style={{ 
-                                    padding: '0.3rem 0.6rem', 
-                                    borderRadius: '8px', 
-                                    border: '1px solid #BAE6FD', 
-                                    backgroundColor: '#F0F9FF', 
-                                    color: '#0369A1', 
-                                    fontWeight: '800', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.4rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    fontSize: '0.8rem'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                <Brain size={16} /> CI-Delta v2
-                            </button>
-                         </div>
-
-                         {/* Category Filter Select */}
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0', height: '42px' }}>
-                            <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.2rem' }}>Categoría:</span>
-                            <select 
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ 
-                                    padding: '0.2rem 0.4rem', 
-                                    borderRadius: '8px', 
-                                    border: 'none', 
-                                    backgroundColor: 'transparent', 
-                                    fontWeight: '800', 
-                                    minWidth: '150px',
-                                    fontSize: '0.8rem',
-                                    color: '#1E293B',
-                                    outline: 'none',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <option value="Todas">Todo el Catálogo</option>
-                                {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
-                            </select>
-                         </div>
-
-                         {/* Refresh button */}
-                         <button 
-                             onClick={fetchData} 
-                             title="Sincronizar Datos"
-                             style={{ 
-                                 width: '42px',
-                                 height: '42px',
-                                 borderRadius: '12px', 
-                                 border: 'none', 
-                                 backgroundColor: '#0F172A', 
-                                 color: 'white', 
-                                 cursor: 'pointer', 
-                                 display: 'flex', 
-                                 alignItems: 'center', 
-                                 justifyContent: 'center',
-                                 transition: 'all 0.2s',
-                                 boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
-                             }}
-                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
-                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
-                         >
-                             <RefreshCw size={18} />
-                         </button>
-
-                         {/* Help Tooltip Icon */}
-                         <div 
-                             style={{ position: 'relative' }} 
-                             onMouseEnter={() => setShowHelp(true)}
-                             onMouseLeave={() => setShowHelp(false)}
-                         >
-                             <div style={{ 
-                                 cursor: 'help', 
-                                 color: showHelp ? 'var(--primary)' : '#9CA3AF',
-                                 backgroundColor: 'white',
-                                 padding: '0.7rem',
-                                 borderRadius: '12px',
-                                 border: '1px solid #E5E7EB',
-                                 display: 'flex',
-                                 alignItems: 'center',
-                                 height: '42px',
-                                 transition: 'all 0.2s'
-                             }}>
-                                 <Info size={18} />
-                             </div>
-                             
-                             {showHelp && (
-                                 <div style={{
-                                     position: 'absolute',
-                                     top: '110%',
-                                     right: 0,
-                                     backgroundColor: '#1F2937',
-                                     color: 'white',
-                                     padding: '1rem',
-                                     borderRadius: '12px',
-                                     width: '280px',
-                                     fontSize: '0.8rem',
-                                     zIndex: 100,
-                                     boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                                     transition: 'all 0.2s ease',
-                                     pointerEvents: 'none',
-                                     opacity: 1
-                                 }}>
-                                     <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
-                                     <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
-                                         <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
-                                         <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
-                                         <li><b>SKU:</b> Busca por código exacto.</li>
-                                     </ul>
-                                 </div>
-                             )}
-                         </div>
-                    </div>
-                </div>
-
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '5rem', color: '#6B7280' }}>Cargando historial de precios...</div>
                 ) : (
+                    /* --- ENTERPRISE DATA GRID CARD --- */
                     <div style={{ 
                         backgroundColor: 'white', 
                         borderRadius: '16px', 
                         boxShadow: '0 4px 20px rgba(0,0,0,0.05)', 
-                        border: '1px solid #E5E7EB'
+                        border: '1px solid #E2E8F0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden'
                     }}>
+                        {/* INTEGRATED DATA GRID HEADER TOOLBAR */}
+                        <div style={{ 
+                            padding: '0.8rem 1.2rem', 
+                            borderBottom: '1px solid #E2E8F0', 
+                            backgroundColor: '#FFFFFF',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            flexWrap: 'wrap'
+                        }}>
+                            {/* Search & Quick Lifecycle Chips */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: '1 1 500px', flexWrap: 'wrap' }}>
+                                {/* Search Input Container */}
+                                <div style={{ 
+                                    flex: '1 1 240px',
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    backgroundColor: '#F8FAFC', 
+                                    borderRadius: '10px', 
+                                    border: '1px solid #E2E8F0', 
+                                    padding: '0 0.8rem', 
+                                    gap: '0.5rem',
+                                    height: '38px',
+                                    transition: 'all 0.2s'
+                                }}>
+                                    <Search size={16} color="#94A3B8" />
+                                    <input 
+                                        type="text"
+                                        placeholder="Buscar producto, ID contable o SKU..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            border: 'none', 
+                                            outline: 'none', 
+                                            fontSize: '0.85rem', 
+                                            fontWeight: '600',
+                                            color: '#1E293B',
+                                            background: 'transparent'
+                                        }}
+                                    />
+                                    {searchTerm && (
+                                        <button 
+                                            onClick={() => setSearchTerm('')}
+                                            style={{ border: 'none', background: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', padding: 0 }}
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Quick Lifecycle Filter Chips */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLifecycleFilter('all')}
+                                        style={{
+                                            padding: '0.35rem 0.65rem',
+                                            borderRadius: '8px',
+                                            border: lifecycleFilter === 'all' ? '1px solid #0EA5E9' : '1px solid #E2E8F0',
+                                            backgroundColor: lifecycleFilter === 'all' ? '#F0F9FF' : 'white',
+                                            color: lifecycleFilter === 'all' ? '#0369A1' : '#64748B',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        Todos ({stats.totalSKU})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLifecycleFilter('vigente')}
+                                        style={{
+                                            padding: '0.35rem 0.65rem',
+                                            borderRadius: '8px',
+                                            border: lifecycleFilter === 'vigente' ? '1px solid #10B981' : '1px solid #E2E8F0',
+                                            backgroundColor: lifecycleFilter === 'vigente' ? '#ECFDF5' : 'white',
+                                            color: lifecycleFilter === 'vigente' ? '#065F46' : '#64748B',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        🟢 Vigentes ({stats.vigentes})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLifecycleFilter('por_vencer')}
+                                        style={{
+                                            padding: '0.35rem 0.65rem',
+                                            borderRadius: '8px',
+                                            border: lifecycleFilter === 'por_vencer' ? '1px solid #F59E0B' : '1px solid #E2E8F0',
+                                            backgroundColor: lifecycleFilter === 'por_vencer' ? '#FFFBEB' : 'white',
+                                            color: lifecycleFilter === 'por_vencer' ? '#92400E' : '#64748B',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        🟡 Por Vencer
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLifecycleFilter('vencido')}
+                                        style={{
+                                            padding: '0.35rem 0.65rem',
+                                            borderRadius: '8px',
+                                            border: lifecycleFilter === 'vencido' ? '1px solid #EF4444' : '1px solid #E2E8F0',
+                                            backgroundColor: lifecycleFilter === 'vencido' ? '#FEF2F2' : 'white',
+                                            color: lifecycleFilter === 'vencido' ? '#991B1B' : '#64748B',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        🔴 Vencidos ({stats.expiringSoon + stats.pendingCost})
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Category, Strategy & Refresh Controls */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                {/* Category Filter Select */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', backgroundColor: '#F8FAFC', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #E2E8F0', height: '38px' }}>
+                                    <span style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase' }}>Cat:</span>
+                                    <select 
+                                        value={selectedCategory}
+                                        onChange={(e) => setSelectedCategory(e.target.value)}
+                                        style={{ 
+                                            border: 'none', 
+                                            backgroundColor: 'transparent', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.78rem',
+                                            color: '#1E293B',
+                                            outline: 'none',
+                                            cursor: 'pointer',
+                                            maxWidth: '140px'
+                                        }}
+                                    >
+                                        <option value="Todas">Todas</option>
+                                        {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Strategy Selector Button */}
+                                <button 
+                                    onClick={() => setIsSmartModalOpen(true)}
+                                    style={{ 
+                                        height: '38px',
+                                        padding: '0 0.6rem', 
+                                        borderRadius: '8px', 
+                                        border: '1px solid #BAE6FD', 
+                                        backgroundColor: '#F0F9FF', 
+                                        color: '#0369A1', 
+                                        fontWeight: '800', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.4rem',
+                                        cursor: 'pointer',
+                                        fontSize: '0.75rem'
+                                    }}
+                                >
+                                    <Brain size={14} /> CI-Delta v2
+                                </button>
+
+                                {/* Refresh button */}
+                                <button 
+                                    onClick={fetchData} 
+                                    title="Sincronizar Datos"
+                                    style={{ 
+                                        width: '38px',
+                                        height: '38px',
+                                        borderRadius: '8px', 
+                                        border: '1px solid #E2E8F0', 
+                                        backgroundColor: '#FFFFFF', 
+                                        color: '#1E293B', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                                >
+                                    <RefreshCw size={15} />
+                                </button>
+
+                                {/* Help Tooltip */}
+                                <div 
+                                    style={{ position: 'relative' }} 
+                                    onMouseEnter={() => setShowHelp(true)}
+                                    onMouseLeave={() => setShowHelp(false)}
+                                >
+                                    <div style={{ 
+                                        cursor: 'help', 
+                                        color: showHelp ? 'var(--primary)' : '#94A3B8',
+                                        backgroundColor: '#FFFFFF',
+                                        padding: '0.5rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid #E2E8F0',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '38px',
+                                        height: '38px'
+                                    }}>
+                                        <Info size={16} />
+                                    </div>
+                                    
+                                    {showHelp && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '110%',
+                                            right: 0,
+                                            backgroundColor: '#1F2937',
+                                            color: 'white',
+                                            padding: '1rem',
+                                            borderRadius: '12px',
+                                            width: '280px',
+                                            fontSize: '0.8rem',
+                                            zIndex: 100,
+                                            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                            pointerEvents: 'none'
+                                        }}>
+                                            <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
+                                            <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
+                                                <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
+                                                <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
+                                                <li><b>ID o SKU:</b> Busca por código contable directo.</li>
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* STYLES & DEDICATED SCROLLABLE TABLE VIEWPORT */}
                         <style dangerouslySetInnerHTML={{__html: `
                             .matrix-table th, .matrix-table td {
-                                transition: all 0.3s ease;
+                                transition: all 0.2s ease;
                                 box-sizing: border-box !important;
                             }
                             
-                            /* Encabezados TH STICKY bajo la barra de búsqueda (85px navbar + 62px barra = 147px) */
+                            /* Encabezados TH STICKY NATIVOS al tope del contenedor de tabla */
                             .matrix-table thead th {
                                 position: sticky !important;
-                                top: 147px !important;
-                                z-index: 25 !important;
-                                background-color: #F9FAFB;
+                                top: 0 !important;
+                                z-index: 20 !important;
+                                background-color: #F8FAFC !important;
+                                border-bottom: 2px solid #E2E8F0 !important;
                             }
 
                             .matrix-table thead th.col-producto {
                                 left: 0 !important;
-                                z-index: 35 !important;
-                                background-color: #F9FAFB !important;
-                                box-shadow: 2px 0 5px rgba(0,0,0,0.03) !important;
+                                z-index: 30 !important;
+                                background-color: #F8FAFC !important;
+                                box-shadow: 2px 0 5px rgba(0,0,0,0.04) !important;
                             }
 
                             .matrix-table thead th.col-costo {
                                 right: 160px !important;
-                                z-index: 35 !important;
+                                z-index: 30 !important;
                                 background-color: #F0FDF4 !important;
-                                box-shadow: -2px 0 5px rgba(0,0,0,0.03) !important;
+                                box-shadow: -2px 0 5px rgba(0,0,0,0.04) !important;
                             }
 
                             .matrix-table thead th.col-tendencia {
                                 right: 0 !important;
-                                z-index: 35 !important;
-                                background-color: #F9FAFB !important;
-                                box-shadow: -2px 0 5px rgba(0,0,0,0.03) !important;
+                                z-index: 30 !important;
+                                background-color: #F8FAFC !important;
+                                box-shadow: -2px 0 5px rgba(0,0,0,0.04) !important;
                             }
 
                             /* Reglas estrictas para evitar que Tendencia y Costo se solapen NUNCA */
@@ -1350,13 +1441,11 @@ export default function CostMatrixPage() {
                                 .col-producto { min-width: 180px !important; font-size: 0.9rem; }
                                 .col-compra, .col-compra-old { min-width: 70px !important; font-size: 0.8rem; }
                                 
-                                /* Ajuste estricto de anclaje para portátiles grandes */
                                 .col-costo { width: 145px !important; min-width: 145px !important; max-width: 145px !important; right: 135px !important; }
                                 .matrix-table thead th.col-costo { right: 135px !important; }
                                 .col-tendencia { width: 135px !important; min-width: 135px !important; max-width: 135px !important; right: 0 !important; }
                                 .matrix-table thead th.col-tendencia { right: 0 !important; }
                                 
-                                /* Achicar elementos internos para que quepan */
                                 .col-costo input { width: 65px !important; padding: 0.3rem !important; font-size: 0.8rem !important; }
                                 .col-costo button { width: 28px !important; height: 28px !important; padding: 0.2rem !important; }
                             }
@@ -1365,7 +1454,6 @@ export default function CostMatrixPage() {
                                 .col-producto { min-width: 150px !important; font-size: 0.8rem !important; }
                                 .col-compra, .col-compra-old { min-width: 60px !important; font-size: 0.7rem !important; }
                                 
-                                /* Ajuste estricto de anclaje para portátiles estándar */
                                 .col-costo { width: 130px !important; min-width: 130px !important; max-width: 130px !important; right: 120px !important; }
                                 .matrix-table thead th.col-costo { right: 120px !important; }
                                 .col-tendencia { width: 120px !important; min-width: 120px !important; max-width: 120px !important; right: 0 !important; }
@@ -1374,14 +1462,12 @@ export default function CostMatrixPage() {
                             }
 
                             @media (max-width: 768px) {
-                                /* En móviles: ocultar compras antiguas para dejar siempre visible Costo y Compra 1 */
                                 .col-compra-old { display: none !important; }
                                 .col-producto { position: static !important; box-shadow: none !important; z-index: auto !important; }
                                 .col-costo { position: static !important; box-shadow: none !important; width: auto !important; max-width: none !important; }
                                 .col-tendencia { position: static !important; box-shadow: none !important; width: auto !important; max-width: none !important; }
                             }
 
-                            /* Énfasis leve para la columna ÚLTIMA */
                             .col-compra {
                                 background-color: #F8FAFC !important;
                                 border-left: 1px solid #E2E8F0 !important;
@@ -1391,28 +1477,34 @@ export default function CostMatrixPage() {
                                 background-color: #F1F5F9 !important;
                             }
                         `}} />
-                        <div style={{ overflowX: 'auto' }}>
+
+                        <div style={{ 
+                            maxHeight: 'calc(100vh - 310px)', 
+                            minHeight: '480px',
+                            overflow: 'auto',
+                            position: 'relative'
+                        }}>
                             <table className="matrix-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead>
-                                    <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
+                                    <tr style={{ backgroundColor: '#F8FAFC' }}>
                                         <th 
                                             className="col-producto"
                                             onClick={() => handleSort('name')}
                                             style={{ 
-                                                padding: '1.2rem 1.5rem', 
-                                                minWidth: '250px', 
+                                                padding: '0.9rem 1.2rem', 
+                                                minWidth: '240px', 
                                                 cursor: 'pointer',
                                                 userSelect: 'none'
                                             }}
                                         >
-                                            <div style={{ fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center' }}>
+                                            <div style={{ fontSize: '0.72rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center' }}>
                                                 PRODUCTO / CATEGORÍA <SortIcon field="name" />
                                             </div>
                                         </th>
                                         {/* Column Headers for 8 purchases */}
                                         {[...Array(8)].map((_, i) => (
-                                            <th key={i} className={i > 0 ? "col-compra-old" : "col-compra"} style={{ padding: '0.8rem', minWidth: '95px', borderLeft: '1px solid #F3F4F6', textAlign: 'center' }}>
-                                                <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#6B7280', textTransform: 'uppercase' }}>{i === 0 ? 'ÚLTIMA' : `COMPRA ${i + 1}`}</div>
+                                            <th key={i} className={i > 0 ? "col-compra-old" : "col-compra"} style={{ padding: '0.7rem 0.5rem', minWidth: '95px', borderLeft: '1px solid #F1F5F9', textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase' }}>{i === 0 ? 'ÚLTIMA' : `COMPRA ${i + 1}`}</div>
                                             </th>
                                         ))}
 
@@ -1420,10 +1512,10 @@ export default function CostMatrixPage() {
                                             className="col-costo"
                                             onClick={() => handleSort('smartCost')}
                                             style={{ 
-                                                padding: '1.2rem', 
+                                                padding: '0.9rem 0.6rem', 
                                                 minWidth: '160px', 
                                                 width: '160px',
-                                                borderLeft: '2px solid #E5E7EB',
+                                                borderLeft: '2px solid #E2E8F0',
                                                 textAlign: 'center',
                                                 verticalAlign: 'middle',
                                                 cursor: 'pointer',
@@ -1431,7 +1523,7 @@ export default function CostMatrixPage() {
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                                                <div style={{ fontSize: '0.75rem', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center' }}>COSTO <SortIcon field="smartCost" /></div>
+                                                <div style={{ fontSize: '0.72rem', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center' }}>COSTO <SortIcon field="smartCost" /></div>
                                             </div>
                                         </th>
 
@@ -1439,17 +1531,17 @@ export default function CostMatrixPage() {
                                             className="col-tendencia"
                                             onClick={() => handleSort('trend')}
                                             style={{ 
-                                                padding: '1.2rem', 
+                                                padding: '0.9rem 0.6rem', 
                                                 minWidth: '160px', 
                                                 width: '160px',
-                                                borderLeft: '2px solid #E5E7EB',
+                                                borderLeft: '2px solid #E2E8F0',
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
                                                 textAlign: 'center',
                                                 verticalAlign: 'middle'
                                             }}
                                         >
-                                            <div style={{ fontSize: '0.75rem', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>TENDENCIA <SortIcon field="trend" /></div>
+                                            <div style={{ fontSize: '0.72rem', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>TENDENCIA <SortIcon field="trend" /></div>
                                         </th>
                                     </tr>
                                 </thead>
