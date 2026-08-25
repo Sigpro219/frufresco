@@ -580,12 +580,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                         }}>
                             <button
                                 onClick={() => {
-                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
-                                    const step = isWeightUnit ? 0.5 : 1;
-                                    const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
+                                    const newQty = Math.max(1, Math.round(quantity - 1));
                                     setQuantity(newQty);
-                                    setInputValue(String(newQty).replace('.', ','));
+                                    setInputValue(String(newQty));
                                 }}
                                 style={{
                                     width: '44px', height: '44px',
@@ -602,52 +599,30 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             >−</button>
                             <input
                                 type="text"
-                                inputMode={((product.unit_of_measure || '').toLowerCase() === 'kg' && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg')) ? "decimal" : "numeric"}
+                                inputMode="numeric"
                                 value={inputValue}
                                 onChange={(e) => {
                                     const val = e.target.value;
-                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
-
                                     if (val === '') {
                                         setInputValue('');
                                         setQuantity(0);
                                         return;
                                     }
-
-                                    if (!isWeightUnit) {
-                                        const cleanInt = val.replace(/[^0-9]/g, '');
-                                        setInputValue(cleanInt);
-                                        const num = parseInt(cleanInt, 10);
-                                        if (!isNaN(num) && num > 0) {
-                                            setQuantity(num);
-                                        }
-                                    } else {
-                                        const cleanVal = val.replace(/[^0-9.,]/g, '').replace(',', '.');
-                                        if (/^\d*\.?\d*$/.test(cleanVal)) {
-                                            setInputValue(val);
-                                            const num = parseFloat(cleanVal);
-                                            if (!isNaN(num) && num > 0) {
-                                                setQuantity(num);
-                                            }
-                                        }
+                                    const cleanInt = val.replace(/[^0-9]/g, '');
+                                    setInputValue(cleanInt);
+                                    const num = parseInt(cleanInt, 10);
+                                    if (!isNaN(num) && num > 0) {
+                                        setQuantity(num);
                                     }
                                 }}
                                 onBlur={() => {
-                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
-                                    const step = isWeightUnit ? 0.5 : 1;
                                     if (quantity <= 0) {
-                                        setQuantity(step);
-                                        setInputValue(String(step).replace('.', ','));
+                                        setQuantity(1);
+                                        setInputValue('1');
                                     } else {
-                                        if (!isWeightUnit) {
-                                            const intVal = Math.max(1, Math.round(quantity));
-                                            setQuantity(intVal);
-                                            setInputValue(String(intVal));
-                                        } else {
-                                            setInputValue(String(quantity).replace('.', ','));
-                                        }
+                                        const intVal = Math.max(1, Math.round(quantity));
+                                        setQuantity(intVal);
+                                        setInputValue(String(intVal));
                                     }
                                 }}
                                 style={{
@@ -663,12 +638,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, 
                             />
                             <button
                                 onClick={() => {
-                                    const unitLower = (product.unit_of_measure || '').toLowerCase();
-                                    const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower) && (!selectedPresentationVal || selectedPresentationVal.toLowerCase() === 'kg');
-                                    const step = isWeightUnit ? 0.5 : 1;
-                                    const newQty = parseFloat((quantity + step).toFixed(2));
+                                    const newQty = Math.max(1, Math.round(quantity + 1));
                                     setQuantity(newQty);
-                                    setInputValue(String(newQty).replace('.', ','));
+                                    setInputValue(String(newQty));
                                 }}
                                 style={{
                                     width: '44px', height: '44px',

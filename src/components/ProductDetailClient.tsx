@@ -614,18 +614,16 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
                                 <button
                                     onClick={() => {
-                                        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
-                                        const step = isWeightUnit ? 0.5 : 1;
-                                        const newQty = Math.max(step, parseFloat((quantity - step).toFixed(2)));
+                                        const newQty = Math.max(1, Math.round(quantity - 1));
                                         setQuantity(newQty);
-                                        setInputValue(String(newQty).replace('.', ','));
+                                        setInputValue(String(newQty));
                                     }}
                                     style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
                                     <Minus size={18} strokeWidth={2.5} />
                                 </button>
                                 <input
                                     type="text"
+                                    inputMode="numeric"
                                     value={inputValue}
                                     onChange={(e) => {
                                         const val = e.target.value;
@@ -634,24 +632,21 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                             setQuantity(0);
                                             return;
                                         }
-                                        const cleanVal = val.replace(',', '.');
-                                        if (/^\d*\.?\d*$/.test(cleanVal)) {
-                                            setInputValue(val);
-                                            const num = parseFloat(cleanVal);
-                                            if (!isNaN(num) && num > 0) {
-                                                setQuantity(num);
-                                            }
+                                        const cleanInt = val.replace(/[^0-9]/g, '');
+                                        setInputValue(cleanInt);
+                                        const num = parseInt(cleanInt, 10);
+                                        if (!isNaN(num) && num > 0) {
+                                            setQuantity(num);
                                         }
                                     }}
                                     onBlur={() => {
-                                        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
-                                        const step = isWeightUnit ? 0.5 : 1;
                                         if (quantity <= 0) {
-                                            setQuantity(step);
-                                            setInputValue(String(step).replace('.', ','));
+                                            setQuantity(1);
+                                            setInputValue('1');
                                         } else {
-                                            setInputValue(String(quantity).replace('.', ','));
+                                            const intQty = Math.max(1, Math.round(quantity));
+                                            setQuantity(intQty);
+                                            setInputValue(String(intQty));
                                         }
                                     }}
                                     style={{
@@ -667,12 +662,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                                 />
                                 <button
                                     onClick={() => {
-                                        const unitLower = (product.web_unit || product.unit_of_measure || '').toLowerCase();
-                                        const isWeightUnit = ['kg', 'kilo', 'kilos', 'libra', 'libras', 'g', 'gr', 'gramos'].includes(unitLower) && !selectedPresentationVal;
-                                        const step = isWeightUnit ? 0.5 : 1;
-                                        const newQty = parseFloat((quantity + step).toFixed(2));
+                                        const newQty = Math.max(1, Math.round(quantity + 1));
                                         setQuantity(newQty);
-                                        setInputValue(String(newQty).replace('.', ','));
+                                        setInputValue(String(newQty));
                                     }}
                                     style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
                                     <Plus size={18} strokeWidth={2.5} />
