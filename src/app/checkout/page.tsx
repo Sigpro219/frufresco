@@ -89,6 +89,9 @@ export default function CheckoutPage() {
     const [maskedAddress, setMaskedAddress] = useState('');
     const [lookupLoading, setLookupLoading] = useState(false);
     const [lookupError, setLookupError] = useState('');
+    const [resolvedAddressPreview, setResolvedAddressPreview] = useState<string>('');
+    const [isResolvingAddress, setIsResolvingAddress] = useState<boolean>(false);
+    const [addressSyncNotice, setAddressSyncNotice] = useState<string | null>(null);
     const [originalAddress, setOriginalAddress] = useState('');
     const [originalCoords, setOriginalCoords] = useState<{lat: number, lng: number} | null>(null);
     const [matchedProfileId, setMatchedProfileId] = useState<string | null>(null);
@@ -498,7 +501,40 @@ export default function CheckoutPage() {
         return () => window.removeEventListener('set_test_coords', testCoordsHandler);
     }, []);
 
-    // Monitor changes to delivery address to invalidate coordinates if address changes
+    // Reverse geocoding helper (Coordinates -> Street Address)
+    const reverseGeocode = (lat: number, lng: number): Promise<string | null> => {
+        return new Promise((resolve) => {
+            if (typeof window === 'undefined' || !(window as any).google?.maps?.Geocoder) {
+                return resolve(null);
+            }
+            const geocoder = new (window as any).google.maps.Geocoder();
+            geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                if (status === 'OK' && results && results[0]) {
+                    let clean = results[0].formatted_address;
+                    clean = clean.replace(/, Colombia.*$/i, '').replace(/, Cundinamarca.*$/i, '').trim();
+                    resolve(clean);
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+    };
+
+    // Auto reverse geocode preview while interacting in the Map Modal
+    useEffect(() => {
+        if (!showMapPicker || !latitude || !longitude) return;
+        const timer = setTimeout(async () => {
+            setIsResolvingAddress(true);
+            const resolved = await reverseGeocode(latitude, longitude);
+            if (resolved) {
+                setResolvedAddressPreview(resolved);
+            }
+            setIsResolvingAddress(false);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [latitude, longitude, showMapPicker]);
+
+    // Monitor changes to delivery address to invalidate coordinates if address changes manually
     useEffect(() => {
         if (originalAddress && address.trim().toLowerCase() !== originalAddress.trim().toLowerCase()) {
             setLatitude(null);
@@ -519,6 +555,26 @@ export default function CheckoutPage() {
         }
     }, [latitude, longitude, activeGeofence]);
 
+    const handleConfirmLocationFromMap = () => {
+        if (outOfZone && !isB2B) {
+            return alert(locale === 'es' 
+                ? '📍 El punto seleccionado está fuera de nuestra zona de cobertura activa (Zona Norte / Centro). Por favor ubica el marcador dentro del área verde o solicita notificación para avisarte cuando habilitemos tu sector.' 
+                : '📍 The selected location is outside our active delivery zone. Please move the pin inside the green zone or request notification when available.');
+        }
+
+        if (resolvedAddressPreview && resolvedAddressPreview.trim()) {
+            handleAddressChange(resolvedAddressPreview.trim());
+            setOriginalAddress(resolvedAddressPreview.trim());
+            if (latitude && longitude) {
+                setOriginalCoords({ lat: latitude, lng: longitude });
+            }
+            setAddressSyncNotice(resolvedAddressPreview.trim());
+            setTimeout(() => setAddressSyncNotice(null), 6000);
+        }
+
+        setShowMapPicker(false);
+    };
+
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
             return alert(locale === 'es' ? 'Tu navegador no soporta geolocalización.' : 'Your browser does not support geolocation.');
@@ -526,10 +582,20 @@ export default function CheckoutPage() {
 
         setIsGettingLocation(true);
         navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setLatitude(position.coords.latitude);
-                setLongitude(position.coords.longitude);
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                setLatitude(lat);
+                setLongitude(lng);
                 setIsGettingLocation(false);
+                const resolved = await reverseGeocode(lat, lng);
+                if (resolved) {
+                    handleAddressChange(resolved);
+                    setOriginalAddress(resolved);
+                    setOriginalCoords({ lat, lng });
+                    setAddressSyncNotice(resolved);
+                    setTimeout(() => setAddressSyncNotice(null), 6000);
+                }
                 alert(locale === 'es' ? '📍 Ubicación capturada con éxito. Ahora tu entrega será más precisa.' : '📍 Location captured successfully. Your delivery will now be more precise.');
             },
             (error) => {
@@ -1827,6 +1893,26 @@ export default function CheckoutPage() {
                                                     />
                                                 </div>
 
+                                                {addressSyncNotice && (
+                                                    <div style={{
+                                                        marginBottom: '0.5rem',
+                                                        padding: '0.45rem 0.85rem',
+                                                        backgroundColor: '#ECFDF5',
+                                                        border: '1px solid #A7F3D0',
+                                                        borderRadius: '10px',
+                                                        fontSize: '0.76rem',
+                                                        color: '#065F46',
+                                                        fontWeight: '700',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                                    }}>
+                                                        <CheckCircle2 size={14} color="#059669" />
+                                                        <span>{locale === 'es' ? `Dirección sincronizada con el mapa: "${addressSyncNotice}"` : `Address synced with map: "${addressSyncNotice}"`}</span>
+                                                    </div>
+                                                )}
+
                                                 {/* GPS Capture Flow Destinatario */}
                                                 {address.trim().length > 3 && !latitude && (
                                                     <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
@@ -2047,6 +2133,26 @@ export default function CheckoutPage() {
                                             className="checkout-input-modern"
                                         />
                                     </div>
+
+                                    {addressSyncNotice && (
+                                        <div style={{
+                                            marginBottom: '0.5rem',
+                                            padding: '0.45rem 0.85rem',
+                                            backgroundColor: '#ECFDF5',
+                                            border: '1px solid #A7F3D0',
+                                            borderRadius: '10px',
+                                            fontSize: '0.76rem',
+                                            color: '#065F46',
+                                            fontWeight: '700',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'var(--font-outfit), sans-serif'
+                                        }}>
+                                            <CheckCircle2 size={14} color="#059669" />
+                                            <span>{locale === 'es' ? `Dirección sincronizada con el mapa: "${addressSyncNotice}"` : `Address synced with map: "${addressSyncNotice}"`}</span>
+                                        </div>
+                                    )}
 
                                     {/* GPS Capture Flow */}
                                     {address.trim().length > 3 && !latitude && (
@@ -2799,44 +2905,79 @@ export default function CheckoutPage() {
                             </Map>
                         </div>
 
-                        <div style={{ padding: '1.25rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1.5rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                            <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                                <div>
-                                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{locale === 'es' ? 'Coordenadas Detectadas' : 'Detected Coordinates'}</p>
-                                    <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-main)', fontWeight: '700', fontFamily: 'monospace' }}>
-                                        {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
-                                    </p>
+                        <div style={{ padding: '1.25rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1.25rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                            <div style={{ marginRight: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        {locale === 'es' ? 'Dirección en el mapa:' : 'Map Address:'}
+                                    </span>
+                                    {latitude && longitude && activeGeofence.length > 0 && (
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            padding: '2px 10px',
+                                            borderRadius: '99px',
+                                            backgroundColor: (outOfZone && !isB2B) ? '#FEF2F2' : '#ECFDF5',
+                                            border: `1px solid ${(outOfZone && !isB2B) ? '#FECACA' : '#A7F3D0'}`,
+                                            color: (outOfZone && !isB2B) ? '#DC2626' : '#059669',
+                                            fontSize: '0.74rem',
+                                            fontWeight: '800',
+                                            fontFamily: 'var(--font-outfit), sans-serif'
+                                        }}>
+                                            {(outOfZone && !isB2B) ? (
+                                                <>
+                                                    <AlertCircle size={13} color="#DC2626" />
+                                                    <span>{locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle2 size={13} color="#059669" />
+                                                    <span>{locale === 'es' ? 'Dentro de Cobertura' : 'In Coverage'}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                {latitude && longitude && activeGeofence.length > 0 && (
-                                    <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '4px 12px',
-                                        borderRadius: '99px',
-                                        backgroundColor: (outOfZone && !isB2B) ? '#FEF2F2' : '#ECFDF5',
-                                        border: `1px solid ${(outOfZone && !isB2B) ? '#FECACA' : '#A7F3D0'}`,
-                                        color: (outOfZone && !isB2B) ? '#DC2626' : '#059669',
-                                        fontSize: '0.78rem',
-                                        fontWeight: '800',
-                                        fontFamily: 'var(--font-outfit), sans-serif'
-                                    }}>
-                                        {(outOfZone && !isB2B) ? (
-                                            <>
-                                                <AlertCircle size={14} color="#DC2626" />
-                                                <span>{locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <CheckCircle2 size={14} color="#059669" />
-                                                <span>{locale === 'es' ? '¡Dentro de Cobertura!' : 'Within Coverage Area!'}</span>
-                                            </>
-                                        )}
-                                    </div>
-                                )}
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: (outOfZone && !isB2B) ? '#DC2626' : '#1E293B', fontWeight: '700', fontFamily: 'var(--font-outfit), sans-serif', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <MapPin size={15} color={(outOfZone && !isB2B) ? '#DC2626' : '#059669'} style={{ flexShrink: 0 }} />
+                                    {isResolvingAddress ? (
+                                        <span style={{ color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Loader2 size={13} className="animate-spin" /> {locale === 'es' ? 'Detectando dirección...' : 'Resolving street address...'}</span>
+                                    ) : (
+                                        resolvedAddressPreview || address || (locale === 'es' ? 'Mueve el marcador a tu puerta' : 'Move marker to your door')
+                                    )}
+                                </p>
+                                <p style={{ margin: 0, fontSize: '0.72rem', color: '#94A3B8', fontFamily: 'monospace' }}>
+                                    GPS: {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
+                                </p>
                             </div>
+
+                            {outOfZone && !isB2B && (
+                                <button
+                                    type="button"
+                                    onClick={handleRegisterRejectionAndReturn}
+                                    disabled={isRegisteringRejection}
+                                    style={{
+                                        padding: '0.75rem 1.25rem',
+                                        borderRadius: 'var(--radius-full)',
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #FCD34D',
+                                        color: '#92400E',
+                                        fontWeight: '800',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <Bell size={15} color="#D97706" /> {locale === 'es' ? 'Avisarme cuando lleguen a mi sector' : 'Notify me when available'}
+                                </button>
+                            )}
+
                             <button 
-                                onClick={() => setShowMapPicker(false)}
+                                type="button"
+                                onClick={handleConfirmLocationFromMap}
                                 className="btn-premium"
                                 style={{ 
                                     padding: '0.85rem 2.25rem', 
@@ -2845,10 +2986,20 @@ export default function CheckoutPage() {
                                     fontSize: '0.95rem',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px'
+                                    gap: '10px',
+                                    backgroundColor: (outOfZone && !isB2B) ? '#DC2626' : 'var(--primary)',
+                                    boxShadow: (outOfZone && !isB2B) ? '0 4px 14px rgba(220, 38, 38, 0.3)' : '0 4px 14px rgba(13, 122, 87, 0.3)'
                                 }}
                             >
-                                <CheckCircle2 size={18} /> {locale === 'es' ? 'Confirmar Ubicación' : 'Confirm Location'}
+                                {(outOfZone && !isB2B) ? (
+                                    <>
+                                        <AlertCircle size={18} /> {locale === 'es' ? 'Ubicación Fuera de Cobertura' : 'Out of Coverage Area'}
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 size={18} /> {locale === 'es' ? 'Confirmar Ubicación' : 'Confirm Location'}
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>
