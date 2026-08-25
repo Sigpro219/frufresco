@@ -5,7 +5,7 @@ import { useCart } from '../../lib/cartContext';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Map, useMap } from '@vis.gl/react-google-maps';
+import { Map } from '@vis.gl/react-google-maps';
 import { Polygon } from '@/components/admin/GeofencingManager';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
@@ -50,15 +50,6 @@ import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHo
 import dynamic from 'next/dynamic';
 
 const QuickViewModal = dynamic(() => import('../../components/QuickViewModal'), { ssr: false });
-
-function MapController({ center }: { center: { lat: number; lng: number } | null }) {
-    const map = useMap();
-    useEffect(() => {
-        if (!map || !center || !center.lat || !center.lng) return;
-        map.panTo(center);
-    }, [map, center]);
-    return null;
-}
 
 export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart, updateItemQuantity, addItem } = useCart();
@@ -2743,19 +2734,28 @@ export default function CheckoutPage() {
                             </div>
 
                             <Map
-                                defaultCenter={{ lat: latitude || 4.6097, lng: longitude || -74.0817 }} // Uses geocoded address or Bogota
-                                defaultZoom={15}
+                                defaultCenter={{ lat: latitude || 4.67, lng: longitude || -74.06 }} // Uses geocoded address or Bogota
+                                defaultZoom={14}
                                 mapId="DEMO_MAP_ID"
                                 gestureHandling={'greedy'}
-                                onCenterChanged={(e) => {
-                                    const center = e.map.getCenter();
-                                    if (center) {
-                                        setLatitude(center.lat());
-                                        setLongitude(center.lng());
+                                onCameraChanged={(ev) => {
+                                    if (ev.detail?.center) {
+                                        setLatitude(ev.detail.center.lat);
+                                        setLongitude(ev.detail.center.lng);
+                                    }
+                                }}
+                                onClick={(e: any) => {
+                                    const lat = e.detail?.latLng?.lat;
+                                    const lng = e.detail?.latLng?.lng;
+                                    if (lat && lng) {
+                                        setLatitude(lat);
+                                        setLongitude(lng);
+                                        if (e.map) {
+                                            e.map.panTo({ lat, lng });
+                                        }
                                     }
                                 }}
                             >
-                                <MapController center={latitude && longitude ? { lat: latitude, lng: longitude } : null} />
 
                                 {/* Polígono Sutil de Cobertura */}
                                 {activeGeofence && activeGeofence.length > 0 && (
