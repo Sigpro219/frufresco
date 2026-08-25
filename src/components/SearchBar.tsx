@@ -112,7 +112,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                 .eq('show_on_web', true)
                 .eq('pricing_model_prices.model_id', pricingModelId)
                 .ilike('name', `%${query}%`)
-                .order('image_url', { ascending: false, nullsFirst: false })
+                .order('name', { ascending: true })
                 .limit(6);
 
             if (error) {
@@ -123,12 +123,14 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     .eq('is_active', true)
                     .eq('show_on_web', true)
                     .ilike('name', `%${query}%`)
-                    .order('image_url', { ascending: false, nullsFirst: false })
+                    .order('name', { ascending: true })
                     .limit(6);
                 fetchedData = fallbackData || [];
             } else {
                 fetchedData = data || [];
             }
+
+            fetchedData.sort((a, b) => ((a.display_name || a.name || '').trim()).localeCompare((b.display_name || b.name || '').trim(), 'es', { sensitivity: 'base', numeric: true }));
 
             setSuggestions(fetchedData);
             setShowDropdown(true);

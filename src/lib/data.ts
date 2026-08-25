@@ -30,7 +30,7 @@ export const getVisibleProducts = unstable_cache(
       .eq('is_active', true)
       .eq('show_on_web', true)
       .eq('pricing_model_prices.model_id', modelId)
-      .order('image_url', { ascending: false, nullsFirst: false })
+      .order('name', { ascending: true })
       .limit(500);
 
     if (error) {
@@ -40,15 +40,17 @@ export const getVisibleProducts = unstable_cache(
         .select('*')
         .eq('is_active', true)
         .eq('show_on_web', true)
-        .order('image_url', { ascending: false, nullsFirst: false })
+        .order('name', { ascending: true })
         .limit(500);
       if (fallbackError) {
         console.error('Fallback products fetch failed:', fallbackError);
         return [];
       }
-      return (fallbackData as Product[]).filter(p => !lockedIds.has(p.id));
+      const fallbackList = (fallbackData as Product[]).filter(p => !lockedIds.has(p.id));
+      return fallbackList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
     }
-    return (data as Product[]).filter(p => !lockedIds.has(p.id));
+    const productList = (data as Product[]).filter(p => !lockedIds.has(p.id));
+    return productList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
   },
   ['visible-products'],
   { revalidate: 60, tags: ['products'] }

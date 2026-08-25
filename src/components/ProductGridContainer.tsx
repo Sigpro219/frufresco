@@ -304,6 +304,13 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
         rawProducts = memoryFiltered;
     }
 
+    // Sort products alphabetically (A-Z) by display_name or name
+    rawProducts.sort((a, b) => {
+        const nameA = (a.display_name || a.name || '').trim();
+        const nameB = (b.display_name || b.name || '').trim();
+        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base', numeric: true });
+    });
+
     return (
         <div style={{ position: 'relative' }}>
             {fallbackCategoryName && (
