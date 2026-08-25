@@ -2804,16 +2804,23 @@ function CreateOrderContent() {
                                                             key={c.id}
                                                             onClick={() => selectClient(c)}
                                                             style={{
-                                                                padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
-                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                                backgroundColor: idx === focusedClientIndex ? '#EFF6FF' : 'white'
+                                                                padding: '0.85rem 1.15rem', 
+                                                                cursor: 'pointer', 
+                                                                borderBottom: '1px solid #E2E8F0',
+                                                                borderLeft: idx === focusedClientIndex ? '6px solid #2563EB' : '6px solid transparent',
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between', 
+                                                                alignItems: 'center',
+                                                                backgroundColor: idx === focusedClientIndex ? '#DBEAFE' : 'white',
+                                                                boxShadow: idx === focusedClientIndex ? 'inset 0 0 0 1px #93C5FD' : 'none',
+                                                                transition: 'all 0.12s ease-in-out'
                                                             }}
                                                             onMouseEnter={() => setFocusedClientIndex(idx)}
                                                             onMouseLeave={() => setFocusedClientIndex(-1)}
                                                         >
                                                             <div>
-                                                                <div style={{ fontWeight: '600', color: '#1F2937' }}>{c.company_name}</div>
-                                                                <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
+                                                                <div style={{ fontWeight: idx === focusedClientIndex ? '900' : '700', color: idx === focusedClientIndex ? '#1E3A8A' : '#1F2937' }}>{c.company_name}</div>
+                                                                <div style={{ fontSize: '0.8rem', fontWeight: idx === focusedClientIndex ? '600' : 'normal', color: idx === focusedClientIndex ? '#2563EB' : '#6B7280' }}>
                                                                     NIT: {c.nit} • {c.address}
                                                                 </div>
                                                             </div>
@@ -3080,23 +3087,25 @@ function CreateOrderContent() {
                                                                             setFocusedClientIndexB2C(-1);
                                                                         }}
                                                                         style={{
-                                                                            padding: '0.8rem 1rem', 
+                                                                            padding: '0.85rem 1.15rem', 
                                                                             cursor: 'pointer', 
-                                                                            borderBottom: '1px solid #F3F4F6',
+                                                                            borderBottom: '1px solid #E2E8F0',
+                                                                            borderLeft: idx === focusedClientIndexB2C ? '6px solid #2563EB' : '6px solid transparent',
                                                                             display: 'flex', 
                                                                             justifyContent: 'space-between', 
                                                                             alignItems: 'center',
-                                                                            backgroundColor: idx === focusedClientIndexB2C ? '#EFF6FF' : 'white',
-                                                                            transition: 'background-color 0.15s'
+                                                                            backgroundColor: idx === focusedClientIndexB2C ? '#DBEAFE' : 'white',
+                                                                            boxShadow: idx === focusedClientIndexB2C ? 'inset 0 0 0 1px #93C5FD' : 'none',
+                                                                            transition: 'all 0.12s ease-in-out'
                                                                         }}
                                                                         onMouseEnter={() => setFocusedClientIndexB2C(idx)}
                                                                         onMouseLeave={() => setFocusedClientIndexB2C(-1)}
                                                                     >
                                                                         <div>
-                                                                            <div style={{ fontWeight: '700', color: idx === focusedClientIndexB2C ? '#1D4ED8' : '#1F2937' }}>
+                                                                            <div style={{ fontWeight: idx === focusedClientIndexB2C ? '900' : '700', color: idx === focusedClientIndexB2C ? '#1E3A8A' : '#1F2937' }}>
                                                                                 {c.contact_name || c.company_name}
                                                                             </div>
-                                                                            <div style={{ fontSize: '0.8rem', color: idx === focusedClientIndexB2C ? '#2563EB' : '#6B7280' }}>
+                                                                            <div style={{ fontSize: '0.8rem', fontWeight: idx === focusedClientIndexB2C ? '600' : 'normal', color: idx === focusedClientIndexB2C ? '#2563EB' : '#6B7280' }}>
                                                                                 {c.contact_phone} • {c.address}
                                                                             </div>
                                                                         </div>
@@ -3828,6 +3837,7 @@ function CreateOrderContent() {
                                         const exc = clientExceptions.find(e => e.product_id === p.id);
                                         const freq = clientFrequentProductMap[p.id];
                                         const isClientHabitual = Boolean(exc || freq);
+                                        const isFocused = idx === focusedProductIndex;
 
                                         return (
                                             <div
@@ -3835,24 +3845,34 @@ function CreateOrderContent() {
                                                 onClick={() => handleProductClick(p)}
                                                 onMouseEnter={() => setFocusedProductIndex(idx)}
                                                 style={{
-                                                    padding: '0.85rem 1rem',
+                                                    padding: '0.9rem 1.15rem',
                                                     cursor: isScarcityLocked ? 'not-allowed' : 'pointer',
-                                                    borderBottom: '1px solid #F3F4F6',
+                                                    borderBottom: '1px solid #E2E8F0',
+                                                    borderLeft: isFocused ? '6px solid #2563EB' : '6px solid transparent',
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
                                                     alignItems: 'center',
-                                                    backgroundColor: isScarcityLocked ? '#FEF2F2' : (idx === focusedProductIndex ? '#EFF6FF' : (isClientHabitual ? '#F0FDF4' : 'white')),
+                                                    backgroundColor: isScarcityLocked
+                                                        ? (isFocused ? '#FEE2E2' : '#FEF2F2')
+                                                        : (isFocused 
+                                                            ? '#DBEAFE' 
+                                                            : (isClientHabitual ? '#F0FDF4' : 'white')),
+                                                    boxShadow: isFocused ? 'inset 0 0 0 1px #93C5FD, 0 2px 4px rgba(37, 99, 235, 0.08)' : 'none',
+                                                    transition: 'all 0.12s ease-in-out',
                                                     opacity: isScarcityLocked ? 0.85 : 1
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                    <span style={{ fontWeight: '700', color: isScarcityLocked ? '#991B1B' : '#111827' }}>
-                                                        {p.name} <span style={{ fontSize: '0.8em', color: '#6B7280' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
+                                                    <span style={{ 
+                                                        fontWeight: isFocused ? '900' : '700', 
+                                                        color: isScarcityLocked ? '#991B1B' : (isFocused ? '#1E3A8A' : '#111827') 
+                                                    }}>
+                                                        {p.name} <span style={{ fontSize: '0.8em', color: isFocused ? '#2563EB' : '#6B7280', fontWeight: '600' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
                                                     </span>
                                                     {isClientHabitual && (
                                                         <span style={{ 
                                                             fontSize: '0.7rem', 
-                                                            backgroundColor: '#DCFCE7', 
+                                                            backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
                                                             color: '#15803D', 
                                                             padding: '2px 8px', 
                                                             borderRadius: '999px', 
@@ -3860,7 +3880,7 @@ function CreateOrderContent() {
                                                             display: 'inline-flex', 
                                                             alignItems: 'center', 
                                                             gap: '4px',
-                                                            border: '1px solid #86EFAC'
+                                                            border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
                                                         }}>
                                                             ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                                         </span>
@@ -3871,9 +3891,22 @@ function CreateOrderContent() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: isFocused ? '800' : '600', color: isFocused ? '#1E40AF' : '#4B5563' }}>
                                                     {formatMoney(p.base_price)}/{p.unit_of_measure}
-                                                    {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
+                                                    {p.options_config?.length > 0 && (
+                                                        <span style={{ 
+                                                            marginLeft: '6px', 
+                                                            fontSize: '0.7em', 
+                                                            backgroundColor: isFocused ? '#FEF08A' : '#FEF3C7', 
+                                                            color: '#92400E', 
+                                                            padding: '2px 6px', 
+                                                            borderRadius: '6px', 
+                                                            border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A',
+                                                            fontWeight: '800' 
+                                                        }}>
+                                                            ⚙️ Opciones
+                                                        </span>
+                                                    )}
                                                 </span>
                                             </div>
                                         );
