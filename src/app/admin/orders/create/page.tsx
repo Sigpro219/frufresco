@@ -2594,13 +2594,77 @@ function CreateOrderContent() {
         }
     };
 
-    const filteredClients = clientSearch.length < 2 ? [] : clients.filter(c =>
-        (c.company_name?.toLowerCase() || '').includes(clientSearch.toLowerCase()) ||
-        (c.nit?.toString() || '').includes(clientSearch) ||
-        (c.contact_name?.toLowerCase() || '').includes(clientSearch.toLowerCase()) ||
-        (c.address?.toLowerCase() || '').includes(clientSearch.toLowerCase()) ||
-        (c.contact_phone?.toString() || '').includes(clientSearch)
-    ).slice(0, 8);
+    // Set of profile IDs that are matrices (parents of at least one branch)
+    const parentMatrixIds = useMemo(() => {
+        const set = new Set<string>();
+        clients.forEach(c => {
+            if (c.parent_id) {
+                set.add(c.parent_id);
+            }
+        });
+        return set;
+    }, [clients]);
+
+    // Map of matrix clients by ID for quick lookup of matrix details
+    const matrixClientsMap = useMemo(() => {
+        const map = new Map<string, any>();
+        clients.forEach(c => {
+            map.set(c.id, c);
+        });
+        return map;
+    }, [clients]);
+
+    const filteredClients = useMemo(() => {
+        if (clientSearch.length < 2) return [];
+        const query = clientSearch.toLowerCase().trim();
+
+        // 1. Filter out pure Casa Matriz (profiles that have child branches and are not deliverable points)
+        const deliverableClients = clients.filter(c => !parentMatrixIds.has(c.id));
+
+        // 2. Find matches on branch info or parent matrix info
+        const matches = deliverableClients.filter(c => {
+            const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
+            const nitMatch = (c.nit?.toString() || '').includes(query);
+            const contactMatch = (c.contact_name?.toLowerCase() || '').includes(query);
+            const addressMatch = (c.address?.toLowerCase() || '').includes(query);
+            const phoneMatch = (c.contact_phone?.toString() || '').includes(query);
+            
+            let parentMatch = false;
+            if (c.parent_id) {
+                const parent = matrixClientsMap.get(c.parent_id);
+                if (parent) {
+                    parentMatch = (parent.company_name?.toLowerCase() || '').includes(query) ||
+                                  (parent.nit?.toString() || '').includes(query);
+                }
+            }
+
+            return nameMatch || nitMatch || contactMatch || addressMatch || phoneMatch || parentMatch;
+        });
+
+        // 3. Partition: Sucursales (has parent_id) vs Independientes (no parent_id)
+        const sucursales = matches.filter(c => Boolean(c.parent_id));
+        const independientes = matches.filter(c => !c.parent_id);
+
+        // 4. Sort sucursales:
+        // Priority A: Sucursales whose parent matrix name matches the search query
+        // Priority B: Alphabetical order
+        sucursales.sort((a, b) => {
+            const parentA = a.parent_id ? matrixClientsMap.get(a.parent_id)?.company_name || '' : '';
+            const parentB = b.parent_id ? matrixClientsMap.get(b.parent_id)?.company_name || '' : '';
+            
+            const aParentMatches = parentA.toLowerCase().includes(query);
+            const bParentMatches = parentB.toLowerCase().includes(query);
+
+            if (aParentMatches && !bParentMatches) return -1;
+            if (!aParentMatches && bParentMatches) return 1;
+
+            return (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' });
+        });
+
+        independientes.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' }));
+
+        return [...sucursales, ...independientes].slice(0, 10);
+    }, [clients, clientSearch, parentMatrixIds, matrixClientsMap]);
 
     const getSelectedClientDetails = () => clients.find(c => c.id === selectedClient);
 
@@ -2826,33 +2890,54 @@ function CreateOrderContent() {
                                                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
                                                     maxHeight: '280px', overflowY: 'auto'
                                                 }}>
-                                                    {filteredClients.map((c, idx) => (
-                                                        <div
-                                                            key={c.id}
-                                                            onClick={() => selectClient(c)}
-                                                            style={{
-                                                                padding: '0.85rem 1.15rem', 
-                                                                cursor: 'pointer', 
-                                                                borderBottom: '1px solid #E2E8F0',
-                                                                borderLeft: idx === focusedClientIndex ? '6px solid #2563EB' : '6px solid transparent',
-                                                                display: 'flex', 
-                                                                justifyContent: 'space-between', 
-                                                                alignItems: 'center',
-                                                                backgroundColor: idx === focusedClientIndex ? '#DBEAFE' : 'white',
-                                                                boxShadow: idx === focusedClientIndex ? 'inset 0 0 0 1px #93C5FD' : 'none',
-                                                                transition: 'all 0.12s ease-in-out'
-                                                            }}
-                                                            onMouseEnter={() => setFocusedClientIndex(idx)}
-                                                            onMouseLeave={() => setFocusedClientIndex(-1)}
-                                                        >
-                                                            <div>
-                                                                <div style={{ fontWeight: idx === focusedClientIndex ? '900' : '700', color: idx === focusedClientIndex ? '#1E3A8A' : '#1F2937' }}>{c.company_name}</div>
-                                                                <div style={{ fontSize: '0.8rem', fontWeight: idx === focusedClientIndex ? '600' : 'normal', color: idx === focusedClientIndex ? '#2563EB' : '#6B7280' }}>
-                                                                    NIT: {c.nit} • {c.address}
+                                                    {filteredClients.map((c, idx) => {
+                                                        const parentMatrix = c.parent_id ? matrixClientsMap.get(c.parent_id) : null;
+                                                        const isFocused = idx === focusedClientIndex;
+
+                                                        return (
+                                                            <div
+                                                                key={c.id}
+                                                                onClick={() => selectClient(c)}
+                                                                style={{
+                                                                    padding: '0.85rem 1.15rem', 
+                                                                    cursor: 'pointer', 
+                                                                    borderBottom: '1px solid #E2E8F0',
+                                                                    borderLeft: isFocused ? '6px solid #2563EB' : '6px solid transparent',
+                                                                    display: 'flex', 
+                                                                    justifyContent: 'space-between', 
+                                                                    alignItems: 'center',
+                                                                    backgroundColor: isFocused ? '#DBEAFE' : 'white',
+                                                                    boxShadow: isFocused ? 'inset 0 0 0 1px #93C5FD' : 'none',
+                                                                    transition: 'all 0.12s ease-in-out'
+                                                                }}
+                                                                onMouseEnter={() => setFocusedClientIndex(idx)}
+                                                                onMouseLeave={() => setFocusedClientIndex(-1)}
+                                                            >
+                                                                <div>
+                                                                    <div style={{ fontWeight: isFocused ? '900' : '700', color: isFocused ? '#1E3A8A' : '#1F2937', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                        <span>{c.company_name}</span>
+                                                                        {parentMatrix && (
+                                                                            <span style={{ 
+                                                                                fontSize: '0.7rem', 
+                                                                                backgroundColor: isFocused ? '#BFDBFE' : '#F1F5F9', 
+                                                                                color: isFocused ? '#1E40AF' : '#475569', 
+                                                                                padding: '1px 6px', 
+                                                                                borderRadius: '4px', 
+                                                                                fontWeight: '700',
+                                                                                border: '1px solid #E2E8F0' 
+                                                                            }}>
+                                                                                Sucursal
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.8rem', fontWeight: isFocused ? '600' : 'normal', color: isFocused ? '#2563EB' : '#6B7280', marginTop: '2px' }}>
+                                                                        {parentMatrix && <span style={{ color: isFocused ? '#1D4ED8' : '#64748B', fontWeight: '600' }}>Matriz: {parentMatrix.company_name} • </span>}
+                                                                        NIT: {c.nit || parentMatrix?.nit || 'N/A'} • {c.address || 'Sin dirección registrada'}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </>
