@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Product, supabase } from '@/lib/supabase';
+import { sortSuggestedValues } from './ManageAttributesModal';
 
 interface Variant {
     id: string;
@@ -413,11 +414,7 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                         </div>
                                                     )}
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                        {matchedAttribute.suggested_values.slice().sort((a: string, b: string) => {
-                                                            const cleanA = a.includes('|') ? a.split('|')[0] : a;
-                                                            const cleanB = b.includes('|') ? b.split('|')[0] : b;
-                                                            return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
-                                                        }).map((val: string) => {
+                                                        {sortSuggestedValues(matchedAttribute.suggested_values).map((val: string) => {
                                                             const isChecked = opt.values.includes(val);
                                                             return (
                                                                 <label 
