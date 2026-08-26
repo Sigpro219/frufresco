@@ -215,7 +215,7 @@ export async function POST(request: Request) {
                 .eq('is_active', true)
                 .in('category', categoryCodes);
 
-            // 2. Fetch pricing model prices cache
+            // 2. Fetch pricing model prices cache & exact rules
             const { data: modelPrices } = await supabase
                 .from('pricing_model_prices')
                 .select('product_id, price')
@@ -228,10 +228,42 @@ export async function POST(request: Request) {
                 });
             }
 
+            const { data: modelRules } = await supabase
+                .from('pricing_rules')
+                .select('product_id, margin_adjustment')
+                .eq('model_id', modelId);
+
+            const modelRulesMap = new Map<string, number>();
+            if (modelRules) {
+                modelRules.forEach(mr => {
+                    modelRulesMap.set(mr.product_id, Number(mr.margin_adjustment));
+                });
+            }
+
+            // Fetch commercial overrides (latest manual cost)
+            const { data: overrides } = await supabase
+                .from('commercial_overrides')
+                .select('product_id, manual_cost, expires_at');
+            const overridesMap = new Map<string, number>();
+            const now = new Date();
+            overrides?.forEach(o => {
+                if (!o.expires_at || new Date(o.expires_at) > now) overridesMap.set(o.product_id, Number(o.manual_cost));
+            });
+
+            // Fetch latest purchases cost
+            const { data: purchases } = await supabase
+                .from('purchases')
+                .select('product_id, unit_price, created_at')
+                .order('created_at', { ascending: false });
+            const purchasesMap = new Map<string, number>();
+            purchases?.forEach(p => {
+                if (!purchasesMap.has(p.product_id)) purchasesMap.set(p.product_id, Number(p.unit_price));
+            });
+
             if (allCategoryProds && allCategoryProds.length > 0) {
-                // Filter only products that have a valid price (base_price > 0 OR model price > 0)
+                // Filter only products that have a valid price (base_price > 0 OR model price > 0 OR cost > 0)
                 const validProds = allCategoryProds.filter(p => {
-                    return Number(p.base_price) > 0 || modelPriceMap.has(p.id);
+                    return Number(p.base_price) > 0 || modelPriceMap.has(p.id) || overridesMap.has(p.id) || purchasesMap.has(p.id);
                 });
 
                 const usedIds = new Set<string>();
@@ -287,15 +319,22 @@ export async function POST(request: Request) {
                 const itemsToInsert = [];
 
                 for (const p of productsToQuote) {
-                    const validCachedPrice = modelPriceMap.get(p.id);
-                    const marginMultiplier = colorTag === 'verde' ? 1.05 : colorTag === 'amarillo' ? 1.10 : 1.15;
-                    const marginPercent = colorTag === 'verde' ? 5 : colorTag === 'amarillo' ? 10 : 15;
+                    const baseCost = overridesMap.get(p.id) || purchasesMap.get(p.id) || Number(p.base_price) || 0;
+                    const defaultModelMargin = colorTag === 'verde' ? 47 : colorTag === 'amarillo' ? 48 : 49;
+                    const modelMargin = modelRulesMap.has(p.id) ? modelRulesMap.get(p.id)! : defaultModelMargin;
+
+                    // Regla de Capacidad de Negociación: +3% adicional sobre el margen particular del SKU
+                    const quotedMargin = modelMargin + 3;
 
                     let unitPrice = 0;
-                    if (validCachedPrice && validCachedPrice > 0) {
-                        unitPrice = validCachedPrice;
-                    } else if (Number(p.base_price) > 0) {
-                        unitPrice = Math.round(Number(p.base_price) * marginMultiplier);
+                    if (baseCost > 0) {
+                        const ivaRate = (Number(p.iva_rate) || 0) / 100;
+                        const priceBeforeTax = baseCost * (1 + quotedMargin / 100);
+                        const priceWithTax = priceBeforeTax * (1 + ivaRate);
+                        unitPrice = Math.ceil(priceWithTax / 50) * 50;
+                    } else if (modelPriceMap.has(p.id)) {
+                        // Si viene del precio cacheado del modelo, agregamos el 3% de colchón
+                        unitPrice = Math.ceil((modelPriceMap.get(p.id)! * 1.03) / 50) * 50;
                     }
 
                     // Ensure minimum unit price
@@ -315,8 +354,8 @@ export async function POST(request: Request) {
                         product_id: p.id,
                         product_name: p.name,
                         quantity: qty,
-                        cost_basis: p.base_price,
-                        margin_percent: marginPercent,
+                        cost_basis: baseCost || p.base_price,
+                        margin_percent: quotedMargin,
                         unit_price: unitPrice,
                         iva_rate: itemTaxRate,
                         iva_amount: itemTax,
