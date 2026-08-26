@@ -516,18 +516,36 @@ export default function CostMatrixPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const { data: prods, error: prodErr } = await supabase
-                .from('products')
-                .select('*')
-                .setHeader('Cache-Control', 'no-store')
-                .eq('show_on_web', true)
-                .eq('is_active', true)
-                .order('category', { ascending: true })
-                .order('name', { ascending: true })
-                .limit(5000);
+            let allProds: any[] = [];
+            let pageNum = 0;
+            const PAGE_SIZE = 1000;
+            let finished = false;
 
-            if (prodErr) throw prodErr;
-            setProducts(prods || []);
+            while (!finished) {
+                const { data: batchProds, error: prodErr } = await supabase
+                    .from('products')
+                    .select('*')
+                    .setHeader('Cache-Control', 'no-store')
+                    .eq('is_active', true)
+                    .order('category', { ascending: true })
+                    .order('name', { ascending: true })
+                    .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+
+                if (prodErr) throw prodErr;
+
+                if (batchProds && batchProds.length > 0) {
+                    allProds = [...allProds, ...batchProds];
+                    if (batchProds.length < PAGE_SIZE) {
+                        finished = true;
+                    } else {
+                        pageNum++;
+                    }
+                } else {
+                    finished = true;
+                }
+            }
+
+            setProducts(allProds);
 
             const { data: hist, error: histErr } = await supabase
                 .from('purchase_history_normalized')
