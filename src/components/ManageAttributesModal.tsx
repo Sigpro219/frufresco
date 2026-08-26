@@ -51,6 +51,29 @@ export const sortSuggestedValues = (values: string[]): string[] => {
     });
 };
 
+export const groupSuggestedValues = (values: string[]) => {
+    const under1kg: string[] = [];
+    const overOrEqual1kg: string[] = [];
+    const others: string[] = [];
+
+    const sorted = sortSuggestedValues(values);
+
+    sorted.forEach(val => {
+        const weight = extractWeight(val);
+        if (weight !== null) {
+            if (weight < 1000) {
+                under1kg.push(val);
+            } else {
+                overOrEqual1kg.push(val);
+            }
+        } else {
+            others.push(val);
+        }
+    });
+
+    return { under1kg, overOrEqual1kg, others };
+};
+
 export default function ManageAttributesModal({ onClose }: ManageAttributesModalProps) {
     const [dbAttributes, setDbAttributes] = useState<MasterAttribute[]>([]);
     const [localAttributes, setLocalAttributes] = useState<MasterAttribute[]>([]);
@@ -440,9 +463,12 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                         </div>
                                     </div>
 
-                                    <div style={{ backgroundColor: '#F9FAFB', padding: '8px 10px', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                            {sortSuggestedValues(attr.suggested_values || []).map(val => {
+                                    <div style={{ backgroundColor: '#F9FAFB', padding: '10px 12px', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
+                                        {(() => {
+                                            const { under1kg, overOrEqual1kg, others } = groupSuggestedValues(attr.suggested_values || []);
+                                            const hasWeightGroups = under1kg.length > 0 || overOrEqual1kg.length > 0;
+
+                                            const renderChip = (val: string) => {
                                                 const isWebUnit = val.toLowerCase() === 'unidad web' || val.toLowerCase() === 'unidadweb';
                                                 return (
                                                     <span key={val} style={{ 
@@ -451,7 +477,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                         border: isWebUnit ? '1.5px solid #10B981' : '1.5px solid #E5E7EB', 
                                                         padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
                                                         fontWeight: '700', color: isWebUnit ? '#047857' : '#374151' 
-                                                    }} title={isWebUnit ? '🌐 EXCLUSIVO PARA TIENDA WEB / E-COMMERCE: Esta opción solo afecta el catálogo web. Al seleccionarla en un producto, hereda su unidad comercial web y factor en Kg para mostrarse a los clientes en la tienda virtual.' : undefined}>
+                                                    }} title={isWebUnit ? '🌐 EXCLUSIVO PARA TIENDA WEB: Hereda unidad web y factor en Kg.' : undefined}>
                                                         {isWebUnit ? '🏷️ Unidad Web (Dinámica SKU)' : (val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val)}
                                                         <button 
                                                             onClick={() => handleRemoveValueLocal(attr.id, val)}
@@ -461,7 +487,53 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                         </button>
                                                     </span>
                                                 );
-                                            })}
+                                            };
+
+                                            if (!hasWeightGroups) {
+                                                return (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                        {others.map(renderChip)}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {under1kg.length > 0 && (
+                                                        <div>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <span>⚖️ Menos de 1 Kilo (&lt; 1000 gr)</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                {under1kg.map(renderChip)}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {overOrEqual1kg.length > 0 && (
+                                                        <div style={{ borderTop: under1kg.length > 0 ? '1px dashed #E5E7EB' : 'none', paddingTop: under1kg.length > 0 ? '6px' : '0' }}>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <span>📦 1 Kilo o Más (&ge; 1 Kg / Mayorista)</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                {overOrEqual1kg.map(renderChip)}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {others.length > 0 && (
+                                                        <div style={{ borderTop: '1px dashed #E5E7EB', paddingTop: '6px' }}>
+                                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <span>🧺 Empaques &amp; Otras Presentaciones</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                {others.map(renderChip)}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                             <input 
                                                 ref={el => { inputRefs.current[attr.id] = el; }}
                                                 placeholder="+ Subcat..."

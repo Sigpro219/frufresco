@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Product, supabase } from '@/lib/supabase';
-import { sortSuggestedValues } from './ManageAttributesModal';
+import { sortSuggestedValues, groupSuggestedValues } from './ManageAttributesModal';
 
 interface Variant {
     id: string;
@@ -413,8 +413,11 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                             ))}
                                                         </div>
                                                     )}
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                        {sortSuggestedValues(matchedAttribute.suggested_values).map((val: string) => {
+                                                    {(() => {
+                                                        const { under1kg, overOrEqual1kg, others } = groupSuggestedValues(matchedAttribute.suggested_values);
+                                                        const hasWeightGroups = under1kg.length > 0 || overOrEqual1kg.length > 0;
+
+                                                        const renderCheckboxChip = (val: string) => {
                                                             const isChecked = opt.values.includes(val);
                                                             return (
                                                                 <label 
@@ -453,8 +456,53 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                                     {val.includes('|') ? `${val.split('|')[0].charAt(0).toUpperCase() + val.split('|')[0].slice(1)} ${val.split('|')[1]} gr` : val}
                                                                 </label>
                                                             );
-                                                        })}
-                                                    </div>
+                                                        };
+
+                                                        if (!hasWeightGroups) {
+                                                            return (
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                    {others.map(renderCheckboxChip)}
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                {under1kg.length > 0 && (
+                                                                    <div>
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>
+                                                                            ⚖️ Menos de 1 Kilo (&lt; 1000 gr)
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                            {under1kg.map(renderCheckboxChip)}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {overOrEqual1kg.length > 0 && (
+                                                                    <div style={{ borderTop: under1kg.length > 0 ? '1px dashed #E5E7EB' : 'none', paddingTop: under1kg.length > 0 ? '6px' : '0' }}>
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>
+                                                                            📦 1 Kilo o Más (&ge; 1 Kg / Mayorista)
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                            {overOrEqual1kg.map(renderCheckboxChip)}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {others.length > 0 && (
+                                                                    <div style={{ borderTop: '1px dashed #E5E7EB', paddingTop: '6px' }}>
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>
+                                                                            🧺 Empaques &amp; Otras Presentaciones
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                            {others.map(renderCheckboxChip)}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             );
                                         })()}
