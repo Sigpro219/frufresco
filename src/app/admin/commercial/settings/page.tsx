@@ -90,6 +90,7 @@ export default function PricingSettingsPage() {
     const [uploadingExcel, setUploadingExcel] = useState(false);
     const [excelError, setExcelError] = useState<string | null>(null);
     const [excelSuccess, setExcelSuccess] = useState<string | null>(null);
+    const [modelAverages, setModelAverages] = useState<Record<string, number>>({});
 
     const fetchModels = async () => {
         setLoadingModels(true);
@@ -98,6 +99,26 @@ export default function PricingSettingsPage() {
             .select('*');
 
         if (data) {
+            // Calcular utilidad promedio para cada modelo desde pricing_rules
+            const { data: allRules } = await supabase
+                .from('pricing_rules')
+                .select('model_id, margin_adjustment');
+
+            const avgMap: Record<string, number> = {};
+            if (allRules && allRules.length > 0) {
+                const sumMap: Record<string, { sum: number; count: number }> = {};
+                allRules.forEach(r => {
+                    if (!sumMap[r.model_id]) sumMap[r.model_id] = { sum: 0, count: 0 };
+                    sumMap[r.model_id].sum += Number(r.margin_adjustment || 0);
+                    sumMap[r.model_id].count += 1;
+                });
+                data.forEach(m => {
+                    const stats = sumMap[m.id];
+                    avgMap[m.id] = stats && stats.count > 0 ? (stats.sum / stats.count) : (m.base_margin_percent || 0);
+                });
+            }
+            setModelAverages(avgMap);
+
             // Lógica de ordenamiento personalizado
             const sortedData = [...data].sort((a, b) => {
                 // 1. Prioridad para General Institucional (1) y Clientes Hogar / B2C (2)
@@ -1353,11 +1374,11 @@ export default function PricingSettingsPage() {
                                         <div style={{
                                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                                             backgroundColor: selectedModel?.id === m.id ? '#D1FAE5' : '#F3F4F6',
-                                            padding: '0.4rem 0.7rem', borderRadius: '8px', minWidth: '65px'
+                                            padding: '0.4rem 0.65rem', borderRadius: '8px', minWidth: '70px'
                                         }}>
-                                            <span style={{ fontSize: '0.6rem', textTransform: 'uppercase', fontWeight: '800', color: selectedModel?.id === m.id ? '#065F46' : '#475569' }}>BASE</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.25rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
-                                                {m.base_margin_percent}%
+                                            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.03em', color: selectedModel?.id === m.id ? '#065F46' : '#64748B' }}>PROMEDIO</span>
+                                            <span style={{ fontWeight: '900', fontSize: '1.15rem', color: selectedModel?.id === m.id ? '#0D7A57' : '#1E293B' }}>
+                                                {formatNumber(modelAverages[m.id] !== undefined ? modelAverages[m.id] : (m.base_margin_percent || 0), 1)}%
                                             </span>
                                         </div>
                                     </div>
