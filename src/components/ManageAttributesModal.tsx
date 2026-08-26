@@ -534,16 +534,17 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 </div>
                                             );
                                         })()}
+                                        <div style={{ marginTop: '8px' }}>
                                             <input 
                                                 ref={el => { inputRefs.current[attr.id] = el; }}
-                                                placeholder="+ Subcat..."
+                                                placeholder="+ Opción / Presentación..."
                                                 value={newValueInputs[attr.id] || ''}
                                                 onChange={(e) => setNewValueInputs({ ...newValueInputs, [attr.id]: e.target.value })}
                                                 onKeyPress={(e) => e.key === 'Enter' && handleAddValueLocal(attr.id)}
                                                 style={{ 
                                                     border: '1.5px dashed #D1D5DB', background: 'none', 
                                                     padding: '3px 10px', borderRadius: '100px', fontSize: '0.8rem', 
-                                                    fontWeight: '700', outline: 'none', width: '100px'
+                                                    fontWeight: '700', outline: 'none', width: '150px'
                                                 }}
                                             />
                                         </div>

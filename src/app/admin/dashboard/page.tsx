@@ -330,7 +330,7 @@ export default function AdminDashboard() {
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        {(profile?.role === 'sys_admin' || profile?.role === 'admin' || profile?.email === 'admin@frufresco.com' || profile?.is_verified_dev) && (
+                        {((profile as any)?.role === 'sys_admin' || (profile as any)?.role === 'admin' || (profile as any)?.email === 'admin@frufresco.com') && (
                             <Link href="/admin/command-center" style={{ textDecoration: 'none' }}>
                                 <button
                                     style={{
