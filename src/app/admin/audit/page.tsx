@@ -365,7 +365,8 @@ export default function AuditLogPage() {
                     
                 if (error) throw error;
                 
-                setLogs(data || []);
+                const uniqueData = Array.from(new Map((data || []).map((item: any) => [item.id, item])).values());
+                setLogs(uniqueData);
                 setHasMore((data || []).length === PAGE_SIZE);
                 setPage(0);
             } catch (err: any) {
@@ -394,7 +395,11 @@ export default function AuditLogPage() {
                 
             if (error) throw error;
             
-            setLogs(prev => [...prev, ...(data || [])]);
+            setLogs(prev => {
+                const existingIds = new Set(prev.map(l => l.id));
+                const newLogs = (data || []).filter(l => !existingIds.has(l.id));
+                return [...prev, ...newLogs];
+            });
             setHasMore((data || []).length === PAGE_SIZE);
             setPage(nextPage);
         } catch (err) {
@@ -627,10 +632,10 @@ export default function AuditLogPage() {
                                 </tbody>
                             ) : (
                                 <tbody style={{ fontFamily: THEME.typography.fontFamilySecondary }}>
-                                    {logs.map((log) => {
+                                    {logs.map((log, index) => {
                                         const badge = getActionBadgeColor(log.action);
                                         return (
-                                            <tr key={log.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', verticalAlign: 'middle', transition: 'background-color 0.15s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                            <tr key={`${log.id}-${index}`} style={{ borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', verticalAlign: 'middle', transition: 'background-color 0.15s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '600', whiteSpace: 'nowrap' }}>
                                                     {new Date(log.created_at).toLocaleString('es-CO')}
                                                 </td>
