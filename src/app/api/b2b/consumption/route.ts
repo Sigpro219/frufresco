@@ -11,6 +11,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const clientId = searchParams.get('clientId');
         const timeRange = searchParams.get('timeRange') || 'all';
+        const includeBranches = searchParams.get('includeBranches') !== 'false';
 
         if (!clientId) {
             return NextResponse.json({ error: 'clientId parameter is required' }, { status: 400 });
@@ -18,13 +19,21 @@ export async function GET(request: Request) {
 
         const { data: clientProfile } = await supabaseAdmin
             .from('profiles')
-            .select('id, parent_id')
+            .select('id, parent_id, is_corporate_parent, company_name, razon_social, nit')
             .eq('id', clientId)
             .single();
 
         const clientIds = [clientId];
-        if (clientProfile?.parent_id) {
-            clientIds.push(clientProfile.parent_id);
+        if (includeBranches) {
+            if (clientProfile?.is_corporate_parent) {
+                const { data: branches } = await supabaseAdmin
+                    .from('profiles')
+                    .select('id')
+                    .eq('parent_id', clientId);
+                if (branches && branches.length > 0) {
+                    branches.forEach((b: any) => clientIds.push(b.id));
+                }
+            }
         }
 
         // 1. Fetch Agreements to get agreement prices & base prices
@@ -56,7 +65,7 @@ export async function GET(request: Request) {
             });
         }
 
-        // 2. Fetch all valid orders for client
+        // 2. Fetch all valid orders for client (or matrix group)
         const { data: ordersData, error: ordersError } = await supabaseAdmin
             .from('orders')
             .select('id, created_at, delivery_date, total, subtotal, status, profile_id')
@@ -73,7 +82,11 @@ export async function GET(request: Request) {
         if (!ordersData || ordersData.length === 0) {
             return NextResponse.json({
                 items: [],
-                kpis: { totalCop: 0, totalKg: 0, totalSavingsCop: 0, avgPrice: 0 }
+                history: [],
+                topProducts: [],
+                paretoProducts: [],
+                kpis: { totalCop: 0, totalKg: 0, totalOrders: 0, totalSkus: 0, classACount: 0, classBCount: 0, classCCount: 0, totalSavingsCop: 0, avgPrice: 0, avgTicket: 0 },
+                clientInfo: clientProfile
             });
         }
 
@@ -81,7 +94,7 @@ export async function GET(request: Request) {
 
         const { data: itemsData, error: itemsError } = await supabaseAdmin
             .from('order_items')
-            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, name, name_en, unit_of_measure, image_url, base_price, category)')
+            .select('id, product_id, order_id, quantity, unit_price, nickname, products(id, sku, name, name_en, unit_of_measure, image_url, base_price, category)')
             .in('order_id', orderIds);
 
         if (itemsError) {
@@ -91,7 +104,7 @@ export async function GET(request: Request) {
 
         // Filter based on timeRange
         const now = new Date();
-        const daysLimit = timeRange === '30days' ? 30 : timeRange === '3months' ? 90 : 99999;
+        const daysLimit = timeRange === '30days' ? 30 : timeRange === '3months' ? 90 : timeRange === '1year' ? 365 : 99999;
         const cutoffDate = new Date(now.getTime() - daysLimit * 24 * 60 * 60 * 1000);
 
         const filteredOrders = ordersData.filter(o => {
@@ -129,8 +142,9 @@ export async function GET(request: Request) {
         });
 
         const avgPrice = totalKg > 0 ? (totalCop / totalKg) : 0;
+        const avgTicket = filteredOrders.length > 0 ? (totalCop / filteredOrders.length) : 0;
 
-        // Group history timeline for SVG Chart
+        // Group history timeline for Chart
         const historyMap: Record<string, { date: string, rawDate: string, cop: number, kg: number }> = {};
 
         filteredOrders.forEach(o => {
@@ -165,13 +179,16 @@ export async function GET(request: Request) {
 
         const history = Object.values(historyMap).sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
-        // Group top products for frequent items list
+        // Group top products for frequent items list and Pareto calculation
         const productMap: Record<string, {
             id: string,
+            sku: string,
             name: string,
             image: string,
             unit: string,
+            category: string,
             totalQuantity: number,
+            totalRevenue: number,
             ordersCount: number,
             orderIds: Set<string>,
             product: any
@@ -185,40 +202,96 @@ export async function GET(request: Request) {
             if (!productMap[pId]) {
                 productMap[pId] = {
                     id: pId,
+                    sku: p?.sku || '',
                     name: p?.name || it.nickname || 'Producto Insumo',
                     image: p?.image_url || '',
                     unit: p?.unit_of_measure || 'Kg',
+                    category: p?.category || 'General',
                     totalQuantity: 0,
+                    totalRevenue: 0,
                     ordersCount: 0,
                     orderIds: new Set<string>(),
-                    product: p || { id: pId, name: it.nickname || 'Producto Insumo', unit_of_measure: 'Kg' }
+                    product: p || { id: pId, sku: p?.sku || '', name: it.nickname || 'Producto Insumo', unit_of_measure: 'Kg' }
                 };
             }
 
-            productMap[pId].totalQuantity += Number(it.quantity || 0);
+            const qty = Number(it.quantity || 0);
+            const uPrice = Number(it.unit_price || 0);
+            productMap[pId].totalQuantity += qty;
+            productMap[pId].totalRevenue += qty * uPrice;
             productMap[pId].orderIds.add(it.order_id);
         });
 
-        const topProducts = Object.values(productMap).map(p => ({
+        // Sort descending by totalRevenue (or totalQuantity)
+        const sortedProducts = Object.values(productMap).map(p => ({
             id: p.id,
+            sku: p.sku,
             name: p.name,
             image: p.image,
             unit: p.unit,
+            category: p.category,
             totalQuantity: p.totalQuantity,
+            totalRevenue: p.totalRevenue,
+            avgUnitPrice: p.totalQuantity > 0 ? (p.totalRevenue / p.totalQuantity) : 0,
             ordersCount: p.orderIds.size,
             product: p.product
-        })).sort((a, b) => b.totalQuantity - a.totalQuantity);
+        })).sort((a, b) => b.totalRevenue - a.totalRevenue || b.totalQuantity - a.totalQuantity);
+
+        let runningRevenue = 0;
+        let runningQuantity = 0;
+
+        const paretoProducts = sortedProducts.map(p => {
+            runningRevenue += p.totalRevenue;
+            runningQuantity += p.totalQuantity;
+
+            const shareRevenuePct = totalCop > 0 ? (p.totalRevenue / totalCop) * 100 : 0;
+            const cumulativeRevenuePct = totalCop > 0 ? (runningRevenue / totalCop) * 100 : 0;
+            const shareQtyPct = totalKg > 0 ? (p.totalQuantity / totalKg) * 100 : 0;
+            const cumulativeQtyPct = totalKg > 0 ? (runningQuantity / totalKg) * 100 : 0;
+
+            // Pareto 80/20 ABC Classification:
+            // Clase A: Representa hasta el 80% del valor total (los más críticos)
+            // Clase B: Siguiente 15% (hasta el 95%)
+            // Clase C: Último 5% (cola larga)
+            let paretoClass: 'A' | 'B' | 'C' = 'C';
+            if (cumulativeRevenuePct <= 80 || shareRevenuePct >= 80) {
+                paretoClass = 'A';
+            } else if (cumulativeRevenuePct <= 95) {
+                paretoClass = 'B';
+            }
+
+            return {
+                ...p,
+                shareRevenuePct,
+                cumulativeRevenuePct,
+                shareQtyPct,
+                cumulativeQtyPct,
+                paretoClass
+            };
+        });
+
+        const classACount = paretoProducts.filter(p => p.paretoClass === 'A').length;
+        const classBCount = paretoProducts.filter(p => p.paretoClass === 'B').length;
+        const classCCount = paretoProducts.filter(p => p.paretoClass === 'C').length;
 
         return NextResponse.json({
             items: filteredItems,
             history,
-            topProducts,
+            topProducts: sortedProducts,
+            paretoProducts,
             kpis: {
                 totalCop,
                 totalKg,
+                totalOrders: filteredOrders.length,
+                totalSkus: paretoProducts.length,
+                classACount,
+                classBCount,
+                classCCount,
                 totalSavingsCop,
-                avgPrice
-            }
+                avgPrice,
+                avgTicket
+            },
+            clientInfo: clientProfile
         });
     } catch (err: any) {
         console.error('B2B Consumption API exception:', err);
