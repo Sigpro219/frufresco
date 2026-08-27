@@ -4,9 +4,19 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
-import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, HelpCircle, Info, Scale, Package, Truck, X, BookOpen } from 'lucide-react';
+import { Wand2, Sparkles, Loader2, ShieldAlert, Tag, Leaf, Flame, Zap, Check, Plus, HelpCircle, Info, Scale, Package, Truck, X, BookOpen, ChefHat, Soup, UtensilsCrossed, Wheat, Drumstick } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
+
+const TYPICAL_RECIPES = [
+    { id: 'ajiaco', label: 'Ajiaco', Icon: Soup },
+    { id: 'sancocho', label: 'Sancocho', Icon: Flame },
+    { id: 'bandeja paisa', label: 'Bandeja Paisa', Icon: UtensilsCrossed },
+    { id: 'mondongo', label: 'Mondongo', Icon: Soup },
+    { id: 'mute', label: 'Mute', Icon: Wheat },
+    { id: 'tamal', label: 'Tamal', Icon: Sparkles },
+    { id: 'arroz con pollo', label: 'Arroz con Pollo', Icon: Drumstick },
+];
 
 interface EditProductModalProps {
     product: Product;
@@ -123,6 +133,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [conversionFactorInput, setConversionFactorInput] = useState(product.web_conversion_factor?.toString().replace('.', ',') || '1,0');
     const [generatingAI, setGeneratingAI] = useState(false);
     const [tagInput, setTagInput] = useState('');
+    const [keywordInput, setKeywordInput] = useState('');
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
@@ -482,6 +493,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 name_en: formData.name_en,
                 description_en: formData.description_en,
                 tags: formData.tags,
+                keywords: formData.keywords || null,
                 requires_label: (formData as any).requires_label ?? false
             };
 
@@ -1446,6 +1458,150 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         </div>
                         <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px' }}>
                             💡 <strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.
+                        </div>
+
+                        {/* SECCIÓN RECETAS TÍPICAS & KEYWORDS */}
+                        <div style={{ backgroundColor: '#F0FDF4', padding: '1rem', borderRadius: '12px', border: '1px solid #BBF7D0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#166534', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <ChefHat size={14} /> Recetas Típicas & Keywords de Búsqueda
+                                </label>
+                                <span style={{ fontSize: '0.7rem', color: '#15803D', fontStyle: 'italic' }}>Asocia el producto a recetas colombianas para el buscador</span>
+                            </div>
+
+                            {/* PRESETS DE PLATOS TÍPICOS */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
+                                {TYPICAL_RECIPES.map(({ id, label, Icon }) => {
+                                    const currentList = (formData.keywords || '')
+                                        .split(',')
+                                        .map(k => k.trim().toLowerCase())
+                                        .filter(Boolean);
+                                    const isAssigned = currentList.includes(id) || currentList.includes(label.toLowerCase());
+
+                                    return (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            onClick={() => {
+                                                let updated: string[];
+                                                if (isAssigned) {
+                                                    updated = currentList.filter(k => k !== id && k !== label.toLowerCase());
+                                                } else {
+                                                    updated = Array.from(new Set([...currentList, id]));
+                                                }
+                                                setFormData({ ...formData, keywords: updated.join(', ') });
+                                            }}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                padding: '3px 8px',
+                                                borderRadius: '16px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s',
+                                                backgroundColor: isAssigned ? '#15803D' : '#FFFFFF',
+                                                color: isAssigned ? '#FFFFFF' : '#166534',
+                                                border: isAssigned ? '1px solid #15803D' : '1px solid #86EFAC',
+                                                boxShadow: isAssigned ? '0 2px 4px rgba(21, 128, 61, 0.2)' : 'none'
+                                            }}
+                                        >
+                                            <Icon size={11} strokeWidth={isAssigned ? 2.5 : 2} />
+                                            <span>{label}</span>
+                                            {isAssigned ? (
+                                                <Check size={11} strokeWidth={3} style={{ marginLeft: '2px' }} />
+                                            ) : (
+                                                <Plus size={11} strokeWidth={2.5} style={{ marginLeft: '2px' }} />
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* LISTA DE KEYWORDS ACTIVOS Y CAMPO MANUAL */}
+                            <div style={{ 
+                                display: 'flex', 
+                                flexWrap: 'wrap', 
+                                gap: '6px', 
+                                padding: '0.5rem', 
+                                border: '1px solid #86EFAC', 
+                                borderRadius: '8px', 
+                                backgroundColor: 'white',
+                                minHeight: '40px',
+                                alignItems: 'center'
+                            }}>
+                                {(formData.keywords || '')
+                                    .split(',')
+                                    .map(k => k.trim())
+                                    .filter(Boolean)
+                                    .map((kw, idx) => (
+                                        <div key={idx} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            backgroundColor: '#DCFCE7',
+                                            color: '#166534',
+                                            padding: '2px 8px',
+                                            borderRadius: '14px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '700',
+                                            border: '1px solid #86EFAC'
+                                        }}>
+                                            <ChefHat size={10} />
+                                            <span>{kw}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const current = (formData.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+                                                    const updated = current.filter((_, i) => i !== idx);
+                                                    setFormData({ ...formData, keywords: updated.join(', ') });
+                                                }}
+                                                style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                                            >
+                                                <X size={10} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                <input
+                                    type="text"
+                                    placeholder={(!formData.keywords || formData.keywords.trim() === '') ? "Ej: ajiaco, sancocho, sopa, guiso..." : "Agregar keyword manual..."}
+                                    value={keywordInput}
+                                    onChange={(e) => setKeywordInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ',') {
+                                            e.preventDefault();
+                                            const newKw = keywordInput.trim().toLowerCase().replace(',', '');
+                                            if (newKw) {
+                                                const current = (formData.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+                                                if (!current.includes(newKw)) {
+                                                    const updated = [...current, newKw].join(', ');
+                                                    setFormData({ ...formData, keywords: updated });
+                                                }
+                                                setKeywordInput('');
+                                            }
+                                        } else if (e.key === 'Backspace' && keywordInput === '') {
+                                            const current = (formData.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+                                            if (current.length > 0) {
+                                                setFormData({ ...formData, keywords: current.slice(0, -1).join(', ') });
+                                            }
+                                        }
+                                    }}
+                                    style={{ 
+                                        flex: 1, 
+                                        minWidth: '130px', 
+                                        border: 'none', 
+                                        outline: 'none', 
+                                        fontSize: '0.82rem', 
+                                        backgroundColor: 'transparent',
+                                        color: '#166534',
+                                        fontWeight: '600'
+                                    }}
+                                />
+                            </div>
+                            <p style={{ fontSize: '0.7rem', color: '#15803D', marginTop: '4px', marginBottom: 0 }}>
+                                Escribe palabras clave y presiona <strong>Enter</strong> o <strong>Coma (,)</strong> para añadirlas a la indexación del buscador.
+                            </p>
                         </div>
                         
                         <div>
