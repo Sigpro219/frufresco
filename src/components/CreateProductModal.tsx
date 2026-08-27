@@ -567,11 +567,11 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Alistamiento</label>
                                     <select
-                                        value={formData.buying_team}
+                                        value={formData.buying_team?.toUpperCase() || ''}
                                         onChange={(e) => setFormData({ ...formData, buying_team: e.target.value })}
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
-                                        <option value="">Seleccionar equipo...</option>
+                                        <option value="">SELECCIONAR EQUIPO...</option>
                                         <option value="AGUACATES">AGUACATES</option>
                                         <option value="ALISTAMIENTO ABARROTES">ALISTAMIENTO ABARROTES</option>
                                         <option value="ALISTAMIENTO BATAVIA">ALISTAMIENTO BATAVIA</option>
@@ -592,11 +592,11 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
                                     <select
-                                        value={formData.purchase_sublist}
+                                        value={formData.purchase_sublist?.toUpperCase() || ''}
                                         onChange={(e) => setFormData({ ...formData, purchase_sublist: e.target.value })}
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
-                                        <option value="">Seleccionar sublista...</option>
+                                        <option value="">SELECCIONAR SUBLISTA...</option>
                                         <option value="DESPENSA">DESPENSA</option>
                                         <option value="FRUTA SELECCIONADA">FRUTA SELECCIONADA</option>
                                         <option value="HORTALIZA SELECCIONADA">HORTALIZA SELECCIONADA</option>
@@ -612,24 +612,27 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Gestión de Compras</label>
                                     <select
-                                        value={formData.procurement_method}
+                                        value={formData.procurement_method?.toUpperCase() || ''}
                                         onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
-                                        <option value="">Seleccionar método...</option>
-                                        <option value="Compras Generales">Compras Generales</option>
-                                        <option value="Compras Menores">Compras Menores</option>
-                                        <option value="Compras Noche">Compras Noche</option>
+                                        <option value="">SELECCIONAR MÉTODO...</option>
+                                        <option value="COMPRAS GENERALES">COMPRAS GENERALES</option>
+                                        <option value="COMPRAS MENORES">COMPRAS MENORES</option>
+                                        <option value="COMPRAS NOCHE">COMPRAS NOCHE</option>
+                                        <option value="CONTRATACIÓN DIRECTA">CONTRATACIÓN DIRECTA</option>
+                                        <option value="IMPORTACIÓN">IMPORTACIÓN</option>
+                                        <option value="LOCAL">LOCAL</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
                                     <select
-                                        value={formData.inventory_group}
+                                        value={formData.inventory_group?.toUpperCase() || ''}
                                         onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
-                                        <option value="">Seleccionar grupo...</option>
+                                        <option value="">SELECCIONAR GRUPO...</option>
                                         <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
                                         <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
                                         <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>

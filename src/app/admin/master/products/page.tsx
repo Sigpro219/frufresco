@@ -399,7 +399,7 @@ export default function MasterProductsPage() {
             ["1. Productos", "IVA", "SÍ", "Número", "Porcentaje de IVA aplicable (0, 5, 19)"],
             ["1. Productos", "URL_Imagen", "NO", "Texto", "Enlace público HTTP de la foto principal"],
             ["1. Productos", "Comprador", "NO", "Texto", "Equipo de alistamiento asignado (ej: EQUIPO B FRUTAS Y OTROS)"],
-            ["1. Productos", "Metodo_Compra", "NO", "Texto", "Tipo de compra: 'Compras Generales', 'Compras Menores', 'Compras Noche'"],
+            ["1. Productos", "Metodo_Compra", "NO", "Texto", "Tipo de compra: 'COMPRAS GENERALES', 'COMPRAS MENORES', 'COMPRAS NOCHE'"],
             ["1. Productos", "Activo", "SÍ", "SI/NO", "Estado de disponibilidad maestro en el ERP"],
             ["1. Productos", "Web", "SÍ", "SI/NO", "Estado de publicación en el e-commerce B2C"],
             ["1. Productos", "Nombre_Web", "NO", "Texto", "Nombre de exhibición web en e-commerce B2C"],
@@ -998,7 +998,7 @@ export default function MasterProductsPage() {
         const sample1 = [
             "M-FR-MNZ-K", "101", "Manzana Roja", "Red Apple", "Manzana fresca seleccionada de alta calidad", "Fresh red apple selected...", 
             "FR", "Kg", 0, "https://images.com/manzana.jpg", "EQUIPO B FRUTAS Y OTROS", 
-            "Compras Generales", "SI", "SI", "Manzana Roja Web", "Kg", 1.0, 
+            "COMPRAS GENERALES", "SI", "SI", "Manzana Roja Web", "Kg", 1.0, 
             10, "", 2.5, "Daño por transporte,Madurez excesiva", 
             "INVENTARIO DE FRUTAS Y OTROS", "FRUTA SELECCIONADA", "frescos,fruta,roja", "manzana,apple,red", 0, 
             "NO", "[]", "[]"
@@ -1007,7 +1007,7 @@ export default function MasterProductsPage() {
         const sample2 = [
             "M-VE-CBL-K", "102", "Cebolla Cabezona", "White Onion", "Cebolla cabezona blanca seleccionada", "Fresh white onion...", 
             "VE", "Kg", 0, "", "LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO", 
-            "Compras Generales", "SI", "SI", "Cebolla Cabezona Web", "Kg", 1.0, 
+            "COMPRAS GENERALES", "SI", "SI", "Cebolla Cabezona Web", "Kg", 1.0, 
             20, "", 1.8, "Deshidratación", 
             "INVENTARIO DE VERDURAS", "VERDURAS", "verduras,cebolla", "cebolla,onion", 0, 
             "NO", "[]", "[]"
@@ -1029,7 +1029,7 @@ export default function MasterProductsPage() {
             ["IVA", "SÍ", "Número", "Porcentaje de IVA aplicable (0, 5, 19)"],
             ["URL_Imagen", "NO", "Texto", "Enlace público HTTP de la foto principal"],
             ["Comprador", "NO", "Texto", "Equipo de alistamiento asignado (ej: EQUIPO B FRUTAS Y OTROS, HIERBAS Y HORTALIZAS)"],
-            ["Metodo_Compra", "NO", "Texto", "Tipo de compra: 'Compras Generales', 'Compras Menores', 'Compras Noche'"],
+            ["Metodo_Compra", "NO", "Texto", "Tipo de compra: 'COMPRAS GENERALES', 'COMPRAS MENORES', 'COMPRAS NOCHE'"],
             ["Activo", "SÍ", "SI/NO", "Estado de disponibilidad maestro en el ERP"],
             ["Web", "SÍ", "SI/NO", "Estado de publicación en el e-commerce B2C"],
             ["Nombre_Web", "NO", "Texto", "Nombre de exhibición web en e-commerce B2C"],
