@@ -44,6 +44,7 @@ import {
     Grid,
     Lock,
     CheckCircle2,
+    XCircle,
     AlertCircle,
     ExternalLink,
     ArrowLeft,
@@ -60,7 +61,9 @@ import {
     ShieldAlert,
     Unlock,
     Gift,
-    Zap
+    Zap,
+    TrendingUp,
+    Layers
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CommercialAgreementsModule from './CommercialAgreementsModule';
@@ -233,7 +236,7 @@ export default function ClientsModule() {
     // Table Header Dropdown Filters State (Like Maestro SKU)
     const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
     const [filterLocationHeader, setFilterLocationHeader] = useState<string>('all');
-    const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
+    const [filterStatusHeader, setFilterStatusHeader] = useState<string>('activo');
     const [filterAgreementGpsHeader, setFilterAgreementGpsHeader] = useState<string>('all');
     const [filterDevHeader, setFilterDevHeader] = useState<string>('all');
 
@@ -257,11 +260,11 @@ export default function ClientsModule() {
         return Array.from(locs).sort((a, b) => a.localeCompare(b));
     }, [activeTab, clientsB2B, clientsB2C, leads]);
 
-    const hasActiveHeaderFilters = filterLocationHeader !== 'all' || filterStatusHeader !== 'all' || filterAgreementGpsHeader !== 'all' || filterDevHeader !== 'all';
+    const hasActiveHeaderFilters = filterLocationHeader !== 'all' || (activeTab === 'leads' ? filterStatusHeader !== 'all' : (filterStatusHeader !== 'activo' && filterStatusHeader !== 'all')) || filterAgreementGpsHeader !== 'all' || filterDevHeader !== 'all';
 
     const clearAllHeaderFilters = () => {
         setFilterLocationHeader('all');
-        setFilterStatusHeader('all');
+        setFilterStatusHeader(activeTab === 'leads' ? 'all' : 'activo');
         setFilterAgreementGpsHeader('all');
         setFilterDevHeader('all');
         setOpenHeaderDropdown(null);
@@ -1622,23 +1625,42 @@ export default function ClientsModule() {
         const matrizProfile = result.find((item: any) => item.is_corporate_parent === true || item.classification === 'matriz' || !item.parent_id);
         const matrizId = matrizProfile ? (matrizProfile as any).id : null;
 
-        // Orden de Jerarquía Visual:
-        // 1. Casa Matriz (Puesto #1)
-        // 2. Sucursales directas que pertenecen a la Matriz (#2)
-        // 3. Registros sin herencia directa de la Matriz (Enviados al fondo de la lista/galería #3)
+        // Orden de Jerarquía Visual Solicitado:
+        // 1. Estado: Activos primero (is_active !== false), Inactivos al fondo (is_active === false)
+        // 2. Jerarquía dentro de Activos:
+        //    2.1 Casa Matriz (is_corporate_parent === true || classification === 'matriz' || !parent_id)
+        //    2.2 Sucursales directas / vinculadas (parent_id)
+        //    2.3 Lo demás
+        // 3. Jerarquía dentro de Inactivos:
+        //    3.1 Matrices inactivas
+        //    3.2 Sucursales inactivas
+        //    3.3 Lo demás
+        // 4. Orden alfabético por nombre
         return [...result].sort((a: any, b: any) => {
+            const aActive = a.is_active !== false;
+            const bActive = b.is_active !== false;
+
+            // 1. Estado: Activos primero (0), Inactivos después (1)
+            if (aActive !== bActive) {
+                return aActive ? -1 : 1;
+            }
+
+            // 2. Jerarquía Corporativa (Matrices -> Sucursales -> Otros)
             const aIsMatriz = a.is_corporate_parent === true || a.classification === 'matriz' || !a.parent_id;
             const bIsMatriz = b.is_corporate_parent === true || b.classification === 'matriz' || !b.parent_id;
 
-            const aIsDirectBranch = matrizId ? a.parent_id === matrizId : false;
-            const bIsDirectBranch = matrizId ? b.parent_id === matrizId : false;
+            const aIsBranch = !aIsMatriz && !!a.parent_id;
+            const bIsBranch = !bIsMatriz && !!b.parent_id;
 
-            const aTier = aIsMatriz ? 0 : aIsDirectBranch ? 1 : 2;
-            const bTier = bIsMatriz ? 0 : bIsDirectBranch ? 1 : 2;
+            const aTier = aIsMatriz ? 0 : aIsBranch ? 1 : 2;
+            const bTier = bIsMatriz ? 0 : bIsBranch ? 1 : 2;
 
             if (aTier !== bTier) return aTier - bTier;
 
-            return String(a.company_name || a.contact_name || '').localeCompare(String(b.company_name || b.contact_name || ''));
+            // 3. Nombre alfabético
+            const aName = String(a.company_name || a.contact_name || '').trim();
+            const bName = String(b.company_name || b.contact_name || '').trim();
+            return aName.localeCompare(bName, 'es', { sensitivity: 'base' });
         });
     };
 
@@ -1963,6 +1985,92 @@ export default function ClientsModule() {
                                 <Grid size={16} strokeWidth={1.5} style={{ color: viewMode === 'grid' ? THEME.colors.primary : '#64748B' }} />
                             </button>
                         </div>
+
+                        {/* FILTRO RÁPIDO DE ESTADO (ACTIVOS / INACTIVOS / TODOS) */}
+                        {(activeTab === 'b2b' || activeTab === 'b2c') && (
+                            <div style={{
+                                display: 'flex',
+                                backgroundColor: '#F1F5F9',
+                                padding: '3px',
+                                borderRadius: '10px',
+                                height: '40px',
+                                alignItems: 'center',
+                                border: '1px solid #E2E8F0',
+                                gap: '2px',
+                                flexShrink: 0
+                            }}>
+                                <button
+                                    onClick={() => setFilterStatusHeader('activo')}
+                                    style={{
+                                        padding: '0 0.8rem',
+                                        height: '32px',
+                                        borderRadius: '7px',
+                                        border: 'none',
+                                        backgroundColor: filterStatusHeader === 'activo' ? '#10B981' : 'transparent',
+                                        color: filterStatusHeader === 'activo' ? 'white' : '#047857',
+                                        boxShadow: filterStatusHeader === 'activo' ? '0 2px 4px rgba(16,185,129,0.25)' : 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        fontWeight: '800',
+                                        fontSize: '0.78rem',
+                                        transition: 'all 0.15s'
+                                    }}
+                                    title="Ver únicamente clientes activos"
+                                >
+                                    <CheckCircle2 size={13} strokeWidth={2.5} />
+                                    <span>Activos ({activeTab === 'b2b' ? clientsB2B.filter(c => c.is_active !== false).length : clientsB2C.filter(c => c.is_active !== false).length})</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setFilterStatusHeader('all')}
+                                    style={{
+                                        padding: '0 0.75rem',
+                                        height: '32px',
+                                        borderRadius: '7px',
+                                        border: 'none',
+                                        backgroundColor: filterStatusHeader === 'all' ? 'white' : 'transparent',
+                                        color: filterStatusHeader === 'all' ? THEME.colors.textMain : '#64748B',
+                                        boxShadow: filterStatusHeader === 'all' ? '0 2px 4px rgba(0,0,0,0.08)' : 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontWeight: '700',
+                                        fontSize: '0.78rem',
+                                        transition: 'all 0.15s'
+                                    }}
+                                    title="Ver todos los clientes (activos e inactivos)"
+                                >
+                                    <span>Todos ({activeTab === 'b2b' ? clientsB2B.length : clientsB2C.length})</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setFilterStatusHeader('inactivo')}
+                                    style={{
+                                        padding: '0 0.75rem',
+                                        height: '32px',
+                                        borderRadius: '7px',
+                                        border: 'none',
+                                        backgroundColor: filterStatusHeader === 'inactivo' ? '#EF4444' : 'transparent',
+                                        color: filterStatusHeader === 'inactivo' ? 'white' : '#B91C1C',
+                                        boxShadow: filterStatusHeader === 'inactivo' ? '0 2px 4px rgba(239,68,68,0.25)' : 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        fontWeight: '800',
+                                        fontSize: '0.78rem',
+                                        transition: 'all 0.15s'
+                                    }}
+                                    title="Ver únicamente clientes inactivos / archivados"
+                                >
+                                    <XCircle size={13} strokeWidth={2.5} />
+                                    <span>Inactivos ({activeTab === 'b2b' ? clientsB2B.filter(c => c.is_active === false).length : clientsB2C.filter(c => c.is_active === false).length})</span>
+                                </button>
+                            </div>
+                        )}
 
                         {/* BUSCADOR ESTÁNDAR FLEXIBLE (OCUPANDO TODO EL ESPACIO) */}
                         <div style={{ position: 'relative', flex: 1 }}>
@@ -5250,6 +5358,114 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         checkB2bAccess();
     }, [isEdit, isB2B, editData?.id]);
 
+    // Pareto Consumption Analysis State (Ley 80/20)
+    const [paretoTimeRange, setParetoTimeRange] = useState<'all' | '30days' | '3months' | '1year'>('all');
+    const [paretoData, setParetoData] = useState<{
+        paretoProducts: any[];
+        kpis: any;
+        loading: boolean;
+        error: string | null;
+    }>({
+        paretoProducts: [],
+        kpis: { totalCop: 0, totalKg: 0, totalOrders: 0, totalSkus: 0, classACount: 0, classBCount: 0, classCCount: 0, avgTicket: 0, avgPrice: 0 },
+        loading: false,
+        error: null
+    });
+    const [paretoSearch, setParetoSearch] = useState('');
+    const [isExportingPareto, setIsExportingPareto] = useState(false);
+
+    const fetchPareto = useCallback(async () => {
+        if (!editData?.id || isLead) return;
+        setParetoData(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await fetch(`/api/b2b/consumption?clientId=${editData.id}&timeRange=${paretoTimeRange}&includeBranches=true`);
+            const json = await res.json();
+            if (res.ok) {
+                setParetoData({
+                    paretoProducts: json.paretoProducts || json.topProducts || [],
+                    kpis: json.kpis || { totalCop: 0, totalKg: 0, totalOrders: 0, totalSkus: 0, classACount: 0, classBCount: 0, classCCount: 0, avgTicket: 0, avgPrice: 0 },
+                    loading: false,
+                    error: null
+                });
+            } else {
+                setParetoData(prev => ({ ...prev, loading: false, error: json.error || 'Error al cargar consumo' }));
+            }
+        } catch (err: any) {
+            console.error('Error loading client Pareto:', err);
+            setParetoData(prev => ({ ...prev, loading: false, error: err.message }));
+        }
+    }, [editData?.id, paretoTimeRange, isLead]);
+
+    useEffect(() => {
+        if (editData?.id && !isLead) {
+            fetchPareto();
+        }
+    }, [fetchPareto, editData?.id, isLead]);
+
+    const handleDownloadParetoExcel = () => {
+        if (!paretoData.paretoProducts || paretoData.paretoProducts.length === 0) {
+            window.showToast?.('No hay productos de consumo registrados para este cliente.', 'info');
+            return;
+        }
+
+        setIsExportingPareto(true);
+        try {
+            const clientName = formData.company_name || formData.razon_social || editData?.company_name || 'Cliente';
+            const clientNit = formData.nit || editData?.nit || 'S_N';
+
+            const formattedRows = paretoData.paretoProducts.map((p, idx) => ({
+                'Ranking': idx + 1,
+                'Clasificación Pareto': p.paretoClass === 'A' ? 'A (80% Crítico)' : p.paretoClass === 'B' ? 'B (15% Medio)' : 'C (5% Ocasional)',
+                'SKU': p.sku || p.product?.sku || '---',
+                'Producto': p.name || p.product?.name || 'Insumo',
+                'Categoría': p.category || p.product?.category || 'General',
+                'Unidad': p.unit || 'Kg',
+                'Cantidad Total Consumida': p.totalQuantity || 0,
+                'Facturación Total ($ COP)': Math.round(p.totalRevenue || 0),
+                'Precio Promedio ($ COP)': Math.round(p.avgUnitPrice || 0),
+                '% Participación Facturación': `${(p.shareRevenuePct || 0).toFixed(2)}%`,
+                '% Acumulado Facturación': `${(p.cumulativeRevenuePct || 0).toFixed(2)}%`,
+                '% Participación Volumen': `${(p.shareQtyPct || 0).toFixed(2)}%`,
+                '% Acumulado Volumen': `${(p.cumulativeQtyPct || 0).toFixed(2)}%`,
+                'N° Pedidos Presente': p.ordersCount || 0
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(formattedRows);
+
+            ws['!cols'] = [
+                { wch: 8 },
+                { wch: 18 },
+                { wch: 14 },
+                { wch: 35 },
+                { wch: 16 },
+                { wch: 10 },
+                { wch: 22 },
+                { wch: 24 },
+                { wch: 20 },
+                { wch: 24 },
+                { wch: 24 },
+                { wch: 22 },
+                { wch: 22 },
+                { wch: 18 }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Pareto 80-20');
+
+            const safeClientName = clientName.replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 30);
+            const dateStr = new Date().toISOString().split('T')[0];
+            const fileName = `Pareto_Consumo_${safeClientName}_NIT_${clientNit}_${dateStr}.xlsx`;
+
+            XLSX.writeFile(wb, fileName);
+            window.showToast?.(`📊 Planilla Pareto descargada con éxito: ${fileName}`, 'success');
+        } catch (err: any) {
+            console.error('Error exporting Pareto Excel:', err);
+            window.showToast?.(`Error al exportar Pareto: ${err.message}`, 'error');
+        } finally {
+            setIsExportingPareto(false);
+        }
+    };
+
     const [branches, setBranches] = useState<Profile[]>([]);
 
     const fetchBranches = async () => {
@@ -6438,6 +6654,261 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         >
                                             Generar Acceso B2B
                                         </button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
+
+                        {/* BLOQUE: PARETO DE CONSUMO & PRODUCTOS MÁS PEDIDOS (LEY 80/20) */}
+                        {editData?.id && !isLead && (
+                            <section style={{ backgroundColor: 'white', padding: '1.75rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#ECFDF5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                                            <TrendingUp size={20} strokeWidth={2} />
+                                        </div>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h4 style={{ fontSize: '0.95rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>
+                                                    PARETO DE CONSUMO & PRODUCTOS FRECUENTES (LEY 80/20)
+                                                </h4>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '2px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0' }}>
+                                                    {paretoData.kpis.totalSkus || 0} SKUs
+                                                </span>
+                                            </div>
+                                            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                                Identificación de la canasta básica de compra y concentración de volumen/facturación.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Controles: Selector de Rango + Botón Exportar */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', gap: '2px' }}>
+                                            {(['all', '1year', '3months', '30days'] as const).map(rangeKey => {
+                                                const label = rangeKey === 'all' ? 'Histórico' : rangeKey === '1year' ? '1 Año' : rangeKey === '3months' ? '3 Meses' : '30 Días';
+                                                const isSel = paretoTimeRange === rangeKey;
+                                                return (
+                                                    <button
+                                                        key={rangeKey}
+                                                        type="button"
+                                                        onClick={() => setParetoTimeRange(rangeKey)}
+                                                        style={{
+                                                            padding: '4px 10px',
+                                                            borderRadius: '7px',
+                                                            border: 'none',
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: isSel ? 'white' : 'transparent',
+                                                            color: isSel ? '#0F172A' : '#64748B',
+                                                            boxShadow: isSel ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleDownloadParetoExcel}
+                                            disabled={isExportingPareto || paretoData.paretoProducts.length === 0}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '0.5rem 1rem',
+                                                backgroundColor: '#10B981',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: paretoData.paretoProducts.length === 0 ? 'not-allowed' : 'pointer',
+                                                opacity: paretoData.paretoProducts.length === 0 ? 0.6 : 1,
+                                                boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            title="Descargar reporte completo en formato Excel (.xlsx)"
+                                        >
+                                            <Download size={14} />
+                                            {isExportingPareto ? 'Exportando...' : 'Descargar Pareto Excel (.xlsx)'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* KPI Banner */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.8rem', marginBottom: '1.2rem' }}>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.9rem 1.1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block', textTransform: 'uppercase' }}>Facturación Total</span>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>
+                                            {formatMoney(paretoData.kpis.totalCop || 0)}
+                                        </div>
+                                        <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{paretoData.kpis.totalOrders || 0} órdenes despachadas</span>
+                                    </div>
+
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.9rem 1.1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block', textTransform: 'uppercase' }}>Volumen Consumido</span>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#059669', marginTop: '2px' }}>
+                                            {formatNumber(paretoData.kpis.totalKg || 0)} <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>Kg/Und</span>
+                                        </div>
+                                        <span style={{ fontSize: '0.65rem', color: '#64748B' }}>Prom. {formatMoney(paretoData.kpis.avgPrice || 0)} / unidad</span>
+                                    </div>
+
+                                    <div style={{ backgroundColor: '#ECFDF5', padding: '0.9rem 1.1rem', borderRadius: '16px', border: '1px solid #A7F3D0' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}>Zona A (80% Crítico)</span>
+                                            <span style={{ backgroundColor: '#059669', color: 'white', fontSize: '0.6rem', fontWeight: '900', padding: '1px 6px', borderRadius: '4px' }}>PARETO</span>
+                                        </div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#064E3B', marginTop: '2px' }}>
+                                            {paretoData.kpis.classACount || 0} <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>SKUs</span>
+                                        </div>
+                                        <span style={{ fontSize: '0.65rem', color: '#047857' }}>Representan el 80% del valor</span>
+                                    </div>
+
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '0.9rem 1.1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block', textTransform: 'uppercase' }}>Ticket Promedio</span>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>
+                                            {formatMoney(paretoData.kpis.avgTicket || 0)}
+                                        </div>
+                                        <span style={{ fontSize: '0.65rem', color: '#64748B' }}>Por pedido despachado</span>
+                                    </div>
+                                </div>
+
+                                {/* Buscador dentro del Pareto */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.8rem' }}>
+                                    <div style={{ position: 'relative', flex: 1 }}>
+                                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Filtrar por SKU o nombre de producto..."
+                                            value={paretoSearch}
+                                            onChange={(e) => setParetoSearch(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                height: '32px',
+                                                paddingLeft: '32px',
+                                                paddingRight: '12px',
+                                                fontSize: '0.75rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid #E2E8F0',
+                                                outline: 'none',
+                                                backgroundColor: '#FAFAFA'
+                                            }}
+                                        />
+                                    </div>
+                                    {paretoSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setParetoSearch('')}
+                                            style={{ fontSize: '0.7rem', color: '#64748B', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '700' }}
+                                        >
+                                            Limpiar
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Tabla Pareto */}
+                                {paretoData.loading ? (
+                                    <div style={{ textAlign: 'center', padding: '2rem', color: '#64748B', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <Loader2 size={16} className="animate-spin" /> Cargando análisis Pareto del cliente...
+                                    </div>
+                                ) : paretoData.paretoProducts.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '2.5rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px dashed #CBD5E1' }}>
+                                        <Package size={28} style={{ color: '#94A3B8', margin: '0 auto 8px' }} />
+                                        <p style={{ margin: 0, fontWeight: '700', fontSize: '0.85rem', color: '#475569' }}>
+                                            No se registran órdenes despachadas para este cliente en el rango seleccionado.
+                                        </p>
+                                        <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>
+                                            El análisis Pareto se genera automáticamente a medida que el cliente realiza compras.
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div style={{ maxHeight: '360px', overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: '12px' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: '800', zIndex: 1 }}>
+                                                    <th style={{ padding: '8px 10px', width: '40px', textAlign: 'center' }}>#</th>
+                                                    <th style={{ padding: '8px 10px', width: '90px' }}>Clase</th>
+                                                    <th style={{ padding: '8px 10px', width: '90px' }}>SKU</th>
+                                                    <th style={{ padding: '8px 10px' }}>Producto / Insumo</th>
+                                                    <th style={{ padding: '8px 10px', textAlign: 'right' }}>Cant. Total</th>
+                                                    <th style={{ padding: '8px 10px', textAlign: 'right' }}>Facturación ($ COP)</th>
+                                                    <th style={{ padding: '8px 10px', textAlign: 'right' }}>% Part.</th>
+                                                    <th style={{ padding: '8px 10px', textAlign: 'right' }}>% Acum.</th>
+                                                    <th style={{ padding: '8px 10px', textAlign: 'center' }}>Pedidos</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paretoData.paretoProducts
+                                                    .filter(p => {
+                                                        if (!paretoSearch.trim()) return true;
+                                                        const q = paretoSearch.toLowerCase();
+                                                        return (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q);
+                                                    })
+                                                    .map((prod, idx) => {
+                                                        const isA = prod.paretoClass === 'A';
+                                                        const isB = prod.paretoClass === 'B';
+                                                        return (
+                                                            <tr 
+                                                                key={prod.id || idx}
+                                                                style={{ 
+                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                    backgroundColor: isA ? '#F0FDF4' : idx % 2 === 0 ? 'white' : '#FAFAFA',
+                                                                    transition: 'background 0.15s'
+                                                                }}
+                                                            >
+                                                                <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '800', color: '#64748B' }}>
+                                                                    {idx + 1}
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px' }}>
+                                                                    <span style={{
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.65rem',
+                                                                        fontWeight: '900',
+                                                                        textTransform: 'uppercase',
+                                                                        backgroundColor: isA ? '#DCFCE7' : isB ? '#FEF3C7' : '#F1F5F9',
+                                                                        color: isA ? '#15803D' : isB ? '#B45309' : '#64748B',
+                                                                        border: `1px solid ${isA ? '#86EFAC' : isB ? '#FDE68A' : '#E2E8F0'}`
+                                                                    }}>
+                                                                        {isA ? '🟢 A (80%)' : isB ? '🟡 B (15%)' : '⚪ C (5%)'}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: '700', color: '#475569' }}>
+                                                                    {prod.sku || '---'}
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', fontWeight: '750', color: '#1E293B' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        {prod.image && (
+                                                                            <img src={prod.image} alt="" style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'cover' }} onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                                                                        )}
+                                                                        <span>{prod.name}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '700', color: '#0F172A' }}>
+                                                                    {formatNumber(prod.totalQuantity)} <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{prod.unit}</span>
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#0F172A' }}>
+                                                                    {formatMoney(prod.totalRevenue)}
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '700', color: isA ? '#15803D' : '#64748B' }}>
+                                                                    {(prod.shareRevenuePct || 0).toFixed(1)}%
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: isA ? '#15803D' : '#334155' }}>
+                                                                    {(prod.cumulativeRevenuePct || 0).toFixed(1)}%
+                                                                </td>
+                                                                <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700', color: '#64748B' }}>
+                                                                    {prod.ordersCount || 0}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </section>
