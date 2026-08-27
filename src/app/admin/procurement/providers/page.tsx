@@ -115,7 +115,8 @@ export default function ProvidersPage() {
             }
 
             const formattedRows = listToExport.map(p => ({
-                'NIT / Identificación': p.tax_id || '',
+                'ID_INTERNO': p.id || '',
+                'NIT / Identificación': p.tax_id || (p as any).nit || '',
                 'Tipo Documento': p.document_type || 'NIT',
                 'Nombre / Razón Social': p.name || '',
                 'Estado Operativo': p.is_active !== false ? 'Activo' : 'Inactivo',
@@ -165,16 +166,17 @@ export default function ProvidersPage() {
             const XLSX = await import('xlsx');
             const sampleRows = templateCategory === 'PRODUCTOS' ? [
                 {
-                    'NIT / Identificación': '901234567-1',
+                    'ID_INTERNO': '',
+                    'NIT / Identificación': '901234567-8',
                     'Tipo Documento': 'NIT',
                     'Nombre / Razón Social': 'AGROPECUARIA SAN JOSÉ S.A.S',
                     'Estado Operativo': 'Activo',
                     'Categoría': 'PRODUCTOS',
-                    'Productos / Insumos Principales': 'CEBOLLA LARGA, PAPA PASTUSA',
+                    'Productos / Insumos Principales': 'PAPA PASTUSA, CEBOLLA LARGA, ZANAHORIA',
                     'Tiempos de Entrega': '24 horas',
                     'Tipo de Pago': 'Contado',
                     'Plazo de Pago (Días)': 0,
-                    'Condición de Pago': 'Pago contra entrega',
+                    'Condición de Pago': 'Contraentrega en efectivo o transferencia',
                     'Facturación': 'Documento Soporte',
                     'Persona de Contacto': 'JUAN CARLOS PÉREZ',
                     'Cargo del Contacto': 'Director de Operaciones',
@@ -192,6 +194,7 @@ export default function ProvidersPage() {
                     'Observaciones': 'Despacha Lunes y Jueves antes de 6am'
                 },
                 {
+                    'ID_INTERNO': '',
                     'NIT / Identificación': '800987654-2',
                     'Tipo Documento': 'NIT',
                     'Nombre / Razón Social': 'DISTRIBUIDORA FRUTAS DEL VALLE',
@@ -220,6 +223,7 @@ export default function ProvidersPage() {
                 }
             ] : [
                 {
+                    'ID_INTERNO': '',
                     'NIT / Identificación': '900555444-3',
                     'Tipo Documento': 'NIT',
                     'Nombre / Razón Social': 'EMPAQUES & PLÁSTICOS INDUSTRIALES S.A.S',
@@ -292,7 +296,13 @@ export default function ProvidersPage() {
                     return '';
                 };
 
+                const rawId = getVal('ID_INTERNO', 'id', 'ID', 'id_interno');
+                const isUUID = rawId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
+
                 const tax_id = getVal('NIT / Identificación', 'NIT', 'tax_id', 'Identificación (NIT/CC)', 'Identificacion', 'NIT/CC');
+                const rawDocType = getVal('Tipo Documento', 'Tipo de Documento', 'document_type').toUpperCase();
+                const document_type = rawDocType || (tax_id.length < 10 && !tax_id.includes('-') ? 'CC' : 'NIT');
+
                 const name = getVal('Nombre / Razón Social', 'Nombre', 'Razón Social', 'name', 'Razon Social');
                 const rawStatus = getVal('Estado Operativo', 'Estado (Activo / Inactivo)', 'Estado', 'is_active').toLowerCase();
                 const is_active = !(rawStatus.includes('inact') || rawStatus.includes('fals') || rawStatus === '0' || rawStatus.includes('deshab'));
@@ -327,8 +337,9 @@ export default function ProvidersPage() {
                     rowIndex: index + 2,
                     isValid,
                     item: {
+                        id: isUUID ? rawId.trim() : undefined,
                         tax_id,
-                        document_type: tax_id.length < 10 && !tax_id.includes('-') ? 'CC' : 'NIT',
+                        document_type,
                         name,
                         category,
                         product,

@@ -130,6 +130,21 @@ export default function WorldOfficeExportPage() {
                     row['ValorTotal'] = item.quantity * item.unit_price;
                     row['CentroCostos'] = 'VENTAS';
                     row['UnidadMedida'] = 'UND';
+                } else if (exportType === 'providers') {
+                    row['TipoDocumento'] = 'TER'; 
+                    row['Prefijo'] = 'PRV';
+                    row['Numero'] = item.world_office_id || (index + 1);
+                    row['Fecha'] = new Date().toISOString().split('T')[0];
+                    row['NitTercero'] = item.tax_id || item.nit || '111111111';
+                    row['NombreTercero'] = item.name || 'PROVEEDOR';
+                    row['Ciudad'] = item.city || 'Bogotá D.C.';
+                    row['Direccion'] = item.address || '';
+                    row['Telefono'] = item.phone || '';
+                    row['Email'] = item.email || '';
+                    row['FormaPago'] = item.type === 'credito' ? 'Crédito' : 'Contado';
+                    row['Plazo'] = item.payment_terms_days || 0;
+                    row['Observaciones'] = item.observations || '';
+                    row['CentroCostos'] = 'COMPRAS';
                 } else {
                     row['TipoDocumento'] = 'CP'; 
                     row['Prefijo'] = 'CONT';

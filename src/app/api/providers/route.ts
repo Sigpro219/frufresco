@@ -136,36 +136,45 @@ export async function POST(request: Request) {
             for (let i = 0; i < items.length; i += CHUNK_SIZE) {
                 const chunk = items.slice(i, i + CHUNK_SIZE);
                 
-                const { data, error } = await adminSupabase
-                    .from('providers')
-                    .upsert(chunk, { onConflict: 'tax_id', ignoreDuplicates: false })
-                    .select('id, tax_id');
-
-                if (error) {
-                    console.warn('Bulk upsert chunk warning, processing item by item:', error.message);
-                    for (const item of chunk) {
-                        try {
-                            const { data: existing } = await adminSupabase
+                for (const item of chunk) {
+                    try {
+                        let existing: any = null;
+                        if (item.id) {
+                            const { data } = await adminSupabase
+                                .from('providers')
+                                .select('id')
+                                .eq('id', item.id)
+                                .maybeSingle();
+                            existing = data;
+                        }
+                        if (!existing && item.tax_id) {
+                            const { data } = await adminSupabase
                                 .from('providers')
                                 .select('id')
                                 .eq('tax_id', item.tax_id)
                                 .maybeSingle();
-
-                            if (existing) {
-                                const { error: uErr } = await adminSupabase.from('providers').update(item).eq('id', existing.id);
-                                if (uErr) throw uErr;
-                                updatedCount++;
-                            } else {
-                                const { error: iErr } = await adminSupabase.from('providers').insert([item]);
-                                if (iErr) throw iErr;
-                                createdCount++;
-                            }
-                        } catch (singleErr: any) {
-                            errors.push({ tax_id: item.tax_id, name: item.name, error: singleErr.message });
+                            existing = data;
                         }
+
+                        if (existing) {
+                            const updatePayload = { ...item };
+                            delete updatePayload.id; // Evitar mutación de ID
+                            const { error: uErr } = await adminSupabase
+                                .from('providers')
+                                .update(updatePayload)
+                                .eq('id', existing.id);
+                            if (uErr) throw uErr;
+                            updatedCount++;
+                        } else {
+                            const { error: iErr } = await adminSupabase
+                                .from('providers')
+                                .insert([item]);
+                            if (iErr) throw iErr;
+                            createdCount++;
+                        }
+                    } catch (singleErr: any) {
+                        errors.push({ tax_id: item.tax_id, name: item.name, error: singleErr.message });
                     }
-                } else {
-                    createdCount += (data?.length || chunk.length);
                 }
             }
 

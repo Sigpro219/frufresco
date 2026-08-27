@@ -1024,6 +1024,9 @@ export default function ClientsModule() {
             return {
                 Estado: c.is_active !== false ? 'ACTIVO' : 'INACTIVO',
                 Revisado_Dev: (c.is_verified_dev || (c.tags && c.tags.includes('verified_dev'))) ? 'SI' : 'NO',
+                Tags: Array.isArray(c.tags) ? c.tags.join(',') : '',
+                Permite_Fuera_Convenio: (c as any).allow_off_agreement_purchases !== false ? 'SI' : 'NO',
+                Override_Matriz_Convenio: (c as any).override_parent_off_agreement ? 'SI' : 'NO',
                 Jerarquia_Visual: jerarquiaVisual,
                 ID_INTERNO: c.id,
                 NIT_CEDULA: c.nit || '',
@@ -1168,7 +1171,7 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "ID_INTERNO", "Estado", "Revisado_Dev", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "ID_INTERNO", "Estado", "Revisado_Dev", "Tags", "Permite_Fuera_Convenio", "Override_Matriz_Convenio", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
             "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
@@ -1181,7 +1184,7 @@ export default function ClientsModule() {
         ];
 
         const sample1 = [
-            "", "ACTIVO", "SI", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "", "ACTIVO", "SI", "vip,corporativo", "SI", "NO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
             "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
@@ -1194,7 +1197,7 @@ export default function ClientsModule() {
         ];
 
         const sample2 = [
-            "", "ACTIVO", "NO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "", "ACTIVO", "NO", "", "SI", "NO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
             "unicentro@elgourmet.com", "", "", "Avenida Carrera 15 # 124-30", "Local 12 - Zona Comercial", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "HEREDADO_MATRIZ",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
@@ -1207,7 +1210,7 @@ export default function ClientsModule() {
         ];
 
         const sample3 = [
-            "", "ACTIVO", "SI", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "", "ACTIVO", "SI", "hogar,nuevo", "SI", "NO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
             "marcela.rincon@gmail.com", "", "", "Carrera 7 # 150-10", "Apto 402 - Torre B", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
@@ -1248,18 +1251,26 @@ export default function ClientsModule() {
 
             setLoading(true);
             try {
-                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true || val === '1';
+                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true || val === '1' || val === 'TRUE' || val === 'true';
 
-                // 1. Cargar catálogo de clientes existentes en la BD para hacer mach automático por NIT/Email si ID_INTERNO no está
-                const { data: existingProfiles } = await supabase.from('profiles').select('id, nit, email');
+                const cleanTags = (val: any): string[] => {
+                    if (!val) return [];
+                    if (Array.isArray(val)) return val;
+                    return val.toString().split(',').map((t: string) => t.trim()).filter(Boolean);
+                };
+
+                // 1. Cargar catálogo de clientes existentes en la BD para hacer match automático por NIT/Email si ID_INTERNO no está
+                const { data: existingProfiles } = await supabase.from('profiles').select('id, nit, email, tags');
                 const nitMap: Record<string, string> = {};
                 const emailMap: Record<string, string> = {};
+                const existingTagsMap: Record<string, string[]> = {};
                 existingProfiles?.forEach(p => {
                     if (p.nit) nitMap[p.nit.trim().toLowerCase()] = p.id;
                     if (p.email) emailMap[p.email.trim().toLowerCase()] = p.id;
+                    if (p.id) existingTagsMap[p.id] = p.tags || [];
                 });
 
-                // Mapearemos todos los clientes con sus 52 atributos
+                // Mapearemos todos los clientes con sus 52+ atributos
                 const clientsToInsert = rows.map(row => {
                     const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
                     const estadoVal = (row.Estado || row.Activo || row['Estado (ACTIVO/INACTIVO)'] || '').toString().trim().toUpperCase();
@@ -1275,6 +1286,26 @@ export default function ClientsModule() {
 
                     const matchedId = isUUID ? rawId.trim() : (nitMap[cleanNit] || emailMap[cleanEmail] || undefined);
 
+                    // Manejo seguro de Tags
+                    let tags = cleanTags(row.Tags || row.tags);
+                    if (tags.length === 0 && matchedId && existingTagsMap[matchedId]) {
+                        tags = [...existingTagsMap[matchedId]];
+                    }
+                    if (is_verified_dev && !tags.includes('verified_dev')) {
+                        tags.push('verified_dev');
+                    } else if (!is_verified_dev && tags.includes('verified_dev') && (row.Revisado_Dev !== undefined || row.is_verified_dev !== undefined)) {
+                        tags = tags.filter(t => t !== 'verified_dev');
+                    }
+
+                    // Compras fuera de convenio
+                    const allow_off_agreement_purchases = row.Permite_Fuera_Convenio !== undefined 
+                        ? cleanBool(row.Permite_Fuera_Convenio) 
+                        : (row.allow_off_agreement_purchases !== undefined ? cleanBool(row.allow_off_agreement_purchases) : true);
+                    const override_parent_off_agreement = row.Override_Matriz_Convenio !== undefined ? cleanBool(row.Override_Matriz_Convenio) : false;
+
+                    const credit_limit = parseFloat(row.Cupo_Credito || '0') || 0;
+                    const payment_terms = (row.Condicion_Pago || 'Contado').toString().trim();
+
                     // Buscar id de modelo de precios si especificaron nombre
                     const modelName = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toLowerCase();
                     const matchedModel = pricingModels.find(m => m.name.toLowerCase() === modelName);
@@ -1283,7 +1314,11 @@ export default function ClientsModule() {
                         id: matchedId,
                         is_active: is_active,
                         is_verified_dev: is_verified_dev,
-                        tags: is_verified_dev ? ['verified_dev'] : [],
+                        tags: tags,
+                        allow_off_agreement_purchases: allow_off_agreement_purchases,
+                        override_parent_off_agreement: override_parent_off_agreement,
+                        credit_limit: credit_limit,
+                        payment_terms: payment_terms,
                         nit: (row.NIT_CEDULA || '').toString().trim(),
                         company_name: (row.Nombre_Comercial || '').toString().trim(),
                         razon_social: (row.Razon_Social || row.Nombre_Comercial || '').toString().trim(),
@@ -1309,10 +1344,12 @@ export default function ClientsModule() {
                         branch_id: (row.Codigo_Sucursal || '').toString().trim() || null,
                         corporate_role: (row.Rol_Corporativo || '').toString().trim() || null,
                         
-                        // Financiera (Guardada en logistics_data JSON para preservar cupo y condición de pago sin error de esquema)
+                        // Financiera (Guardada en root y logistics_data JSON)
                         logistics_data: {
-                            credit_limit: parseFloat(row.Cupo_Credito || '0') || 0,
-                            payment_terms: (row.Condicion_Pago || 'Contado').toString().trim()
+                            credit_limit: credit_limit,
+                            payment_terms: payment_terms,
+                            allow_off_agreement_purchases: allow_off_agreement_purchases,
+                            override_parent_off_agreement: override_parent_off_agreement
                         },
                         iva_responsible: cleanBool(row.Responsable_IVA),
                         is_gran_contribuyente: cleanBool(row.Gran_Contribuyente),

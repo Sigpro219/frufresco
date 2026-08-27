@@ -352,6 +352,8 @@ export default function MasterProductsPage() {
                 Nombre_Web: p.display_name || '',
                 Unidad_Web: p.web_unit || '',
                 Factor_Web: p.web_conversion_factor || 1.0,
+                Peso_Logistico_Kg: p.weight_kg ?? (p.unit_of_measure?.toLowerCase() === 'unidad' ? 1.0 : 0.1),
+                Requiere_Etiqueta: (p as any).requires_label ? 'SI' : 'NO',
                 Min_Inventario: p.min_inventory_level || 0,
                 Merma_Teorica_Pct: p.theoretical_shrinkage_pct || 0,
                 Razones_Desperdicio: Array.isArray(p.allowed_waste_reasons) ? p.allowed_waste_reasons.join(',') : '',
@@ -916,6 +918,15 @@ export default function MasterProductsPage() {
                             tags = tags.filter(t => t !== 'verified_dev');
                         }
 
+                        const cleanParentUUID = (val: any): string | null => {
+                            if (!val) return null;
+                            const str = val.toString().trim();
+                            return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str) ? str : null;
+                        };
+
+                        const requires_label = (row.Requiere_Etiqueta || row.requires_label) === 'SI' || (row.Requiere_Etiqueta || row.requires_label) === true;
+                        const weight_kg = parseNum(row.Peso_Logistico_Kg || row.Peso_Kg || row.weight_kg, (row.Unidad || row.unit_of_measure)?.toString().toLowerCase() === 'unidad' ? 1.0 : 0.1);
+
                         return {
                             id,
                             sku: sku,
@@ -936,8 +947,10 @@ export default function MasterProductsPage() {
                             display_name: (row.Nombre_Web || row.display_name || '').toString() || null,
                             web_unit,
                             web_conversion_factor,
+                            weight_kg,
+                            requires_label,
                             min_inventory_level: parseIntNum(row.Min_Inventario || row.min_inventory_level, 0),
-                            parent_id: row.ID_PADRE || row.parent_id || null,
+                            parent_id: cleanParentUUID(row.ID_PADRE || row.parent_id),
                             theoretical_shrinkage_pct: parseNum(row.Merma_Teorica_Pct || row.theoretical_shrinkage_pct, 0),
                             allowed_waste_reasons: cleanArrayStr(row.Razones_Desperdicio || row.allowed_waste_reasons),
                             inventory_group: (row.Grupo_Inventario || row.inventory_group || '').toString() || null,
@@ -990,7 +1003,7 @@ export default function MasterProductsPage() {
             "SKU", "ID_CONTABLE", "Nombre", "Nombre_EN", "Descripcion", "Descripcion_EN", 
             "Categoria", "Unidad", "IVA", "URL_Imagen", "Comprador", 
             "Metodo_Compra", "Activo", "Web", "Nombre_Web", "Unidad_Web", "Factor_Web", 
-            "Min_Inventario", "ID_PADRE", "Merma_Teorica_Pct", "Razones_Desperdicio", 
+            "Peso_Logistico_Kg", "Requiere_Etiqueta", "Min_Inventario", "ID_PADRE", "Merma_Teorica_Pct", "Razones_Desperdicio", 
             "Grupo_Inventario", "Sublista_Compra", "Tags", "Keywords", "Desviacion_Utilidad_Pct", 
             "Heredar_Precio", "Config_Opciones", "Variantes_JSON"
         ];
@@ -999,7 +1012,7 @@ export default function MasterProductsPage() {
             "M-FR-MNZ-K", "101", "Manzana Roja", "Red Apple", "Manzana fresca seleccionada de alta calidad", "Fresh red apple selected...", 
             "FR", "Kg", 0, "https://images.com/manzana.jpg", "EQUIPO B FRUTAS Y OTROS", 
             "COMPRAS GENERALES", "SI", "SI", "Manzana Roja Web", "Kg", 1.0, 
-            10, "", 2.5, "Daño por transporte,Madurez excesiva", 
+            0.1, "NO", 10, "", 2.5, "Daño por transporte,Madurez excesiva", 
             "INVENTARIO DE FRUTAS Y OTROS", "FRUTA SELECCIONADA", "frescos,fruta,roja", "manzana,apple,red", 0, 
             "NO", "[]", "[]"
         ];
@@ -1008,7 +1021,7 @@ export default function MasterProductsPage() {
             "M-VE-CBL-K", "102", "Cebolla Cabezona", "White Onion", "Cebolla cabezona blanca seleccionada", "Fresh white onion...", 
             "VE", "Kg", 0, "", "LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO", 
             "COMPRAS GENERALES", "SI", "SI", "Cebolla Cabezona Web", "Kg", 1.0, 
-            20, "", 1.8, "Deshidratación", 
+            0.1, "NO", 20, "", 1.8, "Deshidratación", 
             "INVENTARIO DE VERDURAS", "VERDURAS", "verduras,cebolla", "cebolla,onion", 0, 
             "NO", "[]", "[]"
         ];
@@ -1035,6 +1048,8 @@ export default function MasterProductsPage() {
             ["Nombre_Web", "NO", "Texto", "Nombre de exhibición web en e-commerce B2C"],
             ["Unidad_Web", "NO", "Texto", "Unidad de empaque en la web (ej: Kg, Atado, Un)"],
             ["Factor_Web", "NO", "Número", "Conversión de unidad web a unidad base logarítmica (ej: 1.0)"],
+            ["Peso_Logistico_Kg", "NO", "Número", "Peso físico unitario en Kg (ej: 0.1 para granel o 0.5 para fruta empacada)"],
+            ["Requiere_Etiqueta", "NO", "SI/NO", "Indica si el producto requiere impresión de etiqueta térmica de balanza en picking"],
             ["Min_Inventario", "NO", "Número", "Umbral de alerta de stock crítico"],
             ["ID_PADRE", "NO", "Texto", "ID de producto padre si es un producto fraccionado"],
             ["Merma_Teorica_Pct", "NO", "Número", "Porcentaje (%) de merma esperada por manipulación logísitica (ej: 2.5)"],
