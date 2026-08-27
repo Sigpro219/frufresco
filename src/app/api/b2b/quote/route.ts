@@ -208,12 +208,26 @@ export async function POST(request: Request) {
             const numCats = chosenCats.length;
             const maxPerCat = numCats === 1 ? 25 : numCats <= 3 ? 15 : 8;
 
-            // 1. Fetch active products from selected categories
-            const { data: allCategoryProds } = await supabase
-                .from('products')
-                .select('id, name, base_price, iva_rate, sku, category, unit_of_measure')
-                .eq('is_active', true)
-                .in('category', categoryCodes);
+            // 1. Fetch template "Catalogo Completo"
+            const { data: template } = await supabase
+                .from('quote_templates')
+                .select('id, name')
+                .ilike('name', '%Catalogo Completo%')
+                .maybeSingle();
+
+            let templateProducts: any[] = [];
+            if (template?.id) {
+                const { data: tItems } = await supabase
+                    .from('quote_template_items')
+                    .select('product_id, products(id, name, base_price, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit, is_active)')
+                    .eq('template_id', template.id);
+
+                if (tItems && tItems.length > 0) {
+                    templateProducts = tItems
+                        .map(ti => ti.products)
+                        .filter((p: any) => p && p.is_active !== false);
+                }
+            }
 
             // 2. Fetch pricing model prices cache & exact rules
             const { data: modelPrices } = await supabase
@@ -260,55 +274,42 @@ export async function POST(request: Request) {
                 if (!purchasesMap.has(p.product_id)) purchasesMap.set(p.product_id, Number(p.unit_price));
             });
 
-            if (allCategoryProds && allCategoryProds.length > 0) {
-                // Filter only products that have a valid price (base_price > 0 OR model price > 0 OR cost > 0)
-                const validProds = allCategoryProds.filter(p => {
-                    return Number(p.base_price) > 0 || modelPriceMap.has(p.id) || overridesMap.has(p.id) || purchasesMap.has(p.id);
-                });
+            // 3. Populate products to quote from Catalogo Completo filtered by chosen categories
+            for (const catName of chosenCats) {
+                const codes = CATEGORY_TO_CODES[catName] || [catName];
+                let catProds = templateProducts.filter(p => codes.includes(p.category));
 
-                const usedIds = new Set<string>();
-
-                for (const catName of chosenCats) {
-                    const codes = CATEGORY_TO_CODES[catName] || [catName];
-                    const catProds = validProds.filter(p => codes.includes(p.category));
-                    const keywords = ANCHOR_PRIORITY[catName] || [];
-                    const catSelected: any[] = [];
-
-                    // Pass 1: Match high-priority Anchor SKUs in order of importance
-                    for (const kw of keywords) {
-                        if (catSelected.length >= maxPerCat) break;
-                        const matches = catProds.filter(p => !usedIds.has(p.id) && p.name.toLowerCase().includes(kw));
-                        for (const m of matches) {
-                            if (catSelected.length >= maxPerCat) break;
-                            catSelected.push(m);
-                            usedIds.add(m.id);
-                        }
-                    }
-
-                    // Pass 2: Fill remainder of category quota with any remaining valid products
-                    for (const p of catProds) {
-                        if (catSelected.length >= maxPerCat) break;
-                        if (!usedIds.has(p.id)) {
-                            catSelected.push(p);
-                            usedIds.add(p.id);
-                        }
-                    }
-
-                    // Sort items within each category alphabetically by name
-                    catSelected.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true, sensitivity: 'base' }));
-
-                    productsToQuote.push(...catSelected);
+                // Fallback to active products table if template had no items for this category
+                if (catProds.length === 0) {
+                    const { data: fallbackProds } = await supabase
+                        .from('products')
+                        .select('id, name, base_price, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
+                        .eq('is_active', true)
+                        .in('category', codes);
+                    if (fallbackProds) catProds = fallbackProds;
                 }
+
+                // Sort alphabetically by name
+                catProds.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true, sensitivity: 'base' }));
+                productsToQuote.push(...catProds);
             }
 
-            // Fallback to active products if empty
+            // Deduplicate products
+            const seenIds = new Set<string>();
+            productsToQuote = productsToQuote.filter(p => {
+                if (seenIds.has(p.id)) return false;
+                seenIds.add(p.id);
+                return true;
+            });
+
+            // Ultimate fallback if empty
             if (productsToQuote.length === 0) {
                 const { data: activeProds } = await supabase
                     .from('products')
-                    .select('id, name, base_price, iva_rate, sku, category, unit_of_measure')
+                    .select('id, name, base_price, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
                     .eq('is_active', true)
                     .gt('base_price', 0)
-                    .limit(20);
+                    .limit(30);
                 if (activeProds) productsToQuote = activeProds;
             }
 

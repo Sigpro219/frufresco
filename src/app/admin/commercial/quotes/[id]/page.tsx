@@ -52,6 +52,23 @@ export default function QuoteDetailPage() {
         return `COT ${day}${month} ${paddedSeq}`;
     };
 
+    const formatMinQty = (item: any) => {
+        const uom = (item.products?.unit_of_measure || item.unit || 'Kg').trim();
+        const webFactor = item.products?.web_conversion_factor;
+
+        if (uom.toLowerCase() === 'kg') {
+            if (webFactor && webFactor > 0 && webFactor < 1) {
+                return `${String(webFactor).replace('.', ',')} Kg`;
+            }
+            if (webFactor && webFactor > 1) {
+                return `${String(webFactor).replace('.', ',')} Kg`;
+            }
+            return '1 Kg';
+        }
+
+        return `1 ${uom}`;
+    };
+
     const params = useParams();
     const router = useRouter();
     const [quote, setQuote] = useState<any>(null);
@@ -109,10 +126,10 @@ export default function QuoteDetailPage() {
             if (lData) setLead(lData);
         }
 
-        // Load Items (Joins product to get the name, sku, unit, and category)
+        // Load Items (Joins product to get the name, sku, unit, category, and minimum sale factor)
         const { data: iData } = await supabase
             .from('quote_items')
-            .select('*, products(name, unit_of_measure, sku, category)')
+            .select('*, products(name, unit_of_measure, sku, category, web_conversion_factor, web_unit)')
             .eq('quote_id', params.id);
 
         if (iData) setItems(iData);
@@ -611,9 +628,10 @@ export default function QuoteDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
-                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%', textAlign: 'center' }}>#</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', width: '4%', textAlign: 'center' }}>#</th>
                                 <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Producto</th>
-                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Cant. / U.M.</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>U.M.</th>
+                                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Cant. Mínima</th>
                                 <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Costo Base</th>
                                 <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Margen</th>
                                 <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>IVA</th>
@@ -628,7 +646,7 @@ export default function QuoteDetailPage() {
                                     <React.Fragment key={group.category}>
                                         {/* Category Subheader Banner */}
                                         <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                            <td colSpan={8} style={{ 
+                                            <td colSpan={9} style={{ 
                                                 padding: '0.45rem 0.85rem', 
                                                 borderLeft: '3.5px solid #10B981',
                                                 borderTop: '1px solid #E2E8F0',
@@ -652,6 +670,7 @@ export default function QuoteDetailPage() {
                                             const qty = item.quantity || 1;
                                             const totalPrice = item.total_price || (unitPrice * qty);
                                             const unitLabel = item.products?.unit_of_measure || item.unit || 'Kg';
+                                            const minQtyLabel = formatMinQty(item);
 
                                             return (
                                                 <tr key={item.id || counter} style={{ borderBottom: '1px solid #F1F5F9' }}>
@@ -662,7 +681,10 @@ export default function QuoteDetailPage() {
                                                         {item.product_name || item.products?.name || 'Producto'}
                                                     </td>
                                                     <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', color: '#475569', fontSize: '0.8rem' }}>
-                                                        {qty} {unitLabel}
+                                                        {unitLabel}
+                                                    </td>
+                                                    <td style={{ padding: '0.45rem 0.85rem', textAlign: 'center', fontWeight: '700', color: '#0D7A57', fontSize: '0.8rem', backgroundColor: '#F0FDF4' }}>
+                                                        {minQtyLabel}
                                                     </td>
                                                     <td style={{ padding: '0.45rem 0.85rem', textAlign: 'right', color: '#64748B', fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums' }}>
                                                         ${formatPrice(item.cost_basis || 0)}

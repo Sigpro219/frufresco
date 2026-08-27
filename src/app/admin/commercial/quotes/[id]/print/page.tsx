@@ -49,6 +49,23 @@ export default function PrintQuotePage() {
         return `COT ${day}${month} ${paddedSeq}`;
     };
 
+    const formatMinQty = (item: any) => {
+        const uom = (item.products?.unit_of_measure || item.unit || 'Kg').trim();
+        const webFactor = item.products?.web_conversion_factor;
+
+        if (uom.toLowerCase() === 'kg') {
+            if (webFactor && webFactor > 0 && webFactor < 1) {
+                return `${String(webFactor).replace('.', ',')} Kg`;
+            }
+            if (webFactor && webFactor > 1) {
+                return `${String(webFactor).replace('.', ',')} Kg`;
+            }
+            return '1 Kg';
+        }
+
+        return `1 ${uom}`;
+    };
+
     const params = useParams();
     const [quote, setQuote] = useState<any>(null);
     const [lead, setLead] = useState<any>(null);
@@ -115,10 +132,10 @@ export default function PrintQuotePage() {
                 if (cData) setClientInfo(cData);
             }
 
-            // Load Items with product category
+            // Load Items with product category & web conversion factor
             const { data: iData } = await supabase
                 .from('quote_items')
-                .select('*, products(name, unit_of_measure, sku, category)')
+                .select('*, products(name, unit_of_measure, sku, category, web_conversion_factor, web_unit)')
                 .eq('quote_id', params.id);
 
             if (iData) setItems(iData);
@@ -351,11 +368,12 @@ export default function PrintQuotePage() {
                 <table style={{ width: '100%', marginBottom: '1.2rem' }}>
                     <thead>
                         <tr style={{ borderBottom: '1.5px solid #CBD5E1', color: '#475569', backgroundColor: '#F1F5F9' }}>
-                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '5%', textAlign: 'center' }}>#</th>
-                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '46%' }}>Producto</th>
-                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'center' }}>U.M.</th>
-                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>IVA</th>
-                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Valor Unitario</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '4%', textAlign: 'center' }}>#</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '38%' }}>Producto</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '10%', textAlign: 'center' }}>U.M.</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '15%', textAlign: 'center' }}>Cant. Mínima</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '8%', textAlign: 'center' }}>IVA</th>
+                            <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '12%', textAlign: 'right' }}>Valor Unitario</th>
                             <th style={{ fontSize: '7pt', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', width: '13%', textAlign: 'right' }}>Total</th>
                         </tr>
                     </thead>
@@ -365,7 +383,7 @@ export default function PrintQuotePage() {
                                 <React.Fragment key={group.category}>
                                     {/* Category Subheader Banner */}
                                     <tr style={{ backgroundColor: '#F8FAFC', pageBreakInside: 'avoid' }}>
-                                        <td colSpan={6} style={{ 
+                                        <td colSpan={7} style={{ 
                                             padding: '4px 6px', 
                                             borderLeft: `3px solid ${appSettings.primary_color || '#15803D'}`,
                                             borderTop: '1px solid #E2E8F0',
@@ -388,6 +406,7 @@ export default function PrintQuotePage() {
                                         const unitPrice = Math.ceil(item.unit_price || 0);
                                         const totalPrice = Math.ceil(item.total_price || (unitPrice * (item.quantity || 1)));
                                         const unitLabel = item.products?.unit_of_measure || item.unit || 'Kg';
+                                        const minQtyLabel = formatMinQty(item);
 
                                         return (
                                             <tr key={item.id || globalCounter} className="item-row">
@@ -400,7 +419,10 @@ export default function PrintQuotePage() {
                                                     </div>
                                                 </td>
                                                 <td style={{ textAlign: 'center', fontWeight: '500', color: '#475569', fontSize: '7.5pt' }}>
-                                                    {item.quantity || 1} {unitLabel}
+                                                    {unitLabel}
+                                                </td>
+                                                <td style={{ textAlign: 'center', fontWeight: '700', color: '#0D7A57', fontSize: '7.5pt', backgroundColor: '#F0FDF4', borderRadius: '4px' }}>
+                                                    {minQtyLabel}
                                                 </td>
                                                 <td style={{ textAlign: 'center', fontWeight: '500', color: '#64748B', fontSize: '7.2pt' }}>
                                                     {item.iva_rate || 0}%
@@ -420,21 +442,21 @@ export default function PrintQuotePage() {
                     </tbody>
                     <tfoot>
                         <tr style={{ color: '#475569', borderTop: '1.5px solid #CBD5E1' }}>
-                            <td colSpan={4}></td>
+                            <td colSpan={5}></td>
                             <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '600', fontSize: '7.8pt' }}>Subtotal</td>
                             <td className="num-cell" style={{ padding: '4px 6px', textAlign: 'right', fontWeight: '700', fontSize: '8.5pt', color: '#0F172A' }}>
                                 ${formatPrice(Math.ceil(quote.subtotal_amount || quote.total_amount))}
                             </td>
                         </tr>
                         <tr style={{ color: '#64748B' }}>
-                            <td colSpan={4}></td>
+                            <td colSpan={5}></td>
                             <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '500', fontSize: '7.5pt' }}>Impuestos (IVA)</td>
                             <td className="num-cell" style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '600', fontSize: '8pt' }}>
                                 ${formatPrice(Math.ceil(quote.total_tax_amount || 0))}
                             </td>
                         </tr>
                         <tr style={{ backgroundColor: '#F8FAFC', color: '#0F172A', borderTop: '1px solid #E2E8F0' }}>
-                            <td colSpan={4}></td>
+                            <td colSpan={5}></td>
                             <td style={{ padding: '6px 6px', textAlign: 'right', fontWeight: '900', fontSize: '8.5pt' }}>Total General</td>
                             <td className="num-cell" style={{ padding: '6px 6px', textAlign: 'right', fontWeight: '900', fontSize: '10.5pt', color: appSettings.primary_color || '#15803D' }}>
                                 ${formatPrice(Math.ceil(quote.total_amount))} COP

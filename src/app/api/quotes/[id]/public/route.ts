@@ -59,10 +59,10 @@ export async function GET(
             if (cData) clientInfo = cData;
         }
 
-        // 3. Fetch Items with category
+        // 3. Fetch Items with category and minimum sale factor
         const { data: items } = await supabase
             .from('quote_items')
-            .select('*, products(name, unit_of_measure, sku, category)')
+            .select('*, products(name, unit_of_measure, sku, category, web_conversion_factor, web_unit)')
             .eq('quote_id', id);
 
         return NextResponse.json({
