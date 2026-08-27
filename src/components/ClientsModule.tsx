@@ -235,6 +235,7 @@ export default function ClientsModule() {
 
     // Table Header Dropdown Filters State (Like Maestro SKU)
     const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
+    const [filterStructureHeader, setFilterStructureHeader] = useState<string>('all');
     const [filterLocationHeader, setFilterLocationHeader] = useState<string>('all');
     const [filterStatusHeader, setFilterStatusHeader] = useState<string>('activo');
     const [filterAgreementGpsHeader, setFilterAgreementGpsHeader] = useState<string>('all');
@@ -260,9 +261,10 @@ export default function ClientsModule() {
         return Array.from(locs).sort((a, b) => a.localeCompare(b));
     }, [activeTab, clientsB2B, clientsB2C, leads]);
 
-    const hasActiveHeaderFilters = filterLocationHeader !== 'all' || (activeTab === 'leads' ? filterStatusHeader !== 'all' : (filterStatusHeader !== 'activo' && filterStatusHeader !== 'all')) || filterAgreementGpsHeader !== 'all' || filterDevHeader !== 'all';
+    const hasActiveHeaderFilters = filterStructureHeader !== 'all' || filterLocationHeader !== 'all' || (activeTab === 'leads' ? filterStatusHeader !== 'all' : (filterStatusHeader !== 'activo' && filterStatusHeader !== 'all')) || filterAgreementGpsHeader !== 'all' || filterDevHeader !== 'all';
 
     const clearAllHeaderFilters = () => {
+        setFilterStructureHeader('all');
         setFilterLocationHeader('all');
         setFilterStatusHeader(activeTab === 'leads' ? 'all' : 'activo');
         setFilterAgreementGpsHeader('all');
@@ -1483,6 +1485,22 @@ export default function ClientsModule() {
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
         let result = data;
 
+        // 0. Header Dropdown Filter: Estructura (Matriz / Sucursal / Individual)
+        if (filterStructureHeader !== 'all' && activeTab === 'b2b') {
+            result = result.filter((item: any) => {
+                if (filterStructureHeader === 'matriz') {
+                    return item.is_corporate_parent === true;
+                }
+                if (filterStructureHeader === 'sucursal') {
+                    return !!item.parent_id;
+                }
+                if (filterStructureHeader === 'individual') {
+                    return !item.is_corporate_parent && !item.parent_id;
+                }
+                return true;
+            });
+        }
+
         // 1. Header Dropdown Filter: Ubicación
         if (filterLocationHeader !== 'all') {
             result = result.filter((item: any) => {
@@ -2597,7 +2615,49 @@ export default function ClientsModule() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>IDENTIFICACIÓN / CLIENTE</th>
+                                                    {/* IDENTIFICACIÓN / CLIENTE */}
+                                                    <th style={{ padding: '0.65rem 0.6rem', position: 'relative', ...THEME.typography.tableHeader }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <span>IDENTIFICACIÓN / CLIENTE</span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'b2b_structure' ? null : 'b2b_structure'); }}
+                                                                style={{ 
+                                                                    background: filterStructureHeader !== 'all' ? THEME.colors.primary : '#E2E8F0', 
+                                                                    color: filterStructureHeader !== 'all' ? 'white' : '#475569', 
+                                                                    border: 'none', 
+                                                                    borderRadius: '4px', 
+                                                                    padding: '2px 6px', 
+                                                                    cursor: 'pointer', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center',
+                                                                    gap: '3px',
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: '800'
+                                                                }}
+                                                                title="Filtrar por Casas Matrices, Sucursales o Cuentas Individuales"
+                                                            >
+                                                                {filterStructureHeader === 'matriz' ? '👑 Matriz' : filterStructureHeader === 'sucursal' ? '🏢 Sucursal' : filterStructureHeader === 'individual' ? '👤 Individual' : ''}
+                                                                <ChevronDown size={12} />
+                                                            </button>
+                                                        </div>
+                                                        {openHeaderDropdown === 'b2b_structure' && (
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '240px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                                <div onClick={() => { setFilterStructureHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
+                                                                    <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos ({clientsB2B.length})
+                                                                </div>
+                                                                <div onClick={() => { setFilterStructureHeader('matriz'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'matriz' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'matriz' ? '#EFF6FF' : 'transparent', color: '#1E40AF' }}>
+                                                                    👑 Solo Casas Matrices ({clientsB2B.filter(c => c.is_corporate_parent).length})
+                                                                </div>
+                                                                <div onClick={() => { setFilterStructureHeader('sucursal'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'sucursal' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'sucursal' ? '#EFF6FF' : 'transparent', color: '#0369A1' }}>
+                                                                    🏢 Solo Sucursales ({clientsB2B.filter(c => !!c.parent_id).length})
+                                                                </div>
+                                                                <div onClick={() => { setFilterStructureHeader('individual'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'individual' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'individual' ? '#F1F5F9' : 'transparent', color: '#475569' }}>
+                                                                    👤 Cuentas Individuales ({clientsB2B.filter(c => !c.is_corporate_parent && !c.parent_id).length})
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </th>
                                                     <th style={{ padding: '0.65rem 0.6rem', ...THEME.typography.tableHeader }}>CONTACTO</th>
                                                     
                                                     {/* UBICACIÓN */}
