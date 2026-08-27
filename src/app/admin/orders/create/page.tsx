@@ -523,20 +523,30 @@ function CreateOrderContent() {
             setModalQuantity('1');
 
             const baseUnit = selectedProductForModal.unit_of_measure || 'Kg';
+            const isKgProduct = baseUnit.toLowerCase() === 'kg' || baseUnit.toLowerCase() === 'kilo' || baseUnit.toLowerCase() === 'kilogramo';
             setModalUnit(baseUnit);
             setModalFactor(1);
 
             const initialOptions: Record<string, string> = {};
             if (selectedProductForModal.options_config) {
                 selectedProductForModal.options_config.forEach((opt: any) => {
-                    if (opt.name.toLowerCase().includes('presentaci')) {
-                        const matchedValue = opt.values?.find((v: string) => {
-                            const clean = v.includes('|') ? v.split('|')[0] : v;
-                            return clean.toLowerCase() === baseUnit.toLowerCase();
-                        }) || opt.values?.filter((v: string) => {
-                            const clean = v.toLowerCase();
-                            return !clean.includes('libra') && !clean.includes('pound') && !clean.includes('unidad web');
-                        })[0] || '';
+                    const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                    if (isPresentation) {
+                        let matchedValue = opt.values?.find((v: string) => {
+                            const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                            return clean === baseUnit.toLowerCase() || (isKgProduct && (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo'));
+                        });
+
+                        if (!matchedValue && isKgProduct) {
+                            matchedValue = 'Kg';
+                        }
+
+                        if (!matchedValue) {
+                            matchedValue = opt.values?.filter((v: string) => {
+                                const clean = v.toLowerCase();
+                                return !clean.includes('libra') && !clean.includes('pound') && !clean.includes('unidad web');
+                            })[0] || '';
+                        }
                         if (matchedValue) initialOptions[opt.name] = matchedValue;
                     }
                 });
@@ -1528,17 +1538,25 @@ function CreateOrderContent() {
         
         let resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
         let resolvedFactor = modalFactor || (selectedProductForModal.weight_kg ? Number(selectedProductForModal.weight_kg) : 1);
+        const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
+        const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
 
         Object.entries(selectedOptions).forEach(([optName, optVal]) => {
-            if (optName.toLowerCase().includes('presentaci') && optVal) {
+            if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
                 const strVal = String(optVal);
-                if (strVal.includes('|')) {
+                const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
+                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                    resolvedUnit = selectedProductForModal.unit_of_measure || 'Kg';
+                    resolvedFactor = 1;
+                } else if (strVal.includes('|')) {
                     const [base, gr] = strVal.split('|');
                     resolvedUnit = `${base} de ${gr} gr`;
                     const pw = parseFloat(gr);
                     if (!isNaN(pw) && pw > 0) resolvedFactor = pw / 1000;
                 } else {
                     resolvedUnit = strVal;
+                    const pw = getParsedWeight(strVal);
+                    if (pw !== null) resolvedFactor = pw;
                 }
             }
         });
@@ -4559,7 +4577,8 @@ function CreateOrderContent() {
                     .map((opt: any) => {
                     let values: string[] = opt.values || [];
                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
-                    const isKgProduct = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+                    const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
+                    const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
 
                     if (isPresentation) {
                         values = values.filter((v: string) => {
@@ -4569,7 +4588,10 @@ function CreateOrderContent() {
                         
                         // Si el producto se compra en KG, asegurar siempre que 'Kg' sea la primera opción
                         if (isKgProduct) {
-                            const hasKg = values.some(v => v.toLowerCase() === 'kg' || v.toLowerCase().startsWith('kg|'));
+                            const hasKg = values.some(v => {
+                                const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+                                return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+                            });
                             if (!hasKg) {
                                 values = ['Kg', ...values];
                             }
@@ -4578,14 +4600,16 @@ function CreateOrderContent() {
                         }
                     }
                     
-                    const defaultUnit = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
                     const sortedValues = values.slice().sort((valA: string, valB: string) => {
-                        const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
-                        const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
+                        const cleanA = (valA.includes('|') ? valA.split('|')[0] : valA).trim().toLowerCase();
+                        const cleanB = (valB.includes('|') ? valB.split('|')[0] : valB).trim().toLowerCase();
                         
-                        // 'Kg' o unidad base siempre al inicio si es producto por peso
-                        if (cleanA.toLowerCase() === defaultUnit && cleanB.toLowerCase() !== defaultUnit) return -1;
-                        if (cleanB.toLowerCase() === defaultUnit && cleanA.toLowerCase() !== defaultUnit) return 1;
+                        const isKgA = cleanA === 'kg' || cleanA === 'kilo' || cleanA === 'kilogramo' || cleanA === baseUnitLower;
+                        const isKgB = cleanB === 'kg' || cleanB === 'kilo' || cleanB === 'kilogramo' || cleanB === baseUnitLower;
+
+                        // 'Kg' o unidad base siempre al inicio
+                        if (isKgA && !isKgB) return -1;
+                        if (!isKgA && isKgB) return 1;
 
                         // Ordenar numéricamente por gramaje extraído
                         const weightA = getParsedWeight(valA);
@@ -4642,19 +4666,28 @@ function CreateOrderContent() {
                 // Determine dynamic unit label and factor from presentation / selectedOptions
                 let dynamicUnitLabel = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
                 let dynamicUnitFactor = modalFactor || (selectedProductForModal.weight_kg ? Number(selectedProductForModal.weight_kg) : 1);
+                const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
+                const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
 
-                Object.entries(selectedOptions).forEach(([optName, optVal]) => {
-                    if (optName.toLowerCase().includes('presentaci') && optVal) {
-                        const strVal = String(optVal);
-                        if (strVal.includes('|')) {
-                            const [base, gr] = strVal.split('|');
-                            dynamicUnitLabel = `${base} de ${gr} gr`;
-                        } else {
-                            dynamicUnitLabel = strVal;
-                        }
-                        const pw = getParsedWeight(strVal);
-                        if (pw !== null) {
-                            dynamicUnitFactor = pw;
+                normalizedOptionsConfig.forEach((opt: any) => {
+                    if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+                        const optVal = selectedOptions[opt.name] || (isKgProduct ? 'Kg' : opt.values?.[0] || '');
+                        if (optVal) {
+                            const strVal = String(optVal);
+                            const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
+                            if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo' || clean === baseUnitLower) {
+                                dynamicUnitLabel = selectedProductForModal.unit_of_measure || 'Kg';
+                                dynamicUnitFactor = 1;
+                            } else if (strVal.includes('|')) {
+                                const [base, gr] = strVal.split('|');
+                                dynamicUnitLabel = `${base} de ${gr} gr`;
+                                const pw = getParsedWeight(strVal);
+                                if (pw !== null) dynamicUnitFactor = pw;
+                            } else {
+                                dynamicUnitLabel = strVal;
+                                const pw = getParsedWeight(strVal);
+                                if (pw !== null) dynamicUnitFactor = pw;
+                            }
                         }
                     }
                 });
@@ -4857,7 +4890,14 @@ function CreateOrderContent() {
                             </div>
 
                             {/* RENDER OPTIONS DYNAMICALLY */}
-                            {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => (
+                            {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => {
+                                const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
+                                const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
+                                const isKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                                const defaultVal = isPresentation && isKg ? 'Kg' : (isPresentation ? opt.values?.[0] || '' : '');
+                                const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
+
+                                return (
                                 <div key={opt.name} style={{ marginBottom: '1.2rem', textAlign: 'left' }}>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         {opt.name}
@@ -4865,16 +4905,17 @@ function CreateOrderContent() {
                                     <select
                                         id={`modal-select-${index}`}
                                         ref={index === 0 ? firstSelectRef : undefined}
-                                        value={selectedOptions[opt.name] || ''}
+                                        value={selectVal}
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setSelectedOptions(prev => ({ ...prev, [opt.name]: val }));
                                             
-                                            if (opt.name.toLowerCase().includes('presentaci')) {
+                                            if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
                                                 const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                 const defaultUnit = selectedProductForModal.unit_of_measure || 'Kg';
-                                                if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
-                                                    setModalUnit(defaultUnit);
+                                                const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                if (isKgSel) {
+                                                    setModalUnit('Kg');
                                                     setModalFactor(1);
                                                 } else {
                                                     const matchedUnit = optionsList.find(o => o.unit.toLowerCase() === cleanUnit.toLowerCase());
@@ -4913,7 +4954,7 @@ function CreateOrderContent() {
                                             e.target.style.boxShadow = 'none';
                                         }}
                                     >
-                                        <option value="">Seleccionar {opt.name}...</option>
+                                        {!isPresentation && <option value="">Seleccionar {opt.name}...</option>}
                                         {opt.values?.map((val: string) => {
                                             const displayVal = val.includes('|') 
                                                 ? `${val.split('|')[0]} (${val.split('|')[1]} gr)` 
@@ -4924,7 +4965,8 @@ function CreateOrderContent() {
                                         })}
                                     </select>
                                 </div>
-                            ))}
+                            );
+                            })}
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
                                 <div>
