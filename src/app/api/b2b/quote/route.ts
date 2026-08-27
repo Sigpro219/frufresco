@@ -8,8 +8,8 @@ const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || pro
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const ALL_CATEGORIES = [
-  'Frutas',
   'Verduras',
+  'Frutas',
   'Hortalizas',
   'Tubérculos',
   'Despensa',
@@ -189,11 +189,11 @@ export async function POST(request: Request) {
             const modelName = matchedModel?.name || 'General Institucional';
 
             let productsToQuote: any[] = [];
-            const rawChosenCats = (selected_categories && selected_categories.length > 0)
+            const rawChosenCats = (selected_categories && selected_categories.length > 0 && !selected_categories.includes('Todas'))
                 ? selected_categories
                 : ALL_CATEGORIES;
 
-            // Sort chosen categories strictly: 1. Frutas, 2. Verduras, 3. Hortalizas, etc.
+            // Sort chosen categories strictly: 1. Verduras, 2. Frutas, 3. Hortalizas, 4. Tubérculos, etc.
             const chosenCats = [...rawChosenCats].sort((a, b) => {
                 const idxA = ALL_CATEGORIES.indexOf(a);
                 const idxB = ALL_CATEGORIES.indexOf(b);

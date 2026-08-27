@@ -19,10 +19,10 @@ const formatCategoryTitle = (cat?: string) => {
     return cat;
 };
 
-// 1. Frutas, 2. Verduras, 3. Hortalizas, luego las demás
+// 1. Verduras, 2. Frutas, 3. Hortalizas, 4. Tubérculos y Plátanos, luego las demás
 const CATEGORY_PRIORITY = [
-    'Frutas',
     'Verduras',
+    'Frutas',
     'Hortalizas',
     'Tubérculos y Plátanos',
     'Despensa y Abarrotes',

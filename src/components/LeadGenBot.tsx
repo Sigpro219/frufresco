@@ -56,12 +56,12 @@ type Message = {
 };
 
 const ALL_CATEGORIES = [
-  'Despensa',
-  'Hortalizas',
   'Verduras',
-  'Lácteos',
   'Frutas',
+  'Hortalizas',
   'Tubérculos',
+  'Despensa',
+  'Lácteos',
   'Congelados',
   'Procesados'
 ];
@@ -176,17 +176,18 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
 
     // Handle Step 1 Submission -> Move to Step 2
     const handleStep1Submit = () => {
-        const cats = selectedCategories.length > 0 ? selectedCategories : ALL_CATEGORIES;
+        const isAll = selectedCategories.includes('Todas') || selectedCategories.length === 0;
+        const cats = isAll ? ALL_CATEGORIES : selectedCategories;
         const updatedData = {
             ...leadDataRef.current,
             business_type: selectedType,
             business_size: selectedSize,
-            selected_categories: cats
+            selected_categories: isAll ? ['Todas'] : cats
         };
         leadDataRef.current = updatedData;
         setLeadData(updatedData);
 
-        const catsText = cats.join(', ');
+        const catsText = isAll ? 'Todas las Categorías (Catálogo Completo)' : cats.join(', ');
         setMessages(prev => [
             ...prev,
             { 
@@ -710,19 +711,64 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         <div>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '8px' }}>
                                 <LayoutGrid size={16} style={{ color: '#10B981', flexShrink: 0 }} />
-                                <span>Categorías a Cotizar (Selecciona varias):</span>
+                                <span>Categorías a Cotizar (Selecciona varias o Todas):</span>
                             </label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                {/* Botón 'Todas' */}
+                                {(() => {
+                                    const isAll = selectedCategories.includes('Todas') || (selectedCategories.length === ALL_CATEGORIES.length && ALL_CATEGORIES.every(c => selectedCategories.includes(c)));
+                                    return (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (isAll) {
+                                                    setSelectedCategories([]);
+                                                } else {
+                                                    setSelectedCategories(['Todas']);
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '7px 15px',
+                                                borderRadius: '99px',
+                                                border: isAll ? '1.5px solid #10B981' : '1.5px solid #CBD5E1',
+                                                backgroundColor: isAll ? '#10B981' : '#F1F5F9',
+                                                color: isAll ? '#FFFFFF' : '#334155',
+                                                fontWeight: '800',
+                                                fontSize: '0.82rem',
+                                                cursor: 'pointer',
+                                                boxShadow: isAll ? '0 2px 10px rgba(16, 185, 129, 0.3)' : 'none',
+                                                transition: 'all 0.2s ease',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            {isAll ? (
+                                                <CheckCircle2 size={15} color="#FFFFFF" strokeWidth={2.5} />
+                                            ) : (
+                                                <Sparkles size={15} style={{ color: '#10B981' }} />
+                                            )}
+                                            <span>Todas</span>
+                                        </button>
+                                    );
+                                })()}
+
                                 {ALL_CATEGORIES.map(cat => {
-                                    const isSel = selectedCategories.includes(cat);
+                                    const isAll = selectedCategories.includes('Todas');
+                                    const isSel = isAll || selectedCategories.includes(cat);
                                     return (
                                         <button
                                             key={cat}
                                             type="button"
                                             onClick={() => {
-                                                setSelectedCategories(prev =>
-                                                    prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-                                                );
+                                                if (isAll) {
+                                                    setSelectedCategories(ALL_CATEGORIES.filter(c => c !== cat));
+                                                } else {
+                                                    setSelectedCategories(prev => {
+                                                        const clean = prev.filter(c => c !== 'Todas');
+                                                        return clean.includes(cat) ? clean.filter(c => c !== cat) : [...clean, cat];
+                                                    });
+                                                }
                                             }}
                                             style={{
                                                 padding: '7px 14px',
