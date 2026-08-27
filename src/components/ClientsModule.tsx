@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/authContext';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
@@ -170,12 +170,16 @@ interface Order {
 
 export default function ClientsModule() {
     const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
 
     const hasEditPermission = () => {
         if (!profile) return false;
         if (profile.role === 'admin' || profile.role === 'sys_admin') return true;
-        const perms = profile.custom_permissions || [];
-        return perms.includes('*') || perms.includes('admin.commercial.clients') || perms.includes('admin.commercial.clients.edit') || perms.includes('admin.clients.edit');
+        return checkUserPermission(profile, 'admin.clients.edit', roles) || 
+               checkUserPermission(profile, 'admin.commercial.clients.edit', roles) || 
+               checkUserPermission(profile, 'admin.commercial.clients', roles) ||
+               checkUserPermission(profile, 'admin.clients', roles) ||
+               checkUserPermission(profile, 'admin.commercial', roles);
     };
 
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -511,13 +515,22 @@ export default function ClientsModule() {
                 .select('client_id, valid_until')
                 .eq('status', 'agreement');
             
-            // 7. SKUs Bloqueados por Escasez & Reglas Globales de Entrega
+            // 7. SKUs Bloqueados por Escasez, Roles & Reglas Globales de Entrega
             const { data: settingsData } = await supabase
                 .from('app_settings')
                 .select('key, value')
-                .in('key', ['scarcity_locked_skus', 'allow_sunday_deliveries', 'allow_holiday_deliveries']);
+                .in('key', ['scarcity_locked_skus', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'system_roles']);
 
             if (settingsData) {
+                const rolesRow = settingsData.find(s => s.key === 'system_roles');
+                if (rolesRow && rolesRow.value) {
+                    try {
+                        setRoles(JSON.parse(rolesRow.value));
+                    } catch (e) {
+                        console.error('Error parsing system_roles in ClientsModule:', e);
+                    }
+                }
+
                 const scarcityRow = settingsData.find(s => s.key === 'scarcity_locked_skus');
                 if (scarcityRow && scarcityRow.value) {
                     try {

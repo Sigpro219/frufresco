@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
         const { data: callerProfile, error: profileError } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, custom_permissions')
             .eq('id', user.id)
             .single();
 
@@ -49,8 +49,13 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Error al comprobar rol' }, { status: 403 });
         }
 
-        const staffRoles = ['admin', 'sys_admin'];
-        if (!staffRoles.includes(callerProfile.role)) {
+        const isSuperAdmin = ['admin', 'sys_admin'].includes(callerProfile.role);
+        const perms = callerProfile.custom_permissions || [];
+        const hasClientEditPerm = isSuperAdmin || 
+            callerProfile.role === 'LIDER DE CARTERA' ||
+            perms.some((p: string) => !p.startsWith('-') && (p.includes('admin.clients') || p.includes('admin.commercial.clients') || p.includes('*')));
+
+        if (!hasClientEditPerm) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
         }
 
@@ -91,10 +96,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Sesión inválida o expirada' }, { status: 401 });
         }
 
-        // 2. Validar que el usuario sea administrador
+        // 2. Validar que el usuario sea administrador o Líder de Cartera / CRM
         const { data: callerProfile, error: profileError } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, custom_permissions')
             .eq('id', user.id)
             .single();
 
@@ -102,8 +107,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Error al comprobar rol de administrador' }, { status: 403 });
         }
 
-        const staffRoles = ['admin', 'sys_admin'];
-        if (!staffRoles.includes(callerProfile.role)) {
+        const isSuperAdmin = ['admin', 'sys_admin'].includes(callerProfile.role);
+        const perms = callerProfile.custom_permissions || [];
+        const hasClientEditPerm = isSuperAdmin || 
+            callerProfile.role === 'LIDER DE CARTERA' ||
+            perms.some((p: string) => !p.startsWith('-') && (p.includes('admin.clients') || p.includes('admin.commercial.clients') || p.includes('*')));
+
+        if (!hasClientEditPerm) {
             return NextResponse.json({ error: 'No tienes permisos para realizar esta operación' }, { status: 403 });
         }
 
