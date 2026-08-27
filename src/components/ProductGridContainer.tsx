@@ -5,6 +5,7 @@ import { expandSearchQuery } from '@/lib/ai_search';
 import { CATEGORY_MAP } from '../lib/constants';
 import { translations, Locale } from '../lib/translations';
 import Link from 'next/link';
+import { ChefHat, X } from 'lucide-react';
 import FeaturedProductsCarousel from './FeaturedProductsCarousel';
 import ProductGridClient from './ProductGridClient';
 import { supabase } from '../lib/supabase';
@@ -314,14 +315,14 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     });
 
     // Recipe banner detection
-    const RECIPE_TITLES: Record<string, { name: string; emoji: string }> = {
-        'ajiaco': { name: 'Ajiaco Santafereño', emoji: '🥣' },
-        'sancocho': { name: 'Sancocho Criollo', emoji: '🍲' },
-        'bandeja paisa': { name: 'Bandeja Paisa', emoji: '🍛' },
-        'mondongo': { name: 'Mondongo Tradicional', emoji: '🥘' },
-        'mute': { name: 'Mute Santandereano', emoji: '🍲' },
-        'tamal': { name: 'Tamal Tolimense', emoji: '🫔' },
-        'arroz con pollo': { name: 'Arroz con Pollo', emoji: '🍗' }
+    const RECIPE_TITLES: Record<string, string> = {
+        'ajiaco': 'Ajiaco Santafereño',
+        'sancocho': 'Sancocho Criollo',
+        'bandeja paisa': 'Bandeja Paisa',
+        'mondongo': 'Mondongo Tradicional',
+        'mute': 'Mute Santandereano',
+        'tamal': 'Tamal Tolimense',
+        'arroz con pollo': 'Arroz con Pollo'
     };
     const matchedRecipe = q ? RECIPE_TITLES[q.toLowerCase().trim()] : null;
 
@@ -330,43 +331,45 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             {matchedRecipe && (
                 <div style={{
                     backgroundColor: '#F0FDF4',
-                    border: '1.5px solid #10B981',
-                    borderRadius: '16px',
-                    padding: '0.9rem 1.2rem',
-                    marginBottom: '1.5rem',
+                    border: '1px solid #86EFAC',
+                    borderRadius: '10px',
+                    padding: '6px 12px',
+                    marginBottom: '0.75rem',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     flexWrap: 'wrap',
-                    gap: '12px',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.08)'
+                    gap: '8px',
+                    boxShadow: '0 1px 4px rgba(16, 185, 129, 0.05)'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.6rem' }}>{matchedRecipe.emoji}</span>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#065F46' }}>
-                                Ingredientes Frescos para {matchedRecipe.name}
-                            </h3>
-                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#047857' }}>
-                                Selecciona los ingredientes y cantidades para tu preparación casera.
-                            </p>
-                        </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <ChefHat size={14} className="text-emerald-700 shrink-0" />
+                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#166534' }}>
+                            Ingredientes para {matchedRecipe}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: '#15803D', opacity: 0.85 }}>
+                            ({rawProducts.length} disponibles)
+                        </span>
                     </div>
                     <Link 
                         href="/#catalog"
                         scroll={false}
                         style={{
-                            fontSize: '0.78rem',
-                            fontWeight: '700',
-                            color: '#065F46',
+                            fontSize: '0.72rem',
+                            fontWeight: '600',
+                            color: '#166534',
                             backgroundColor: '#FFFFFF',
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            border: '1px solid #A7F3D0',
-                            textDecoration: 'none'
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid #BBF7D0',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
                         }}
                     >
-                        Ver todo el catálogo
+                        <span>Ver todo el catálogo</span>
+                        <X size={11} />
                     </Link>
                 </div>
             )}

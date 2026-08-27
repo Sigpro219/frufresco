@@ -37,13 +37,13 @@ import {
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 const TYPICAL_RECIPES = [
-    { id: 'ajiaco', label: 'Ajiaco', emoji: '🥣' },
-    { id: 'sancocho', label: 'Sancocho', emoji: '🍲' },
-    { id: 'bandeja paisa', label: 'Bandeja Paisa', emoji: '🍛' },
-    { id: 'mondongo', label: 'Mondongo', emoji: '🥘' },
-    { id: 'mute', label: 'Mute', emoji: '🍲' },
-    { id: 'tamal', label: 'Tamal', emoji: '🫔' },
-    { id: 'arroz con pollo', label: 'Arroz con Pollo', emoji: '🍗' },
+    { id: 'ajiaco', label: 'Ajiaco' },
+    { id: 'sancocho', label: 'Sancocho' },
+    { id: 'bandeja paisa', label: 'Bandeja Paisa' },
+    { id: 'mondongo', label: 'Mondongo' },
+    { id: 'mute', label: 'Mute' },
+    { id: 'tamal', label: 'Tamal' },
+    { id: 'arroz con pollo', label: 'Arroz con Pollo' },
 ];
 
 const COMMERCIAL_TAGS = ['Promoción', 'Cosecha', 'Oferta', 'Descuento', 'Top Ventas'];
@@ -1223,7 +1223,7 @@ export default function AdminProductsPage() {
                                                                         gap: '3px',
                                                                         border: '1px solid #86EFAC'
                                                                     }}>
-                                                                        <span>{matched?.emoji || '🍲'}</span>
+                                                                        <ChefHat size={10} />
                                                                         <span>{matched?.label || recipeKey}</span>
                                                                         <X size={10} strokeWidth={2} style={{ cursor: 'pointer', color: '#166534' }} onClick={() => {
                                                                             const currentList = (product.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
@@ -1264,7 +1264,7 @@ export default function AdminProductsPage() {
                                                                         gap: '2px'
                                                                     }}
                                                                 >
-                                                                    + {rec.emoji} {rec.label}
+                                                                    + {rec.label}
                                                                 </button>
                                                             );
                                                         })}

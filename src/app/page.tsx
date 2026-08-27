@@ -33,12 +33,11 @@ async function CategoryPills({ category, q, locale }: { category?: string, q?: s
             display: 'flex',
             flexWrap: 'wrap',
             justifyContent: 'center',
-            gap: '0.6rem',
-            marginTop: '1.5rem',
+            gap: '0.4rem',
             maxWidth: '1200px',
-            margin: '1.5rem auto 0',
+            margin: '0.4rem auto 0',
             width: '100%',
-            padding: '0 1rem'
+            padding: '0 0.5rem'
         }}>
             {dynamicCategories.map((cat: string) => (
                 <Link
@@ -449,13 +448,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             backgroundColor: 'rgba(251, 250, 245, 0.95)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
-            padding: '1rem 0 1.25rem 0',
-            margin: '0 -1rem 2rem -1rem',
+            padding: '0.5rem 0 0.6rem 0',
+            margin: '0 -1rem 0.85rem -1rem',
             borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-            boxShadow: '0 8px 24px -6px rgba(0, 0, 0, 0.05)'
+            boxShadow: '0 4px 16px -4px rgba(0, 0, 0, 0.04)'
           }}
         >
-          <div style={{ maxWidth: '600px', margin: '0 auto', padding: '0 0.5rem' }}>
+          <div style={{ maxWidth: '580px', margin: '0 auto', padding: '0 0.5rem' }}>
             <SearchBar placeholder={t.searchPlaceholder} />
           </div>
 
@@ -463,7 +462,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             <TypicalRecipesBar currentQ={q} locale={locale} />
           </Suspense>
 
-          <Suspense fallback={<div style={{ height: '40px', marginTop: '1.2rem' }}></div>}>
+          <Suspense fallback={null}>
             <CategoryPills category={category} q={q} locale={locale} />
           </Suspense>
         </div>
