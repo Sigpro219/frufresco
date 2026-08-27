@@ -29,9 +29,24 @@ import {
     DollarSign,
     Scale,
     ShoppingBag,
-    Sparkles
+    Sparkles,
+    ChefHat,
+    Plus,
+    Tag
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+
+const TYPICAL_RECIPES = [
+    { id: 'ajiaco', label: 'Ajiaco', emoji: '🥣' },
+    { id: 'sancocho', label: 'Sancocho', emoji: '🍲' },
+    { id: 'bandeja paisa', label: 'Bandeja Paisa', emoji: '🍛' },
+    { id: 'mondongo', label: 'Mondongo', emoji: '🥘' },
+    { id: 'mute', label: 'Mute', emoji: '🍲' },
+    { id: 'tamal', label: 'Tamal', emoji: '🫔' },
+    { id: 'arroz con pollo', label: 'Arroz con Pollo', emoji: '🍗' },
+];
+
+const COMMERCIAL_TAGS = ['Promoción', 'Cosecha', 'Oferta', 'Descuento', 'Top Ventas'];
 
 export default function AdminProductsPage() {
     const { profile } = useAuth();
@@ -1028,7 +1043,7 @@ export default function AdminProductsPage() {
                                     </th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left' }}>Producto</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Categoría</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Atributos & Tags</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Recetas & Tags</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Precio</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Oferta / Var.</th>
                                     <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Presencia</th>
@@ -1177,138 +1192,149 @@ export default function AdminProductsPage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', minWidth: '220px' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                {/* Tags Input */}
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '2px', justifyContent: 'center' }}>
-                                                    {product.tags?.map((tag, i) => (
-                                                        <span key={i} style={{ 
-                                                            fontSize: '0.65rem', 
-                                                            padding: '1px 6px', 
-                                                            backgroundColor: THEME.colors.background, 
-                                                            color: THEME.colors.textMain, 
-                                                            borderRadius: '4px',
-                                                            fontWeight: '500',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '3px',
-                                                            border: `1px solid ${THEME.colors.border}`
-                                                        }}>
-                                                            {tag}
-                                                            <X size={10} strokeWidth={1.5} style={{ cursor: 'pointer', color: THEME.colors.textSecondary }} onClick={() => {
-                                                                const newTags = product.tags?.filter(t => t !== tag) || [];
-                                                                updateProductField(product.id, 'tags', newTags);
-                                                            }} />
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', minWidth: '280px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {/* 1. SECCIÓN RECETAS (KEYWORDS) */}
+                                                <div style={{ backgroundColor: '#F0FDF4', padding: '6px 8px', borderRadius: THEME.radius.sm, border: '1px solid #BBF7D0' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <ChefHat size={12} /> Recetas (Keywords)
                                                         </span>
-                                                    ))}
-                                                </div>
-                                                <div style={{ position: 'relative' }}>
-                                                    <input 
-                                                        type="text"
-                                                        placeholder="+ tag estratégico"
-                                                        style={{ 
-                                                            fontSize: '0.75rem', 
-                                                            padding: '4px 8px', 
-                                                            borderRadius: THEME.radius.sm, 
-                                                            border: `1px solid ${THEME.colors.border}`, 
-                                                            width: '100%',
-                                                            backgroundColor: THEME.colors.surface,
-                                                            fontWeight: '500',
-                                                            outline: 'none'
-                                                        }}
-                                                        onFocus={(e) => {
-                                                            const box = e.currentTarget.nextElementSibling as HTMLElement;
-                                                            if (box) box.style.display = 'flex';
-                                                        }}
-                                                        onBlur={(e) => {
-                                                            setTimeout(() => {
-                                                                const box = e.target.nextElementSibling as HTMLElement;
-                                                                if (box) box.style.display = 'none';
-                                                            }, 200);
-                                                        }}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter' || e.key === ',') {
-                                                                e.preventDefault();
-                                                                const val = e.currentTarget.value.trim().replace(',', '');
-                                                                if (val) {
-                                                                    const newTags = Array.from(new Set([...(product.tags || []), val]));
-                                                                    updateProductField(product.id, 'tags', newTags);
-                                                                    e.currentTarget.value = '';
-                                                                }
-                                                            }
-                                                        }}
-                                                    />
-                                                    {/* Sugerencias Flotantes */}
-                                                    <div style={{ 
-                                                        display: 'none', 
-                                                        position: 'absolute', 
-                                                        bottom: '100%', 
-                                                        left: 0, 
-                                                        right: 0, 
-                                                        backgroundColor: THEME.colors.surface, 
-                                                        border: `1px solid ${THEME.colors.border}`, 
-                                                        borderRadius: THEME.radius.md, 
-                                                        boxShadow: THEME.shadow.md, 
-                                                        zIndex: 20,
-                                                        padding: '8px',
-                                                        flexDirection: 'column',
-                                                        gap: '4px'
-                                                    }}>
-                                                        <div style={{ fontSize: '0.6rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: '2px', letterSpacing: '0.05em' }}>Sugerencias</div>
-                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                            {(categorySuggestions[product.category] || []).filter(t => !product.tags?.includes(t)).length > 0 ? (
-                                                                (categorySuggestions[product.category] || [])
-                                                                    .filter(t => !product.tags?.includes(t))
-                                                                    .map(tag => (
-                                                                        <button 
-                                                                            key={tag}
-                                                                            onClick={() => {
-                                                                                const newTags = Array.from(new Set([...(product.tags || []), tag]));
-                                                                                updateProductField(product.id, 'tags', newTags);
-                                                                            }}
-                                                                            style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${THEME.colors.primary}30`, backgroundColor: THEME.colors.primaryLight, cursor: 'pointer', fontWeight: '500', color: THEME.colors.primary }}
-                                                                        >
-                                                                            + {tag}
-                                                                        </button>
-                                                                    ))
-                                                            ) : (
-                                                                ['Fresco', 'Oferta', 'Premium', 'Directo'].filter(t => !product.tags?.includes(t)).map(tag => (
-                                                                    <button 
-                                                                        key={tag}
-                                                                        onClick={() => {
-                                                                            const newTags = Array.from(new Set([...(product.tags || []), tag]));
-                                                                            updateProductField(product.id, 'tags', newTags);
-                                                                        }}
-                                                                        style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, cursor: 'pointer', fontWeight: '500', color: THEME.colors.textMain }}
-                                                                    >
-                                                                        + {tag}
-                                                                    </button>
-                                                                ))
-                                                            )}
-                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Active Recipe Badges */}
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '4px', justifyContent: 'flex-start' }}>
+                                                        {(product.keywords || '')
+                                                            .split(',')
+                                                            .map(k => k.trim())
+                                                            .filter(Boolean)
+                                                            .map((recipeKey, i) => {
+                                                                const matched = TYPICAL_RECIPES.find(r => r.id === recipeKey.toLowerCase() || r.label.toLowerCase() === recipeKey.toLowerCase());
+                                                                return (
+                                                                    <span key={i} style={{ 
+                                                                        fontSize: '0.65rem', 
+                                                                        padding: '1px 6px', 
+                                                                        backgroundColor: '#DCFCE7', 
+                                                                        color: '#15803D', 
+                                                                        borderRadius: '4px',
+                                                                        fontWeight: '700',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '3px',
+                                                                        border: '1px solid #86EFAC'
+                                                                    }}>
+                                                                        <span>{matched?.emoji || '🍲'}</span>
+                                                                        <span>{matched?.label || recipeKey}</span>
+                                                                        <X size={10} strokeWidth={2} style={{ cursor: 'pointer', color: '#166534' }} onClick={() => {
+                                                                            const currentList = (product.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+                                                                            const newList = currentList.filter(k => k.toLowerCase() !== recipeKey.toLowerCase());
+                                                                            updateProductField(product.id, 'keywords', newList.join(', '));
+                                                                        }} />
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                    </div>
+
+                                                    {/* Quick Recipe Chips Toggle */}
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                                        {TYPICAL_RECIPES.map(rec => {
+                                                            const currentList = (product.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+                                                            const isAssigned = currentList.includes(rec.id) || currentList.includes(rec.label.toLowerCase());
+                                                            if (isAssigned) return null;
+
+                                                            return (
+                                                                <button
+                                                                    key={rec.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const updated = Array.from(new Set([...currentList, rec.id])).join(', ');
+                                                                        updateProductField(product.id, 'keywords', updated);
+                                                                    }}
+                                                                    style={{
+                                                                        fontSize: '0.62rem',
+                                                                        padding: '1px 5px',
+                                                                        borderRadius: '3px',
+                                                                        border: '1px dashed #86EFAC',
+                                                                        backgroundColor: '#FFFFFF',
+                                                                        color: '#166534',
+                                                                        cursor: 'pointer',
+                                                                        fontWeight: '600',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '2px'
+                                                                    }}
+                                                                >
+                                                                    + {rec.emoji} {rec.label}
+                                                                </button>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
-                                                {/* Keywords Input */}
-                                                <input 
-                                                    type="text"
-                                                    placeholder="Keywords de búsqueda..."
-                                                    defaultValue={product.keywords || ''}
-                                                    style={{ 
-                                                        fontSize: '0.75rem', 
-                                                        padding: '4px 8px', 
-                                                        borderRadius: THEME.radius.sm, 
-                                                        border: `1px solid ${THEME.colors.border}`, 
-                                                        width: '100%', 
-                                                        fontStyle: 'italic', 
-                                                        backgroundColor: 'transparent',
-                                                        outline: 'none'
-                                                    }}
-                                                    onBlur={(e) => {
-                                                        if (e.target.value !== (product.keywords || '')) {
-                                                            updateProductField(product.id, 'keywords', e.target.value);
-                                                        }
-                                                    }}
-                                                />
+
+                                                {/* 2. SECCIÓN TAGS COMERCIALES (TAGS) */}
+                                                <div style={{ backgroundColor: '#FFFBEB', padding: '6px 8px', borderRadius: THEME.radius.sm, border: '1px solid #FDE68A' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Tag size={12} /> Tags Comerciales
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Active Commercial Tags */}
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '4px', justifyContent: 'flex-start' }}>
+                                                        {product.tags?.map((tag, i) => (
+                                                            <span key={i} style={{ 
+                                                                fontSize: '0.65rem', 
+                                                                padding: '1px 6px', 
+                                                                backgroundColor: '#FEF3C7', 
+                                                                color: '#92400E', 
+                                                                borderRadius: '4px',
+                                                                fontWeight: '700',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                border: '1px solid #FCD34D'
+                                                            }}>
+                                                                {tag}
+                                                                <X size={10} strokeWidth={2} style={{ cursor: 'pointer', color: '#B45309' }} onClick={() => {
+                                                                    const newTags = product.tags?.filter(t => t !== tag) || [];
+                                                                    updateProductField(product.id, 'tags', newTags);
+                                                                }} />
+                                                            </span>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Quick Tag Chips & Input */}
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center' }}>
+                                                        {COMMERCIAL_TAGS.map(tLabel => {
+                                                            const tVal = tLabel.toLowerCase();
+                                                            const isAssigned = (product.tags || []).some(t => t.toLowerCase() === tVal);
+                                                            if (isAssigned) return null;
+
+                                                            return (
+                                                                <button
+                                                                    key={tVal}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newTags = Array.from(new Set([...(product.tags || []), tVal]));
+                                                                        updateProductField(product.id, 'tags', newTags);
+                                                                    }}
+                                                                    style={{
+                                                                        fontSize: '0.62rem',
+                                                                        padding: '1px 5px',
+                                                                        borderRadius: '3px',
+                                                                        border: '1px dashed #FCD34D',
+                                                                        backgroundColor: '#FFFFFF',
+                                                                        color: '#92400E',
+                                                                        cursor: 'pointer',
+                                                                        fontWeight: '600'
+                                                                    }}
+                                                                >
+                                                                    + {tLabel}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>

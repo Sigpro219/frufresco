@@ -196,7 +196,8 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             p.name.toLowerCase().includes(sq) ||
             (p.display_name && p.display_name.toLowerCase().includes(sq)) ||
             (p.description && p.description.toLowerCase().includes(sq)) ||
-            (p.keywords && p.keywords.toLowerCase().includes(sq))
+            (p.keywords && p.keywords.toLowerCase().includes(sq)) ||
+            (p.tags && p.tags.some(t => t.toLowerCase().includes(sq)))
         );
     });
 
@@ -216,6 +217,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             orConditions.push(`name.ilike.%${sq}%`);
             orConditions.push(`description.ilike.%${sq}%`);
             orConditions.push(`display_name.ilike.%${sq}%`);
+            orConditions.push(`keywords.ilike.%${sq}%`);
         });
 
         // Process AI terms to ensure no commas sneak into the .or() query strings
@@ -311,8 +313,64 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
         return nameA.localeCompare(nameB, 'es', { sensitivity: 'base', numeric: true });
     });
 
+    // Recipe banner detection
+    const RECIPE_TITLES: Record<string, { name: string; emoji: string }> = {
+        'ajiaco': { name: 'Ajiaco Santafereño', emoji: '🥣' },
+        'sancocho': { name: 'Sancocho Criollo', emoji: '🍲' },
+        'bandeja paisa': { name: 'Bandeja Paisa', emoji: '🍛' },
+        'mondongo': { name: 'Mondongo Tradicional', emoji: '🥘' },
+        'mute': { name: 'Mute Santandereano', emoji: '🍲' },
+        'tamal': { name: 'Tamal Tolimense', emoji: '🫔' },
+        'arroz con pollo': { name: 'Arroz con Pollo', emoji: '🍗' }
+    };
+    const matchedRecipe = q ? RECIPE_TITLES[q.toLowerCase().trim()] : null;
+
     return (
         <div style={{ position: 'relative' }}>
+            {matchedRecipe && (
+                <div style={{
+                    backgroundColor: '#F0FDF4',
+                    border: '1.5px solid #10B981',
+                    borderRadius: '16px',
+                    padding: '0.9rem 1.2rem',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.08)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.6rem' }}>{matchedRecipe.emoji}</span>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#065F46' }}>
+                                Ingredientes Frescos para {matchedRecipe.name}
+                            </h3>
+                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#047857' }}>
+                                Selecciona los ingredientes y cantidades para tu preparación casera.
+                            </p>
+                        </div>
+                    </div>
+                    <Link 
+                        href="/#catalog"
+                        scroll={false}
+                        style={{
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            color: '#065F46',
+                            backgroundColor: '#FFFFFF',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid #A7F3D0',
+                            textDecoration: 'none'
+                        }}
+                    >
+                        Ver todo el catálogo
+                    </Link>
+                </div>
+            )}
+
             {fallbackCategoryName && (
                 <div style={{ 
                     backgroundColor: 'var(--accent)', 

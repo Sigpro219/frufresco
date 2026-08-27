@@ -105,15 +105,16 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
             const pricingModelId = resolvePricingModelId(profile);
 
             let fetchedData: any[] = [];
+            const orFilter = `name.ilike.%${query}%,display_name.ilike.%${query}%,keywords.ilike.%${query}%`;
             const { data, error } = await supabase
                 .from('products')
                 .select('id, name, category, base_price, image_url, display_name, web_conversion_factor, pricing_model_prices(price)')
                 .eq('is_active', true)
                 .eq('show_on_web', true)
                 .eq('pricing_model_prices.model_id', pricingModelId)
-                .ilike('name', `%${query}%`)
+                .or(orFilter)
                 .order('name', { ascending: true })
-                .limit(6);
+                .limit(8);
 
             if (error) {
                 console.error("Predictive query error, using fallback:", error.message);
@@ -122,9 +123,9 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     .select('id, name, category, base_price, image_url, display_name, web_conversion_factor')
                     .eq('is_active', true)
                     .eq('show_on_web', true)
-                    .ilike('name', `%${query}%`)
+                    .or(orFilter)
                     .order('name', { ascending: true })
-                    .limit(6);
+                    .limit(8);
                 fetchedData = fallbackData || [];
             } else {
                 fetchedData = data || [];

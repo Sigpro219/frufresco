@@ -12,6 +12,7 @@ import ProductGridContainer from '../components/ProductGridContainer';
 import ProductSkeleton from '../components/ProductSkeleton';
 import HeroActions from '../components/HeroActions';
 import ReorderHeroBanner from '../components/ReorderHeroBanner';
+import TypicalRecipesBar from '../components/TypicalRecipesBar';
 
 export const revalidate = 60; // Auto-revalidate every 60s fallback, plus on-demand revalidation
 
@@ -457,6 +458,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           <div style={{ maxWidth: '600px', margin: '0 auto', padding: '0 0.5rem' }}>
             <SearchBar placeholder={t.searchPlaceholder} />
           </div>
+
+          <Suspense fallback={null}>
+            <TypicalRecipesBar currentQ={q} locale={locale} />
+          </Suspense>
 
           <Suspense fallback={<div style={{ height: '40px', marginTop: '1.2rem' }}></div>}>
             <CategoryPills category={category} q={q} locale={locale} />
