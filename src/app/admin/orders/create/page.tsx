@@ -5083,6 +5083,7 @@ function CreateOrderContent() {
                                     {optionsList.length > 1 ? (
                                         <select
                                             id="modal-unit-select"
+                                            tabIndex={-1}
                                             value={modalUnit}
                                             onChange={(e) => {
                                                 const selected = e.target.value;
@@ -5156,6 +5157,7 @@ function CreateOrderContent() {
                                     ) : (
                                         <input
                                             readOnly
+                                            tabIndex={-1}
                                             type="text"
                                             value={dynamicUnitLabel}
                                             style={{
@@ -5193,7 +5195,9 @@ function CreateOrderContent() {
                                     Cancelar
                                 </button>
                                 <button
+                                    id="modal-confirm-btn"
                                     type="button"
+                                    tabIndex={0}
                                     onClick={confirmModalAdd}
                                     style={{ flex: 1, padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
                                     onFocus={(e) => {
