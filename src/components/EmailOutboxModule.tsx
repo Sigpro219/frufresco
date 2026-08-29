@@ -300,7 +300,8 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
               }}
               onFocus={(e) => e.target.style.borderColor = THEME.colors.primary}
               onBlur={(e) => e.target.style.borderColor = THEME.colors.border}
-            />             {searchQuery && (
+            />
+            {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
                 style={{
@@ -397,7 +398,8 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
         </div>
       ) : (
         <div style={{ overflowX: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', backgroundColor: 'white' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>             <thead>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
+            <thead>
               <tr style={{ backgroundColor: THEME.colors.background, borderBottom: `2px solid ${THEME.colors.border}` }}>
                 <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}>
                   <input 
@@ -426,7 +428,8 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 const isSimulated = email.subject?.toLowerCase().includes('(simulado)') || email.message?.text?.includes('[SIMULADO]');
                 const status = email.status || 'sent';
 
-                return (                   <tr key={email.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                return (
+                  <tr key={email.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <input 
                         type="checkbox"
@@ -532,7 +535,8 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             textAlign: 'left'
           }}>
-            {/* Modal Header */}             <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Modal Header */}
+            <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.15rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
                 <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
@@ -621,7 +625,8 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             textAlign: 'left',
             padding: '1.5rem'
-          }}>             <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: THEME.colors.textMain, fontWeight: 800 }}>
+          }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: THEME.colors.textMain, fontWeight: 800 }}>
               ¿Eliminar registro de correo?
             </h3>
             <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5' }}>
