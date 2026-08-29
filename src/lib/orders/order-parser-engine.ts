@@ -13,6 +13,13 @@ export function sanitizeDocText(text: string): string {
   // Arreglo de palabras fragmentadas comunes por kerning de impresoras PDF
   lower = lower.replace(/\ba\s+gua\s+cates?\b/gi, 'aguacate');
   lower = lower.replace(/\barra\s+cacha\b/gi, 'arracacha');
+  lower = lower.replace(/\bc\s+e\s+b\s+o\s+l\s+l\s+a\b/gi, 'cebolla');
+  lower = lower.replace(/\bt\s+o\s+m\s+a\s+t\s+e\b/gi, 'tomate');
+  lower = lower.replace(/\bp\s+a\s+p\s+a\b/gi, 'papa');
+  lower = lower.replace(/\bl\s+i\s+m\s+o\s+n\b/gi, 'limon');
+  lower = lower.replace(/\bn\s+a\s+r\s+a\s+n\s+j\s+a\b/gi, 'naranja');
+  lower = lower.replace(/\bp\s+l\s+a\s+t\s+a\s+n\s+o\b/gi, 'platano');
+  lower = lower.replace(/\bc\s+o\s+l\s+s\s+u\s+b\s+s\s+i\s+d\s+i\s+o\b/gi, 'colsubsidio');
   return lower.replace(/\s+/g, ' ');
 }
 
@@ -26,41 +33,42 @@ export async function fetchGeminiExtraction(
   mimeType: string = 'application/pdf'
 ): Promise<any> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const modelsToTry = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
+  const modelsToTry = [
+    'gemini-2.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite'
+  ];
   let resultText: string | null = null;
+  let successfulModel: string = '';
   let lastError: any = null;
 
   for (const modelName of modelsToTry) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        console.log(`[OrderParserEngine] Extrayendo con modelo ${modelName} (intento ${attempt + 1})...`);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        
-        const contents: any[] = [];
-        if (base64Data) {
-          contents.push({ inlineData: { data: base64Data, mimeType } });
-        }
-        contents.push({ text: prompt });
-
-        const res = await model.generateContent(contents);
-        const text = (await res.response).text().trim();
-        if (text) {
-          resultText = text;
-          console.log(`[OrderParserEngine] Éxito con modelo ${modelName}`);
-          break;
-        }
-      } catch (err: any) {
-        console.warn(`[OrderParserEngine] Error con modelo ${modelName} (intento ${attempt + 1}):`, err.message);
-        lastError = err;
-        if (err.message?.includes('429') || err.status === 429) {
-          console.log('⏳ Rate limit 429. Esperando 10s antes de reintentar...');
-          await new Promise(r => setTimeout(r, 10000));
-        } else {
-          break; // Switch to next model if non-429 error
-        }
+    try {
+      console.log(`[OrderParserEngine] Extrayendo con modelo ultrarrápido: ${modelName}...`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      
+      const contents: any[] = [];
+      if (base64Data) {
+        contents.push({ inlineData: { data: base64Data, mimeType } });
       }
+      contents.push({ text: prompt });
+
+      const res = await model.generateContent(contents);
+      const text = (await res.response).text().trim();
+      if (text) {
+        resultText = text;
+        successfulModel = modelName;
+        console.log(`[OrderParserEngine] ✅ Extracción exitosa con modelo ${modelName}`);
+        break;
+      }
+    } catch (err: any) {
+      console.warn(`[OrderParserEngine] Advertencia con modelo ${modelName}:`, err.message);
+      lastError = err;
+      // Continuar inmediatamente al siguiente modelo de respaldo
     }
-    if (resultText) break;
   }
 
   if (!resultText) {
@@ -69,7 +77,9 @@ export async function fetchGeminiExtraction(
 
   // Sanitizar el bloque JSON de la respuesta
   const cleanJson = resultText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-  return JSON.parse(cleanJson);
+  const parsedJson = JSON.parse(cleanJson);
+  parsedJson._modelUsed = successfulModel;
+  return parsedJson;
 }
 
 /**
@@ -130,19 +140,26 @@ export function resolveClientProfile(
   return null;
 }
 
+export interface ProductMatchResult {
+  product: any | null;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  confidenceScore: number;
+  matchSource: 'MEMORY' | 'EXACT' | 'TOKEN' | 'NONE';
+  matchReason: string;
+}
+
 /**
- * 📦 Buscador Inteligente de Productos con Memoria Histórica
- * Prioridad 1: Memoria del cliente (document_learning_memory)
- * Prioridad 2: Coincidencia exacta/substring sanitizada en catálogo
- * Prioridad 3: Coincidencia por raíz (plurales/singulares)
+ * 📦 Buscador Detallado de Productos con Nivel de Confianza
  */
-export function findBestProductMatch(
+export function findBestProductMatchDetails(
   rawName: string,
   products: any[],
   learnedMemory: any[] = []
-): any | null {
+): ProductMatchResult {
   const cleanInput = sanitizeDocText(rawName);
-  if (!cleanInput || !products || products.length === 0) return null;
+  if (!cleanInput || !products || products.length === 0) {
+    return { product: null, confidence: 'LOW', confidenceScore: 0, matchSource: 'NONE', matchReason: 'Sin datos de entrada' };
+  }
 
   // Prioridad 1: Memoria Histórica Aprendida para este Cliente
   if (learnedMemory.length > 0) {
@@ -153,18 +170,49 @@ export function findBestProductMatch(
     );
     if (memMatch) {
       const matchedProd = products.find(p => p.id === memMatch.matched_product_id);
-      if (matchedProd) return matchedProd;
+      if (matchedProd) {
+        return {
+          product: matchedProd,
+          confidence: 'HIGH',
+          confidenceScore: 100,
+          matchSource: 'MEMORY',
+          matchReason: 'Aprendido de órdenes anteriores'
+        };
+      }
     }
   }
 
   // Prioridad 2: Coincidencia exacta o por contención directa en catálogo
   let match = products.find(p => {
     const cleanPName = sanitizeDocText(p.name);
-    return cleanInput === cleanPName || cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
+    return cleanInput === cleanPName;
   });
-  if (match) return match;
+  if (match) {
+    return {
+      product: match,
+      confidence: 'HIGH',
+      confidenceScore: 98,
+      matchSource: 'EXACT',
+      matchReason: 'Coincidencia exacta de catálogo'
+    };
+  }
 
-  // Prioridad 3: Coincidencia por tokens / palabras individuales (Manejo de plurales: Bananos -> Banano, Ajos -> Ajo)
+  // Substring contención directa
+  match = products.find(p => {
+    const cleanPName = sanitizeDocText(p.name);
+    return cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
+  });
+  if (match) {
+    return {
+      product: match,
+      confidence: 'HIGH',
+      confidenceScore: 90,
+      matchSource: 'EXACT',
+      matchReason: 'Nombre contenido en catálogo'
+    };
+  }
+
+  // Prioridad 3: Coincidencia por tokens / palabras individuales (Manejo de plurales)
   const tokens = cleanInput.split(' ').filter(t => t.length > 2);
   if (tokens.length > 0) {
     const firstToken = tokens[0];
@@ -173,9 +221,35 @@ export function findBestProductMatch(
       const cleanPName = sanitizeDocText(p.name);
       return cleanPName.includes(firstToken) || cleanPName.includes(stemToken);
     });
+    if (match) {
+      return {
+        product: match,
+        confidence: 'MEDIUM',
+        confidenceScore: 75,
+        matchSource: 'TOKEN',
+        matchReason: 'Sugerencia por palabra clave'
+      };
+    }
   }
 
-  return match || null;
+  return {
+    product: null,
+    confidence: 'LOW',
+    confidenceScore: 0,
+    matchSource: 'NONE',
+    matchReason: 'No se encontró coincidencia automática'
+  };
+}
+
+/**
+ * 📦 Buscador Inteligente de Productos con Memoria Histórica (Compatibilidad)
+ */
+export function findBestProductMatch(
+  rawName: string,
+  products: any[],
+  learnedMemory: any[] = []
+): any | null {
+  return findBestProductMatchDetails(rawName, products, learnedMemory).product;
 }
 
 /**

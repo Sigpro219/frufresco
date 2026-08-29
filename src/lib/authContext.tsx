@@ -143,11 +143,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 
                 if (sessionError) {
-                    console.error('❌ Sesión corrupta detectada:', sessionError.message);
-                    await supabase.auth.signOut();
-                    localStorage.clear();
-                    window.location.href = '/login?error=reset';
-                    return;
+                    const isNetworkErr = sessionError.message?.toLowerCase().includes('fetch') || 
+                                         sessionError.message?.toLowerCase().includes('network') ||
+                                         (typeof window !== 'undefined' && !navigator.onLine);
+
+                    if (!isNetworkErr) {
+                        console.error('❌ Sesión inválida detectada:', sessionError.message);
+                        // Solo resetear si es un error fatal de token (no un fallo de red)
+                        if (sessionError.message?.includes('invalid_grant') || sessionError.message?.includes('refresh_token_not_found')) {
+                            await supabase.auth.signOut();
+                            localStorage.clear();
+                            window.location.href = '/login?error=reset';
+                            return;
+                        }
+                    } else {
+                        console.warn('⚠️ Error de red al iniciar sesión. Manteniendo sesión local offline...');
+                    }
                 }
 
                 if (isMounted) {
@@ -163,39 +174,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         } catch (e) {}
                         await fetchProfile(currentUser.id);
                     } else {
-                        setProfile(null);
+                        // Intentar recuperar de caché si el navegador está temporalmente offline
+                        if (typeof window !== 'undefined' && !navigator.onLine) {
+                            console.log('📡 Modo Offline: Preservando estado de autenticación previo');
+                        } else {
+                            setProfile(null);
+                        }
                     }
                     setLoading(false);
                 }
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
                     if (!isMounted) return;
-                    
+                    console.log(`🔐 Evento Auth detectado [${event}]:`, session?.user?.email || 'Sin sesión');
+
                     const newUser = session?.user ?? null;
                     if (newUser) {
                         setUser(newUser);
                         fetchProfile(newUser.id);
                         setLoading(false);
                     } else if (event === 'SIGNED_OUT') {
-                        // Confirmed sign out action
+                        // Confirmed sign out action por el usuario
+                        console.log('🚪 Cierre de sesión confirmado (SIGNED_OUT)');
                         setUser(null);
                         setProfile(null);
                         setLoading(false);
                     } else {
-                        // Transient session refresh event: verify with getSession before evicting
-                        const { data: checkData } = await supabase.auth.getSession();
-                        if (isMounted) {
-                            if (checkData.session?.user) {
-                                setUser(checkData.session.user);
-                                fetchProfile(checkData.session.user.id);
-                            } else {
-                                setUser(null);
-                                setProfile(null);
-                            }
+                        // Evento transitorio de refresco de token o cambio de pestaña:
+                        // NUNCA expulsar inmediatamente. Esperar y verificar con reintentos.
+                        if (typeof window !== 'undefined' && !navigator.onLine) {
+                            console.warn('⚠️ Navegador Offline durante refresco de auth. Preservando sesión.');
                             setLoading(false);
+                            return;
                         }
+
+                        // Espera de 1.5s antes de comprobar para dar tiempo a Supabase a refrescar el JWT
+                        setTimeout(async () => {
+                            if (!isMounted) return;
+                            try {
+                                const { data: checkData } = await supabase.auth.getSession();
+                                if (isMounted) {
+                                    if (checkData.session?.user) {
+                                        console.log('🔄 Sesión recuperada tras refresco:', checkData.session.user.email);
+                                        setUser(checkData.session.user);
+                                        fetchProfile(checkData.session.user.id);
+                                    } else {
+                                        console.warn('⚠️ Sesión expirada confirmada tras verificación');
+                                        setUser(null);
+                                        setProfile(null);
+                                    }
+                                    setLoading(false);
+                                }
+                            } catch (e) {
+                                console.warn('Error en verificación de sesión diferida:', e);
+                                setLoading(false);
+                            }
+                        }, 1500);
                     }
                 });
+
+                // Reconexión automática al volver a tener internet
+                const handleOnline = async () => {
+                    if (!isMounted) return;
+                    console.log('🌐 Conexión a internet restaurada. Sincronizando sesión...');
+                    const { data: onlineData } = await supabase.auth.getSession();
+                    if (onlineData.session?.user) {
+                        setUser(onlineData.session.user);
+                        fetchProfile(onlineData.session.user.id);
+                    }
+                };
+
+                window.addEventListener('online', handleOnline);
+
                 return subscription;
             } catch (err) {
                 console.error('❌ Error crítico auth:', err);

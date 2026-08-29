@@ -15,7 +15,18 @@ if (!isUrlValid && typeof window !== 'undefined') {
 
 const createSafeClient = () => {
     if (isUrlValid) {
-        return createBrowserClient(supabaseUrl, supabaseAnonKey);
+        return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            },
+            cookieOptions: {
+                lifetime: 60 * 60 * 24 * 365, // 1 año de persistencia de sesión
+                sameSite: 'lax',
+                path: '/'
+            }
+        });
     }
 
     // Proxy-based "Bunker" to prevent SSR/Build crashes when Env Vars are missing

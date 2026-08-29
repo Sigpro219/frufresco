@@ -3,11 +3,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import { 
+    Mail, ArrowRight, Trash2, RotateCcw, MapPin, Phone, Hash, X, Check, Calendar, Search, 
+    ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, 
+    Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
+    Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
+    Settings, Plus, Package 
+} from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import VariantModal from './VariantModal';
+import PdfCanvasViewer from './PdfCanvasViewer';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -202,7 +209,7 @@ const formatDetectedUnit = (qty: number, unit: string) => {
         suffix = qty === 1 ? 'detectada' : 'detectadas';
     }
     
-    return `✨ ${qty} ${cleanUnit} ${suffix}`;
+    return `${qty} ${cleanUnit} ${suffix}`;
 };
 
 const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
@@ -651,7 +658,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     // Reset selectedAttachmentIndex to the first new virtual attachment
     setSelectedAttachmentIndex(0);
-    showToast(`¡Se dividió el documento en ${newVirtualAttachments.length} adjuntos virtuales según sus fechas de entrega! ⚡`, 'success');
+    showToast(`¡Se dividió el documento en ${newVirtualAttachments.length} adjuntos virtuales según sus fechas de entrega!`, 'success');
   };
 
   const getMinDeliveryDate = () => {
@@ -698,6 +705,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [sendingReceipt, setSendingReceipt] = useState(false);
   const [receiptSent, setReceiptSent] = useState(false);
+
+  const scrollToDraftRow = (targetIdx: number) => {
+    const container = document.getElementById('email-draft-scroll-container');
+    const row = document.getElementById(`draft-row-${targetIdx}`);
+    if (!container || !row) return;
+
+    if (targetIdx < 3) {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      const anchorHeight = 220;
+      const targetTop = row.offsetTop - anchorHeight;
+      container.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: 'smooth'
+      });
+    }
+  };
   
   useEffect(() => {
     if (selectedDraft) {
@@ -1098,7 +1122,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setEditableItems(newEdits);
     setDuplicateMatchConfirm(null);
     setActiveSearchRowIndex(null);
-    showToast('Cantidad acumulada en la línea existente y fila duplicada descartada. ✅', 'success');
+    showToast('Cantidad acumulada en la línea existente y fila duplicada descartada.', 'success');
   };
 
   const handleKeepBothMatches = () => {
@@ -1106,6 +1130,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const { product, rowIndex } = duplicateMatchConfirm;
     executeSelectProduct(product, rowIndex);
     setDuplicateMatchConfirm(null);
+  };
+
+  const handleAddManualItem = () => {
+    setEditableItems(prev => [
+      ...prev,
+      {
+        originalName: '',
+        name: '',
+        quantity: 1,
+        matched_product_id: null,
+        searchQuery: '',
+        skuQuery: '',
+        unit: 'Kg',
+        observations: '',
+        isConfirmed: false
+      }
+    ]);
+    setTimeout(() => {
+      const nextIdx = editableItems.length;
+      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+      if (nextInput) {
+        nextInput.focus();
+        scrollToDraftRow(nextIdx);
+      }
+    }, 50);
   };
 
   const handleProductSearchKeyDown = (e: React.KeyboardEvent, rowIndex: number, filtered: any[]) => {
@@ -1459,7 +1508,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
           await safeFetchJson(res);
 
-          showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️', 'success');
+          showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente.', 'success');
           setSelectedDraft(null);
           fetchDrafts();
         } catch (e: any) {
@@ -1529,7 +1578,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         throw new Error(data.error || 'Error al aprobar borrador');
       }
 
-      showToast(`¡Pedido #${data.orderNumber || data.orderId} aprobado y procesado exitosamente! 🎉`, 'success');
+      showToast(`¡Pedido #${data.orderNumber || data.orderId} aprobado y procesado exitosamente!`, 'success');
       setSelectedDraft(null);
       fetchDrafts(true);
 
@@ -1911,7 +1960,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             extracted_items: dbItems
           }));
           setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
-          showToast('Productos eliminados y novedades notificadas por correo. ✉️', 'success');
+          showToast('Productos eliminados y novedades notificadas por correo.', 'success');
         } catch (err: any) {
           console.warn('Error deleting and notifying:', err);
           showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
@@ -1926,7 +1975,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
         setEditableItems(remainingItems);
         setSelectedRowIndices([]);
-        showToast('Productos eliminados de la lista (novedades pendientes de notificar). ⚠️', 'success');
+        showToast('Productos eliminados de la lista (novedades pendientes de notificar).', 'success');
       }
     });
   };
@@ -3246,10 +3295,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }
 
           if (isLastAttachment) {
-            showToast('Pedido registrado y acuse de recibo enviado con éxito 📧✅', 'success');
+            showToast('Pedido registrado y acuse de recibo enviado con éxito.', 'success');
             setSelectedDraft(null);
           } else {
-            showToast(`Pedido registrado para "${updatedAttachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+            showToast(`Pedido registrado para "${updatedAttachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente...`, 'success');
             const localDraftUpdated = {
               ...selectedDraft,
               extracted_items: updatedExtractedItems
@@ -3498,7 +3547,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       if (hasZeroPriceItem) {
         setConfirmingOrder(false);
-        showToast(`❌ Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Por favor asigne precio manualmente antes de aprobar.`, 'error');
+        showToast(`Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Por favor asigne precio manualmente antes de aprobar.`, 'error');
         return;
       }
 
@@ -3633,11 +3682,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       if (isLastAttachment) {
-        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado ✅', 'success');
+        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado', 'success');
         setShowConfirmModal(false);
         setSelectedDraft(null);
       } else {
-        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente... ✅`, 'success');
+        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente...`, 'success');
         setShowConfirmModal(false);
         
         // Update local selectedDraft state with updated attachments
@@ -4314,9 +4363,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       {meta.address !== 'No detectado' ? (meta.address.slice(0, 35) + '...') : '-'}
                     </div>
                     {meta.address !== 'No detectado' ? (
-                      <span style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '900' }}>📍 GPS OK</span>
+                      <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <MapPin size={10} color="#059669" /> GPS OK
+                      </span>
                     ) : (
-                      <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
+                      <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <AlertTriangle size={10} color="#9CA3AF" /> SIN GPS
+                      </span>
                     )}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
@@ -4547,16 +4600,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       )}
 
       {/* Modal de Aprobación */}
-      {selectedDraft && (
-        <div style={{
+      {selectedDraft && (() => {
+        const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+        return (
+          <div style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(6px)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: showFloatingEmail ? 'flex-start' : 'center',
+          justifyContent: 'center',
           zIndex: 9999,
-          padding: showFloatingEmail ? '1rem 0 1rem 24px' : '1rem',
+          padding: '1.25rem',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <style>{`
@@ -4605,1318 +4661,700 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           `}</style>
           <div style={{
             backgroundColor: 'white',
-            borderRadius: THEME.radius.xl,
-            width: showFloatingEmail ? (isFloatingExpanded ? 'calc(100% - 1022px)' : 'calc(100% - 622px)') : '94%',
-            minWidth: showFloatingEmail ? '480px' : 'auto',
-            maxWidth: '1400px',
-            maxHeight: '90vh',
+            borderRadius: '24px',
+            width: '98%',
+            maxWidth: showFloatingEmail ? '1750px' : '1280px',
+            height: '93vh',
+            maxHeight: '93vh',
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
             position: 'relative',
             overflow: 'hidden',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            border: `1px solid ${THEME.colors.border}`,
+            transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: '1.5rem',
-              borderBottom: `1px solid ${THEME.colors.border}`,
+            {/* Mesa de Trabajo Header: Client Validation (Identical to PDF Workstation) */}
+            <div style={{ 
+              padding: '1.1rem 1.75rem', 
+              backgroundColor: matchedProfile ? '#F0FDF4' : '#FFF7ED', 
+              borderBottom: `1px solid ${matchedProfile ? '#BBF7D0' : '#FFEDD5'}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
-              backgroundColor: isScrolled ? 'rgba(255, 255, 255, 0.85)' : 'white',
-              backdropFilter: isScrolled ? 'blur(12px)' : 'none',
-              transition: 'all 0.3s ease',
-              boxShadow: isScrolled ? '0 4px 20px -5px rgba(0, 0, 0, 0.08)' : 'none',
-              borderTopLeftRadius: THEME.radius.xl,
-              borderTopRightRadius: THEME.radius.xl
+              flexWrap: 'wrap',
+              gap: '1rem',
+              flexShrink: 0
             }}>
-              {/* Barra de progreso de lectura premium */}
-              <div style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                width: `${scrollPercent}%`,
-                height: '3px',
-                background: 'linear-gradient(to right, #10B981, #34D399)',
-                transition: 'width 0.1s ease-out',
-                zIndex: 11
-              }} />
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827', fontWeight: 800 }}>Revisión de Correo</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
-                  <span style={{ color: '#6B7280', fontSize: '0.85rem' }}><strong>De:</strong> {selectedDraft.source_email}</span>
-                  <span style={{ color: '#1F2937', fontSize: '0.9rem', fontWeight: 600 }}><strong>Asunto:</strong> {selectedDraft.email_subject || '(Sin Asunto)'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ color: matchedProfile ? '#16A34A' : '#D97706' }}>
+                  {matchedProfile ? <CheckCircle2 size={26} strokeWidth={1.7} /> : <AlertTriangle size={26} strokeWidth={1.7} />}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: '900', color: matchedProfile ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Validación de Cliente (Auditoría)
+                  </div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    Documento detectado para: <span style={{ textDecoration: 'underline' }}>{matchedProfile?.company_name || matchedProfile?.contact_name || selectedDraft.client_detected_name || selectedDraft.source_email}</span>
+                    {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
+                      <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <CheckCircle2 size={11} color="#15803D" /> En Cobertura
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                    <span><strong>De:</strong> {selectedDraft.source_email}</span>
+                    <span>•</span>
+                    <span style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
+                      <strong>Asunto:</strong> {selectedDraft.email_subject || '(Sin Asunto)'}
+                    </span>
+                    {editableAddress && (
+                      <>
+                        <span>•</span>
+                        <span><strong>Dir:</strong> {editableAddress}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <button
-                  type="button"
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <span style={{ 
+                  backgroundColor: '#ECFDF5', 
+                  color: '#065F46', 
+                  border: '1.5px solid #6EE7B7', 
+                  padding: '5px 12px', 
+                  borderRadius: '100px', 
+                  fontSize: '0.78rem', 
+                  fontWeight: '800',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  boxShadow: '0 1px 3px rgba(16, 185, 129, 0.1)'
+                }}>
+                  <Zap size={13} fill="#059669" color="#059669" />
+                  <span>Recepción: <strong>{new Date(selectedDraft.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</strong></span>
+                </span>
+                <button 
                   onClick={() => setShowFloatingEmail(prev => !prev)}
-                  style={{
-                    backgroundColor: showFloatingEmail ? '#EFF6FF' : '#F1F5F9',
-                    color: showFloatingEmail ? '#2563EB' : '#475569',
-                    border: `1.5px solid ${showFloatingEmail ? '#BFDBFE' : '#E2E8F0'}`,
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
+                  title="Alternar visor del documento original"
+                  style={{ 
+                    padding: '6px 14px', 
+                    backgroundColor: showFloatingEmail ? '#DBEAFE' : '#EFF6FF', 
+                    borderRadius: '100px', 
+                    fontSize: '0.78rem', 
+                    fontWeight: '800', 
+                    color: '#1D4ED8',
+                    border: '1.5px solid #93C5FD',
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     transition: 'all 0.2s'
                   }}
                 >
-                  <Mail size={14} />
-                  {showFloatingEmail ? 'Ocultar Texto Original' : 'Ver Texto Original'}
+                  <FileText size={14} /> {showFloatingEmail ? 'Ocultar Visor PDF' : 'Ver Documento Lado a Lado'}
                 </button>
-                <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
-                  <X size={24} />
+                <button 
+                  onClick={() => setSelectedDraft(null)} 
+                  style={{ 
+                    border: 'none', 
+                    background: '#F8FAFC', 
+                    cursor: 'pointer', 
+                    color: '#64748B', 
+                    width: '32px', 
+                    height: '32px', 
+                    borderRadius: '100px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    transition: 'all 0.15s' 
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.color = '#EF4444'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#64748B'; }}
+                >
+                  <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* Modal Body */}
-            <div 
-              className="premium-scrollbar"
-              onScroll={(e) => {
-                const target = e.currentTarget;
-                const pct = (target.scrollTop / (target.scrollHeight - target.clientHeight)) * 100;
-                setScrollPercent(isNaN(pct) ? 0 : pct);
-                setIsScrolled(target.scrollTop > 10);
-              }}
-              style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}
-            >
-              {selectedDraft.status === 'rejected' && (
-                <div style={{
-                  padding: '1rem',
-                  backgroundColor: '#FEF2F2',
-                  borderLeft: '4px solid #EF4444',
-                  borderRadius: '8px',
-                  marginBottom: '1.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  textAlign: 'left'
-                }}>
-                  <AlertTriangle size={24} style={{ color: '#EF4444', flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#991B1B', fontSize: '0.9rem' }}>
-                      🚫 BORRADOR DE PEDIDO RECHAZADO
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#B91C1C', fontWeight: 600, marginTop: '2px' }}>
-                      Motivo: <strong>{
-                        (() => {
-                          const r = getDraftMetadata(selectedDraft).rejectReason;
-                          if (r === 'cobertura') return 'Dirección fuera de la zona de cobertura en Bogotá';
-                          if (r === 'monto_minimo') return 'El pedido no cumple con el monto mínimo de entrega de $100.000 COP';
-                          if (r === 'no_comercializado') return 'Productos no comercializados por FruFresco (ej. materiales de construcción)';
-                          if (r === 'datos_incompletos') return 'Datos de contacto o dirección insuficientes en la solicitud';
-                          if (r === 'pedido_duplicado') return 'Solicitud ya procesada anteriormente (Pedido duplicado)';
-                          if (r === 'bloqueo_cartera') return 'Cliente con bloqueo de cartera o saldo vencido en mora';
-                          if (r === 'sin_stock') return 'Agotamiento de inventario en productos principales del pedido';
-                          if (r === 'fuera_de_horario') return 'Pedido recibido fuera del horario límite de programación operativa';
-                          return r || 'No especificado';
-                        })()
-                      }</strong>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {draftCoordinates && !checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
-                <div style={{
-                  backgroundColor: '#FEE2E2',
-                  borderLeft: '4px solid #EF4444',
-                  padding: '1rem',
-                  borderRadius: '8px',
-                  marginBottom: '1.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  textAlign: 'left'
-                }}>
-                  <AlertTriangle size={24} style={{ color: '#EF4444', flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#991B1B', fontSize: '0.9rem' }}>
-                      ⚠️ DIRECCIÓN FUERA DE COBERTURA
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#B91C1C', fontWeight: 600, marginTop: '2px' }}>
-                      La dirección ingresada ({editableAddress}) se encuentra fuera del área de cobertura de FruFresco. Por favor valida o rechaza el pedido.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {checkIsNewClient(selectedDraft) && (
-                <div style={{
-                  backgroundColor: '#FEF3C7',
-                  borderLeft: '4px solid #D97706',
-                  padding: '1rem',
-                  borderRadius: '8px',
-                  marginBottom: '1.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  textAlign: 'left'
-                }}>
-                  <Info size={24} style={{ color: '#D97706', flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#92400E', fontSize: '0.9rem' }}>
-                      ⚠️ CLIENTE NUEVO DETECTADO
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: 600, marginTop: '2px' }}>
-                      {getDraftMetadata(selectedDraft).clientType === 'b2b_client' 
-                        ? 'Este cliente comercial no está registrado en el sistema.'
-                        : 'Este cliente no está registrado en el sistema. Es necesario verificar su cobertura en Bogotá antes de procesar el pedido.'
-                      }
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Encabezado Estilo Pedido */}
-              <div style={{ marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827', fontWeight: 900 }}>
-                    Revisión de Pedido por Correo
-                  </h2>
-                  <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800 }}>NUEVO BORRADOR</span>
-                  <span style={{ 
-                    backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#EFF6FF' : '#ECFDF5', 
-                    color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#2563EB' : '#059669', 
-                    padding: '4px 10px', 
-                    borderRadius: '12px', 
-                    fontSize: '0.75rem', 
-                    fontWeight: 800 
-                  }}>
-                    {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'B2C / HOGAR'}
-                  </span>
-                </div>
-                
-                <div style={{ backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', overflow: 'hidden', marginBottom: '24px', marginTop: '16px' }}>
-                  <div style={{ backgroundColor: '#10B981', color: 'white', padding: '10px 16px', fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Información del pedido
-                  </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', fontSize: '0.85rem' }}>
-                    
-                    {/* Cliente */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Cliente</div>
-                      <div style={{ padding: '8px 16px', color: '#111827', fontWeight: 600 }}>
-                        {isEditing ? (
-                          <div style={{ position: 'relative', width: '100%', maxWidth: '500px' }}>
-                            <input
-                              type="text"
-                              value={clientSearchQuery}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setClientSearchQuery(val);
-                                
-                                const cleanVal = val.trim().toLowerCase();
-                                const foundProf = profiles.find(p => 
-                                  (p.company_name || p.contact_name || '').trim().toLowerCase() === cleanVal
-                                );
-                                if (foundProf) {
-                                  setSelectedDraft(prev => ({
-                                    ...prev,
-                                    profile_id: foundProf.id,
-                                    client_detected_name: foundProf.company_name || foundProf.contact_name || ''
-                                  }));
-                                  
-                                  const effectiveClientId = foundProf.parent_id || foundProf.id;
-                                  const activeAgreement = effectiveClientId 
-                                    ? agreements.find(q => q.client_id === effectiveClientId)
-                                    : null;
-                                  if (activeAgreement) {
-                                    setPriceList(formatAgreementNumber(activeAgreement.quote_number, activeAgreement.start_date));
-                                  } else {
-                                    const parentProfile = foundProf.parent_id ? profiles.find(p => p.id === foundProf.parent_id) : null;
-                                    const resolvedModelId = foundProf.pricing_model_id || parentProfile?.pricing_model_id || null;
-                                    const pm = resolvedModelId ? pricingModels.find(m => m.id === resolvedModelId) : null;
-                                    setPriceList(pm ? pm.name : 'Clientes B2C');
-                                  }
-
-                                  setEditableClientName(foundProf.company_name || foundProf.contact_name || '');
-                                  setEditableClientPhone(foundProf.phone && foundProf.phone !== '0' ? foundProf.phone : '');
-                                  setEditableClientNit(foundProf.nit || '');
-                                  setEditableClientType(foundProf.role || 'b2b_client');
-                                  if (foundProf.address) {
-                                    const fullAddress = `${foundProf.address}${foundProf.municipality || foundProf.city ? `, ${foundProf.municipality || foundProf.city}` : ''}${foundProf.department ? `, ${foundProf.department}` : ''}`;
-                                    setEditableAddress(fullAddress);
-                                    triggerGeocoding(fullAddress);
-                                  }
-                                  const computedSlot = getDeliverySlotFromLogistics(foundProf.logistics_data);
-                                  if (computedSlot) {
-                                    setEditableDeliverySlot(computedSlot);
-                                  }
-                                  if (foundProf.logistics_data) {
-                                    const allowedDays = foundProf.logistics_data.allowed_days || foundProf.logistics_data.days;
-                                    if (allowedDays && allowedDays.length > 0) {
-                                      setDeliveryDate(prevDate => getNextAllowedDeliveryDate(prevDate, allowedDays));
-                                    }
-                                  }
-                                } else {
-                                  setSelectedDraft(prev => ({
-                                    ...prev,
-                                    profile_id: null,
-                                    client_detected_name: val
-                                  }));
-                                  setEditableClientName(val);
-                                }
+            {/* Split Canvas Body: Left (Document/Email Viewer 48%) & Right (Products Table 52%) */}
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'row',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              {/* Left Side: Document / Email Preview (Side-by-Side) */}
+              {showFloatingEmail && (
+                <div style={{ 
+                  width: isFloatingExpanded ? '52%' : '48%', 
+                  minWidth: '420px', 
+                  borderRight: '2px solid #E2E8F0', 
+                  backgroundColor: '#F8FAFC', 
+                  padding: '1rem', 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  flexShrink: 0 
+                }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <FileText size={14} /> Documento Original
+                      </span>
+                      {(() => {
+                        const metadata = getDraftMetadata(selectedDraft);
+                        if (!metadata.attachmentUrl) return null;
+                        return (
+                          <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', borderRadius: '6px', padding: '2px', marginLeft: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('email')}
+                              style={{
+                                padding: '3px 8px',
+                                border: 'none',
+                                borderRadius: '4px',
+                                backgroundColor: activeTab === 'email' ? 'white' : 'transparent',
+                                color: activeTab === 'email' ? '#1E293B' : '#64748B',
+                                fontWeight: activeTab === 'email' ? 700 : 500,
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px'
                               }}
-                              list="client-profiles-list"
-                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', outline: 'none', fontWeight: 600, fontSize: '0.9rem' }}
-                              placeholder="Buscar cliente existente o escribir nuevo..."
-                            />
-                            <datalist id="client-profiles-list">
-                              {profiles.map(p => (
-                                <option key={p.id} value={p.company_name || p.contact_name || ''} />
-                              ))}
-                            </datalist>
-                          </div>
-                        ) : (
-                          <>
-                            {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
-                            <span style={{ color: '#6B7280', fontWeight: 'normal' }}> ({getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'NIT' : 'CC'}: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {!selectedDraft.profile_id && (
-                      <>
-                        {/* Celular de Cliente Nuevo */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Celular</div>
-                          <div style={{ padding: '8px 16px' }}>
-                            <input
-                              type="text"
-                              value={editableClientPhone}
-                              onChange={(e) => setEditableClientPhone(e.target.value)}
-                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none' }}
-                              placeholder="Celular del nuevo cliente..."
-                            />
-                          </div>
-                        </div>
-
-                        {/* NIT / CC de Cliente Nuevo */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>NIT / CC</div>
-                          <div style={{ padding: '8px 16px' }}>
-                            <input
-                              type="text"
-                              value={editableClientNit}
-                              onChange={(e) => setEditableClientNit(e.target.value)}
-                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none' }}
-                              placeholder="NIT o Documento..."
-                            />
-                          </div>
-                        </div>
-
-                        {/* Tipo de Cliente Nuevo */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Tipo de Cliente</div>
-                          <div style={{ padding: '8px 16px' }}>
-                            <select
-                              value={editableClientType}
-                              onChange={(e) => setEditableClientType(e.target.value as any)}
-                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none', fontWeight: 600 }}
                             >
-                              <option value="b2c_client">Hogar / B2C</option>
-                              <option value="b2b_client">B2B / HORECA</option>
-                            </select>
+                              <Mail size={11} /> Correo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('attachment')}
+                              style={{
+                                padding: '3px 8px',
+                                border: 'none',
+                                borderRadius: '4px',
+                                backgroundColor: activeTab === 'attachment' ? 'white' : 'transparent',
+                                color: activeTab === 'attachment' ? '#1E293B' : '#64748B',
+                                fontWeight: activeTab === 'attachment' ? 700 : 500,
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                            >
+                              <Paperclip size={11} /> Adjunto
+                            </button>
                           </div>
-                        </div>
-                      </>
-                    )}
+                        );
+                      })()}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {(() => {
+                        const metadata = getDraftMetadata(selectedDraft);
+                        let currentUrl = metadata.attachmentUrl;
+                        if (metadata.attachments && metadata.attachments[selectedAttachmentIndex]) {
+                          currentUrl = metadata.attachments[selectedAttachmentIndex].url;
+                        }
+                        if (!currentUrl) return null;
+                        return (
+                          <a href={currentUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                            <button style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Maximize2 size={11} /> Abrir Pestaña
+                            </button>
+                          </a>
+                        );
+                      })()}
+                      <button
+                        type="button"
+                        onClick={() => setIsFloatingExpanded(prev => !prev)}
+                        style={{ padding: '3px 6px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        title={isFloatingExpanded ? "Contraer" : "Expandir"}
+                      >
+                        {isFloatingExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                      </button>
+                    </div>
+                  </div>
 
-
-
-                    {/* Sucursal / Dirección */}
+                  {/* Document Content Viewport */}
+                  <div style={{ flex: 1, minHeight: '520px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
                     {(() => {
-                      const cleanForComparison = (str: string) => {
-                        return str
-                          .toLowerCase()
-                          .normalize("NFD")
-                          .replace(/[\u0300-\u036f]/g, "")
-                          .replace(/[^a-z0-9]/g, '');
-                      };
+                      const metadata = getDraftMetadata(selectedDraft);
                       
-                      const addressVal = editableAddress || '';
-                      const cleanBody = cleanForComparison(selectedDraft.email_body || '');
-                      const cleanSubject = cleanForComparison(selectedDraft.email_subject || '');
-                      const cleanAddress = cleanForComparison(addressVal);
-                      
-                      const isAddressMissing = !addressVal || 
-                        addressVal.trim() === '' || 
-                        addressVal.toLowerCase().includes('no detectado') || 
-                        addressVal.toLowerCase().includes('no detectada') || 
-                        addressVal.toLowerCase() === 'null';
-                        
-                      const meta = getDraftMetadata(selectedDraft);
-                      const wasAddressAssumed = isAddressMissing || 
-                        ((meta as any).addressDetected === false) || 
-                        (cleanAddress && !cleanBody.includes(cleanAddress) && !cleanSubject.includes(cleanAddress));
+                      // PESTAÑA: Adjunto
+                      if (activeTab === 'attachment') {
+                        let currentUrl = metadata.attachmentUrl;
+                        let currentName = metadata.attachmentName;
+                        if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+                          const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                          if (selectedAtt) {
+                            currentUrl = selectedAtt.url;
+                            currentName = selectedAtt.name;
+                          }
+                        }
 
-                      return (
-                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Sucursal/Dirección</div>
-                          <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                            {isEditing ? (
-                              <div style={{ width: '100%' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                                  <input
-                                    type="text"
-                                    value={editableAddress}
-                                    onChange={(e) => setEditableAddress(e.target.value)}
-                                    onBlur={() => triggerGeocoding(editableAddress)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); triggerGeocoding(editableAddress); } }}
-                                    style={{ 
-                                      padding: '8px 12px', 
-                                      borderRadius: '6px', 
-                                      border: wasAddressAssumed ? '1px solid #EF4444' : `1px solid ${THEME.colors.border}`, 
-                                      backgroundColor: wasAddressAssumed ? '#FEF2F2' : '#FFFFFF',
-                                      width: '100%', 
-                                      outline: 'none',
-                                      transition: 'all 0.2s ease-in-out'
+                        if (!currentUrl) {
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', backgroundColor: '#F8FAFC', color: '#64748B' }}>
+                              <span>No hay documentos adjuntos.</span>
+                            </div>
+                          );
+                        }
+
+                        const attachmentName = currentName || '';
+                        const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+
+                        const renderSelector = () => {
+                          if (!metadata.attachments || !Array.isArray(metadata.attachments) || metadata.attachments.length <= 1) return null;
+                          return (
+                            <div style={{
+                              display: 'flex',
+                              gap: '6px',
+                              padding: '6px 10px',
+                              backgroundColor: '#F1F5F9',
+                              borderBottom: '1px solid #E2E8F0',
+                              overflowX: 'auto',
+                              whiteSpace: 'nowrap'
+                            }} className="premium-scrollbar">
+                              {metadata.attachments.map((att: any, idx: number) => {
+                                const isActive = idx === selectedAttachmentIndex;
+                                const isProcessed = att.processed === true;
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => handleSelectAttachment(idx)}
+                                    style={{
+                                      padding: '4px 10px',
+                                      borderRadius: '16px',
+                                      border: '1px solid',
+                                      borderColor: isActive ? '#2563EB' : (isProcessed ? '#10B981' : '#CBD5E1'),
+                                      backgroundColor: isActive ? '#EFF6FF' : (isProcessed ? '#ECFDF5' : 'white'),
+                                      color: isActive ? '#2563EB' : (isProcessed ? '#047857' : '#475569'),
+                                      fontSize: '0.7rem',
+                                      fontWeight: isActive ? 800 : 500,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
                                     }}
-                                    placeholder="Editar dirección de entrega..."
-                                  />
-                                  {geocoding && <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 600, flexShrink: 0 }}>🔍 Validando...</span>}
-                                </div>
-                                {wasAddressAssumed && (
-                                  <div style={{ 
-                                    marginTop: '6px', 
-                                    padding: '6px 12px', 
-                                    borderRadius: '4px', 
-                                    backgroundColor: isAddressMissing ? '#FEF2F2' : '#FFFBEB', 
-                                    borderLeft: `3px solid ${isAddressMissing ? '#EF4444' : '#D97706'}`,
-                                    color: isAddressMissing ? '#991B1B' : '#92400E',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    width: '100%',
-                                    boxSizing: 'border-box'
-                                  }}>
-                                    <span>{isAddressMissing ? '⚠️ Dirección requerida. No se detectó ninguna dirección en el pedido.' : '⚠️ Dirección no detectada en el correo/documento. Se cargó la dirección por defecto del cliente.'}</span>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div>
-                                <span style={{ 
-                                  color: wasAddressAssumed ? '#EF4444' : 'inherit', 
-                                  fontWeight: wasAddressAssumed ? 600 : 'normal' 
-                                }}>
-                                  {editableAddress || meta.address || 'No detectada'}
-                                </span>
-                                {wasAddressAssumed && (
-                                  <div style={{ 
-                                    marginTop: '4px',
-                                    color: isAddressMissing ? '#EF4444' : '#D97706',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600
-                                  }}>
-                                    {isAddressMissing ? '⚠️ Dirección requerida (No detectada)' : '⚠️ Dirección no detectada (Cargada de perfil)'}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                                  >
+                                    <span>{isProcessed ? <CheckCircle2 size={12} color="#10B981" /> : <Paperclip size={12} />}</span>
+                                    <span style={{ maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
+                                      {att.name}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        };
+
+                        const wrapContent = (content: React.ReactNode) => (
+                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                            {renderSelector()}
+                            {content}
                           </div>
+                        );
+
+                        // PDF
+                        if (ext === 'pdf') {
+                          return wrapContent(
+                            <div style={{ flex: 1, backgroundColor: '#F8FAFC', position: 'relative', overflow: 'hidden' }}>
+                              <PdfCanvasViewer file={null} fileUrl={currentUrl} />
+                            </div>
+                          );
+                        }
+
+                        // Excel
+                        if (ext === 'xlsx' || ext === 'xls') {
+                          if (loadingAttachment) {
+                            return wrapContent(
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
+                                <Loader2 size={32} color="#2563EB" className="animate-spin" />
+                                <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Cargando tabla Excel...</span>
+                              </div>
+                            );
+                          }
+                          if (attachmentHtml) {
+                            return wrapContent(
+                              <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '10px' }}>
+                                <div dangerouslySetInnerHTML={{ __html: attachmentHtml }} />
+                              </div>
+                            );
+                          }
+                        }
+
+                        // Imagen
+                        if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+                          return wrapContent(
+                            <div style={{ flex: 1, backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '12px' }}>
+                              <img src={currentUrl} alt={attachmentName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }} />
+                            </div>
+                          );
+                        }
+
+                        // Office u otros
+                        return wrapContent(
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                            <FileText size={40} color="#2563EB" />
+                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B' }}>{attachmentName}</span>
+                            <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#2563EB', color: 'white', padding: '6px 14px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
+                              Descargar Documento
+                            </a>
+                          </div>
+                        );
+                      }
+
+                      // PESTAÑA: Correo (Default)
+                      if (metadata.emailHtml) {
+                        return (
+                          <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
+                            <iframe srcDoc={metadata.emailHtml} style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'white' }} sandbox="allow-same-origin allow-popups" />
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="premium-scrollbar" style={{ padding: '16px', overflowY: 'auto', flex: 1, fontSize: '0.825rem', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap', backgroundColor: '#FCFDFE', fontFamily: 'SFMono-Regular, Consolas, monospace' }}>
+                          {selectedDraft.email_body || '(Sin cuerpo de correo)'}
                         </div>
                       );
                     })()}
-
-                    {/* Lista de precios */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Lista de precios</div>
-                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
-                        {isEditing ? (
-                          <input type="text" value={priceList} onChange={(e) => setPriceList(e.target.value)} placeholder="Ej. NUTRESA -CORRAL..." style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%' }} />
-                        ) : (
-                          <span>{priceList || 'No especificada'}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Fecha de envío (Entrega) */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Fecha de envío</div>
-                      <div style={{ padding: '8px 16px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <input 
-                            type="date" 
-                            value={deliveryDate} 
-                            min={minDeliveryDate}
-                            disabled={!isEditing} 
-                            onChange={(e) => {
-                              const newDate = e.target.value;
-                              const minDate = getMinDeliveryDate();
-                              if (newDate < minDate) {
-                                showToast(`La fecha mínima de entrega permitida es ${minDate}.`, 'error');
-                                setDeliveryDate(minDate);
-                                return;
-                              }
-                              const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
-                              if (matchedProfile?.logistics_data) {
-                                const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
-                                if (allowedDays && allowedDays.length > 0) {
-                                  const adjustedDate = getNextAllowedDeliveryDate(newDate, allowedDays);
-                                  if (adjustedDate !== newDate) {
-                                    showToast(`Día no permitido. Ajustado al siguiente día válido: ${adjustedDate}`, 'info');
-                                    setDeliveryDate(adjustedDate);
-                                    return;
-                                  }
-                                }
-                              }
-                              setDeliveryDate(newDate);
-                            }} 
-                            style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, cursor: isEditing ? 'pointer' : 'default', backgroundColor: isEditing ? 'white' : '#F9FAFB' }} 
-                          />
-                          {(() => {
-                            const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
-                            if (matchedProfile?.logistics_data) {
-                              const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
-                              if (allowedDays && allowedDays.length > 0) {
-                                const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                                const mappedNames = allowedDays.map((d: number) => {
-                                  if (d === 7) return dayNames[0];
-                                  return dayNames[d];
-                                });
-                                return (
-                                  <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>
-                                    ✓ Días permitidos: {mappedNames.join(', ')}
-                                  </div>
-                                );
-                              }
-                            }
-                            return null;
-                          })()}
-                          {selectedDraft.email_subject?.includes('[Pedido ') && (
-                            <div style={{
-                              marginTop: '6px',
-                              padding: '8px 12px',
-                              backgroundColor: '#EFF6FF',
-                              borderLeft: '3px solid #3B82F6',
-                              color: '#1E3A8A',
-                              fontSize: '0.8rem',
-                              fontWeight: 500,
-                              borderRadius: '4px',
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: '8px'
-                            }}>
-                              <span style={{ fontSize: '1rem' }}>ℹ️</span>
-                              <div>
-                                <strong>Pedido dividido por fechas:</strong> Este borrador contiene exclusivamente los productos que el cliente solicitó para entrega en la fecha indicada arriba.
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Documento del pedido */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Documento del pedido</div>
-                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
-                        {isEditing ? (
-                          <select value={orderDocument} onChange={(e) => setOrderDocument(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', minWidth: '200px' }}>
-                            <option value="Remisión">Remisión</option>
-                            <option value="Factura Electrónica">Factura Electrónica</option>
-                            <option value="Cotización">Cotización</option>
-                          </select>
-                        ) : (
-                          <span>{orderDocument}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Hora de entrega */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Hora de entrega</div>
-                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        {(() => {
-                          const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
-                          const hasCustomSchedule = matchedProfile?.logistics_data && 
-                            (matchedProfile.logistics_data.start_time || matchedProfile.logistics_data.end_time);
-                          return isEditing ? (
-                            <>
-                                <input 
-                                  type="time" 
-                                  value={editableDeliverySlot && /^([01]\d|2[0-3]):[0-5]\d$/.test(editableDeliverySlot) ? editableDeliverySlot : ''} 
-                                  onChange={(e) => setEditableDeliverySlot(e.target.value)} 
-                                  disabled={!!hasCustomSchedule}
-                                  style={{ 
-                                    padding: '6px 12px', 
-                                    borderRadius: '8px', 
-                                    border: `1px solid ${THEME.colors.border}`, 
-                                    backgroundColor: hasCustomSchedule ? '#F3F4F6' : 'white', 
-                                    color: hasCustomSchedule ? '#9CA3AF' : '#111827',
-                                    outline: 'none',
-                                    fontWeight: 700,
-                                    fontSize: '0.85rem',
-                                    cursor: hasCustomSchedule ? 'not-allowed' : 'pointer'
-                                  }}
-                                />
-                              {hasCustomSchedule && (
-                                <span style={{ fontSize: '0.8rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
-                                  <Info size={14} />
-                                  Horario establecido: {formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span>{formatDeliverySlot(editableDeliverySlot)}</span>
-                              {hasCustomSchedule && (
-                                <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 500 }}>
-                                  ({formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'})
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                        {!editableDeliverySlot && <span style={{ marginLeft: '12px', color: '#DC2626', fontSize: '0.75rem' }}>La hora de entrega del pedido es obligatoria</span>}
-                      </div>
-                    </div>
-
-                    {/* Orden de compra */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Orden de compra</div>
-                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
-                        {isEditing ? (
-                          <input type="text" value={purchaseOrder} onChange={(e) => setPurchaseOrder(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '300px' }} />
-                        ) : (
-                          <span>{purchaseOrder || ''}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Contacto */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Contacto</div>
-                      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '4px', color: '#374151' }}>
-                        <div><strong>Correo del pedido:</strong> {selectedDraft.source_email}</div>
-                        <div><strong>Teléfono:</strong> {getDraftMetadata(selectedDraft).phone || '0'}</div>
-                        <div><strong>Hora de recepción:</strong> {new Date(selectedDraft.created_at).toLocaleString('es-CO')}</div>
-                        {draftCoordinates && (
-                          <div 
-                            onClick={() => setShowMapModal(true)}
-                            style={{
-                              color: checkIsNewClient(selectedDraft) ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626') : '#059669',
-                              fontWeight: 600, 
-                              marginTop: '4px',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              textDecoration: 'underline'
-                            }}
-                            title="Haz clic para ver la ubicación exacta en el mapa"
-                          >
-                            {checkIsNewClient(selectedDraft) && (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '✅ En Zona de Cobertura ' : '❌ Fuera de Zona de Cobertura ')}
-                            📍 (Lat: {draftCoordinates.lat.toFixed(6)}, Lng: {draftCoordinates.lng.toFixed(6)})
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-
-
                   </div>
+
+                  {/* Attachment footer label */}
+                  {(() => {
+                    const metadata = getDraftMetadata(selectedDraft);
+                    let currentName = metadata.attachmentName;
+                    if (metadata.attachments && metadata.attachments[selectedAttachmentIndex]) {
+                      currentName = metadata.attachments[selectedAttachmentIndex].name;
+                    }
+                    if (!currentName) return null;
+                    return (
+                      <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: '#64748B' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }} title={currentName}>
+                          <Paperclip size={12} /> {currentName}
+                        </span>
+                        <span style={{ fontWeight: 600 }}>Adjunto {selectedAttachmentIndex + 1} de {metadata.attachments?.length || 1}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
+              )}
 
+              {/* Right Side: Products Table (Split-Screen Master Workspace) */}
+              <div 
+                id="email-draft-scroll-container"
+                className="premium-scrollbar"
+                style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: 'calc(93vh - 150px)', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
+              >
+                {/* Global Datalist for SKUs */}
+                <datalist id="all-products-list">
+                  {products.map(p => (
+                    <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
+                  ))}
+                </datalist>
 
+                <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
+                  <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
+                      <th style={{ padding: '1rem', textAlign: 'center', width: '35px' }}>
+                        <input
+                          type="checkbox"
+                          checked={editableItems.length > 0 && selectedRowIndices.length === editableItems.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedRowIndices(editableItems.map((_, idx) => idx));
+                            } else {
+                              setSelectedRowIndices([]);
+                            }
+                          }}
+                          style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                        />
+                      </th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '35%' }}>NOMBRE EN DOCUMENTO</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '42%' }}>TU PRODUCTO (ID)</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>CANT.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editableItems.map((item: any, i: number) => {
+                      const matchedProd = products.find(p => p.id === item.matched_product_id);
+                      const isConfidenceHigh = !!matchedProd && !item.isDeleted;
 
-              {/* Tabla de Productos Estilo Pedido */}
-              <div style={{ marginBottom: '2rem' }}>
-
-                 <div style={{ overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                     <thead>
-                      <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-                        {isEditing && (
-                          <th style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F3F4F6' }}>
+                      return (
+                        <tr 
+                          key={i} 
+                          id={`draft-row-${i}`}
+                          style={{ 
+                            borderBottom: '1px solid #F8FAFC',
+                            backgroundColor: item.isConfirmed 
+                              ? '#F0FDF4' 
+                              : (matchedProd ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED'),
+                            transition: 'background-color 0.2s'
+                          }}
+                        >
+                          <td style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '35px' }}>
                             <input
                               type="checkbox"
-                              checked={editableItems.length > 0 && selectedRowIndices.length === editableItems.length}
+                              disabled={item.isDeleted}
+                              checked={selectedRowIndices.includes(i)}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  setSelectedRowIndices(editableItems.map((_, idx) => idx));
+                                  setSelectedRowIndices(prev => [...prev, i]);
                                 } else {
-                                  setSelectedRowIndices([]);
+                                  setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
                                 }
                               }}
-                              style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                              style={{ transform: 'scale(1.2)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
                             />
-                          </th>
-                        )}
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '25%' }}>NOMBRE EN DOCUMENTO</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '30%' }}>TU PRODUCTO (ID)</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>CANT.</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '13%' }}>PRECIO U.</th>
-                        <th style={{ padding: '1rem 1rem', textAlign: 'right', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '12%' }}>SUBTOTAL</th>
-                        <th style={{ padding: '1rem 1rem', backgroundColor: '#F3F4F6', width: '5%' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        return (
-                          <>
-                            {editableItems.map((item: any, i: number) => {
-                              const matchedProd = products.find(p => p.id === item.matched_product_id);
-                              const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
-                              const itemTotal = resolvedPrice * (item.quantity || 0);
-
-                              return (
-                                <React.Fragment key={i}>
-                                  <tr 
-                                    className="scroll-row-animate"
-                                    style={{ 
-                                      borderBottom: `1px solid ${THEME.colors.border}`,
-                                      animationDelay: `${i * 0.04}s`,
-                                      backgroundColor: item.isDeleted ? '#FEF2F2' : (getRowBgColor(i) || 'transparent'),
-                                      transition: 'all 0.2s'
-                                    }}
-                                  >
-                                    {isEditing && (
-                                      <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        textAlign: 'center', 
-                                        width: '40px', 
-                                        backgroundColor: getCellBgColor(i, true),
-                                        transition: 'background-color 0.2s',
-                                        opacity: item.isDeleted ? 0.5 : 1
-                                      }}>
-                                        <input
-                                          type="checkbox"
-                                          disabled={item.isDeleted}
-                                          checked={selectedRowIndices.includes(i)}
-                                          onChange={(e) => {
-                                            if (e.target.checked) {
-                                              setSelectedRowIndices(prev => [...prev, i]);
-                                            } else {
-                                              setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
-                                            }
-                                          }}
-                                          style={{ transform: 'scale(1.2)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
-                                        />
-                                      </td>
-                                    )}
-                                    <td style={{ 
-                                      padding: '1rem 1rem', 
-                                      width: '30%', 
-                                      backgroundColor: getCellBgColor(i, true),
-                                      transition: 'background-color 0.2s'
-                                    }}>
-                                      <div style={{ 
-                                        fontSize: '0.9rem', 
-                                        color: '#1E293B', 
-                                        textTransform: 'uppercase', 
-                                        fontWeight: 800,
-                                        textDecoration: item.isDeleted ? 'line-through' : 'none',
-                                        opacity: item.isDeleted ? 0.5 : 1
-                                      }}>
-                                        {item.originalName || item.name || item.producto || item.item || ''}
-                                      </div>
-                                      <div style={{ marginTop: '6px', opacity: item.isDeleted ? 0.5 : 1, display: 'flex', alignItems: 'center' }}>
-                                        <span style={{
-                                          padding: '2px 8px',
-                                          backgroundColor: '#FFFBEB',
-                                          color: '#B45309',
-                                          border: '1.5px solid #FBBF24',
-                                          boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)',
-                                          borderRadius: '6px',
-                                          fontSize: '0.75rem',
-                                          fontWeight: 900,
-                                          textDecoration: item.isDeleted ? 'line-through' : 'none'
-                                        }}>
-                                          {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
-                                        </span>
-                                      </div>
-                                    </td>
-                                    <td style={{ 
-                                      padding: '1rem 1rem', 
-                                      width: '40%', 
-                                      backgroundColor: getCellBgColor(i, false),
-                                      transition: 'background-color 0.2s'
-                                    }}>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
-                                            <input
-                                              ref={el => { productInputRefs.current[i] = el; }}
-                                              disabled={!isEditing || item.isDeleted}
-                                              value={matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : (item.searchQuery || '')}
-                                              placeholder="Buscar ID..."
-                                              list="all-products-list"
-                                              onFocus={(e) => e.target.select()}
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'Tab') {
-                                                  const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                                  if (p) {
-                                                    e.preventDefault();
-                                                    openVariantModalForItem(p, i);
-                                                  }
-                                                } else if (e.key === 'Enter') {
-                                                  e.preventDefault();
-                                                  const val = e.currentTarget.value;
-                                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                                  const newEdits = [...editableItems];
-                                                  if (p) {
-                                                    newEdits[i].matched_product_id = p.id;
-                                                    newEdits[i].searchQuery = `${p.name} (${getAccountingIdDisplay(p)})`;
-                                                    newEdits[i].skuQuery = p.sku || '';
-                                                  }
-                                                  newEdits[i].isConfirmed = true;
-                                                  setEditableItems(newEdits);
-                                                  
-                                                  // Jump focus to the next product input
-                                                  setTimeout(() => {
-                                                    const nextInput = productInputRefs.current[i + 1];
-                                                    if (nextInput) {
-                                                      nextInput.focus();
-                                                      nextInput.select();
-                                                    } else {
-                                                      const approveBtn = document.getElementById('btn-approve-draft');
-                                                      if (approveBtn) approveBtn.focus();
-                                                    }
-                                                  }, 50);
-                                                } else if (e.key === 'ArrowDown') {
-                                                  e.preventDefault();
-                                                  const nextInput = productInputRefs.current[i + 1];
-                                                  if (nextInput) {
-                                                    nextInput.focus();
-                                                    nextInput.select();
-                                                  }
-                                                } else if (e.key === 'ArrowUp') {
-                                                  e.preventDefault();
-                                                  const prevInput = productInputRefs.current[i - 1];
-                                                  if (prevInput) {
-                                                    prevInput.focus();
-                                                    prevInput.select();
-                                                  }
-                                                }
-                                              }}
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                                if (p) {
-                                                  selectProduct(p, i);
-                                                } else {
-                                                  const newEdits = [...editableItems];
-                                                  newEdits[i].matched_product_id = null;
-                                                  newEdits[i].searchQuery = val;
-                                                  newEdits[i].skuQuery = '';
-                                                  newEdits[i].selected_options = {};
-                                                  setEditableItems(newEdits);
-                                                }
-                                              }}
-                                              style={{
-                                                width: '100%',
-                                                padding: '10px 14px',
-                                                borderRadius: '10px',
-                                                border: item.matched_product_id ? '2px solid #E2E8F0' : '2px solid #F97316',
-                                                fontSize: '1rem',
-                                                fontWeight: '700',
-                                                backgroundColor: item.isDeleted ? '#F1F5F9' : (item.matched_product_id ? '#FFFFFF' : '#FFFBEB'),
-                                                color: item.isDeleted ? '#94A3B8' : '#1E293B',
-                                                textDecoration: item.isDeleted ? 'line-through' : 'none',
-                                                cursor: item.isDeleted ? 'not-allowed' : 'text',
-                                                outline: 'none',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                transition: 'all 0.2s'
-                                              }}
-                                            />
-                                          </div>
-                                          {(() => {
-                                            if (!matchedProd) return null;
-                                            const priceExists = contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null;
-                                            if (!priceExists) {
-                                              return (
-                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
-                                                  ⚠️ Sin Precio
-                                                </span>
-                                              );
-                                            }
-                                            
-                                            const isAgreement = activePricingModel?.is_agreement;
-                                            const hasAgreementPrice = isAgreement && agreementPrices[activePricingModel.id]?.[matchedProd.id] !== undefined;
-                                            
-                                            if (hasAgreementPrice) {
-                                              return (
-                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
-                                                  Tarifa Contrato
-                                                </span>
-                                              );
-                                            } else if (isB2CDefault || (!isAgreement && activePricingModel?.name === 'Clientes B2C')) {
-                                              return (
-                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
-                                                  Tarifa B2C (Defecto)
-                                                </span>
-                                              );
-                                            } else {
-                                              return (
-                                                <span style={{ display: 'inline-block', alignSelf: 'flex-start', fontSize: '0.75rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', marginTop: '6px' }}>
-                                                  Tarifa Modelo
-                                                </span>
-                                              );
-                                            }
-                                          })()}
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td style={{ 
-                                      padding: '1rem 1rem', 
-                                      width: '25%', 
-                                      backgroundColor: getCellBgColor(i, true),
-                                      transition: 'background-color 0.2s'
-                                    }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                        <input 
-                                           ref={el => { quantityInputRefs.current[i] = el; }}
-                                           type="text"
-                                           disabled={!isEditing || item.isDeleted}
-                                           value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
-                                           onFocus={(e) => {
-                                             setFocusedRowIndex(i);
-                                             e.target.select();
-                                           }}
-                                           onBlur={() => {
-                                             setFocusedRowIndex(null);
-                                             const newEdits = [...editableItems];
-                                             newEdits[i].quantity_text = undefined;
-                                             setEditableItems(newEdits);
-                                           }}
-                                           onChange={(e) => {
-                                             const rawVal = e.target.value;
-                                             const parsed = parseQuantity(rawVal);
-                                             const newEdits = [...editableItems];
-                                             newEdits[i].quantity_text = rawVal;
-                                             newEdits[i].quantity = parsed;
-                                             setEditableItems(newEdits);
-                                           }}
-                                           onKeyDown={(e) => {
-                                             if (e.key === '.' || e.key === ',') {
-                                               e.preventDefault();
-                                               const input = e.currentTarget;
-                                               const start = input.selectionStart ?? 0;
-                                               const end = input.selectionEnd ?? 0;
-                                               const val = input.value;
-                                               const newVal = val.substring(0, start) + ',' + val.substring(end);
-                                               
-                                               const parsed = parseQuantity(newVal);
-                                               const newEdits = [...editableItems];
-                                               newEdits[i].quantity_text = newVal;
-                                               newEdits[i].quantity = parsed;
-                                               setEditableItems(newEdits);
-                                               
-                                               setTimeout(() => {
-                                                 input.setSelectionRange(start + 1, start + 1);
-                                               }, 10);
-                                             } else if (e.key === 'Enter') {
-                                               e.preventDefault();
-                                               if (i < editableItems.length - 1) {
-                                                 const nextInput = productInputRefs.current[i + 1];
-                                                 if (nextInput) {
-                                                   nextInput.focus();
-                                                   nextInput.select();
-                                                 }
-                                               } else {
-                                                 const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                                                 setEditableItems(newEdits);
-                                                 setTimeout(() => {
-                                                   const nextInput = productInputRefs.current[i + 1];
-                                                   if (nextInput) {
-                                                     nextInput.focus();
-                                                     nextInput.select();
-                                                   }
-                                                 }, 50);
-                                               }
-                                             } else if (e.key === 'ArrowDown') {
-                                               e.preventDefault();
-                                               const nextQty = quantityInputRefs.current[i + 1];
-                                               if (nextQty) {
-                                                 nextQty.focus();
-                                                 nextQty.select();
-                                               }
-                                             } else if (e.key === 'ArrowUp') {
-                                               e.preventDefault();
-                                               const prevQty = quantityInputRefs.current[i - 1];
-                                               if (prevQty) {
-                                                 prevQty.focus();
-                                                 prevQty.select();
-                                               }
-                                             }
-                                           }}
-                                          style={{
-                                            width: '130px',
-                                            padding: '8px',
-                                            textAlign: 'center',
-                                            borderRadius: '8px',
-                                            border: '2px solid #E2E8F0',
-                                            fontWeight: 800,
-                                            fontSize: '1.1rem',
-                                            backgroundColor: item.isDeleted ? '#F1F5F9' : '#FFFFFF',
-                                            color: item.isDeleted ? '#94A3B8' : '#1E293B',
-                                            textDecoration: item.isDeleted ? 'line-through' : 'none',
-                                            cursor: item.isDeleted ? 'not-allowed' : 'text',
-                                            outline: 'none'
-                                          }}
-                                        />
-                                        <span style={{ 
-                                          fontWeight: 'bold', 
-                                          color: '#64748B', 
-                                          fontSize: '0.95rem', 
-                                          minWidth: '35px', 
-                                          textAlign: 'left',
-                                          textDecoration: item.isDeleted ? 'line-through' : 'none',
-                                          opacity: item.isDeleted ? 0.5 : 1
-                                        }}>
-                                          {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                        </span>
-                                      </div>
-                                    </td>
-
-                                    {/* Precio Unitario */}
-                                    <td style={{ 
-                                      padding: '1rem 1rem', 
-                                      textAlign: 'right',
-                                      width: '13%', 
-                                      backgroundColor: getCellBgColor(i, false),
-                                      fontWeight: '600',
-                                      color: '#374151',
-                                      opacity: item.isDeleted ? 0.5 : 1
-                                    }}>
-                                      {formatMoney(resolvedPrice)}
-                                    </td>
-
-                                    {/* Subtotal */}
-                                    <td style={{ 
-                                      padding: '1rem 1rem', 
-                                      textAlign: 'right',
-                                      width: '12%', 
-                                      backgroundColor: getCellBgColor(i, false),
-                                      fontWeight: '800',
-                                      color: '#059669',
-                                      opacity: item.isDeleted ? 0.5 : 1
-                                    }}>
-                                      {formatMoney(itemTotal)}
-                                    </td>
-
-                                    <td style={{ 
-                                      padding: '1rem 0.5rem', 
-                                      textAlign: 'center', 
-                                      width: '5%',
-                                      backgroundColor: getCellBgColor(i, true),
-                                      transition: 'background-color 0.2s'
-                                    }}>
-                                      {isEditing && (
-                                        item.isDeleted ? (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              const newEdits = [...editableItems];
-                                              newEdits[i].isDeleted = false;
-                                              setEditableItems(newEdits);
-                                            }}
-                                            style={{
-                                              background: 'none',
-                                              border: 'none',
-                                              color: '#10B981',
-                                              cursor: 'pointer',
-                                              padding: '6px',
-                                              borderRadius: '6px',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              justifyContent: 'center',
-                                              transition: 'all 0.2s'
-                                            }}
-                                            title="Restaurar registro"
-                                            onMouseEnter={(e) => {
-                                              e.currentTarget.style.backgroundColor = '#D1FAE5';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              e.currentTarget.style.backgroundColor = 'transparent';
-                                            }}
-                                          >
-                                            <RotateCcw size={18} />
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              const newEdits = [...editableItems];
-                                              newEdits[i].isDeleted = true;
-                                              setEditableItems(newEdits);
-                                            }}
-                                            style={{
-                                              background: 'none',
-                                              border: 'none',
-                                              color: '#64748B',
-                                              cursor: 'pointer',
-                                              padding: '6px',
-                                              borderRadius: '6px',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              justifyContent: 'center',
-                                              transition: 'all 0.2s'
-                                            }}
-                                            title="Limpiar/Eliminar registro"
-                                            onMouseEnter={(e) => {
-                                              e.currentTarget.style.backgroundColor = '#F1F5F9';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              e.currentTarget.style.backgroundColor = 'transparent';
-                                            }}
-                                          >
-                                            <Eraser size={18} />
-                                          </button>
-                                        )
-                                      )}
-                                    </td>
-                                  </tr>
+                          </td>
+                          <td style={{ padding: '0.8rem 1.25rem', width: '35%' }}>
+                            <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#1E293B' }}>
+                              {item.originalName || item.name || item.producto || item.item || ''}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 7px', borderRadius: '6px', fontWeight: '900' }}>
+                                {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
+                              </span>
+                              {matchedProd ? (
+                                <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                  <CheckCircle2 size={11} color="#15803D" /> {item.confidenceScore ? `${item.confidenceScore}%` : '98%'}
+                                </span>
+                              ) : (
+                                <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                  <AlertCircle size={11} color="#B91C1C" /> Sin Match
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '42%' }}>
+                            <input 
+                              ref={el => { productInputRefs.current[i] = el; }}
+                              type="text"
+                              placeholder="Buscar ID..."
+                              defaultValue={matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : (item.searchQuery || '')}
+                              list="all-products-list"
+                              onFocus={(e) => {
+                                e.target.select();
+                                scrollToDraftRow(i);
+                              }}
+                              className="sku-search-input"
+                              id={`sku-input-${i}`}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Tab') {
+                                  const val = e.currentTarget.value;
+                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                  if (p) {
+                                    e.preventDefault(); 
+                                    openVariantModalForItem(p, i);
+                                  }
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const val = e.currentTarget.value;
+                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                  const newEdits = [...editableItems];
+                                  if (p) {
+                                    newEdits[i].matched_product_id = p.id;
+                                    newEdits[i].searchQuery = `${p.name} (${getAccountingIdDisplay(p)})`;
+                                    newEdits[i].skuQuery = p.sku || '';
+                                  }
+                                  newEdits[i].isConfirmed = true;
+                                  setEditableItems(newEdits);
                                   
-                                  {false && (
-                                    <tr style={{ backgroundColor: '#F0FDF4' }}>
-                                      <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                        <div style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '24px',
-                                          backgroundColor: '#FFFFFF',
-                                          border: '1.5px solid #10B981',
-                                          borderRadius: '10px',
-                                          padding: '0.65rem 1rem',
-                                          boxShadow: '0 4px 10px rgba(16, 185, 129, 0.06)'
-                                        }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '140px' }}>
-                                            <span style={{ fontSize: '0.95rem' }}>⚡</span>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#065F46' }}>
-                                              VARIABLES:
-                                            </span>
-                                          </div>
-                                          
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                            {(() => {
-                                              const variantOptionNames = new Set<string>();
-                                              let isOldFormat = false;
-                                              matchedProd.variants.forEach((v: any) => {
-                                                if (v.name && Array.isArray(v.options)) {
-                                                  isOldFormat = true;
-                                                } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
-                                                  Object.keys(v.options).forEach(k => variantOptionNames.add(k));
-                                                }
-                                              });
+                                  const nextIdx = i + 1;
+                                  const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                  if (nextInput) {
+                                    nextInput.focus();
+                                    nextInput.select();
+                                    scrollToDraftRow(nextIdx);
+                                  } else {
+                                    document.getElementById('btn-approve-draft')?.focus();
+                                  }
+                                } else if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  const nextIdx = i + 1;
+                                  const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                  if (nextInput) {
+                                    nextInput.focus();
+                                    nextInput.select();
+                                    scrollToDraftRow(nextIdx);
+                                  }
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  const prevIdx = i - 1;
+                                  if (prevIdx >= 0) {
+                                    const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
+                                    if (prevInput) {
+                                      prevInput.focus();
+                                      prevInput.select();
+                                      scrollToDraftRow(prevIdx);
+                                    }
+                                  }
+                                }
+                              }}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                if (p) {
+                                  selectProduct(p, i);
+                                } else {
+                                  const newEdits = [...editableItems];
+                                  newEdits[i].matched_product_id = null;
+                                  newEdits[i].searchQuery = val;
+                                  newEdits[i].skuQuery = '';
+                                  newEdits[i].selected_options = {};
+                                  setEditableItems(newEdits);
+                                }
+                              }}
+                              style={{ 
+                                width: '100%', 
+                                padding: '9px 12px', 
+                                borderRadius: '10px', 
+                                border: matchedProd ? (isConfidenceHigh ? '2px solid #E2E8F0' : '2px solid #FCD34D') : '2px solid #F97316',
+                                fontSize: '0.92rem',
+                                fontWeight: '700',
+                                backgroundColor: matchedProd ? '#FFFFFF' : '#FFFBEB',
+                                outline: 'none',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                              <input 
+                                ref={el => { quantityInputRefs.current[i] = el; }}
+                                type="text"
+                                id={`draft-qty-input-${i}`}
+                                value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                onFocus={(e) => {
+                                  setFocusedRowIndex(i);
+                                  e.target.select();
+                                  scrollToDraftRow(i);
+                                }}
+                                onBlur={() => {
+                                  setFocusedRowIndex(null);
+                                  const newEdits = [...editableItems];
+                                  newEdits[i].quantity_text = undefined;
+                                  setEditableItems(newEdits);
+                                }}
+                                onChange={(e) => {
+                                  const rawVal = e.target.value;
+                                  const parsed = parseQuantity(rawVal);
+                                  const newEdits = [...editableItems];
+                                  newEdits[i].quantity_text = rawVal;
+                                  newEdits[i].quantity = parsed;
+                                  setEditableItems(newEdits);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === '.' || e.key === ',') {
+                                    e.preventDefault();
+                                    const input = e.currentTarget;
+                                    const start = input.selectionStart ?? 0;
+                                    const end = input.selectionEnd ?? 0;
+                                    const val = input.value;
+                                    const newVal = val.substring(0, start) + ',' + val.substring(end);
+                                    
+                                    const parsed = parseQuantity(newVal);
+                                    const newEdits = [...editableItems];
+                                    newEdits[i].quantity_text = newVal;
+                                    newEdits[i].quantity = parsed;
+                                    setEditableItems(newEdits);
+                                    
+                                    setTimeout(() => {
+                                      input.setSelectionRange(start + 1, start + 1);
+                                    }, 10);
+                                  } else if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const nextIdx = i + 1;
+                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                    if (nextInput) {
+                                      nextInput.focus();
+                                      nextInput.select();
+                                      scrollToDraftRow(nextIdx);
+                                    } else {
+                                      document.getElementById('btn-approve-draft')?.focus();
+                                    }
+                                  }
+                                }}
+                                style={{ 
+                                  width: '75px', 
+                                  padding: '9px', 
+                                  borderRadius: '8px', 
+                                  border: '2px solid #E2E8F0', 
+                                  textAlign: 'center',
+                                  fontWeight: '800',
+                                  fontSize: '1rem',
+                                  backgroundColor: 'white'
+                                }}
+                              />
+                              <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '40px', textAlign: 'left' }}>
+                                {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
 
-                                              let variantOptionsList = matchedProd.variants;
-                                              if (!isOldFormat) {
-                                                variantOptionsList = Array.from(variantOptionNames).map(name => {
-                                                  const values = new Set<string>();
-                                                  matchedProd.variants.forEach((v: any) => {
-                                                    if (v.options && v.options[name]) values.add(v.options[name]);
-                                                  });
-                                                  return { name, options: Array.from(values) };
-                                                });
-                                              }
+                {/* Bottom of Right Panel: Add Row & Actions */}
+                <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9' }}>
+                  <button
+                    type="button"
+                    onClick={handleAddManualItem}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#EFF6FF',
+                      color: '#1D4ED8',
+                      border: '1px solid #BFDBFE',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Plus size={16} /> Agregar Producto Manual
+                  </button>
 
-                                              return variantOptionsList.map((v: any, vIdx: number) => {
-                                                const currentValue = (item.selected_options || {})[v.name] || '';
-                                                return (
-                                                  <div key={vIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', whiteSpace: 'nowrap' }}>
-                                                      {v.name}:
-                                                    </label>
-                                                    <select
-                                                      id={`variant-select-${i}-${vIdx}`}
-                                                      value={currentValue}
-                                                      onFocus={() => setFocusedRowIndex(i)}
-                                                      onBlur={() => setFocusedRowIndex(null)}
-                                                      onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        const newEdits = [...editableItems];
-                                                        if (!newEdits[i].selected_options) {
-                                                          newEdits[i].selected_options = {};
-                                                        }
-                                                        newEdits[i].selected_options[v.name] = val;
-                                                        setEditableItems(newEdits);
-                                                      }}
-                                                      onKeyDown={(e) => {
-                                                        if (e.key === 'Escape') {
-                                                          setActiveVariantRow(null);
-                                                          setTimeout(() => {
-                                                            if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
-                                                          }, 50);
-                                                        } else if (e.key === 'Enter') {
-                                                          e.preventDefault();
-                                                          const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                          if (nextSelect) {
-                                                            nextSelect.focus();
-                                                          } else {
-                                                            setActiveVariantRow(null);
-                                                            setTimeout(() => {
-                                                              if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
-                                                            }, 50);
-                                                          }
-                                                        } else if (e.key === 'ArrowRight' && !e.altKey) {
-                                                          const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                          if (nextSelect) {
-                                                            e.preventDefault();
-                                                            nextSelect.focus();
-                                                          }
-                                                        } else if (e.key === 'ArrowLeft' && !e.altKey) {
-                                                          const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
-                                                          if (prevSelect) {
-                                                            e.preventDefault();
-                                                            prevSelect.focus();
-                                                          }
-                                                        }
-                                                      }}
-                                                      style={{
-                                                        padding: '0.3rem 1.5rem 0.3rem 0.5rem',
-                                                        borderRadius: '6px',
-                                                        border: currentValue ? '1.5px solid #10B981' : '1px solid #D1D5DB',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 600,
-                                                        backgroundColor: currentValue ? '#ECFDF5' : 'white',
-                                                        color: '#111827',
-                                                        outline: 'none',
-                                                        cursor: 'pointer'
-                                                      }}
-                                                    >
-                                                      <option value="">-- Seleccionar {v.name} --</option>
-                                                      {(Array.isArray(v.options) ? v.options : []).map((opt: string, optIdx: number) => (
-                                                        <option key={optIdx} value={opt}>{opt}</option>
-                                                      ))}
-                                                    </select>
-                                                  </div>
-                                                );
-                                              });
-                                            })()}
-                                          </div>
-                                          
-                                          <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: 500 }}>
-                                            [Alt+V / Enter] para cerrar
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  )}
-
-                                  {false && (
-                                    <tr style={{ backgroundColor: '#EEF2FF' }}>
-                                      <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                        <div style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '24px',
-                                          backgroundColor: '#FFFFFF',
-                                          border: '1.5px solid #6366F1',
-                                          borderRadius: '10px',
-                                          padding: '0.65rem 1rem',
-                                          boxShadow: '0 4px 10px rgba(99, 102, 241, 0.06)'
-                                        }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '140px' }}>
-                                            <span style={{ fontSize: '0.95rem' }}>⚖️</span>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338CA' }}>
-                                              EQUIVALENCIA:
-                                            </span>
-                                          </div>
-                                          
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4B5563' }}>
-                                              {item.originalQuantity || item.cant || item.cantidad || 1} {item.originalUnit || item.unit || 'Unidades'}
-                                            </div>
-                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#9CA3AF' }}>x</div>
-                                            <div>
-                                              <input
-                                                id={`equiv-input-${i}`}
-                                                type="number"
-                                                step="0.01"
-                                                min="0.01"
-                                                value={item.conversion_factor || 1}
-                                                onFocus={() => setFocusedRowIndex(i)}
-                                                onBlur={() => setFocusedRowIndex(null)}
-                                                onChange={(e) => {
-                                                  const factor = parseFloat(e.target.value) || 1;
-                                                  const newEdits = [...editableItems];
-                                                  newEdits[i].conversion_factor = factor;
-                                                  const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].cant || newEdits[i].cantidad || 1);
-                                                  newEdits[i].quantity = parseFloat((origQty * factor).toFixed(3));
-                                                  setEditableItems(newEdits);
-                                                }}
-                                                onKeyDown={(e) => {
-                                                  if (e.key === 'Escape' || e.key === 'Enter') {
-                                                    setActiveEquivalenceRow(null);
-                                                    setTimeout(() => {
-                                                      if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
-                                                    }, 50);
-                                                  }
-                                                }}
-                                                style={{
-                                                  width: '80px',
-                                                  padding: '0.3rem 0.5rem',
-                                                  borderRadius: '6px',
-                                                  border: '1.5px solid #6366F1',
-                                                  textAlign: 'center',
-                                                  fontWeight: 'bold',
-                                                  outline: 'none'
-                                                }}
-                                              />
-                                            </div>
-                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#9CA3AF' }}>=</div>
-                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#6366F1' }}>
-                                              {item.quantity} {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                            </div>
-                                          </div>
-                                          
-                                          <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: 500 }}>
-                                            [Enter / Esc] para cerrar
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-
-                          </>
-                        );
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {isEditing && (
-                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start', gap: '0.75rem', alignItems: 'center' }}>
+                  {recentlyDeletedItems.length > 0 && selectedDraft?.source_email && (
                     <button
+                      type="button"
+                      disabled={saving}
                       onClick={() => {
-                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                        setEditableItems(newEdits);
-                        setTimeout(() => {
-                          const nextInput = productInputRefs.current[newEdits.length - 1];
-                          if (nextInput) nextInput.focus();
-                        }, 50);
+                        setActionConfirm({
+                          isOpen: true,
+                          title: 'Notificar Novedades de Productos',
+                          message: `¿Deseas enviar un correo al cliente (${selectedDraft.source_email}) notificando los ${recentlyDeletedItems.length} productos no disponibles o eliminados?`,
+                          confirmText: 'Enviar Notificación',
+                          onConfirm: async () => {
+                            try {
+                              setSaving(true);
+                              await handleSendBatchNovedadEmail();
+                              setRecentlyDeletedItems([]);
+                              showToast('Novedades notificadas consolidadas al cliente por correo.', 'success');
+                            } catch (err: any) {
+                              showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+                            } finally {
+                              setSaving(false);
+                            }
+                          }
+                        });
                       }}
                       style={{
-                        padding: '0.6rem 1rem',
-                        backgroundColor: '#F3F4F6',
-                        color: '#4B5563',
-                        border: '1px dashed #D1D5DB',
+                        padding: '8px 16px',
+                        backgroundColor: '#FEF3C7',
+                        color: '#B45309',
+                        border: '1px solid #FCD34D',
                         borderRadius: '8px',
                         fontWeight: 700,
                         cursor: 'pointer',
@@ -5926,777 +5364,153 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         gap: '6px'
                       }}
                     >
-                      + Añadir Producto Manualmente
+                      <Mail size={16} /> Notificar Novedades ({recentlyDeletedItems.length})
                     </button>
-
-
-                    {recentlyDeletedItems.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionConfirm({
-                            isOpen: true,
-                            title: '¿Notificar novedades de productos agotados?',
-                            message: `Se enviará un correo electrónico de notificación consolidado al cliente por los siguientes productos que no están disponibles:\n\n${recentlyDeletedItems.map(item => `• ${item}`).join('\n')}\n\n¿Estás seguro de que deseas proceder?`,
-                            confirmText: 'Enviar Notificación',
-                            cancelText: 'Cancelar',
-                            isDanger: false,
-                            onConfirm: async () => {
-                              // Preparar ítems para tabla de correo
-                              const emailItems = editableItems.map(itm => {
-                                const mProd = products.find(p => p.id === itm.matched_product_id);
-                                return {
-                                  productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
-                                  quantity: itm.quantity,
-                                  unitPrice: mProd ? mProd.base_price : 0,
-                                  unitOfMeasure: itm.unit || (mProd ? mProd.unit_of_measure : 'und')
-                                };
-                              });
-
-                              // Preparar dbItems (ya están actualizados en la base de datos)
-                              const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
-                              const dbItems = [
-                                { ...metaItem, deliveryDate: deliveryDate },
-                                ...editableItems.map(itm => ({
-                                  originalName: itm.originalName || '',
-                                  quantity: itm.quantity,
-                                  matched_product_id: itm.matched_product_id
-                                }))
-                              ];
-
-                              setSaving(true);
-                              try {
-                                const res = await fetch('/api/orders/notify-deleted-item', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    draftId: selectedDraft.id,
-                                    deletedItem: recentlyDeletedItems,
-                                    sourceEmail: selectedDraft.source_email,
-                                    clientName: selectedDraft.client_detected_name || 'Cliente',
-                                    dbItems,
-                                    emailItems
-                                  })
-                                });
-
-                                await safeFetchJson(res);
-
-
-                                setRecentlyDeletedItems([]);
-                                showToast('Novedades notificadas consolidadas al cliente por correo. ✉️', 'success');
-                              } catch (err: any) {
-                                console.warn('Error sending batch notification:', err);
-                                showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
-                              } finally {
-                                setSaving(false);
-                              }
-                            }
-                          });
-                        }}
-                        style={{
-                          padding: '0.6rem 1rem',
-                          backgroundColor: '#FEF3C7',
-                          color: '#B45309',
-                          border: '1px solid #FCD34D',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                        }}
-                      >
-                        <Mail size={16} />
-                        Notificar Novedades ({recentlyDeletedItems.length})
-                      </button>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+            </div> {/* Closes Split Canvas Body */}
 
+          {/* Master Sticky Bottom Footer */}
+          <div style={{
+            padding: '1rem 2rem',
+            borderTop: `1px solid ${THEME.colors.border}`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#FFFFFF',
+            flexShrink: 0,
+            boxShadow: '0 -4px 15px rgba(0, 0, 0, 0.03)'
+          }}>
+            {/* Botones de acción reubicados al footer */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {isEditing && selectedRowIndices.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  style={{
+                    background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                  }}
+                >
+                  <Trash2 size={16} /> Eliminar Seleccionados ({selectedRowIndices.length})
+                </button>
+              )}
+              
+              {selectedDraft.status === 'pending' && (
+                <button
+                  id="btn-reject-draft"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setRejectReason('');
+                    setRejectModal({
+                      isOpen: true, draftId: selectedDraft.id, address: getDraftMetadata(selectedDraft).address || 'No detectada', sourceEmail: selectedDraft.source_email, totalValue: totalValue
+                    });
+                  }}
+                  style={{
+                    background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                  }}
+                >
+                  <Trash2 size={16} /> Rechazar Pedido
+                </button>
+              )}
 
-
+              {selectedDraft.status === 'pending' && selectedDraft.source_email && (
+                <button
+                  id="btn-send-receipt"
+                  type="button"
+                  disabled={sendingReceipt}
+                  onClick={handleSendManualReceipt}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: receiptSent ? '#059669' : '#2563EB',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    cursor: sendingReceipt ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Send size={16} />
+                  {sendingReceipt ? 'Enviando...' : receiptSent ? 'Acuse Enviado' : 'Enviar Acuse de Recibo'}
+                </button>
+              )}
             </div>
 
-            {/* Modal Footer */}
-            <div style={{
-              padding: '1.5rem',
-              borderTop: `1px solid ${THEME.colors.border}`,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: '#F9FAFB',
-              borderBottomLeftRadius: THEME.radius.xl,
-              borderBottomRightRadius: THEME.radius.xl
-            }}>
-              {/* Botones de acción reubicados al footer */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                {isEditing && selectedRowIndices.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleBatchDelete}
-                    style={{
-                      background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                    }}
-                  >
-                    <Trash2 size={16} /> Eliminar Seleccionados ({selectedRowIndices.length})
-                  </button>
-                )}
-                
-                
-                 {selectedDraft.status === 'pending' && (
-                  <button
-                    id="btn-reject-draft"
-                    type="button"
-                    disabled={saving}
-                    onClick={() => {
-                      setRejectReason('');
-                      setRejectModal({
-                        isOpen: true, draftId: selectedDraft.id, address: getDraftMetadata(selectedDraft).address || 'No detectada', sourceEmail: selectedDraft.source_email, totalValue: totalValue
-                      });
-                    }}
-                    style={{
-                      background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                    }}
-                  >
-                    <Trash2 size={16} /> Rechazar Pedido
-                  </button>
-                 )}
-
-                 {selectedDraft.status === 'pending' && selectedDraft.source_email && (
-                   <button
-                     id="btn-send-receipt"
-                     type="button"
-                     disabled={sendingReceipt}
-                     onClick={handleSendManualReceipt}
-                     style={{
-                       background: 'none',
-                       border: 'none',
-                       color: receiptSent ? '#059669' : '#2563EB',
-                       fontWeight: 600,
-                       fontSize: '0.85rem',
-                       cursor: sendingReceipt ? 'not-allowed' : 'pointer',
-                       display: 'flex',
-                       alignItems: 'center',
-                       gap: '4px'
-                     }}
-                   >
-                     <Send size={16} />
-                     {sendingReceipt ? 'Enviando...' : receiptSent ? 'Acuse Enviado ✓' : 'Enviar Acuse de Recibo 📧'}
-                   </button>
-                 )}
-              </div>
-
-              {/* Right Side: Standard Buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', backgroundColor: '#F3F4F6', padding: '2px 8px', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
-                      {editableItems.filter(itm => !itm.isDeleted).length} prod.
-                    </span>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280', letterSpacing: '0.05em' }}>TOTAL ESTIMADO</span>
-                  </div>
-                  <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
-                </div>
-
-                {hasUnmatchedItems && (
-                  <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
-                    ⚠️ Debe mapear todos los productos
+            {/* Right Side: Totals & Approval Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', backgroundColor: '#F3F4F6', padding: '2px 8px', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                    {editableItems.filter(itm => !itm.isDeleted).length} prod.
                   </span>
-                )}
-
-                {(() => {
-                  const metadata = getDraftMetadata(selectedDraft);
-                  if (!metadata || !metadata.attachments || !Array.isArray(metadata.attachments)) return null;
-                  const pendingDocs = metadata.attachments.filter((a: any) => !a.processed).length;
-                  if (pendingDocs > 1) {
-                    return (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FCD34D' }}>
-                        <span style={{ fontSize: '14px' }}>📑</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>
-                          Aprobando 1 de {pendingDocs} adjuntos
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                <button 
-                  onClick={() => setSelectedDraft(null)}
-                  style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
-                >
-                  Cancelar
-                </button>
-                {selectedDraft.status === 'pending' && (
-                  <button 
-                    id="btn-approve-draft"
-                    onClick={handleApprove}
-                    disabled={saving || hasUnmatchedItems}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
-                      color: 'white',
-                      borderRadius: '10px',
-                      fontWeight: '700',
-                      border: 'none',
-                      cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
-                      opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      boxShadow: hasUnmatchedItems ? 'none' : undefined
-                    }}
-                  >
-                    {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
-                  </button>
-                )}
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: THEME.colors.textSecondary, letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>TOTAL ESTIMADO</span>
+                </div>
+                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: THEME.colors.primary, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalValue)}</span>
               </div>
+
+              {hasUnmatchedItems && (
+                <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <AlertCircle size={13} color="#EF4444" /> Debe mapear todos los productos
+                </span>
+              )}
+
+              {(() => {
+                const metadata = getDraftMetadata(selectedDraft);
+                if (!metadata || !metadata.attachments || !Array.isArray(metadata.attachments)) return null;
+                const pendingDocs = metadata.attachments.filter((a: any) => !a.processed).length;
+                if (pendingDocs > 1) {
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FCD34D' }}>
+                      <FileText size={14} color="#92400E" />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>
+                        Aprobando 1 de {pendingDocs} adjuntos
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              <button 
+                onClick={() => setSelectedDraft(null)}
+                style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer', transition: 'all 0.15s' }}
+              >
+                Cancelar
+              </button>
+              {selectedDraft.status === 'pending' && (
+                <button 
+                  id="btn-approve-draft"
+                  onClick={handleApprove}
+                  disabled={saving || hasUnmatchedItems}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
+                    color: 'white',
+                    borderRadius: '10px',
+                    fontWeight: '800',
+                    fontFamily: 'var(--font-outfit), sans-serif',
+                    border: 'none',
+                    cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
+                    opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: hasUnmatchedItems ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
+                </button>
+              )}
             </div>
           </div>
-
-          {/* Ventana flotante premium con el cuerpo del correo original */}
-          {showFloatingEmail && (
-            <div style={{
-              position: 'fixed',
-              right: '24px',
-              top: '5vh',
-              width: isFloatingExpanded ? '950px' : '550px',
-              height: '90vh',
-              backgroundColor: 'white',
-              borderRadius: THEME.radius.xl,
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
-              zIndex: 10000,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-            }} onClick={e => e.stopPropagation()}>
-              {/* Header de la ventana flotante */}
-              <div style={{
-                padding: '12px 16px',
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Mail size={16} color="#2563EB" />
-                  <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Cuerpo del Correo</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setIsFloatingExpanded(prev => !prev)}
-                    style={{
-                      border: 'none',
-                      background: 'none',
-                      cursor: 'pointer',
-                      padding: '6px',
-                      color: '#64748B',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'background-color 0.2s, color 0.2s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = '#EFF6FF';
-                      e.currentTarget.style.color = '#2563EB';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = '#64748B';
-                    }}
-                    title={isFloatingExpanded ? "Contraer visor" : "Expandir visor"}
-                  >
-                    {isFloatingExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => setShowFloatingEmail(false)}
-                    style={{
-                      border: 'none',
-                      background: 'none',
-                      cursor: 'pointer',
-                      padding: '6px',
-                      color: '#64748B',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'background-color 0.2s, color 0.2s'
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = '#FEF2F2';
-                      e.currentTarget.style.color = '#EF4444';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = '#64748B';
-                    }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Asunto del correo */}
-              <div style={{
-                padding: '12px 16px',
-                backgroundColor: '#EFF6FF',
-                borderBottom: '1px solid #DBEAFE',
-                fontSize: '0.8rem',
-                color: '#1E40AF',
-                fontWeight: 700
-              }}>
-                Asunto: {selectedDraft.email_subject || '(Sin Asunto)'}
-              </div>
-
-              {/* Selector de Pestañas (Tabs) */}
-              {(() => {
-                const metadata = getDraftMetadata(selectedDraft);
-                if (!metadata.attachmentUrl) return null;
-                return (
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderBottom: '1px solid #E2E8F0',
-                    backgroundColor: '#F8FAFC',
-                    padding: '0 8px'
-                  }}>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('email')}
-                        style={{
-                          padding: '10px 16px',
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          fontWeight: activeTab === 'email' ? 800 : 500,
-                          color: activeTab === 'email' ? '#2563EB' : '#64748B',
-                          borderBottom: activeTab === 'email' ? '2.5px solid #2563EB' : '2.5px solid transparent',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <Mail size={14} />
-                        Correo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('attachment')}
-                        style={{
-                          padding: '10px 16px',
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          fontWeight: activeTab === 'attachment' ? 800 : 500,
-                          color: activeTab === 'attachment' ? '#2563EB' : '#64748B',
-                          borderBottom: activeTab === 'attachment' ? '2.5px solid #2563EB' : '2.5px solid transparent',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <Paperclip size={14} />
-                        Adjunto
-                      </button>
-                    </div>
-
-                    {/* Botón interactivo de división de adjunto eliminado */}
-                  </div>
-                );
-              })()}
-
-              {/* Contenido Dinámico de la Pestaña */}
-              {(() => {
-                const metadata = getDraftMetadata(selectedDraft);
-                
-                // PESTAÑA: Adjunto
-                if (activeTab === 'attachment') {
-                  let currentUrl = metadata.attachmentUrl;
-                  let currentName = metadata.attachmentName;
-                  if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
-                    const selectedAtt = metadata.attachments[selectedAttachmentIndex];
-                    if (selectedAtt) {
-                      currentUrl = selectedAtt.url;
-                      currentName = selectedAtt.name;
-                    }
-                  }
-
-                  if (!currentUrl) {
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '24px', backgroundColor: '#F8FAFC', color: '#64748B' }}>
-                        <span>No hay documentos adjuntos.</span>
-                      </div>
-                    );
-                  }
-
-                  const attachmentName = currentName || '';
-                  const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
-
-                  // Inline helper for multiple attachments selectors
-                  const renderSelector = () => {
-                    if (!metadata.attachments || !Array.isArray(metadata.attachments) || metadata.attachments.length <= 1) return null;
-                    return (
-                      <div style={{
-                        display: 'flex',
-                        gap: '6px',
-                        padding: '8px 12px',
-                        backgroundColor: '#F1F5F9',
-                        borderBottom: '1px solid #E2E8F0',
-                        overflowX: 'auto',
-                        whiteSpace: 'nowrap'
-                      }} className="premium-scrollbar">
-                        {metadata.attachments.map((att: any, idx: number) => {
-                          const isActive = idx === selectedAttachmentIndex;
-                          const isProcessed = att.processed === true;
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => handleSelectAttachment(idx)}
-                              style={{
-                                padding: '6px 12px',
-                                borderRadius: '20px',
-                                border: '1px solid',
-                                borderColor: isActive ? '#2563EB' : (isProcessed ? '#10B981' : '#CBD5E1'),
-                                backgroundColor: isActive ? '#EFF6FF' : (isProcessed ? '#ECFDF5' : 'white'),
-                                color: isActive ? '#2563EB' : (isProcessed ? '#047857' : '#475569'),
-                                fontSize: '0.725rem',
-                                fontWeight: isActive ? 800 : 500,
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <span>{isProcessed ? '✅' : '📎'}</span>
-                              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={att.name}>
-                                {att.name}
-                              </span>
-                              {att.deliveryDate && (
-                                <span style={{ opacity: 0.8, fontSize: '0.65rem', marginLeft: '2px', fontWeight: 'bold' }}>
-                                  ({att.deliveryDate.substring(5).replace('-', '/')})
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  };
-
-                  const wrapContent = (content: React.ReactNode) => {
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                        {renderSelector()}
-                        {content}
-                      </div>
-                    );
-                  };
-
-                  // 1. Caso: Excel (.xlsx, .xls)
-                  if (ext === 'xlsx' || ext === 'xls') {
-                    if (loadingAttachment) {
-                      return wrapContent(
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', backgroundColor: '#F8FAFC' }}>
-                          <style>{`
-                            @keyframes spin {
-                              from { transform: rotate(0deg); }
-                              to { transform: rotate(360deg); }
-                            }
-                          `}</style>
-                          <Loader2 size={32} color="#2563EB" style={{ animation: 'spin 1.2s linear infinite' }} />
-                          <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>Cargando tabla Excel...</span>
-                        </div>
-                      );
-                    }
-                    if (attachmentError) {
-                      return wrapContent(
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                          <AlertTriangle size={32} color="#EF4444" />
-                          <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: 700 }}>{attachmentError}</span>
-                          <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#2563EB', fontWeight: 800, textDecoration: 'underline', marginTop: '4px' }}>
-                            Descargar archivo original
-                          </a>
-                        </div>
-                      );
-                    }
-                    if (attachmentHtml) {
-                      return wrapContent(
-                        <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '12px' }}>
-                          <style>{`
-                            .excel-table {
-                              border-collapse: collapse;
-                              width: max-content;
-                              min-width: 100%;
-                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                              font-size: 0.725rem;
-                              color: #334155;
-                              background-color: white;
-                              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                              border-radius: 8px;
-                              overflow: hidden;
-                              border: 1px solid #E2E8F0;
-                            }
-                            .excel-table td, .excel-table th {
-                              border: 1px solid #E2E8F0;
-                              padding: 8px 10px;
-                              min-width: 60px;
-                              white-space: nowrap;
-                              text-align: left;
-                            }
-                            .excel-table tr:first-child {
-                              background-color: #F1F5F9;
-                              font-weight: 800;
-                              color: #1E293B;
-                              position: sticky;
-                              top: 0;
-                              border-bottom: 2px solid #CBD5E1;
-                            }
-                            .excel-table tr:nth-child(even) {
-                              background-color: #F8FAFC;
-                            }
-                            .excel-table tr:hover {
-                              background-color: #EFF6FF;
-                            }
-                          `}</style>
-                          <div dangerouslySetInnerHTML={{ __html: attachmentHtml }} />
-                        </div>
-                      );
-                    }
-                    return null;
-                  }
-
-                  // 2. Caso: PDF (.pdf)
-                  if (ext === 'pdf') {
-                    return wrapContent(
-                      <div style={{ flex: 1, backgroundColor: 'white', position: 'relative' }}>
-                        <iframe
-                          src={pdfBlobUrl || currentUrl}
-                          style={{ width: '100%', height: '100%', border: 'none' }}
-                        />
-                      </div>
-                    );
-                  }
-
-                  // 2.5 Caso: Imagen (.png, .jpg, .jpeg, .gif, .webp)
-                  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
-                    return wrapContent(
-                      <div style={{ 
-                        flex: 1, 
-                        backgroundColor: '#F8FAFC', 
-                        display: isAttachmentZoomed ? 'block' : 'flex', 
-                        alignItems: isAttachmentZoomed ? 'flex-start' : 'center', 
-                        justifyContent: isAttachmentZoomed ? 'flex-start' : 'center', 
-                        overflow: 'auto', 
-                        padding: '16px',
-                        position: 'relative'
-                      }}>
-                        <img
-                          src={currentUrl}
-                          alt={attachmentName}
-                          onClick={() => setIsAttachmentZoomed(!isAttachmentZoomed)}
-                          style={{ 
-                            maxWidth: isAttachmentZoomed ? 'none' : '100%', 
-                            maxHeight: isAttachmentZoomed ? 'none' : '100%', 
-                            width: isAttachmentZoomed ? '220%' : 'auto',
-                            cursor: isAttachmentZoomed ? 'zoom-out' : 'zoom-in',
-                            objectFit: 'contain', 
-                            borderRadius: '8px', 
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                            transition: 'all 0.15s ease'
-                          }}
-                        />
-                        <div style={{
-                          position: 'absolute',
-                          bottom: '12px',
-                          right: '12px',
-                          backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: '6px',
-                          fontSize: '0.65rem',
-                          fontWeight: 600,
-                          pointerEvents: 'none',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
-                        }}>
-                          {isAttachmentZoomed ? 'Click para alejar' : 'Click para acercar'}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // 3. Caso: Otros (Word .docx, .doc, etc.)
-                  return wrapContent(
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px', padding: '24px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                      <div style={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', width: '85%', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                        <FileText size={48} color="#2563EB" />
-                        <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#1E293B', wordBreak: 'break-all' }}>{attachmentName}</span>
-                        <span style={{ fontSize: '0.725rem', color: '#64748B' }}>Documento de oficina u otro formato adjunto</span>
-                        <a
-                          href={currentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            marginTop: '8px',
-                            backgroundColor: '#2563EB',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            textDecoration: 'none',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
-                          }}
-                        >
-                          <Download size={14} />
-                          Descargar Documento
-                        </a>
-                      </div>
-                      
-                      <a 
-                        href={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(currentUrl)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontSize: '0.75rem',
-                          color: '#2563EB',
-                          fontWeight: 700,
-                          textDecoration: 'none',
-                          borderBottom: '1px dashed #2563EB'
-                        }}
-                      >
-                        Abrir en Visor de Office Online ↗
-                      </a>
-                    </div>
-                  );
-                }
-
-                // PESTAÑA: Correo (Default)
-                if (metadata.emailHtml) {
-                  return (
-                    <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
-                      <iframe
-                        srcDoc={metadata.emailHtml}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          border: 'none',
-                          backgroundColor: 'white'
-                        }}
-                        sandbox="allow-same-origin allow-popups"
-                      />
-                    </div>
-                  );
-                }
-                return (
-                  <div 
-                    className="premium-scrollbar"
-                    style={{
-                      padding: '16px',
-                      overflowY: 'auto',
-                      flex: 1,
-                      fontSize: '0.825rem',
-                      color: '#334155',
-                      lineHeight: '1.6',
-                      whiteSpace: 'pre-wrap',
-                      backgroundColor: '#FCFDFE',
-                      fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
-                    }}
-                  >
-                    {selectedDraft.email_body || '(Sin cuerpo de correo)'}
-                  </div>
-                );
-              })()}
-
-              {/* Barra de archivo adjunto si existe */}
-              {(() => {
-                const metadata = getDraftMetadata(selectedDraft);
-                let currentUrl = metadata.attachmentUrl;
-                let currentName = metadata.attachmentName;
-                if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
-                  const selectedAtt = metadata.attachments[selectedAttachmentIndex];
-                  if (selectedAtt) {
-                    currentUrl = selectedAtt.url;
-                    currentName = selectedAtt.name;
-                  }
-                }
-                
-                if (!currentUrl) return null;
-                return (
-                  <div style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#F1F5F9',
-                    borderTop: '1px solid #E2E8F0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }} title={currentName}>
-                      📎 {currentName || 'Documento adjunto'}
-                    </span>
-
-                    {metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0 && (
-                      <span style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        backgroundColor: '#E2E8F0',
-                        color: '#334155',
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}>
-                        📂 Adjunto {selectedAttachmentIndex + 1} de {metadata.attachments.length} 
-                        {metadata.attachments[selectedAttachmentIndex]?.processed && ' (Aprobado)'}
-                      </span>
-                    )}
-
-                    <a
-                      href={currentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        fontSize: '0.75rem',
-                        color: '#2563EB',
-                        fontWeight: 800,
-                        textDecoration: 'none',
-                        padding: '4px 8px',
-                        backgroundColor: 'white',
-                        borderRadius: '6px',
-                        border: '1px solid #BFDBFE'
-                      }}
-                    >
-                      Ver original
-                    </a>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
         </div>
-      )}
+      </div>
+    );
+  })()}
 
       {duplicateMatchConfirm && duplicateMatchConfirm.isOpen && (
         <div style={{
@@ -6847,7 +5661,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  📍 Ubicación del Pedido
+                  <MapPin size={16} color="#059669" /> Ubicación del Pedido
                 </h3>
                 <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#6B7280' }}>
                   {editableAddress}
@@ -6905,7 +5719,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 display: 'flex',
                 alignItems: 'center'
               }}>
-                {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '✅ Dirección en cobertura de FruFresco' : '❌ Dirección fuera de cobertura'}
+                {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <CheckCircle2 size={13} color="#059669" /> Dirección en cobertura de FruFresco
+                  </span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={13} color="#DC2626" /> Dirección fuera de cobertura
+                  </span>
+                )}
               </span>
               <button
                 onClick={() => setShowMapModal(false)}
@@ -7156,8 +5978,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 }}>
                   ¿Deseas enviar el correo de notificación por <strong>{deleteConfirm.productName}</strong> ahora, o prefieres solo eliminarlo de la lista y notificar más tarde?
                   {recentlyDeletedItems.length > 0 && (
-                    <span style={{ display: 'block', marginTop: '8px', fontSize: '0.85rem', color: '#B45309', fontWeight: 600 }}>
-                      ⚠️ Se enviará junto con los productos ya eliminados: {recentlyDeletedItems.join(', ')}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px', fontSize: '0.85rem', color: '#B45309', fontWeight: 600 }}>
+                      <AlertTriangle size={13} color="#D97706" /> Se enviará junto con los productos ya eliminados: {recentlyDeletedItems.join(', ')}
                     </span>
                   )}
                 </p>
@@ -7374,7 +6196,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <h3 style={{
                 fontSize: '1.25rem',
                 fontWeight: 800,
-                color: '#111827',
+                color: THEME.colors.textMain,
+                fontFamily: 'var(--font-outfit), sans-serif',
                 margin: '0 0 1rem 0',
                 textAlign: 'center'
               }}>
@@ -7422,9 +6245,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ No es posible rechazar por monto mínimo ya que el valor estimado de este pedido es de {formatMoney(rejectModal.totalValue)} (igual o mayor a $100.000).
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>No es posible rechazar por monto mínimo ya que el valor estimado de este pedido es de {formatMoney(rejectModal.totalValue)} (igual o mayor a $100.000).</span>
                 </div>
               )}
 
@@ -7437,9 +6264,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ No es posible rechazar por falta de cobertura ya que la dirección se encuentra dentro de la zona de cobertura actual de FruFresco.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>No es posible rechazar por falta de cobertura ya que la dirección se encuentra dentro de la zona de cobertura actual de FruFresco.</span>
                 </div>
               )}
 
@@ -7452,9 +6283,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ No es posible rechazar la totalidad del pedido por productos no comercializados ya que tienes productos homologados válidos. Elimina del listado los productos no comercializados y procesa el resto.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>No es posible rechazar la totalidad del pedido por productos no comercializados ya que tienes productos homologados válidos. Elimina del listado los productos no comercializados y procesa el resto.</span>
                 </div>
               )}
 
@@ -7467,9 +6302,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ No es posible rechazar por datos insuficientes ya que se cuenta con dirección de entrega, correo y teléfono de contacto completos.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>No es posible rechazar por datos insuficientes ya que se cuenta con dirección de entrega, correo y teléfono de contacto completos.</span>
                 </div>
               )}
 
@@ -7482,9 +6321,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ No es posible rechazar por duplicado ya que no se encontraron otras solicitudes del mismo remitente el día de hoy.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>No es posible rechazar por duplicado ya que no se encontraron otras solicitudes del mismo remitente el día de hoy.</span>
                 </div>
               )}
 
@@ -7497,9 +6340,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ El perfil del cliente se encuentra activo y no registra bloqueos vigentes en la base de datos.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>El perfil del cliente se encuentra activo y no registra bloqueos vigentes en la base de datos.</span>
                 </div>
               )}
 
@@ -7512,9 +6359,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ No es posible rechazar la totalidad del pedido por falta de stock ya que tienes productos disponibles. Elimina del listado los productos sin stock y procesa el resto.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>No es posible rechazar la totalidad del pedido por falta de stock ya que tienes productos disponibles. Elimina del listado los productos sin stock y procesa el resto.</span>
                 </div>
               )}
 
@@ -7527,9 +6378,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   color: '#991B1B',
-                  marginBottom: '1.25rem'
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  ⚠️ El correo del pedido fue recibido antes de la hora de corte operativa (8:00 PM), por lo que se encuentra dentro del horario para entrega de mañana.
+                  <AlertTriangle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                  <span>El correo del pedido fue recibido antes de la hora de corte operativa (8:00 PM), por lo que se encuentra dentro del horario para entrega de mañana.</span>
                 </div>
               )}
 
@@ -7572,7 +6427,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (data.warning) {
                         showToast(data.warning, 'info');
                       } else {
-                        showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
+                        showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente.`, 'success');
                       }
                       setRejectModal(null);
                       setSelectedDraft(null);
@@ -7632,10 +6487,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                <div style={{ backgroundColor: '#D1FAE5', color: '#059669', width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FileText size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: THEME.colors.textMain, margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>
                   Previsualización de Factura / Pedido
                 </h3>
               </div>
@@ -7650,15 +6505,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Client info summary */}
             <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
-              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1E293B', marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: THEME.colors.textMain, marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontFamily: 'var(--font-outfit), sans-serif' }}>
                 <span>CLIENTE DETECTADO</span>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
                     {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
                   </span>
                   {activePricingModel && (
-                    <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', fontWeight: '900' }}>
-                      🏷️ {isB2CDefault ? 'Tarifa B2C (Defecto)' : `Modelo: ${activePricingModel.name}`}
+                    <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <Tag size={11} /> {isB2CDefault ? 'Tarifa B2C (Defecto)' : `Modelo: ${activePricingModel.name}`}
                     </span>
                   )}
                 </div>
@@ -7674,11 +6529,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Items details list */}
             <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.05em', marginBottom: '0.5rem', textTransform: 'uppercase' }}>PRODUCTOS DEL PEDIDO</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.05em', marginBottom: '0.5rem', textTransform: 'uppercase', fontFamily: 'var(--font-outfit), sans-serif' }}>PRODUCTOS DEL PEDIDO</div>
               <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#F8FAF9', borderBottom: '1px solid #E2E8F0', textAlign: 'left', fontWeight: 800, color: '#4B5563' }}>
+                    <tr style={{ backgroundColor: '#F8FAF9', borderBottom: '1px solid #E2E8F0', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontFamily: 'var(--font-outfit), sans-serif' }}>
                       <th style={{ padding: '0.65rem 1rem' }}>Producto (Mapeado)</th>
                       <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Cant.</th>
                       <th style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>Total</th>
@@ -7695,15 +6550,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             <div style={{ fontWeight: 600 }}>{prod?.name}</div>
                             <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{item.originalName}</div>
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 'bold' }}>{qty}</td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>{formatMoney((prod?.base_price || 0) * qty)}</td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{qty}</td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney((prod?.base_price || 0) * qty)}</td>
                         </tr>
                       );
                     })}
-                    <tr style={{ backgroundColor: '#F8FAF9', borderTop: '2px solid #E2E8F0', fontWeight: 'bold', fontSize: '0.95rem', color: '#111827' }}>
-                      <td style={{ padding: '0.8rem 1rem' }}>TOTAL</td>
+                    <tr style={{ backgroundColor: '#F8FAF9', borderTop: '2px solid #E2E8F0', fontWeight: 'bold', fontSize: '0.95rem', color: THEME.colors.textMain }}>
+                      <td style={{ padding: '0.8rem 1rem', fontFamily: 'var(--font-outfit), sans-serif' }}>TOTAL</td>
                       <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>-</td>
-                      <td style={{ padding: '0.8rem 1rem', textAlign: 'right', color: '#059669', fontSize: '1.05rem', fontWeight: 900 }}>{formatMoney(totalValue)}</td>
+                      <td style={{ padding: '0.8rem 1rem', textAlign: 'right', color: THEME.colors.primary, fontSize: '1.15rem', fontWeight: 900, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalValue)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -7713,7 +6568,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Delivery and payment inputs */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>FECHA DE ENTREGA:</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>FECHA DE ENTREGA:</label>
                 <input 
                   type="date" 
                   value={deliveryDate} 
@@ -7732,7 +6587,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>FRANJA HORARIA:</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>FRANJA HORARIA:</label>
                 {(() => {
                   const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
                   const hasCustomSchedule = matchedProfile?.logistics_data && 
@@ -7760,7 +6615,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <option value="PM">Tarde (PM)</option>
                       </select>
                       {hasCustomSchedule && (
-                        <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '0.25rem', fontWeight: 500 }}>
+                        <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, marginTop: '0.25rem', fontWeight: 500 }}>
                           Horario establecido: {formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'}
                         </div>
                       )}
@@ -7769,14 +6624,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 })()}
               </div>
               <div style={{ gridColumn: 'span 2' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>MÉTODO DE PAGO:</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>MÉTODO DE PAGO:</label>
                 <select 
                   value={paymentMethod} 
                   onChange={(e) => setPaymentMethod(e.target.value)} 
                   style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', backgroundColor: 'white' }}
                 >
-                  <option value="contra_entrega">Efectivo / Contra Entrega</option>
-                  <option value="transferencia">Transferencia Bancaria Bancolombia</option>
+                  <option value="credit">Crédito Comercial (B2B)</option>
+                  <option value="cash_on_delivery">Contra Entrega / Efectivo</option>
+                  <option value="transfer">Transferencia Bancaria (Bancolombia)</option>
                   <option value="wompi">Link de Pago / Tarjeta (Wompi)</option>
                 </select>
               </div>
@@ -7810,10 +6666,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     onChange={(e) => {
                       // Handled by parent div
                     }} 
-                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#10B981' }}
+                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: THEME.colors.primary }}
                   />
                   <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: sendConfirmationEmail ? '#065F46' : '#4B5563', marginBottom: '2px' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: sendConfirmationEmail ? '#065F46' : '#4B5563', marginBottom: '2px', fontFamily: 'var(--font-outfit), sans-serif' }}>
                       Enviar correo de confirmación al cliente
                     </div>
                     <div style={{ fontSize: '0.75rem', color: sendConfirmationEmail ? '#047857' : '#9CA3AF', fontWeight: '600' }}>
@@ -7828,29 +6684,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               {isInvoiceModified() && sendConfirmationEmail && (
                 <div style={{
                   gridColumn: 'span 2',
-                  padding: '0.8rem',
-                  backgroundColor: '#FEF3C7',
-                  borderRadius: '10px',
+                  backgroundColor: '#FFFBEB',
                   border: '1.5px solid #FCD34D',
-                  fontSize: '0.8rem',
-                  color: '#92400E',
+                  borderRadius: '12px',
+                  padding: '1rem',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  textAlign: 'left'
+                  alignItems: 'flex-start',
+                  gap: '12px'
                 }}>
-                  <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <AlertTriangle size={14} /> Se han detectado cambios respecto al correo original.
-                  </div>
-                  <div>Para poder enviar la notificación con los cambios al cliente, debes confirmar que estás autorizado:</div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', fontWeight: 800 }}>
-                    <input 
-                      type="checkbox" 
-                      checked={isAuthorizedForChanges} 
-                      onChange={(e) => setIsAuthorizedForChanges(e.target.checked)} 
-                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                    />
-                    Confirmo que tengo autorización para notificar estos cambios al cliente.
+                  <input 
+                    type="checkbox" 
+                    id="chk-authorize-changes"
+                    checked={isAuthorizedForChanges} 
+                    onChange={(e) => setIsAuthorizedForChanges(e.target.checked)} 
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '2px', accentColor: '#D97706' }}
+                  />
+                  <label htmlFor="chk-authorize-changes" style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: 600, cursor: 'pointer', lineHeight: '1.4' }}>
+                    <strong>Confirmación de novedades:</strong> Se detectaron modificaciones en los productos originales de la orden. Confirmo que las novedades reflejadas son las autorizadas para notificar al cliente.
                   </label>
                 </div>
               )}
@@ -7874,15 +6724,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   padding: '0.8rem',
                   borderRadius: '12px',
                   border: 'none',
-                  backgroundColor: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#D1D5DB' : '#059669',
+                  backgroundColor: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#D1D5DB' : THEME.colors.primary,
                   color: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#9CA3AF' : 'white',
                   fontWeight: '800',
+                  fontFamily: 'var(--font-outfit), sans-serif',
                   cursor: (confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)) ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
-                  boxShadow: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? 'none' : '0 4px 6px -1px rgba(5, 150, 105, 0.2)'
+                  boxShadow: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)',
+                  transition: 'all 0.2s'
                 }}
               >
                 {confirmingOrder ? 'Procesando Pedido...' : 'CONFIRMAR Y CREAR PEDIDO'}
@@ -7934,9 +6786,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 'bold'
+                color: '#9CA3AF',
+                cursor: 'pointer'
               }}
-            >✕</button>
+            >
+              <X size={20} />
+            </button>
 
             {/* Flex container for header */}
             <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
@@ -7959,12 +6814,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     justifyContent: 'center',
                     boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                   }}>
-                    <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                    <Package size={32} color="#9CA3AF" />
                   </div>
                 )}
                 <div>
-                  <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
-                  <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>{selectedProductForVariant.name}</h3>
+                  <p style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
                     Personaliza tu producto:
                   </p>
                 </div>
@@ -8013,8 +6868,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   color: '#92400E',
                   lineHeight: '1.4'
                 }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
-                    📌 REQUERIMIENTOS DEL CLIENTE:
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Pin size={12} /> REQUERIMIENTOS DEL CLIENTE:
                   </div>
                   {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForVariant.name.trim().toLowerCase() && (
                     <div><strong>Nombre/Alias:</strong> {exc.nickname}</div>
@@ -8033,7 +6888,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               fontSize: '0.75rem',
               color: '#9CA3AF',
               marginBottom: '1.5rem',
-              fontWeight: '700'
+              alignItems: 'center'
             }}>
               <button
                 type="button"
@@ -8047,10 +6902,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   cursor: 'pointer',
                   padding: 0,
                   fontSize: 'inherit',
-                  textDecoration: 'underline'
+                  textDecoration: 'underline',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}
               >
-                ⚙️ Editar Variantes
+                <Settings size={12} /> Editar Variantes
               </button>
               <span>|</span>
               <button
@@ -8065,10 +6923,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   cursor: 'pointer',
                   padding: 0,
                   fontSize: 'inherit',
-                  textDecoration: 'underline'
+                  textDecoration: 'underline',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}
               >
-                ⚙️ Editar Equivalencias
+                <Scale size={12} /> Editar Equivalencias
               </button>
             </div>
 
@@ -8540,18 +7401,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   >
                       <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
                           <div style={{ textAlign: 'left' }}>
-                              <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>
-                                  ⚖️ Equivalencias y Conversiones
+                              <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                  <Scale size={20} color={THEME.colors.primary} /> Equivalencias y Conversiones
                               </h3>
-                              <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>
+                              <span style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
                                   {manageConversionsProduct.name}
                               </span>
                           </div>
                           <button
                               onClick={() => setManageConversionsProduct(null)}
-                              style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', fontWeight: 'bold' }}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}
                           >
-                              ✕
+                              <X size={20} />
                           </button>
                       </header>
 
@@ -8612,8 +7473,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                       {/* AGREGAR NUEVA RELACIÓN */}
                       <div style={{ borderTop: '1px dashed #E2E8F0', paddingTop: '1.25rem', textAlign: 'left' }}>
-                          <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800', textAlign: 'center' }}>
-                              ➕ DEFINIR NUEVA RELACIÓN
+                          <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                              <Plus size={14} /> DEFINIR NUEVA RELACIÓN
                           </h4>
                           
                           <div style={{ 

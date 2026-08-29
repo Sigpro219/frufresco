@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       1. Identifica el nombre del CLIENTE mencionado en el documento.
          - NOMBRE DEL CLIENTE PRINCIPAL: Identifica la compañía matriz, institución o razón social que emite el documento (frecuentemente en el encabezado, logo o parte superior, ej. "Colsubsidio"). NUNCA uses nombres de sucursales, centros de costos (ej. "CC33 Centro de Producción...") o dependencias internas como el nombre principal del cliente. Prioriza siempre el nombre de la entidad corporativa principal. NUNCA uses nombres de ciudades o países.
          - GUÍA DE FIRMA/PIE DE PÁGINA: Si el documento es un correo o tiene pie de página, guíate por esa sección para ubicar el nombre de la empresa matriz, la dirección y el número de teléfono.
-      2. Extrae todos los productos solicitados junto con su cantidad numérica.
+      2. Extrae todos los productos solicitados junto con su cantidad numérica y su UNIDAD DE MEDIDA O PRESENTACIÓN exacta que aparezca en la columna (ej. "Presentación", "Unidad", "Medida", "U.M." -> ej. "KG", "UND", "UNIDAD", "CUBETA", "BOLSA", "LBS", "DOCENA", etc.) o en la descripción.
       3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada de forma limpia. Extrae únicamente la nomenclatura geográfica (ej. "Carrera 15 # 134A 25, Apartamento 802, Barrio Cedritos, Bogotá"). NUNCA incluyas comentarios, solicitudes de disponibilidad, firmas o textos adicionales del documento en este campo.
       4. Identifica si hay un TELÉFONO de contacto.
       5. Identifica si hay un número de CÉDULA o NIT.
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
         "nitInDocument": "NIT/Cédula Extraída o null",
         "documentType": "PDF / Excel / Imagen",
         "items": [
-          { "originalName": "Nombre del Producto en el documento", "quantity": 10, "unit": "Kg / Unidad / null", "observations": "Cualquier nota u observación específica del producto o null" }
+          { "originalName": "Nombre del Producto en el documento", "quantity": 10, "unit": "KG / UND / CUBETA / etc.", "presentation": "Valor de la columna Presentación si existe", "observations": "Cualquier nota u observación específica del producto o null" }
         ]
       }
     `;

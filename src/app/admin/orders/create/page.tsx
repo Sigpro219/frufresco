@@ -5,7 +5,7 @@ import { isInsidePolygon, Point } from '@/lib/geoUtils';
 import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sanitizeDocText, resolveClientProfile, findBestProductMatch, recordLearningMemory } from '@/lib/orders/order-parser-engine';
+import { sanitizeDocText, resolveClientProfile, findBestProductMatch, findBestProductMatchDetails, recordLearningMemory } from '@/lib/orders/order-parser-engine';
 import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
@@ -47,50 +47,113 @@ import {
     Tag,
     Zap,
     AlertCircle,
-    FileCheck
+    FileCheck,
+    ShoppingCart,
+    Pin
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import VariantModal from '@/components/VariantModal';
+import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import { getNextValidDeliveryDate, isValidDeliveryDate } from '@/lib/colombianHolidays';
 
+export const normalizeDocUnit = (unitStr: string): string => {
+    if (!unitStr) return '';
+    const u = unitStr.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    
+    // Kilos / Kilogramos (KL, KLS, KG, KGS, KILO, KILOS, KILOGRAMO, KILOGRAMOS)
+    if (u === 'kl' || u === 'kls' || u === 'kg' || u === 'kgs' || u.startsWith('kilo') || u.startsWith('kilogram')) {
+        return 'Kg';
+    }
+    
+    // Gramos (GR, GRS, G, GRAMO, GRAMOS)
+    if (u === 'gr' || u === 'grs' || u === 'g' || u.startsWith('gram')) {
+        return 'g';
+    }
+    
+    // Libras (LB, LBS, LIBRA, LIBRAS)
+    if (u === 'lb' || u === 'lbs' || u.startsWith('libra')) {
+        return 'Libra';
+    }
+    
+    // Unidades (UN, UND, UNDS, UD, UDS, UNI, UNIDAD, UNIDADES, PZA, PZAS, PIEZA)
+    if (u === 'un' || u === 'und' || u === 'unds' || u === 'ud' || u === 'uds' || u === 'uni' || u.startsWith('unidad') || u.startsWith('pieza') || u === 'pza' || u === 'pzas') {
+        return 'Unidad';
+    }
+    
+    // Cubetas / Panales
+    if (u.startsWith('cubeta') || u === 'cub' || u.startsWith('panal')) {
+        return 'Cubeta';
+    }
+    
+    // Paquetes / Atados / Manojo
+    if (u.startsWith('paquet') || u === 'paq' || u === 'pqt' || u === 'pq' || u.startsWith('atado') || u.startsWith('manojo')) {
+        return 'Paquete';
+    }
+    
+    // Bolsas / Mallas
+    if (u.startsWith('bolsa') || u === 'bol' || u.startsWith('malla')) {
+        return 'Bolsa';
+    }
+    
+    // Cajas / Canastillas
+    if (u.startsWith('caja') || u === 'caj' || u.startsWith('canast')) {
+        return 'Caja';
+    }
+    
+    // Litros
+    if (u === 'lt' || u === 'lts' || u === 'l' || u.startsWith('litro')) {
+        return 'Litro';
+    }
+    
+    // Docenas
+    if (u.startsWith('docena') || u === 'doc') {
+        return 'Docena';
+    }
+    
+    return unitStr.trim();
+};
+
 const formatDetectedUnit = (qty: number, unit: string) => {
-    const u = (unit || '').toLowerCase();
-    let cleanUnit = u;
+    const norm = normalizeDocUnit(unit);
+    let cleanUnit = norm.toLowerCase();
     let suffix = qty === 1 ? 'detectado' : 'detectados';
     
-    if (u.includes('libra') || u.includes('lb')) {
-        cleanUnit = qty === 1 ? 'libra' : 'libras';
-        suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
-        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
-        suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('kilo') || u.includes('kg')) {
+    if (norm === 'Kg') {
         cleanUnit = qty === 1 ? 'kilo' : 'kilos';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
+    } else if (norm === 'Unidad') {
+        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'Cubeta') {
+        cleanUnit = qty === 1 ? 'cubeta' : 'cubetas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'Libra') {
+        cleanUnit = qty === 1 ? 'libra' : 'libras';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'g') {
+        cleanUnit = qty === 1 ? 'gramo' : 'gramos';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (norm === 'Paquete') {
         cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('litro') || u.includes('lt')) {
-        cleanUnit = qty === 1 ? 'litro' : 'litros';
-        suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('frasco')) {
-        cleanUnit = qty === 1 ? 'frasco' : 'frascos';
-        suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('bolsa')) {
+    } else if (norm === 'Bolsa') {
         cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('caja')) {
+    } else if (norm === 'Caja') {
         cleanUnit = qty === 1 ? 'caja' : 'cajas';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('atado')) {
-        cleanUnit = qty === 1 ? 'atado' : 'atados';
+    } else if (norm === 'Litro') {
+        cleanUnit = qty === 1 ? 'litro' : 'litros';
         suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (norm === 'Docena') {
+        cleanUnit = qty === 1 ? 'docena' : 'docenas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else {
-        cleanUnit = qty === 1 ? 'unidad' : 'unidades';
+        cleanUnit = cleanUnit || (qty === 1 ? 'unidad' : 'unidades');
         suffix = qty === 1 ? 'detectada' : 'detectadas';
     }
     
-    return `✨ ${qty} ${cleanUnit} ${suffix}`;
+    return `${qty} ${cleanUnit} ${suffix}`;
 };
 
 const getAccountingIdDisplay = (product: any) => {
@@ -345,6 +408,67 @@ function CreateOrderContent() {
         fetchClientData();
     }, [activeCustomerId]);
 
+    // --- CUSTOMER STRUCTURED PREFERENCES (PINNED COMBINATIONS) ---
+    const [savingPreference, setSavingPreference] = useState(false);
+
+    const handleSaveCustomerOptionPreference = async (productId: string, optionsToSave: Record<string, string>, clear: boolean = false) => {
+        if (!activeCustomerId) {
+            alert('Debe seleccionar un cliente antes de fijar una preferencia.');
+            return;
+        }
+        setSavingPreference(true);
+        try {
+            const exc = clientExceptions.find(e => e.product_id === productId);
+            const optionsPayload = clear ? {} : optionsToSave;
+            
+            let newRecord: any = null;
+            if (exc?.id) {
+                const { data, error } = await supabase
+                    .from('product_nicknames')
+                    .update({ preferred_options: optionsPayload })
+                    .eq('id', exc.id)
+                    .select()
+                    .single();
+                if (error) throw error;
+                newRecord = data;
+            } else {
+                const { data, error } = await supabase
+                    .from('product_nicknames')
+                    .insert({
+                        customer_id: activeCustomerId,
+                        product_id: productId,
+                        preferred_options: optionsPayload,
+                        nickname: selectedProductForModal?.name || 'Producto',
+                        picking_note: null
+                    })
+                    .select()
+                    .single();
+                if (error) throw error;
+                newRecord = data;
+            }
+
+            // Update local React state immediately
+            setClientExceptions(prev => {
+                const idx = prev.findIndex(e => e.product_id === productId);
+                if (idx >= 0) {
+                    const copy = [...prev];
+                    copy[idx] = newRecord || { ...copy[idx], preferred_options: optionsPayload };
+                    return copy;
+                }
+                return [...prev, newRecord];
+            });
+
+            if (clear) {
+                // If cleared, inform operator
+            }
+        } catch (err: any) {
+            console.error('Error saving customer preference:', err);
+            alert('Error al guardar preferencia de cliente: ' + (err.message || err));
+        } finally {
+            setSavingPreference(false);
+        }
+    };
+
     const [focusedProductIndex, setFocusedProductIndex] = useState(-1);
 
     const [latitude, setLatitude] = useState<number | null>(null);
@@ -551,9 +675,17 @@ function CreateOrderContent() {
                     }
                 });
             }
+            // 💡 Pre-populate with customer's structured preferred options if exist!
+            const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
+            if (exc?.preferred_options && typeof exc.preferred_options === 'object') {
+                Object.entries(exc.preferred_options).forEach(([k, v]) => {
+                    if (v) initialOptions[k] = String(v);
+                });
+            }
+
             setSelectedOptions(initialOptions);
         }
-    }, [selectedProductForModal, editingCartIndex, editingStagedItemId]);
+    }, [selectedProductForModal, editingCartIndex, editingStagedItemId, clientExceptions]);
 
     // Cart Logic
     const [cart, setCart] = useState<{
@@ -614,8 +746,12 @@ function CreateOrderContent() {
     }>({ clientInDocument: '', isMatch: true, documentType: null });
     const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [permanentDocumentUrl, setPermanentDocumentUrl] = useState<string | null>(null);
+    const [showSideDocPreview, setShowSideDocPreview] = useState(true);
     const [showFloatingDoc, setShowFloatingDoc] = useState(false);
     const [isFloatingDocExpanded, setIsFloatingDocExpanded] = useState(false);
+    const [digestionDuration, setDigestionDuration] = useState<string | null>(null);
+    const [digestionModel, setDigestionModel] = useState<string | null>(null);
 
     // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
     useEffect(() => {
@@ -1620,11 +1756,13 @@ function CreateOrderContent() {
                     if (nextInput) {
                         (nextInput as HTMLElement).focus();
                         (nextInput as HTMLInputElement).select();
+                        scrollToStagedRow(nextIdx);
                     } else {
                         // Focus the confirm and inject button!
                         const confirmBtn = document.getElementById('confirm-inject-button');
                         if (confirmBtn) {
                             confirmBtn.focus();
+                            confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }
                     }
                 }, 80);
@@ -1655,6 +1793,25 @@ function CreateOrderContent() {
         }
     };
 
+    // Auto-scroll anclado: Mantiene la fila activa en la 4ª línea visible (~205px) al avanzar con Enter
+    const scrollToStagedRow = (targetIdx: number) => {
+        const container = document.getElementById('staged-table-scroll-container');
+        const row = document.getElementById(`staged-row-${targetIdx}`);
+        if (!container || !row) return;
+
+        if (targetIdx < 3) {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            // A partir de la fila #4 (targetIdx >= 3), mantener el cursor en la 4ª posición visual
+            const anchorHeight = 205;
+            const targetTop = row.offsetTop - anchorHeight;
+            container.scrollTo({
+                top: Math.max(0, targetTop),
+                behavior: 'smooth'
+            });
+        }
+    };
+
     const openModalForStagedItem = (
         stagedId: string, 
         product: any, 
@@ -1668,7 +1825,12 @@ function CreateOrderContent() {
         setEditingStagedItemId(stagedId);
         setEditingStagedItemIdx(rowIdx);
         setSelectedProductForModal(product);
-        setSelectedOptions(selectedOptionsMap || {});
+
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        const mergedOptions = (selectedOptionsMap && Object.keys(selectedOptionsMap).length > 0)
+            ? { ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}), ...selectedOptionsMap }
+            : (exc?.preferred_options && typeof exc.preferred_options === 'object' ? { ...exc.preferred_options } : {});
+        setSelectedOptions(mergedOptions);
         
         if (originalQty !== undefined) {
             setModalQuantity(originalQty);
@@ -1695,6 +1857,7 @@ function CreateOrderContent() {
                 if (currentInput) {
                     (currentInput as HTMLElement).focus();
                     (currentInput as HTMLInputElement).select();
+                    scrollToStagedRow(currentStagedIdx);
                 }
             } else if (productSearchInputRef.current) {
                 productSearchInputRef.current.focus();
@@ -1813,21 +1976,28 @@ function CreateOrderContent() {
 
     const parseOrderWithAI = async (file: File) => {
         setParsingFile(true);
+        const startTime = performance.now();
         try {
-            if (uploadedFileUrl) {
-                URL.revokeObjectURL(uploadedFileUrl);
-            }
             const url = URL.createObjectURL(file);
             setUploadedFileUrl(url);
             setUploadedFile(file);
-            setShowFloatingDoc(true);
+            setShowSideDocPreview(true);
+            setShowFloatingDoc(false);
             setIsFloatingDocExpanded(false);
 
             const formData = new FormData();
             formData.append('file', file);
 
+            // Obtener el token de sesión activo para enviar como Bearer token
+            const { data: sessionData } = await supabase.auth.getSession();
+            const headers: Record<string, string> = {};
+            if (sessionData?.session?.access_token) {
+                headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+            }
+
             const response = await fetch('/api/ai/extract-order', {
                 method: 'POST',
+                headers,
                 body: formData
             });
 
@@ -1846,9 +2016,14 @@ function CreateOrderContent() {
                 throw new Error(data.error || 'Error en la API de extracción');
             }
             
-            // Helper para detectar unidad desde el texto del item
-            const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
-                const cleanName = originalName.toLowerCase();
+            // Helper para detectar unidad desde el texto y metadatos del item
+            const detectUnitFromItem = (item: any, product: any, productConversions: any[]) => {
+                const cleanName = (item.originalName || '').toLowerCase();
+                const rawUnit = (item.unit || '').trim();
+                const rawPres = (item.presentation || '').trim();
+                const rawObs = (item.observations || '').trim();
+                const docUnitNorm = normalizeDocUnit(rawUnit || rawPres);
+                const fullSearchText = `${cleanName} ${rawUnit} ${rawPres} ${rawObs}`.toLowerCase();
                 
                 // 1. Obtener todas las unidades posibles para este producto
                 const possibleUnits: { unit: string; factor: number }[] = [];
@@ -1908,30 +2083,35 @@ function CreateOrderContent() {
                     });
                 }
                 
-                // 2. Buscar en originalName qué unidad coincide mejor
+                // 2. Coincidencia directa con la unidad normalizada del documento (ej. 'Kg', 'Unidad', 'Cubeta', 'Libra')
+                if (docUnitNorm) {
+                    for (const u of possibleUnits) {
+                        const uNorm = normalizeDocUnit(u.unit);
+                        if (uNorm.toLowerCase() === docUnitNorm.toLowerCase()) {
+                            return u;
+                        }
+                    }
+                }
+
+                // 3. Buscar en texto completo (nombre + observaciones) qué unidad coincide mejor
                 for (const u of possibleUnits) {
                     const unitLower = u.unit.toLowerCase();
                     if (unitLower.length > 2) {
-                        if (cleanName.includes(unitLower)) {
+                        if (fullSearchText.includes(unitLower)) {
                             return u;
                         }
                     }
                 }
                 
-                if (cleanName.includes('libra') || cleanName.includes('lb')) {
-                    const lbUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('libra') || u.unit.toLowerCase().includes('lb'));
-                    if (lbUnit) return lbUnit;
+                // 4. Si el documento trajo una unidad normalizada, respetarla
+                if (docUnitNorm) {
+                    let factor = 1;
+                    if (docUnitNorm === 'Libra' && product.unit_of_measure === 'Kg') factor = 0.5;
+                    if (docUnitNorm === 'g' && product.unit_of_measure === 'Kg') factor = 0.001;
+                    return { unit: docUnitNorm, factor };
                 }
-                if (cleanName.includes('kilo') || cleanName.includes('kg')) {
-                    const kgUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('kilo') || u.unit.toLowerCase().includes('kg'));
-                    if (kgUnit) return kgUnit;
-                }
-                if (cleanName.includes('unidad') || cleanName.includes('ud') || cleanName.includes('und')) {
-                    const undUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('unidad') || u.unit.toLowerCase().includes('und') || u.unit.toLowerCase().includes('ud'));
-                    if (undUnit) return undUnit;
-                }
-                
-                return null;
+
+                return { unit: product.unit_of_measure || 'Kg', factor: 1 };
             };
 
             // Helper para sanitizar texto de OCR/PDF (homóglifos, espacios en blanco por kerning, tildes)
@@ -1990,10 +2170,13 @@ function CreateOrderContent() {
                 const originalName = item.originalName || 'Producto Desconocido';
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
-                const match = findBestProductMatch(originalName, products, learnedMemory);
+                const matchResult = findBestProductMatchDetails(originalName, products, learnedMemory);
+                const match = matchResult.product;
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
-                const detectedUnit = match ? detectUnitFromName(originalName, match, productConversions) : null;
+                const detectedUnit = match 
+                    ? detectUnitFromItem(item, match, productConversions) 
+                    : (item.unit ? { unit: item.unit, factor: 1 } : null);
                 
                 return {
                     id: crypto.randomUUID(),
@@ -2001,23 +2184,37 @@ function CreateOrderContent() {
                     quantity: detectedUnit ? parseFloat((quantity * detectedUnit.factor).toFixed(3)) : quantity,
                     originalQtyInFile: quantity,
                     originalQty: quantity,
-                    originalUnit: detectedUnit ? detectedUnit.unit : (match?.unit_of_measure || 'Kg'),
+                    originalUnit: detectedUnit ? detectedUnit.unit : (item.unit || item.presentation || match?.unit_of_measure || 'Kg'),
                     conversion_factor: detectedUnit ? detectedUnit.factor : 1,
                     suggestedProduct: match || null,
+                    confidence: matchResult.confidence,
+                    confidenceScore: matchResult.confidenceScore,
+                    matchSource: matchResult.matchSource,
+                    matchReason: matchResult.matchReason,
                     status: match ? 'MATCH' : 'PENDING',
-                    selected_options: (detectedUnit && match.options_config) ? (() => {
+                    selected_options: (() => {
                         const opts: any = {};
-                        match.options_config.forEach((opt: any) => {
-                            if (opt.name.toLowerCase().includes('presentaci')) {
-                                const matchedVal = opt.values?.find((v: string) => {
-                                    const clean = v.includes('|') ? v.split('|')[0] : v;
-                                    return clean.toLowerCase() === detectedUnit.unit.toLowerCase();
-                                });
-                                if (matchedVal) opts[opt.name] = matchedVal;
-                            }
-                        });
+                        // 1. Cargar preferencias fijas del cliente si existen
+                        const exc = match ? clientExceptions.find(e => e.product_id === match.id) : null;
+                        if (exc?.preferred_options && typeof exc.preferred_options === 'object') {
+                            Object.entries(exc.preferred_options).forEach(([k, v]) => {
+                                if (v) opts[k] = String(v);
+                            });
+                        }
+                        // 2. Mapear unidad de presentación detectada si aplica
+                        if (detectedUnit && match?.options_config) {
+                            match.options_config.forEach((opt: any) => {
+                                if (opt.name.toLowerCase().includes('presentaci')) {
+                                    const matchedVal = opt.values?.find((v: string) => {
+                                        const clean = v.includes('|') ? v.split('|')[0] : v;
+                                        return clean.toLowerCase() === detectedUnit.unit.toLowerCase();
+                                    });
+                                    if (matchedVal) opts[opt.name] = matchedVal;
+                                }
+                            });
+                        }
                         return opts;
-                    })() : {}
+                    })()
                 };
             }).filter(Boolean);
 
@@ -2034,6 +2231,10 @@ function CreateOrderContent() {
                 detectedName.includes(selectedName.split(' ')[0])
             ));
 
+            const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
+            setDigestionDuration(elapsedSec);
+            setDigestionModel(data._modelUsed || 'gemini-2.5-flash');
+
             setImportValidation({
                 clientInDocument: clientInFile,
                 isMatch: !!isMatch,
@@ -2042,6 +2243,7 @@ function CreateOrderContent() {
 
             setStagedItems(suggested);
             setIsStaging(true);
+            showToast(`⚡ Documento procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
         } catch (error: any) {
             console.error('AI Parsing Error:', error);
             showToast(`Error: ${error.message}`, 'error');
@@ -2051,6 +2253,35 @@ function CreateOrderContent() {
     };
 
     const handleConfirmImport = async () => {
+        // 1. Subida silenciosa del archivo original al bucket order-attachments para persistencia permanente
+        if (uploadedFile) {
+            try {
+                const fileExt = uploadedFile.name.split('.').pop() || 'pdf';
+                const cleanFileName = `${Date.now()}_${uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                const filePath = `${cleanFileName}`;
+
+                const { data: uploadData, error: uploadError } = await supabase
+                    .storage
+                    .from('order-attachments')
+                    .upload(filePath, uploadedFile, { upsert: true });
+
+                if (uploadError) {
+                    console.warn('Silent upload warning in handleConfirmImport:', uploadError);
+                } else {
+                    const { data: publicUrlData } = supabase
+                        .storage
+                        .from('order-attachments')
+                        .getPublicUrl(filePath);
+                    if (publicUrlData?.publicUrl) {
+                        setPermanentDocumentUrl(publicUrlData.publicUrl);
+                        console.log('Documento persistido con éxito:', publicUrlData.publicUrl);
+                    }
+                }
+            } catch (upErr) {
+                console.warn('Error subiendo adjunto a storage:', upErr);
+            }
+        }
+
         // Inyectamos los items validados al carrito real
         const itemsToInject = stagedItems
             .filter(item => item.suggestedProduct)
@@ -2422,7 +2653,7 @@ function CreateOrderContent() {
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
                     logistics_data: logisticsOverride,
-                    document_url: documentUrl
+                    document_url: permanentDocumentUrl || documentUrl
                 })
                 .select()
                 .single();
@@ -2687,11 +2918,10 @@ function CreateOrderContent() {
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
             <div style={{
-                width: showFloatingDoc ? (isFloatingDocExpanded ? 'calc(100% - 998px)' : 'calc(100% - 598px)') : '100%',
-                maxWidth: showFloatingDoc ? 'none' : '1700px',
-                margin: showFloatingDoc ? '0' : '0 auto',
-                padding: showFloatingDoc ? '1rem 2rem 8rem 2rem' : '1rem 2rem',
-                transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                width: '100%',
+                maxWidth: '1850px',
+                margin: '0 auto',
+                padding: '1rem 2rem 9rem 2rem',
                 boxSizing: 'border-box'
             }}>
                 <div style={{ marginBottom: '1rem' }}>
@@ -2713,7 +2943,7 @@ function CreateOrderContent() {
                     </Link>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: showFloatingDoc ? '1fr' : 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', alignItems: 'start' }}>
 
                     {/* LEFT COLUMN: FORM */}
                     <div style={{ backgroundColor: THEME.colors.surface, padding: '2rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
@@ -2829,7 +3059,7 @@ function CreateOrderContent() {
                                                         fontSize: '0.8rem'
                                                     }}
                                                 >
-                                                    ✕
+                                                    <X size={14} />
                                                 </button>
                                             </div>
 
@@ -3050,7 +3280,7 @@ function CreateOrderContent() {
                                                             }}
                                                             title="Cambiar Cliente"
                                                         >
-                                                            ✕
+                                                            <X size={14} />
                                                         </button>
                                                     </div>
 
@@ -3391,6 +3621,7 @@ function CreateOrderContent() {
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.4rem' }}>CANAL DE VENTA</label>
                                             <select
+                                                id="origin-source-select"
                                                 value={originSource} onChange={e => setOriginSource(e.target.value)}
                                                 style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '0.9rem' }}
                                             >
@@ -3588,10 +3819,14 @@ function CreateOrderContent() {
                                     <input 
                                         id="fileInput"
                                         type="file" 
+                                        accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*"
                                         style={{ display: 'none' }} 
                                         onChange={(e) => {
                                             const file = e.target.files?.[0];
-                                            if (file) parseOrderWithAI(file);
+                                            if (file) {
+                                                parseOrderWithAI(file);
+                                                e.target.value = '';
+                                            }
                                         }}
                                     />
                                     {parsingFile ? (
@@ -3618,23 +3853,23 @@ function CreateOrderContent() {
                                         </>
                                     )}
                                 </div>
-                            ) : (
+) : (
                                 <div style={{ 
                                     backgroundColor: 'white', 
                                     borderRadius: '24px', 
                                     border: '1px solid #E2E8F0', 
-                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                                    overflow: 'hidden',
-                                    animation: 'fadeInUp 0.3s ease-out'
+                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' 
                                 }}>
                                     {/* Mesa de Trabajo Header: Client Validation */}
                                     <div style={{ 
-                                        padding: '1.5rem 2rem', 
+                                        padding: '1.25rem 2rem', 
                                         backgroundColor: importValidation.isMatch ? '#F0FDF4' : '#FFF7ED', 
                                         borderBottom: `1px solid ${importValidation.isMatch ? '#BBF7D0' : '#FFEDD5'}`,
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: '1rem'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                             <div style={{ color: importValidation.isMatch ? '#16A34A' : '#D97706' }}>{importValidation.isMatch ? <CheckCircle2 size={24} strokeWidth={1.5} /> : <AlertTriangle size={24} strokeWidth={1.5} />}</div>
@@ -3652,7 +3887,7 @@ function CreateOrderContent() {
                                                 )}
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                                             {selectedStagedIds.length > 0 && (
                                                 <button
                                                     onClick={() => {
@@ -3678,208 +3913,308 @@ function CreateOrderContent() {
                                                     <Trash2 size={14} /> Eliminar Seleccionados ({selectedStagedIds.length})
                                                 </button>
                                             )}
-                                            <button 
-                                                onClick={() => {
-                                                    if (uploadedFileUrl) {
-                                                        setShowFloatingDoc(prev => !prev);
-                                                    }
-                                                }}
-                                                title="Click para ver documento original"
-                                                style={{ 
-                                                    padding: '6px 12px', 
-                                                    backgroundColor: '#EFF6FF', 
+                                            {digestionDuration && (
+                                                <span style={{ 
+                                                    backgroundColor: '#ECFDF5', 
+                                                    color: '#065F46', 
+                                                    border: '1.5px solid #6EE7B7', 
+                                                    padding: '5px 12px', 
                                                     borderRadius: '100px', 
-                                                    fontSize: '0.75rem', 
-                                                    fontWeight: '800', 
-                                                    color: '#1D4ED8',
-                                                    border: '1px solid #BFDBFE',
-                                                    cursor: 'pointer',
+                                                    fontSize: '0.78rem', 
+                                                    fontWeight: '800',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '6px',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                                onMouseEnter={e => {
-                                                    e.currentTarget.style.backgroundColor = '#DBEAFE';
-                                                    e.currentTarget.style.borderColor = '#93C5FD';
-                                                }}
-                                                onMouseLeave={e => {
-                                                    e.currentTarget.style.backgroundColor = '#EFF6FF';
-                                                    e.currentTarget.style.borderColor = '#BFDBFE';
-                                                }}
-                                            >
-                                                📄 VER {importValidation.documentType || 'DOCUMENTO'}
-                                            </button>
+                                                    gap: '5px',
+                                                    boxShadow: '0 1px 3px rgba(16, 185, 129, 0.1)'
+                                                }}>
+                                                    <Zap size={13} fill="#059669" color="#059669" />
+                                                    <span>Digestión: <strong>{digestionDuration}s</strong></span>
+                                                </span>
+                                            )}
+                                            {uploadedFileUrl && (
+                                                <button 
+                                                    onClick={() => setShowSideDocPreview(prev => !prev)}
+                                                    title="Alternar vista dividida del documento original"
+                                                    style={{ 
+                                                        padding: '6px 14px', 
+                                                        backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', 
+                                                        borderRadius: '100px', 
+                                                        fontSize: '0.78rem', 
+                                                        fontWeight: '800', 
+                                                        color: '#1D4ED8',
+                                                        border: '1.5px solid #93C5FD',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    <FileText size={14} /> {showSideDocPreview ? 'Ocultar Visor PDF' : `Ver ${importValidation.documentType || 'PDF'} Lado a Lado`}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
-                                    {/* Mesa de Trabajo Body: Table Mapping */}
-                                    <div style={{ padding: '0', maxHeight: '550px', overflowY: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                            <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                                                <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
-                                                    <th style={{ padding: '1rem', textAlign: 'center', width: '40px' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={stagedItems.length > 0 && selectedStagedIds.length === stagedItems.length}
-                                                            onChange={(e) => {
-                                                                if (e.target.checked) {
-                                                                    setSelectedStagedIds(stagedItems.map(item => item.id));
-                                                                } else {
-                                                                    setSelectedStagedIds([]);
-                                                                }
-                                                            }}
-                                                            style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
-                                                        />
-                                                    </th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '25%' }}>CANT.</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {stagedItems.map((item, idx) => (
-                                                    <tr 
-                                                        key={item.id} 
-                                                        style={{ 
-                                                            borderBottom: '1px solid #F8FAFC',
-                                                            backgroundColor: item.isConfirmed 
-                                                                ? '#F0FDF4' 
-                                                                : (item.suggestedProduct ? 'white' : '#FFF7ED'),
-                                                            transition: 'background-color 0.2s'
-                                                        }}
-                                                    >
-                                                        <td style={{ padding: '1rem', textAlign: 'center', width: '40px' }}>
+                                    {/* Mesa de Trabajo Body: Split Screen (Side-by-Side) */}
+                                    <div style={{ display: 'flex', gap: '0', padding: '0', alignItems: 'stretch', maxHeight: '650px', overflow: 'hidden' }}>
+                                        {/* Left Side: Document Preview */}
+                                        {uploadedFileUrl && showSideDocPreview && (
+                                            <div style={{ 
+                                                width: '48%', 
+                                                minWidth: '420px', 
+                                                borderRight: '2px solid #E2E8F0', 
+                                                backgroundColor: '#F8FAFC', 
+                                                padding: '1rem', 
+                                                display: 'flex', 
+                                                flexDirection: 'column' 
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <FileText size={14} /> Documento Original
+                                                    </span>
+                                                    <a href={uploadedFileUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                                                        <button style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <Maximize2 size={11} /> Abrir Pestaña
+                                                        </button>
+                                                    </a>
+                                                </div>
+                                                <div style={{ flex: 1, minHeight: '560px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC' }}>
+                                                    <PdfCanvasViewer file={uploadedFile} fileUrl={uploadedFileUrl} />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Right Side: Table Mapping */}
+                                        <div 
+                                            id="staged-table-scroll-container" 
+                                            style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: '650px', position: 'relative', scrollBehavior: 'smooth' }}
+                                        >
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
+                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
+                                                        <th style={{ padding: '1rem', textAlign: 'center', width: '35px' }}>
                                                             <input
                                                                 type="checkbox"
-                                                                checked={selectedStagedIds.includes(item.id)}
+                                                                checked={stagedItems.length > 0 && selectedStagedIds.length === stagedItems.length}
                                                                 onChange={(e) => {
                                                                     if (e.target.checked) {
-                                                                        setSelectedStagedIds(prev => [...prev, item.id]);
+                                                                        setSelectedStagedIds(stagedItems.map(item => item.id));
                                                                     } else {
-                                                                        setSelectedStagedIds(prev => prev.filter(id => id !== item.id));
+                                                                        setSelectedStagedIds([]);
                                                                     }
                                                                 }}
                                                                 style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                             />
-                                                        </td>
-                                                        <td style={{ padding: '1rem 2rem', width: '30%' }}>
-                                                             <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
-                                                             <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
-                                                                 <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900' }}>
-                                                                     {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
-                                                                 </span>
-                                                             </div>
-                                                         </td>
-                                                         <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '45%' }}>
-                                                             <input 
-                                                                 type="text"
-                                                                 placeholder="Buscar ID..."
-                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${getAccountingIdDisplay(item.suggestedProduct)})` : ''}
-                                                                 list="all-products-list"
-                                                                 onFocus={(e) => e.target.select()}
-                                                                 className="sku-search-input"
-                                                                 id={`sku-input-${idx}`}
-                                                                 onKeyDown={(e) => {
-                                                                     if (e.key === 'Tab') {
-                                                                         const val = e.currentTarget.value;
-                                                                         const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                                                         if (p) {
-                                                                             e.preventDefault(); 
-                                                                             openModalForStagedItem(
-                                                                                 item.id, 
-                                                                                 p, 
-                                                                                 item.quantity, 
-                                                                                 idx, 
-                                                                                 item.selected_options, 
-                                                                                 item.originalQty, 
-                                                                                 item.originalUnit, 
-                                                                                 item.conversion_factor
-                                                                             );
-                                                                         }
-                                                                     } else if (e.key === 'Enter') {
-                                                                         e.preventDefault();
-                                                                         const val = e.currentTarget.value;
-                                                                         const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                                                         if (p) {
-                                                                             updateStagedItem(item.id, 'product', p);
-                                                                         }
-                                                                         updateStagedItem(item.id, 'isConfirmed', true);
-                                                                         const nextInput = document.getElementById(`sku-input-${idx + 1}`);
-                                                                         if (nextInput) {
-                                                                             (nextInput as HTMLElement).focus();
-                                                                             (nextInput as HTMLInputElement).select();
-                                                                         } else {
-                                                                             document.getElementById('confirm-inject-button')?.focus();
-                                                                         }
-                                                                     }
-                                                                 }}
-                                                                 onChange={(e) => {
-                                                                     const val = e.target.value;
-                                                                     const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                                     if (p) {
-                                                                         updateStagedItem(item.id, 'product', p);
-                                                                     }
-                                                                 }}
-                                                                 style={{ 
-                                                                     width: '100%', 
-                                                                     padding: '10px 14px', 
-                                                                     borderRadius: '10px', 
-                                                                     border: item.suggestedProduct ? '2px solid #E2E8F0' : '2px solid #F97316',
-                                                                     fontSize: '1rem',
-                                                                     fontWeight: '700',
-                                                                     backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
-                                                                     outline: 'none',
-                                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                 }}
-                                                             />
-                                                         </td>
-                                                         <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '25%' }}>
-                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                                 <input 
-                                                                     type="number"
-                                                                     value={item.originalQty !== undefined ? item.originalQty : item.quantity}
-                                                                     onFocus={(e) => e.target.select()}
-                                                                     onKeyDown={(e) => {
-                                                                         if (e.key === 'Enter') {
-                                                                             const nextInput = document.getElementById(`sku-input-${idx + 1}`);
-                                                                             if (nextInput) {
-                                                                                 nextInput.focus();
-                                                                             } else {
-                                                                                 document.getElementById('confirm-inject-button')?.focus();
-                                                                             }
-                                                                         }
-                                                                     }}
-                                                                     onChange={(e) => {
-                                                                         const val = parseFloat(e.target.value) || 0;
-                                                                         if (item.originalQty !== undefined) {
-                                                                             updateStagedItem(item.id, 'originalQty', val);
-                                                                             updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
-                                                                         } else {
-                                                                             updateStagedItem(item.id, 'quantity', val);
-                                                                         }
-                                                                     }}
-                                                                     style={{ 
-                                                                         width: '80px', 
-                                                                         padding: '10px', 
-                                                                         borderRadius: '8px', 
-                                                                         border: '2px solid #E2E8F0', 
-                                                                         textAlign: 'center',
-                                                                         fontWeight: '800',
-                                                                         fontSize: '1.1rem',
-                                                                         backgroundColor: 'white'
-                                                                     }}
-                                                                 />
-                                                                 <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#475569', minWidth: '45px', textAlign: 'left' }}>
-                                                                     {item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg'}
-                                                                 </span>
-                                                             </div>
-                                                         </td>
+                                                        </th>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '32%' }}>NOMBRE EN DOCUMENTO</th>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>CANT.</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {stagedItems.map((item, idx) => {
+                                                        const isConfidenceHigh = item.confidence === 'HIGH' || (item.confidenceScore && item.confidenceScore >= 90);
+                                                        const isConfidenceMed = item.confidence === 'MEDIUM' || (item.confidenceScore && item.confidenceScore >= 70 && item.confidenceScore < 90);
+
+                                                        return (
+                                                            <tr 
+                                                                key={item.id} 
+                                                                id={`staged-row-${idx}`}
+                                                                style={{ 
+                                                                    borderBottom: '1px solid #F8FAFC',
+                                                                    backgroundColor: item.isConfirmed 
+                                                                        ? '#F0FDF4' 
+                                                                        : (item.suggestedProduct ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED'),
+                                                                    transition: 'background-color 0.2s'
+                                                                }}
+                                                            >
+                                                                <td style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '35px' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedStagedIds.includes(item.id)}
+                                                                        onChange={(e) => {
+                                                                            if (e.target.checked) {
+                                                                                setSelectedStagedIds(prev => [...prev, item.id]);
+                                                                            } else {
+                                                                                setSelectedStagedIds(prev => prev.filter(id => id !== item.id));
+                                                                            }
+                                                                        }}
+                                                                        style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                                                                    />
+                                                                </td>
+                                                                <td style={{ padding: '0.8rem 1.25rem', width: '32%' }}>
+                                                                    <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
+                                                                    <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                        <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 7px', borderRadius: '6px', fontWeight: '900' }}>
+                                                                            {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
+                                                                        </span>
+                                                                        {/* SEMÁFORO DE CONFIANZA */}
+                                                                        {isConfidenceHigh && (
+                                                                            <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <CheckCircle2 size={11} color="#15803D" /> {item.confidenceScore ? `${item.confidenceScore}%` : '100%'}
+                                                                            </span>
+                                                                        )}
+                                                                        {isConfidenceMed && (
+                                                                            <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <AlertTriangle size={11} color="#B45309" /> Sugerido ({item.confidenceScore || 75}%)
+                                                                            </span>
+                                                                        )}
+                                                                        {(!item.suggestedProduct || item.confidence === 'LOW') && (
+                                                                            <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <AlertCircle size={11} color="#B91C1C" /> Sin Match
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '45%' }}>
+                                                                    <input 
+                                                                        type="text"
+                                                                        placeholder="Buscar ID..."
+                                                                        defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${getAccountingIdDisplay(item.suggestedProduct)})` : ''}
+                                                                        list="all-products-list"
+                                                                        onFocus={(e) => {
+                                                                            e.target.select();
+                                                                            scrollToStagedRow(idx);
+                                                                        }}
+                                                                        className="sku-search-input"
+                                                                        id={`sku-input-${idx}`}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Tab') {
+                                                                                const val = e.currentTarget.value;
+                                                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                                                                if (p) {
+                                                                                    e.preventDefault(); 
+                                                                                    openModalForStagedItem(
+                                                                                        item.id, 
+                                                                                        p, 
+                                                                                        item.quantity, 
+                                                                                        idx, 
+                                                                                        item.selected_options, 
+                                                                                        item.originalQty, 
+                                                                                        item.originalUnit, 
+                                                                                        item.conversion_factor
+                                                                                    );
+                                                                                }
+                                                                            } else if (e.key === 'Enter') {
+                                                                                e.preventDefault();
+                                                                                const val = e.currentTarget.value;
+                                                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                                                                if (p) {
+                                                                                    updateStagedItem(item.id, 'product', p);
+                                                                                }
+                                                                                updateStagedItem(item.id, 'isConfirmed', true);
+                                                                                const nextIdx = idx + 1;
+                                                                                const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                if (nextInput) {
+                                                                                    nextInput.focus();
+                                                                                    nextInput.select();
+                                                                                    scrollToStagedRow(nextIdx);
+                                                                                } else {
+                                                                                    const confirmBtn = document.getElementById('confirm-inject-button');
+                                                                                    if (confirmBtn) {
+                                                                                        confirmBtn.focus();
+                                                                                        confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                                    }
+                                                                                }
+                                                                            } else if (e.key === 'ArrowDown') {
+                                                                                e.preventDefault();
+                                                                                const nextIdx = idx + 1;
+                                                                                const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                if (nextInput) {
+                                                                                    nextInput.focus();
+                                                                                    nextInput.select();
+                                                                                    scrollToStagedRow(nextIdx);
+                                                                                }
+                                                                            } else if (e.key === 'ArrowUp') {
+                                                                                e.preventDefault();
+                                                                                const prevIdx = idx - 1;
+                                                                                if (prevIdx >= 0) {
+                                                                                    const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
+                                                                                    if (prevInput) {
+                                                                                        prevInput.focus();
+                                                                                        prevInput.select();
+                                                                                        scrollToStagedRow(prevIdx);
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                            if (p) {
+                                                                                updateStagedItem(item.id, 'product', p);
+                                                                            }
+                                                                        }}
+                                                                        style={{ 
+                                                                            width: '100%', 
+                                                                            padding: '9px 12px', 
+                                                                            borderRadius: '10px', 
+                                                                            border: item.suggestedProduct ? (isConfidenceHigh ? '2px solid #E2E8F0' : '2px solid #FCD34D') : '2px solid #F97316',
+                                                                            fontSize: '0.92rem',
+                                                                            fontWeight: '700',
+                                                                            backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
+                                                                            outline: 'none',
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                        }}
+                                                                    />
+                                                                </td>
+                                                                <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                                        <input 
+                                                                            type="number"
+                                                                            id={`staged-qty-input-${idx}`}
+                                                                            value={item.originalQty !== undefined ? item.originalQty : item.quantity}
+                                                                            onFocus={(e) => {
+                                                                                e.target.select();
+                                                                                scrollToStagedRow(idx);
+                                                                            }}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') {
+                                                                                    e.preventDefault();
+                                                                                    const nextIdx = idx + 1;
+                                                                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                    if (nextInput) {
+                                                                                        nextInput.focus();
+                                                                                        nextInput.select();
+                                                                                        scrollToStagedRow(nextIdx);
+                                                                                    } else {
+                                                                                        document.getElementById('confirm-inject-button')?.focus();
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                            onChange={(e) => {
+                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                                if (item.originalQty !== undefined) {
+                                                                                    updateStagedItem(item.id, 'originalQty', val);
+                                                                                    updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
+                                                                                } else {
+                                                                                    updateStagedItem(item.id, 'quantity', val);
+                                                                                }
+                                                                            }}
+                                                                            style={{ 
+                                                                                width: '75px', 
+                                                                                padding: '9px', 
+                                                                                borderRadius: '8px', 
+                                                                                border: '2px solid #E2E8F0', 
+                                                                                textAlign: 'center',
+                                                                                fontWeight: '800',
+                                                                                fontSize: '1rem',
+                                                                                backgroundColor: 'white'
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '40px', textAlign: 'left' }}>
+                                                                            {item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg'}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
 
                                     {/* Mesa de Trabajo Footer */}
@@ -4013,6 +4348,22 @@ function CreateOrderContent() {
                                                             ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
                                                         </span>
                                                     )}
+                                                    {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
+                                                        <span style={{ 
+                                                            fontSize: '0.68rem', 
+                                                            backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
+                                                            color: '#15803D', 
+                                                            padding: '2px 7px', 
+                                                            borderRadius: '6px', 
+                                                            fontWeight: '800', 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '3px',
+                                                            border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                                        }}>
+                                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} /> {Object.values(exc.preferred_options).join(' • ')}
+                                                        </span>
+                                                    )}
                                                     {isScarcityLocked && (
                                                         <span style={{ fontSize: '0.68rem', backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCA5A5', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                             <PackageX size={12} /> AGOTADO POR ESCASEZ
@@ -4030,9 +4381,12 @@ function CreateOrderContent() {
                                                             padding: '2px 6px', 
                                                             borderRadius: '6px', 
                                                             border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A',
-                                                            fontWeight: '800' 
+                                                            fontWeight: '800',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
                                                         }}>
-                                                            ⚙️ Opciones
+                                                            <Settings size={11} /> Opciones
                                                         </span>
                                                     )}
                                                 </span>
@@ -4078,7 +4432,9 @@ function CreateOrderContent() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#92400E', fontWeight: '600' }}>
                                             <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0 }} />
                                             <div>
-                                                <strong style={{ color: '#B45309' }}>🛒 Productos duplicados detectados:</strong> Hay líneas repetidas del mismo producto en este pedido.
+                                                <strong style={{ color: '#B45309', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <ShoppingCart size={15} color="#B45309" /> Productos duplicados detectados:
+                                                </strong> Hay líneas repetidas del mismo producto en este pedido.
                                             </div>
                                         </div>
                                         <button
@@ -4100,7 +4456,7 @@ function CreateOrderContent() {
                                                 flexShrink: 0
                                             }}
                                         >
-                                            ⚡ Consolidar Cantidades
+                                            <Zap size={13} /> Consolidar Cantidades
                                         </button>
                                     </div>
                                 );
@@ -4337,7 +4693,9 @@ function CreateOrderContent() {
                                                             />
                                                         </div>
                                                         {isZeroPrice && (
-                                                            <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold' }}>⚠️ Asignar Precio</span>
+                                                            <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                <AlertCircle size={11} color="#DC2626" /> Asignar Precio
+                                                            </span>
                                                         )}
                                                     </div>
 
@@ -4380,8 +4738,8 @@ function CreateOrderContent() {
                                                         gap: '0.75rem'
                                                     }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: hasPredefined ? '#15803D' : '#A16207' }}>
-                                                                {hasPredefined ? '⚖️ Conversiones de Equivalencia Sugeridas' : '⚖️ Calculadora Libre de Equivalencias'}
+                                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: hasPredefined ? '#15803D' : '#A16207', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Scale size={14} /> {hasPredefined ? 'Conversiones de Equivalencia Sugeridas' : 'Calculadora Libre de Equivalencias'}
                                                             </span>
                                                             <button
                                                                 type="button"
@@ -4516,51 +4874,116 @@ function CreateOrderContent() {
                         </div>
 
                     </div>
+                </div>
 
-                    {/* RIGHT COLUMN: SUMMARY */}
-                    {!showFloatingDoc && (
-                        <div>
-                            <div style={{ position: 'sticky', top: '2rem', backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1.5rem', color: '#111827' }}>Resumen</h3>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                    <span style={{ color: '#6B7280' }}>Total Items:</span>
-                                    <span style={{ fontWeight: 'bold' }}>{cart.length}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
-                                    <span style={{ color: '#6B7280' }}>Subtotal (Neto):</span>
-                                    <span style={{ fontWeight: '600', color: '#374151' }}>{formatMoney(calculateSubtotal())}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
-                                    <span style={{ color: '#6B7280' }}>IVA Estimado:</span>
-                                    <span style={{ fontWeight: '600', color: '#374151' }}>{formatMoney(calculateTotalTax())}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827', borderTop: '1px dashed #E5E7EB', paddingTop: '0.5rem' }}>
-                                    <span>TOTAL:</span>
-                                    <span>{formatMoney(calculateTotal())}</span>
-                                </div>
-
-                                <button
-                                    onClick={handleSubmit}
-                                    disabled={loading || cart.length === 0}
-                                    style={{
-                                        width: '100%', padding: '1rem', borderRadius: '12px',
-                                        backgroundColor: '#111827', color: 'white', border: 'none',
-                                        fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer',
-                                        opacity: (loading || cart.length === 0) ? 0.5 : 1,
-                                        marginBottom: '1rem'
-                                    }}
-                                >
-                                    {loading ? 'Creando...' : 'CONFIRMAR PEDIDO'}
-                                </button>
-
-                                <p style={{ fontSize: '0.8rem', color: '#9CA3AF', textAlign: 'center', lineHeight: '1.4' }}>
-                                    Al confirmar, el pedido entrará a la Mesa de Control en estado &quot;Recibido&quot; para su revisión y aprobación.
-                                </p>
-                            </div>
+                {/* --- STICKY FLOATING ISLAND DOCK (PREMIUM GLASSMORPHISM) --- */}
+                <div style={{
+                    position: 'fixed',
+                    bottom: '1.25rem',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 'min(calc(100% - 190px), 1360px)',
+                    zIndex: 80,
+                    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    borderRadius: '24px',
+                    border: '1.5px solid rgba(13, 122, 87, 0.22)',
+                    boxShadow: '0 20px 45px -10px rgba(13, 122, 87, 0.16), 0 8px 24px -6px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.9) inset',
+                    padding: '0.85rem 2.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '1.5rem',
+                    boxSizing: 'border-box'
+                }}>
+                    {/* LEFT: Quick Items & Financial Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                        {/* Items Badge */}
+                        <div style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '0.55rem', 
+                            backgroundColor: cart.length > 0 ? '#E8F5EE' : '#F1F5F9', 
+                            color: cart.length > 0 ? '#0D7A57' : '#64748B', 
+                            padding: '0.5rem 1.1rem', 
+                            borderRadius: '100px', 
+                            fontWeight: '800', 
+                            fontSize: '0.88rem',
+                            border: `1.5px solid ${cart.length > 0 ? '#A7D7C5' : '#E2E8F0'}`,
+                            boxShadow: cart.length > 0 ? '0 2px 8px rgba(13, 122, 87, 0.1)' : 'none'
+                        }}>
+                            <ShoppingCart size={17} />
+                            <span>{cart.length} {cart.length === 1 ? 'Ítem' : 'Ítems en Pedido'}</span>
                         </div>
-                    )}
 
+                        {/* Subtotal & IVA */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.1rem', fontSize: '0.88rem', color: '#4B5563' }}>
+                            <span>Subtotal: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(calculateSubtotal())}</strong></span>
+                            <span style={{ color: '#CBD5E1' }}>•</span>
+                            <span>IVA Est.: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(calculateTotalTax())}</strong></span>
+                        </div>
+                    </div>
+
+                    {/* RIGHT: Big Total & Action Button */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.8rem' }}>
+                        <div style={{ textAlign: 'right' }}>
+                            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Total a Pagar
+                            </span>
+                            <span style={{ fontSize: '1.55rem', fontWeight: '900', color: '#0D7A57', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+                                {formatMoney(calculateTotal())}
+                            </span>
+                        </div>
+
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading || cart.length === 0}
+                            style={{
+                                padding: '0.9rem 2.2rem',
+                                borderRadius: '16px',
+                                background: cart.length > 0 ? 'linear-gradient(135deg, #0D7A57 0%, #064E3B 100%)' : '#94A3B8',
+                                color: 'white',
+                                border: 'none',
+                                fontWeight: '800',
+                                fontSize: '1.05rem',
+                                letterSpacing: '0.02em',
+                                cursor: (loading || cart.length === 0) ? 'not-allowed' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.65rem',
+                                boxShadow: cart.length > 0 ? '0 6px 20px -2px rgba(13, 122, 87, 0.45)' : 'none',
+                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                            onMouseOver={(e) => {
+                                if (cart.length > 0 && !loading) {
+                                    e.currentTarget.style.background = 'linear-gradient(135deg, #0A5F43 0%, #04382A 100%)';
+                                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+                                    e.currentTarget.style.boxShadow = '0 10px 25px -2px rgba(13, 122, 87, 0.55)';
+                                }
+                            }}
+                            onMouseOut={(e) => {
+                                if (cart.length > 0 && !loading) {
+                                    e.currentTarget.style.background = 'linear-gradient(135deg, #0D7A57 0%, #064E3B 100%)';
+                                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                    e.currentTarget.style.boxShadow = '0 6px 20px -2px rgba(13, 122, 87, 0.45)';
+                                }
+                            }}
+                        >
+                            {loading ? (
+                                <>
+                                    <Loader2 size={19} style={{ animation: 'spin 1s linear infinite' }} />
+                                    <span>Creando...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={19} />
+                                    <span>CONFIRMAR PEDIDO</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -4732,7 +5155,7 @@ function CreateOrderContent() {
                                             justifyContent: 'center',
                                             boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                                         }}>
-                                            <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                            <PackageX size={28} color="#9CA3AF" />
                                         </div>
                                     )}
                                     <div>
@@ -4772,68 +5195,202 @@ function CreateOrderContent() {
                                 )}
                             </div>
 
-                            {/* CLIENT CUSTOM REQUIREMENT & MIN SALE BANNER */}
-                            {(exc || hasSpecialMinSale) && (
-                                <div style={{
-                                    backgroundColor: '#FEF3C7',
-                                    border: '1px solid #FCD34D',
-                                    borderRadius: '14px',
-                                    padding: '0.85rem 1.3rem',
-                                    margin: '0.5rem 0 1.2rem 0',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    gap: '1.2rem',
-                                    flexWrap: 'wrap',
-                                    textAlign: 'left',
-                                    fontSize: '0.82rem',
-                                    color: '#92400E',
-                                    lineHeight: '1.4'
-                                }}>
-                                    {/* Left: Requerimientos del cliente */}
-                                    <div style={{ flex: '1 1 auto', minWidth: '220px' }}>
-                                        {exc ? (
-                                            <>
-                                                <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#B45309', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <FileText size={12} strokeWidth={2} /> REQUERIMIENTOS DEL CLIENTE:
-                                                </div>
-                                                {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
-                                                    <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
-                                                )}
-                                                {exc.picking_note && (
-                                                    <div><strong>Nota del cliente:</strong> {exc.picking_note}</div>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div style={{ fontWeight: '800', color: '#92400E', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <Info size={16} style={{ color: '#D97706' }} />
-                                                <span>Restricción Logística y Comercial</span>
-                                            </div>
-                                        )}
-                                    </div>
+                            {/* CLIENT CUSTOM REQUIREMENT / STRUCTURED PREFERENCES BANNER */}
+                            {(() => {
+                                const hasStructuredPreference = Boolean(
+                                    exc?.preferred_options && 
+                                    typeof exc.preferred_options === 'object' && 
+                                    Object.keys(exc.preferred_options).length > 0
+                                );
+                                const hasClientNote = Boolean(exc?.picking_note || exc?.delivery_note);
+                                const activeClientObj = clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails();
+                                const clientDisplayName = activeClientObj?.company_name || activeClientObj?.contact_name || 'este cliente';
 
-                                    {/* Right: Cantidad Mínima Prominente */}
-                                    {hasSpecialMinSale && (
-                                         <div style={{
-                                             backgroundColor: '#FFFBEB',
-                                             color: '#92400E',
-                                             border: '1.5px solid #F59E0B',
-                                             boxShadow: '0 2px 6px rgba(245, 158, 11, 0.15)',
-                                             padding: '8px 16px',
-                                             borderRadius: '10px',
-                                             fontSize: '0.85rem',
-                                             fontWeight: '800',
-                                             display: 'inline-flex',
-                                             alignItems: 'center',
-                                             gap: '8px',
-                                             marginLeft: 'auto'
-                                         }}>
-                                             <Info size={18} style={{ color: '#D97706', flexShrink: 0 }} />
-                                             <span>Cantidad mínima: <strong style={{ color: '#78350F', fontSize: '0.95rem' }}>{formatWeightKg(minSaleLimitKg)} kg</strong></span>
-                                         </div>
-                                     )}
-                                </div>
-                            )}
+                                // SOLO mostrar si el cliente tiene Nota de cliente, Preferencia estructurada activa, o venta mínima especial
+                                if (!hasStructuredPreference && !hasClientNote && !hasSpecialMinSale) return null;
+
+                                return (
+                                    <div style={{
+                                        backgroundColor: hasStructuredPreference ? '#ECFDF5' : (hasClientNote ? '#FEF3C7' : '#F8FAFC'),
+                                        border: `1.5px solid ${hasStructuredPreference ? '#A7F3D0' : (hasClientNote ? '#FCD34D' : '#E2E8F0')}`,
+                                        borderRadius: '16px',
+                                        padding: '0.9rem 1.3rem',
+                                        margin: '0.5rem 0 1.2rem 0',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        gap: '1.2rem',
+                                        flexWrap: 'wrap',
+                                        textAlign: 'left',
+                                        fontSize: '0.84rem',
+                                        color: hasStructuredPreference ? '#065F46' : (hasClientNote ? '#92400E' : '#334155'),
+                                        lineHeight: '1.4',
+                                        boxShadow: hasStructuredPreference ? '0 4px 14px rgba(16, 185, 129, 0.1)' : 'none',
+                                        transition: 'all 0.3s ease'
+                                    }}>
+                                        {/* Left: Requerimiento / Preferencia */}
+                                        <div style={{ flex: '1 1 auto', minWidth: '240px' }}>
+                                            {hasStructuredPreference ? (
+                                                <div>
+                                                    <div style={{ fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#047857', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <CheckCircle2 size={15} color="#059669" /> PREFERENCIA ESTRUCTURADA ACTIVA:
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                                        {Object.entries(exc.preferred_options).map(([k, v]) => (
+                                                            <span key={k} style={{
+                                                                backgroundColor: '#D1FAE5',
+                                                                color: '#065F46',
+                                                                border: '1px solid #6EE7B7',
+                                                                padding: '3px 9px',
+                                                                borderRadius: '8px',
+                                                                fontWeight: '800',
+                                                                fontSize: '0.8rem',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}>
+                                                                <span>{k}:</span> <strong>{String(v)}</strong>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    {exc.picking_note && (
+                                                        <div style={{ fontSize: '0.78rem', color: '#059669', marginTop: '4px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <FileText size={12} color="#059669" /> Nota origen: &quot;{exc.picking_note}&quot;
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : hasClientNote ? (
+                                                <div>
+                                                    <div style={{ fontWeight: '800', marginBottom: '3px', textTransform: 'uppercase', fontSize: '0.72rem', color: '#B45309', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                        <FileText size={13} strokeWidth={2.2} /> NOTA INFORMAL DEL CLIENTE (SIN ESTRUCTURAR):
+                                                    </div>
+                                                    {exc?.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
+                                                        <div style={{ marginBottom: '2px' }}><strong>Alias Comercial:</strong> {exc.nickname}</div>
+                                                    )}
+                                                    {exc?.picking_note && (
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#78350F', backgroundColor: 'rgba(254, 243, 199, 0.7)', padding: '2px 8px', borderRadius: '6px', display: 'inline-block' }}>
+                                                            Nota: &quot;{exc.picking_note}&quot;
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : null}
+                                        </div>
+
+                                        {/* Right: Botón para Fijar / Desfijar la combinación actual */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            {activeCustomerId && normalizedOptionsConfig && normalizedOptionsConfig.length > 0 && (
+                                                hasStructuredPreference ? (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <button
+                                                            type="button"
+                                                            id="btn-update-preference"
+                                                            onClick={() => handleSaveCustomerOptionPreference(selectedProductForModal.id, selectedOptions, false)}
+                                                            disabled={savingPreference}
+                                                            style={{
+                                                                backgroundColor: '#0D7A57',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                padding: '6px 14px',
+                                                                borderRadius: '10px',
+                                                                fontWeight: '800',
+                                                                fontSize: '0.78rem',
+                                                                cursor: savingPreference ? 'wait' : 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#0A5F43'}
+                                                            onMouseOut={e => e.currentTarget.style.backgroundColor = '#0D7A57'}
+                                                            title="Actualiza la regla fija con la combinación actualmente seleccionada"
+                                                        >
+                                                            <RefreshCw size={13} /> Actualizar regla fija
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            id="btn-clear-preference"
+                                                            onClick={() => handleSaveCustomerOptionPreference(selectedProductForModal.id, {}, true)}
+                                                            disabled={savingPreference}
+                                                            style={{
+                                                                backgroundColor: 'white',
+                                                                color: '#DC2626',
+                                                                border: '1px solid #FECACA',
+                                                                padding: '5px 10px',
+                                                                borderRadius: '10px',
+                                                                fontWeight: '700',
+                                                                fontSize: '0.75rem',
+                                                                cursor: savingPreference ? 'wait' : 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                                            onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                            title="Eliminar regla fija para volver a la configuración estándar"
+                                                        >
+                                                            <X size={13} /> Desfijar
+                                                        </button>
+                                                    </div>
+                                                ) : hasClientNote ? (
+                                                    <button
+                                                        type="button"
+                                                        id="btn-pin-preference"
+                                                        onClick={() => handleSaveCustomerOptionPreference(selectedProductForModal.id, selectedOptions, false)}
+                                                        disabled={savingPreference}
+                                                        style={{
+                                                            backgroundColor: '#0D7A57',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            padding: '8px 18px',
+                                                            borderRadius: '12px',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.84rem',
+                                                            cursor: savingPreference ? 'wait' : 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            boxShadow: '0 4px 14px rgba(13, 122, 87, 0.35)',
+                                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                        }}
+                                                        onMouseOver={e => {
+                                                            e.currentTarget.style.backgroundColor = '#0A5F43';
+                                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                                        }}
+                                                        onMouseOut={e => {
+                                                            e.currentTarget.style.backgroundColor = '#0D7A57';
+                                                            e.currentTarget.style.transform = 'translateY(0)';
+                                                        }}
+                                                    >
+                                                        <Pin size={14} /> Fijar combinación para {clientDisplayName.split(' ')[0]}
+                                                    </button>
+                                                ) : null
+                                            )}
+
+                                            {/* Cantidad Mínima Prominente */}
+                                            {hasSpecialMinSale && (
+                                                <div style={{
+                                                    backgroundColor: '#FFFBEB',
+                                                    color: '#92400E',
+                                                    border: '1.5px solid #F59E0B',
+                                                    boxShadow: '0 2px 6px rgba(245, 158, 11, 0.15)',
+                                                    padding: '6px 14px',
+                                                    borderRadius: '10px',
+                                                    fontSize: '0.82rem',
+                                                    fontWeight: '800',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}>
+                                                    <Info size={16} style={{ color: '#D97706', flexShrink: 0 }} />
+                                                    <span>Mínimo: <strong style={{ color: '#78350F' }}>{formatWeightKg(minSaleLimitKg)} kg</strong></span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
 
                             {/* DISCRETE PRODUCT CONFIG ACTION BAR */}
@@ -5290,8 +5847,8 @@ function CreateOrderContent() {
                         >
                             <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
                                 <div style={{ textAlign: 'left' }}>
-                                    <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>
-                                        ⚖️ Equivalencias y Conversiones
+                                    <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Scale size={20} color="#111827" /> Equivalencias y Conversiones
                                     </h3>
                                     <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>
                                         {manageConversionsProduct.name}
@@ -5299,9 +5856,9 @@ function CreateOrderContent() {
                                 </div>
                                 <button
                                     onClick={() => setManageConversionsProduct(null)}
-                                    style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', fontWeight: 'bold' }}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}
                                 >
-                                    ✕
+                                    <X size={20} />
                                 </button>
                             </header>
 
@@ -5362,8 +5919,8 @@ function CreateOrderContent() {
 
                             {/* AGREGAR NUEVA RELACIÓN */}
                             <div style={{ borderTop: '1px dashed #E2E8F0', paddingTop: '1.25rem', textAlign: 'left' }}>
-                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800', textAlign: 'center' }}>
-                                    ➕ DEFINIR NUEVA RELACIÓN
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                    <Plus size={14} /> DEFINIR NUEVA RELACIÓN
                                 </h4>
                                 
                                 <div style={{ 
@@ -5958,8 +6515,8 @@ function CreateOrderContent() {
                             }}>
                                 <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                                 <div>
-                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#B45309' }}>
-                                        🛒 Insumo ya incluido en tu pedido
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <ShoppingCart size={15} color="#B45309" /> Insumo ya incluido en tu pedido
                                     </div>
                                     <div style={{ marginTop: '4px', color: '#78350F', lineHeight: '1.4' }}>
                                         Ya tienes <strong style={{ color: '#B45309' }}>{currentQty} {unitStr}</strong> de {duplicateConfirm.product.name} en tu pedido.
