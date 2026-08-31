@@ -2136,26 +2136,34 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
   };
 
+  const modalOpenedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (customizingModalItem) {
-      setTimeout(() => {
-        if (firstModalSelectRef.current) {
-          firstModalSelectRef.current.focus();
-        } else {
-          const firstSelect = document.getElementById('modal-opt-select-0') as HTMLSelectElement | null;
-          if (firstSelect) {
-            firstSelect.focus();
+      const currentModalKey = `${customizingModalItem.rowIndex}-${customizingModalItem.product?.id}`;
+      if (modalOpenedKeyRef.current !== currentModalKey) {
+        modalOpenedKeyRef.current = currentModalKey;
+        setTimeout(() => {
+          if (firstModalSelectRef.current) {
+            firstModalSelectRef.current.focus();
           } else {
-            const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
-            if (qtyInput) {
-              qtyInput.focus();
-              qtyInput.select();
+            const firstSelect = document.getElementById('modal-opt-select-0') as HTMLSelectElement | null;
+            if (firstSelect) {
+              firstSelect.focus();
+            } else {
+              const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+              if (qtyInput) {
+                qtyInput.focus();
+                qtyInput.select();
+              }
             }
           }
-        }
-      }, 50);
+        }, 50);
+      }
+    } else {
+      modalOpenedKeyRef.current = null;
     }
-  }, [customizingModalItem]);
+  }, [customizingModalItem?.rowIndex, customizingModalItem?.product?.id]);
 
   const saveCustomizingModal = () => {
     if (!customizingModalItem) return;
