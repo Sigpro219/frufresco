@@ -16,6 +16,7 @@ import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
+import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -4409,74 +4410,37 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }
 
           // G. Enviar correo HTML de acuse de recibo con resumen de pedido
-          const itemsHtml = editableItems.filter((item: any) => !item.isDeleted).map((item: any) => {
+          const formattedAttachmentItems = editableItems.filter((item: any) => !item.isDeleted).map((item: any) => {
             const prod = products.find(p => p.id === item.matched_product_id);
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
-            const lineTotal = unitPrice * qtyNum;
-            const lineTotalDisplay = lineTotal > 0 ? formatMoney(lineTotal) : 'Por confirmar';
-            const productNameDisplay = `${prod?.name || item.originalName || 'Producto'}${item.unit ? ` (${item.unit})` : ''}`;
-            return `
-              <tr style="border-bottom: 1px solid #E5E7EB;">
-                  <td style="padding: 12px 0; color: #111827; font-family: sans-serif; font-size: 14px;">${productNameDisplay}</td>
-                  <td style="padding: 12px 0; text-align: center; color: #4B5563; font-family: sans-serif; font-size: 14px; font-weight: bold;">${qtyNum}</td>
-                  <td style="padding: 12px 0; text-align: right; color: #111827; font-family: sans-serif; font-size: 14px; font-weight: bold;">${lineTotalDisplay}</td>
-              </tr>
-            `;
-          }).join('');
+            return {
+              name: prod?.name || item.originalName || 'Producto',
+              quantity: qtyNum,
+              unit: item.unit || prod?.unit || undefined,
+              price: formatNumber(unitPrice),
+              total: formatNumber(unitPrice * qtyNum)
+            };
+          });
 
-          const totalOrderDisplay = totalAmount > 0 ? `Total Aprox: ${formatMoney(totalAmount)}` : 'Total: A confirmar en despacho';
+          const attachmentEmailData = {
+            client: clientName,
+            order_number: shortCode,
+            delivery_date: deliveryDate,
+            delivery_slot: editableDeliverySlot || matchedProfile?.delivery_restrictions || '06:30 AM - 11:00 AM',
+            delivery_address: editableAddress || matchedProfile?.address || 'Dirección de despacho registrada',
+            total_amount: formatNumber(totalAmount),
+            items: formattedAttachmentItems
+          };
 
-          const emailHtml = `
-            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-            <div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
-                <center>
-                    <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
-                    <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
-                    <p style="font-size: 16px; color: #555; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
-                </center>
-                
-                <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-                    <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${shortCode}</h3>
-                    <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</p>
-                    
-                    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
-                                <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
-                                <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
-                                <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsHtml}
-                        </tbody>
-                    </table>
-                    
-                    <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
-                        <p style="font-size: 16px; color: #286a36; margin: 0; font-weight: 800;">
-                            <span>${totalOrderDisplay}</span>
-                        </p>
-                    </div>
-                </div>
-
-                <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
-                    Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
-                    Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
-                </p>
-                
-                <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
-                
-                <center>
-                    <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
-                </center>
-            </div>
-          `;
+          const emailHtml = generateOrderConfirmationHtml(attachmentEmailData);
+          const emailText = generateOrderConfirmationText(attachmentEmailData);
 
           const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
             to_email: selectedDraft.source_email,
             subject: `¡Hemos recibido tu pedido! (#${shortCode})`,
-            message: { html: emailHtml, text: `Hemos recibido tu pedido con éxito y ya está en preparación.` },
+            message: { html: emailHtml, text: emailText },
+            template: { name: 'order_confirmation', data: attachmentEmailData },
             status: 'pending'
           }).select().single();
 
@@ -4856,31 +4820,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const targetConfirmationEmail = matchedProfile?.email || matchedProfile?.contact_email || matchedProfile?.email_2 || (selectedDraft.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : null);
 
       if (targetConfirmationEmail && sendConfirmationEmail) {
-        const formattedItems = editableItems.map(item => {
+        const formattedOrderItems = editableItems.filter((item: any) => !item.isDeleted).map(item => {
           const prod = products.find(p => p.id === item.matched_product_id);
           const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
           const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
           return {
             name: prod?.name || item.originalName || 'Producto',
             quantity: qtyNum,
+            unit: item.unit || prod?.unit || undefined,
             price: formatNumber(unitPrice),
             total: formatNumber(unitPrice * qtyNum)
           };
         });
 
-        await supabase.from('mail').insert({
+        const orderEmailData = {
+          client: selectedDraft.client_detected_name || matchedProfile?.company_name || matchedProfile?.contact_name || 'Cliente',
+          order_number: order.id.slice(0, 6).toUpperCase(),
+          delivery_date: deliveryDate,
+          delivery_slot: editableDeliverySlot || matchedProfile?.delivery_restrictions || '06:30 AM - 11:00 AM',
+          delivery_address: editableAddress || matchedProfile?.address || getDraftMetadata(selectedDraft).address || 'Dirección de despacho registrada',
+          total_amount: formatNumber(totalAmount),
+          items: formattedOrderItems
+        };
+
+        const emailHtml = generateOrderConfirmationHtml(orderEmailData);
+        const emailText = generateOrderConfirmationText(orderEmailData);
+
+        const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
           to_email: targetConfirmationEmail,
           subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
+          message: { html: emailHtml, text: emailText },
           template: {
             name: 'order_confirmation',
-            data: {
-              client: selectedDraft.client_detected_name || 'Cliente',
-              order_number: order.id.slice(0, 6).toUpperCase(),
-              total_amount: formatNumber(totalAmount),
-              items: formattedItems
-            }
-          }
-        });
+            data: orderEmailData
+          },
+          status: 'pending'
+        }).select().single();
+
+        if (!mailError && insertedMail) {
+          fetch('/api/mail/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ record: insertedMail })
+          }).catch(e => console.error('Failed to trigger mail processor', e));
+        }
       }
 
       showToast(`¡Pedido #${finalOrderNumber} creado exitosamente!`, 'success');

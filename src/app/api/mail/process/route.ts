@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
 
 // Helper function to send email for a single mail record
 async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
@@ -16,96 +17,73 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
     let htmlContent = '';
     let textContent = '';
 
-    if (message) {
-      htmlContent = message.html || '';
+    if (message && message.html) {
+      htmlContent = message.html;
       textContent = message.text || '';
     } else if (template) {
       const tName = template.name;
       const tData = template.data || {};
 
       if (tName === 'order_confirmation') {
-        const client = tData.client || 'Cliente';
-        const orderNum = tData.order_number || 'N/A';
-        const total = tData.total_amount || '0';
-        const items = tData.items || [];
-
-        const itemsHtml = items.map((it: any) => `
-          <tr style="border-bottom: 1px solid #F3F4F6;">
-            <td style="padding: 10px 0; font-family: sans-serif; font-size: 14px;">${it.name}</td>
-            <td style="padding: 10px 0; text-align: center; font-family: sans-serif; font-size: 14px; font-weight: bold;">${it.quantity}</td>
-            <td style="padding: 10px 0; text-align: right; font-family: sans-serif; font-size: 14px;">$${it.price}</td>
-            <td style="padding: 10px 0; text-align: right; font-family: sans-serif; font-size: 14px; font-weight: bold;">$${it.total || it.price}</td>
-          </tr>
-        `).join('');
-
-        htmlContent = `
-          <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-          <div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
-            <center>
-              <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
-              <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${client}!</h1>
-              <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
-            </center>
-            
-            <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-              <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${orderNum}</h3>
-              <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</p>
-              
-              <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
-                <thead>
-                  <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
-                    <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${itemsHtml}
-                </tbody>
-              </table>
-
-              <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
-                <p style="font-size: 16px; color: #286a36; margin: 0;"><b>Total Confirmado: $${total}</b></p>
-              </div>
-            </div>
-            
-            <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
-              Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
-              Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
-            </p>
-            
-            <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
-            <center>
-              <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
-            </center>
-          </div>
-        `;
-        textContent = `Hola ${client}, tu orden N° ${orderNum} ha sido confirmada por un total de $${total}.`;
+        htmlContent = generateOrderConfirmationHtml(tData);
+        textContent = generateOrderConfirmationText(tData);
       } else {
         htmlContent = `<p>${JSON.stringify(template)}</p>`;
         textContent = JSON.stringify(template);
       }
     }
 
-    // 3. Send the email
+    // 3. Check App Settings for Email Notifications Mode
+    const { data: settingsRows } = await supabaseAdmin
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['email_notifications_mode', 'email_sandbox_recipient']);
+
+    const settingsMap: Record<string, string> = {};
+    (settingsRows || []).forEach((r: any) => { settingsMap[r.key] = r.value; });
+
+    const notificationMode = settingsMap['email_notifications_mode'] || 'sandbox'; // Defaults to 'sandbox'
+    const sandboxRecipient = settingsMap['email_sandbox_recipient'] || 'auditoria.investment@gmail.com';
+
+    // 4. Handle Modes
+    if (notificationMode === 'disabled') {
+      console.log(`[Mail Queue Processor] Notifications disabled by switch. Marking mail ${id} as simulated.`);
+      await supabaseAdmin
+        .from('mail')
+        .update({
+          status: 'simulated',
+          sent_at: new Date().toISOString(),
+          message: { html: htmlContent, text: textContent },
+          error_message: 'Modo Silencioso (Notificaciones desactivadas en /admin/settings)'
+        })
+        .eq('id', id);
+
+      return { success: true, messageId: 'simulated-disabled' };
+    }
+
+    // Determine final recipient and subject based on Sandbox vs Live
+    const isSandbox = notificationMode === 'sandbox';
+    const effectiveToEmail = isSandbox ? sandboxRecipient : (to_email || '').toLowerCase().trim();
+    const effectiveSubject = isSandbox ? `[PRUEBAS - Para: ${to_email}] ${subject || 'Confirmación de Pedido FruFresco'}` : (subject || 'Confirmación de Compra - Investments Cortés');
+
+    // 5. Send the email via Resend or SMTP
     const resendApiKey = process.env.RESEND_API_KEY;
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
     let messageId = 'simulated-id';
 
-    const cleanToEmail = (to_email || '').toLowerCase().trim();
     const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
-    const isCorporate = corporateEmails.includes(cleanToEmail) || cleanToEmail.endsWith('@frufresco.com') || cleanToEmail.endsWith('@frufresco.co');
+    const isCorporate = corporateEmails.includes(effectiveToEmail) || effectiveToEmail.endsWith('@frufresco.com') || effectiveToEmail.endsWith('@frufresco.co');
 
-    if (isCorporate) {
-      console.log('[Mail Queue Processor] Corporate/admin email recipient detected. Simulating mail send to avoid spamming inbox.', cleanToEmail);
+    if (isCorporate && !isSandbox) {
+      console.log('[Mail Queue Processor] Corporate/admin email recipient detected. Simulating mail send to avoid spamming inbox.', effectiveToEmail);
       messageId = 'simulated-corporate-id';
     } else if (resendApiKey) {
-      console.log('[Mail Queue Processor] Sending via Resend API...');
+      console.log(`[Mail Queue Processor] Sending via Resend API (${isSandbox ? 'SANDBOX' : 'LIVE'})... to: ${effectiveToEmail}`);
       const emailPayload = {
         from: 'Investments Cortés (Pedidos) <pedidos@frufresco.com>',
-        to: [to_email],
-        subject: subject || 'Confirmación de Compra - Investments Cortés',
+        to: [effectiveToEmail],
+        subject: effectiveSubject,
         html: htmlContent,
         text: textContent
       };
@@ -129,7 +107,7 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
       console.log('[Mail Queue Processor] Resend response:', resData);
 
     } else if (smtpUser && smtpPass) {
-      console.log('[Mail Queue Processor] Sending via SMTP (Nodemailer)...');
+      console.log(`[Mail Queue Processor] Sending via SMTP (Nodemailer) (${isSandbox ? 'SANDBOX' : 'LIVE'})... to: ${effectiveToEmail}`);
       try {
         const nodemailer = require('nodemailer');
         const transporter = nodemailer.createTransport({
@@ -142,8 +120,8 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
 
         const mailOptions = {
           from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
-          to: to_email,
-          subject: subject || 'Confirmación de Compra - Investments Cortés',
+          to: effectiveToEmail,
+          subject: effectiveSubject,
           html: htmlContent,
           text: textContent
         };
@@ -156,17 +134,19 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
         throw smtpErr;
       }
     } else {
-      console.warn('[Mail Queue Processor] No email credentials found. Simulating send in development.');
+      console.warn(`[Mail Queue Processor] No email credentials found. Simulating send in development (${isSandbox ? 'SANDBOX' : 'LIVE'}).`);
+      messageId = `simulated-${Date.now()}`;
     }
 
-    // 4. Update status to 'sent'
+    // 6. Update status in database
+    const finalStatus = isSandbox ? 'sandbox_sent' : 'sent';
     await supabaseAdmin
       .from('mail')
       .update({
-        status: 'sent',
+        status: finalStatus,
         sent_at: new Date().toISOString(),
         message: { html: htmlContent, text: textContent },
-        error_message: null
+        error_message: isSandbox ? `Redirigido a buzón de pruebas: ${sandboxRecipient}` : null
       })
       .eq('id', id);
 

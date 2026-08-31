@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2 } from 'lucide-react';
+import { generateOrderConfirmationHtml } from '@/lib/emailTemplates';
 
 interface EmailOutboxModuleProps {
   onOutboxChange?: (count: number) => void;
@@ -425,8 +426,10 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             <tbody>
               {filteredEmails.map((email) => {
                 const date = new Date(email.sent_at || email.created_at || Date.now());
-                const isSimulated = email.subject?.toLowerCase().includes('(simulado)') || email.message?.text?.includes('[SIMULADO]');
-                const status = email.status || 'sent';
+                const isSandbox = email.status === 'sandbox_sent' || (email.subject && email.subject.includes('[PRUEBAS')) || (email.error_message && email.error_message.includes('buzón de pruebas'));
+                const isSimulated = email.status === 'simulated' || email.subject?.toLowerCase().includes('(simulado)') || email.message?.text?.includes('[SIMULADO]');
+                const isFailed = email.status === 'failed';
+                const isPending = email.status === 'pending' || email.status === 'processing';
 
                 return (
                   <tr key={email.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
@@ -454,12 +457,16 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                       {email.subject}
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
-                      {status === 'failed' ? (
-                        <span style={{ backgroundColor: '#FDE8E8', color: '#9B1C1C', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>FALLIDO</span>
+                      {isFailed ? (
+                        <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>FALLIDO</span>
+                      ) : isSandbox ? (
+                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🟡 MODO PRUEBAS</span>
                       ) : isSimulated ? (
-                        <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>SIMULADO</span>
+                        <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>SIMULADO</span>
+                      ) : isPending ? (
+                        <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>EN COLA</span>
                       ) : (
-                        <span style={{ backgroundColor: '#DEF7EC', color: '#03543F', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>ENVIADO</span>
+                        <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🟢 ENVIADO REAL</span>
                       )}
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -513,75 +520,99 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
       )}
 
       {/* Detail Modal */}
-      {selectedEmail && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 99999,
-          padding: '2rem'
-        }}>
+      {selectedEmail && (() => {
+        const previewHtml = selectedEmail.message?.html || (selectedEmail.template?.name === 'order_confirmation' ? generateOrderConfirmationHtml(selectedEmail.template.data) : null);
+        const isSandboxModal = selectedEmail.status === 'sandbox_sent' || (selectedEmail.subject && selectedEmail.subject.includes('[PRUEBAS')) || (selectedEmail.error_message && selectedEmail.error_message.includes('buzón de pruebas'));
+
+        return (
           <div style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '700px',
-            maxHeight: '85vh',
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
             display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            textAlign: 'left'
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '2rem'
           }}>
-            {/* Modal Header */}
-            <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
-                <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '750px',
+              maxHeight: '88vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              textAlign: 'left'
+            }}>
+              {/* Modal Header */}
+              <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
+                  <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
+                </div>
+                <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                  <X size={24} />
+                </button>
               </div>
-              <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
-                <X size={24} />
-              </button>
-            </div>
 
-            {/* Modal Body (Email HTML Preview) */}
-            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, backgroundColor: THEME.colors.background }}>
-              {selectedEmail.message?.html ? (
-                <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', overflow: 'hidden', backgroundColor: 'white' }}>
-                  <iframe
-                    srcDoc={selectedEmail.message.html}
-                    title="Vista previa del correo"
-                    style={{
-                      width: '100%',
-                      height: '500px',
-                      border: 'none',
-                      display: 'block'
-                    }}
-                  />
-                </div>
-              ) : (
-                <div style={{
-                  backgroundColor: 'white',
-                  border: `1px solid ${THEME.colors.border}`,
-                  borderRadius: '12px',
-                  padding: '2rem',
-                  fontSize: '0.9rem',
-                  lineHeight: '1.6',
-                  color: THEME.colors.textMain,
-                  whiteSpace: 'pre-wrap',
-                  minHeight: '200px'
-                }}>
-                  {selectedEmail.message?.text || 'Sin contenido de texto alternativo'}
-                </div>
-              )}
-            </div>
+              {/* Modal Body (Email HTML Preview) */}
+              <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, backgroundColor: THEME.colors.background }}>
+                {isSandboxModal && (
+                  <div style={{
+                    backgroundColor: '#FEF3C7',
+                    border: '1px solid #FCD34D',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    marginBottom: '1rem',
+                    fontSize: '0.78rem',
+                    color: '#92400E',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{ fontSize: '1rem' }}>🟡</span>
+                    <div>
+                      <strong>MODO PRUEBAS ACTIVO:</strong> Este correo fue generado en entorno de pruebas y redirigido a tu buzón de auditoría (<u>no</u> fue enviado al cliente real).
+                    </div>
+                  </div>
+                )}
 
-            {/* Modal Footer */}
-            <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', backgroundColor: THEME.colors.background, borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
-              <button
-                onClick={() => setSelectedEmail(null)}
+                {previewHtml ? (
+                  <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', overflow: 'hidden', backgroundColor: 'white' }}>
+                    <iframe
+                      srcDoc={previewHtml}
+                      title="Vista previa del correo"
+                      style={{
+                        width: '100%',
+                        height: '520px',
+                        border: 'none',
+                        display: 'block'
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: 'white',
+                    border: `1px solid ${THEME.colors.border}`,
+                    borderRadius: '12px',
+                    padding: '2rem',
+                    fontSize: '0.9rem',
+                    lineHeight: '1.6',
+                    color: THEME.colors.textMain,
+                    whiteSpace: 'pre-wrap',
+                    minHeight: '200px'
+                  }}>
+                    {selectedEmail.message?.text || 'Sin contenido de texto alternativo'}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', backgroundColor: THEME.colors.background, borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
+                <button
+                  onClick={() => setSelectedEmail(null)}
                 style={{
                   padding: '0.5rem 1.25rem',
                   backgroundColor: 'white',
@@ -601,7 +632,8 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
             </div>
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm.isOpen && (

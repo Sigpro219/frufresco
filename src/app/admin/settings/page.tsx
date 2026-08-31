@@ -27,7 +27,8 @@ import {
     Sparkles,
     PackageCheck,
     Percent,
-    CalendarX
+    CalendarX,
+    Mail
 } from 'lucide-react';
 
 function ImageUpload({ 
@@ -273,6 +274,8 @@ export default function AdminSettingsPage() {
 
         const defaultSettings = [
             { key: 'delivery_fee', value: '5000', description: 'Costo de envío estándar' },
+            { key: 'email_notifications_mode', value: 'sandbox', description: 'Modo de Notificaciones por Correo Saliente' },
+            { key: 'email_sandbox_recipient', value: 'auditoria.investment@gmail.com', description: 'Correo Destino para Modo Pruebas / Sandbox' },
             { key: 'min_order_hogar', value: '30000', description: 'Pedido mínimo para la Línea Hogar' },
             { key: 'min_order_institucional', value: '150000', description: 'Pedido mínimo para la Línea Institucional' },
             { key: 'enable_cutoff_rules', value: 'true', description: 'Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)' },
@@ -644,7 +647,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -659,6 +662,8 @@ export default function AdminSettingsPage() {
                                         }}>
                                             <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 {setting.key === 'delivery_fee' ? 'Costo de Envío' :
+                                                 setting.key === 'email_notifications_mode' ? <><Mail size={14} style={{ color: 'var(--primary)' }} /> Notificaciones por Correo Saliente</> :
+                                                 setting.key === 'email_sandbox_recipient' ? <><Mail size={14} style={{ color: '#D97706' }} /> Correo Destino Modo Pruebas (Sandbox)</> :
                                                  setting.key === 'min_order_hogar' ? 'Mínimo Hogar' :
                                                  setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
                                                  setting.key === 'store_status' ? 'Estado Tienda' :
@@ -671,7 +676,50 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'packaging_fee_note' ? <><FileText size={14} style={{ color: 'var(--primary)' }} /> Explicación de Empaque (Nota Cliente)</> :
                                                  setting.key.replace(/_/g, ' ')}
                                             </h4>
-                                            {setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
+                                            {setting.key === 'email_notifications_mode' ? (
+                                                <select 
+                                                    value={setting.value || 'sandbox'} 
+                                                    onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '8px 12px', 
+                                                        borderRadius: THEME.radius.sm, 
+                                                        border: `1px solid ${THEME.colors.borderActive}`, 
+                                                        fontWeight: '700',
+                                                        fontSize: '0.85rem',
+                                                        color: setting.value === 'live' ? '#15803D' : setting.value === 'disabled' ? '#DC2626' : '#B45309',
+                                                        backgroundColor: setting.value === 'live' ? '#DCFCE7' : setting.value === 'disabled' ? '#FEE2E2' : '#FEF3C7',
+                                                        cursor: 'pointer',
+                                                        outline: 'none'
+                                                    }}
+                                                >
+                                                    <option value="sandbox">🟡 MODO PRUEBAS (Sandbox / Redirigir)</option>
+                                                    <option value="disabled">🔴 DESACTIVADO (Silencioso: No enviar)</option>
+                                                    <option value="live">🟢 PRODUCCIÓN REAL (Clientes)</option>
+                                                </select>
+                                            ) : setting.key === 'email_sandbox_recipient' ? (
+                                                <div>
+                                                    <input 
+                                                        type="email" 
+                                                        defaultValue={setting.value || 'auditoria.investment@gmail.com'} 
+                                                        placeholder="ej: auditoria.investment@gmail.com"
+                                                        onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)} 
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '8px 12px', 
+                                                            borderRadius: THEME.radius.sm, 
+                                                            border: `1px solid ${THEME.colors.borderActive}`, 
+                                                            fontWeight: '600', 
+                                                            fontSize: '0.85rem',
+                                                            color: THEME.colors.textMain, 
+                                                            outline: 'none' 
+                                                        }} 
+                                                    />
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '4px' }}>
+                                                        Los correos en Modo Pruebas se redirigirán a esta dirección.
+                                                    </div>
+                                                </div>
+                                            ) : setting.key === 'store_status' || setting.key === 'enable_b2b_lead_capture' || setting.key === 'enable_cutoff_rules' || setting.key === 'allow_sunday_deliveries' || setting.key === 'allow_holiday_deliveries' || setting.key === 'packaging_fee_enabled' ? (
                                                 <select 
                                                     value={setting.value} 
                                                     onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 
@@ -712,7 +760,7 @@ export default function AdminSettingsPage() {
                                                 <div>
                                                     <div style={{ position: 'relative' }}>
                                                         <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: '600', color: THEME.colors.textSecondary }}>
-                                                            {setting.key === 'packaging_fee_percentage' ? '%' : '$'}
+                                                             {setting.key === 'packaging_fee_percentage' ? '%' : '$'}
                                                         </span>
                                                         <input 
                                                             type="number" 
@@ -723,9 +771,9 @@ export default function AdminSettingsPage() {
                                                                 padding: '8px 8px 8px 25px', 
                                                                 borderRadius: THEME.radius.sm, 
                                                                 border: `1px solid ${THEME.colors.borderActive}`, 
-                                                                fontWeight: '600',
-                                                                color: THEME.colors.textMain,
-                                                                outline: 'none'
+                                                                fontWeight: '600', 
+                                                                color: THEME.colors.textMain, 
+                                                                outline: 'none' 
                                                             }} 
                                                         />
                                                     </div>
