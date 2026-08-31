@@ -2929,6 +2929,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setIsEditing(!isEditing);
   };
 
+  const handleDeleteSpecificRow = (index: number) => {
+    const itemToDelete = editableItems[index];
+    if (!itemToDelete) return;
+    
+    const prodName = itemToDelete.originalName || itemToDelete.name || 'Producto';
+    setRecentlyDeletedItems(prev => [...prev, prodName]);
+    const remainingItems = editableItems.filter((_, idx) => idx !== index);
+    setEditableItems(remainingItems);
+    setSelectedRowIndices(prev => prev.filter(idx => idx !== index).map(idx => idx > index ? idx - 1 : idx));
+    showToast(`"${prodName}" eliminado de la orden`, 'info');
+  };
+
   const handleBatchDelete = () => {
     if (selectedRowIndices.length === 0) return;
     const namesToDelete = selectedRowIndices.map(idx => {
@@ -7110,9 +7122,41 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   backgroundColor: 'white'
                                 }}
                               />
-                              <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '40px', textAlign: 'left' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '32px', textAlign: 'left' }}>
                                 {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                               </span>
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSpecificRow(i);
+                                }}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: '6px',
+                                  borderRadius: '8px',
+                                  color: '#94A3B8',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.15s ease',
+                                  marginLeft: '4px'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = '#EF4444';
+                                  e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = '#94A3B8';
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                                title="Eliminar este producto del pedido"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </td>
                         </tr>
