@@ -4730,7 +4730,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '40px', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '40px', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>
                     <input
                       type="checkbox"
                       checked={sortedFilteredDrafts.length > 0 && selectedDraftIds.length === sortedFilteredDrafts.length}
@@ -4744,14 +4744,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
                     />
                   </th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '12%', textAlign: 'left', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '22%', textAlign: 'left', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '24%', textAlign: 'left', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '15%', textAlign: 'left', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '10%', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '10%', textAlign: 'right', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>VALOR</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '10%', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                  <th style={{ position: 'sticky', top: '218px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '1rem', width: '10%', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', ...THEME.typography?.tableHeader }}>ACCIONES</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '12%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '22%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '24%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '15%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>VALOR</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                  <th style={{ position: 'sticky', top: '236px', zIndex: 20, backgroundColor: '#F8FAFB', padding: '0.85rem 1rem', width: '10%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }}>ACCIONES</th>
                 </tr>
               </thead>
             <tbody>
