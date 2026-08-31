@@ -1260,7 +1260,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       });
     }
   };
-  
+
+  // Auto-scroll dropdown items when navigating with Arrow Up / Down keys
+  useEffect(() => {
+    if (activeDropdownRowIndex !== null && focusedDropdownItemIndex >= 0) {
+      const el = document.getElementById(`dropdown-item-${activeDropdownRowIndex}-${focusedDropdownItemIndex}`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [activeDropdownRowIndex, focusedDropdownItemIndex]);
+
+  useEffect(() => {
+    if (isClientSearchOpen && focusedClientSearchIndex >= 0) {
+      const el = document.getElementById(`client-search-item-${focusedClientSearchIndex}`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [isClientSearchOpen, focusedClientSearchIndex]);
+
   useEffect(() => {
     if (selectedDraft) {
       const metadata = getDraftMetadata(selectedDraft);
@@ -5843,6 +5862,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             return (
                               <div
                                 key={p.id}
+                                id={`client-search-item-${pIdx}`}
                                 onClick={() => handleSelectClientProfile(p)}
                                 onMouseEnter={() => setFocusedClientSearchIndex(pIdx)}
                                 style={{
@@ -6960,6 +6980,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     return (
                                       <div
                                         key={p.id}
+                                        id={`dropdown-item-${i}-${idx}`}
                                         onMouseDown={(e) => {
                                           e.preventDefault();
                                           selectProduct(p, i);
