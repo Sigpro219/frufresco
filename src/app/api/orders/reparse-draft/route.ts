@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,29 +28,20 @@ export async function POST(req: Request) {
       .single();
 
     if (fetchErr || !draft) {
-      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+      return NextResponse.json({ error: "Borrador no encontrado" }, { status: 404 });
     }
 
     const rawItems = draft.extracted_items || [];
     const metadata = (Array.isArray(rawItems) ? rawItems.find((it: any) => it.isMetadata) : {}) || {};
     const attachmentUrl = metadata.attachments?.[0]?.url || metadata.attachmentUrl;
     const attachmentName = metadata.attachments?.[0]?.name || metadata.attachmentName || 'documento.pdf';
+    const emailBodyText = draft.email_body || metadata.emailHtml || metadata.rawText || '';
+    const emailSubject = draft.email_subject || '';
 
-    if (!attachmentUrl) {
-      return NextResponse.json({ error: "Draft has no attachment URL" }, { status: 400 });
-    }
-
-    const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-
     if (!apiKey) {
-      return NextResponse.json({ error: "Gemini API key not configured on server" }, { status: 500 });
+      return NextResponse.json({ error: "No se encuentra configurada la clave de API de Gemini en el servidor" }, { status: 500 });
     }
-
-    // Fetch attachment file buffer
-    const fileRes = await fetch(attachmentUrl);
-    if (!fileRes.ok) throw new Error("Failed to download attachment from storage");
-    const fileBuf = await fileRes.arrayBuffer();
 
     let extractedData: {
       clientName?: string;
@@ -59,11 +51,21 @@ export async function POST(req: Request) {
       items: Array<{ name: string; quantity: number; unit?: string; observations?: string }>;
     } = { items: [] };
 
-    if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
-      const base64 = Buffer.from(fileBuf).toString('base64');
-      const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    let parsedSuccessfully = false;
 
-      const prompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
+    // 1. Intento con archivo adjunto si existe URL
+    if (attachmentUrl) {
+      try {
+        const fileRes = await fetch(attachmentUrl);
+        if (fileRes.ok) {
+          const fileBuf = await fileRes.arrayBuffer();
+          const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+
+          if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+            const base64 = Buffer.from(fileBuf).toString('base64');
+            const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+
+            const prompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
 Extrae la información en formato JSON estricto:
 - clientName: Razón social del cliente o empresa compradora.
 - nit: NIT o documento de identificación fiscal.
@@ -87,91 +89,118 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
   ]
 }`;
 
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-      const payload = {
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64 } }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          response_mime_type: 'application/json'
-        }
-      };
+            const gJson = await fetchGeminiExtraction(apiKey, prompt, base64, mimeType);
+            if (gJson && Array.isArray(gJson.items)) {
+              extractedData = gJson;
+              parsedSuccessfully = true;
+            }
+          } else if (ext === 'xlsx' || ext === 'xls') {
+            const workbook = XLSX.read(fileBuf, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
 
-      const gRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+            let headerRowIdx = -1;
+            let qtyCol = -1;
+            let nameCol = -1;
+            let unitCol = -1;
+            let obsCol = -1;
 
-      if (!gRes.ok) {
-        const errText = await gRes.text();
-        throw new Error(`Gemini API Error: ${errText}`);
-      }
+            for (let R = range.s.r; R <= range.e.r; R++) {
+              const rowCells: any[] = [];
+              for (let C = range.s.c; C <= range.e.c; C++) {
+                const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+                const cell = worksheet[cellRef];
+                rowCells.push(cell ? cell.v : '');
+              }
 
-      const gJson = await gRes.json();
-      const text = gJson.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        extractedData = JSON.parse(text);
-      }
-    } else if (ext === 'xlsx' || ext === 'xls') {
-      const workbook = XLSX.read(fileBuf, { type: 'array' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
-
-      let headerRowIdx = -1;
-      let qtyCol = -1;
-      let nameCol = -1;
-      let unitCol = -1;
-      let obsCol = -1;
-
-      for (let R = range.s.r; R <= range.e.r; R++) {
-        const rowCells: any[] = [];
-        for (let C = range.s.c; C <= range.e.c; C++) {
-          const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
-          const cell = worksheet[cellRef];
-          rowCells.push(cell ? cell.v : '');
-        }
-
-        if (headerRowIdx === -1) {
-          const isHeader = rowCells.some(c => {
-            const s = String(c || '').toLowerCase().trim();
-            return s === 'plu' || s === 'prodcuto' || s === 'producto';
-          });
-          if (isHeader) {
-            headerRowIdx = R;
-            rowCells.forEach((c, cIdx) => {
-              const s = String(c || '').toLowerCase().trim();
-              if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s === 'qty') qtyCol = cIdx;
-              else if (s.includes('prod') || s.includes('descrip')) nameCol = cIdx;
-              else if (s === 'ubm' || s.includes('unidad') || s === 'und') unitCol = cIdx;
-              else if (s.includes('observ') || s.includes('nota')) obsCol = cIdx;
-            });
-          }
-        } else if (qtyCol !== -1 && nameCol !== -1) {
-          const rawQty = rowCells[qtyCol];
-          if (rawQty !== undefined && rawQty !== null && String(rawQty).trim() !== '') {
-            const num = parseFloat(String(rawQty).replace(',', '.'));
-            if (!isNaN(num) && num > 0) {
-              const nameVal = String(rowCells[nameCol] || '').trim();
-              const unitVal = unitCol !== -1 ? String(rowCells[unitCol] || '').trim() : 'Kg';
-              const obsVal = obsCol !== -1 ? String(rowCells[obsCol] || '').trim() : '';
-              if (nameVal) {
-                extractedData.items.push({
-                  name: nameVal,
-                  quantity: num,
-                  unit: unitVal,
-                  observations: obsVal
+              if (headerRowIdx === -1) {
+                const isHeader = rowCells.some(c => {
+                  const s = String(c || '').toLowerCase().trim();
+                  return s === 'plu' || s === 'prodcuto' || s === 'producto';
                 });
+                if (isHeader) {
+                  headerRowIdx = R;
+                  rowCells.forEach((c, cIdx) => {
+                    const s = String(c || '').toLowerCase().trim();
+                    if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s === 'qty') qtyCol = cIdx;
+                    else if (s.includes('prod') || s.includes('descrip')) nameCol = cIdx;
+                    else if (s === 'ubm' || s.includes('unidad') || s === 'und') unitCol = cIdx;
+                    else if (s.includes('observ') || s.includes('nota')) obsCol = cIdx;
+                  });
+                }
+              } else if (qtyCol !== -1 && nameCol !== -1) {
+                const rawQty = rowCells[qtyCol];
+                if (rawQty !== undefined && rawQty !== null && String(rawQty).trim() !== '') {
+                  const num = parseFloat(String(rawQty).replace(',', '.'));
+                  if (!isNaN(num) && num > 0) {
+                    const nameVal = String(rowCells[nameCol] || '').trim();
+                    const unitVal = unitCol !== -1 ? String(rowCells[unitCol] || '').trim() : 'Kg';
+                    const obsVal = obsCol !== -1 ? String(rowCells[obsCol] || '').trim() : '';
+                    if (nameVal) {
+                      extractedData.items.push({
+                        name: nameVal,
+                        quantity: num,
+                        unit: unitVal,
+                        observations: obsVal
+                      });
+                    }
+                  }
+                }
               }
             }
+            parsedSuccessfully = extractedData.items.length > 0;
           }
         }
+      } catch (attErr) {
+        console.warn("[reparse-draft] Error procesando archivo adjunto, intentando fallback de texto:", attErr);
+      }
+    }
+
+    // 2. Fallback con texto del correo o cuerpo si no hubo adjunto o falló
+    if (!parsedSuccessfully) {
+      if (!emailBodyText && !emailSubject) {
+        return NextResponse.json({ 
+          error: "Este borrador no tiene archivos adjuntos ni texto en el cuerpo para procesar con IA." 
+        }, { status: 400 });
+      }
+
+      const textPrompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
+FECHA ACTUAL: ${new Date().toISOString().split('T')[0]}
+
+ASUNTO DEL CORREO: "${emailSubject}"
+
+CUERPO / TEXTO DEL PEDIDO:
+"""
+${emailBodyText}
+"""
+
+Extrae la información en formato JSON estricto:
+- clientName: Razón social o nombre comercial del cliente comprador. Revisa firmas y pie de página.
+- nit: NIT o documento fiscal si está presente.
+- address: Dirección física de entrega limpia.
+- deliveryDate: Fecha de entrega solicitada (formato YYYY-MM-DD o DD/MM/YYYY).
+- items: Lista de productos solicitados con cantidad mayor a cero.
+Cada item debe tener:
+  * name: Nombre comercial del producto limpio.
+  * quantity: Número decimal o entero mayor a cero.
+  * unit: Unidad de medida (Kg, Uds, Atado, Bandeja, etc.).
+  * observations: Notas o especificaciones de calidad si existen.
+
+Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
+{
+  "clientName": "...",
+  "nit": "...",
+  "address": "...",
+  "deliveryDate": "...",
+  "items": [
+    { "name": "...", "quantity": 10, "unit": "Kg", "observations": "..." }
+  ]
+}`;
+
+      const textJson = await fetchGeminiExtraction(apiKey, textPrompt);
+      if (textJson && Array.isArray(textJson.items)) {
+        extractedData = textJson;
+        parsedSuccessfully = true;
       }
     }
 

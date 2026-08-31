@@ -1970,7 +1970,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
         showToast(`¡Éxito! Se extrajeron ${data.items.length} productos con IA`, "success");
       } else {
-        showToast("No se detectaron productos en el documento", "warning");
+        showToast("No se detectaron productos en el documento o correo", "info");
       }
     } catch (err: any) {
       console.error("Error reparsing draft:", err);
