@@ -1623,7 +1623,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
       extraDescription = extraWords.join(' ');
     }
-    let finalObservations = [newEdits[rowIndex].observations || '', extraDescription].filter(Boolean).join(' ').trim();
+    const baseObs = newEdits[rowIndex].initial_observations !== undefined 
+      ? newEdits[rowIndex].initial_observations 
+      : (newEdits[rowIndex].originalObservations || '');
+    let finalObservations = [baseObs, extraDescription].filter(Boolean).join(' ').trim();
+    const distinctWords = Array.from(new Set(finalObservations.split(/\s+/).filter(Boolean)));
+    finalObservations = distinctWords.join(' ');
     
     if (product.variants && product.variants.length > 0) {
       const variantOptionNames = new Set<string>();
@@ -3330,7 +3335,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
                 extraDescription = extraWords.join(' ');
               }
-              let finalObservations = [item.observations || '', extraDescription].filter(Boolean).join(' ').trim();
+              let finalObservations = [item.initial_observations || item.observations || '', extraDescription].filter(Boolean).join(' ').trim();
+              const distinctWords = Array.from(new Set(finalObservations.split(/\s+/).filter(Boolean)));
+              finalObservations = distinctWords.join(' ');
 
               if (prod && prod.variants && prod.variants.length > 0) {
                 const variantOptionNames = new Set<string>();
@@ -4732,27 +4739,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return itm;
       });
 
-      const genOrderNumber = order.order_number || ('PED-' + order.id.slice(0, 8).toUpperCase());
+      const nowIso = new Date().toISOString();
+      const finalOrderNumber = order.order_number || genOrderNumber;
 
-      if (isLastAttachment) {
-        await supabase
-          .from('order_drafts')
-          .update({ 
-            status: 'approved',
-            order_id: order.id,
-            order_number: genOrderNumber,
-            delivery_date: deliveryDate,
-            extracted_items: updatedExtractedItems
-          })
-          .eq('id', selectedDraft.id);
-      } else {
-        await supabase
-          .from('order_drafts')
-          .update({ 
-            extracted_items: updatedExtractedItems
-          })
-          .eq('id', selectedDraft.id);
-      }
+      await supabase
+        .from('order_drafts')
+        .update({ 
+          status: 'approved',
+          order_id: order.id,
+          order_number: finalOrderNumber,
+          processed_at: nowIso,
+          updated_at: nowIso,
+          delivery_date: deliveryDate,
+          extracted_items: updatedExtractedItems
+        })
+        .eq('id', selectedDraft.id);
 
       // 5. Send confirmation email (queue in mail table)
       if (selectedDraft.source_email && sendConfirmationEmail) {
@@ -4783,29 +4784,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         });
       }
 
-      if (isLastAttachment) {
-        showToast('¡Todos los pedidos registrados exitosamente! Borrador aprobado', 'success');
-        setShowConfirmModal(false);
-        setSelectedDraft(null);
-      } else {
-        showToast(`Pedido registrado para "${metadata.attachments[selectedAttachmentIndex]?.name || 'documento'}". Avanzando al siguiente...`, 'success');
-        setShowConfirmModal(false);
-        
-        // Update local selectedDraft state with updated attachments
-        const localDraftUpdated = {
-          ...selectedDraft,
-          extracted_items: updatedExtractedItems
-        };
-        setSelectedDraft(localDraftUpdated);
-        
-        // Update draft in parent drafts list
-        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
-        
-        // Advance to next unprocessed attachment index
-        if (nextUnprocessedIdx !== -1) {
-          setSelectedAttachmentIndex(nextUnprocessedIdx);
-        }
-      }
+      showToast(`¡Pedido #${finalOrderNumber} creado exitosamente!`, 'success');
+      setShowConfirmModal(false);
+      
+      const localDraftUpdated = {
+        ...selectedDraft,
+        status: 'approved',
+        order_id: order.id,
+        order_number: finalOrderNumber,
+        processed_at: nowIso,
+        delivery_date: deliveryDate,
+        extracted_items: updatedExtractedItems
+      };
+      
+      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
+      setSelectedDraft(null);
       fetchDrafts();
     } catch (e: any) {
       console.error('Error creating order directly:', e);
@@ -4840,8 +4833,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
     // 4. Status Filter
     let matchesStatus = true;
-    if (selectedStatus !== 'all') {
-      matchesStatus = draft.status === selectedStatus;
+    const isDraftApproved = draft.status === 'approved' || Boolean(draft.order_id);
+    const isDraftPending = draft.status === 'pending' && !draft.order_id;
+    const isDraftRejected = draft.status === 'rejected';
+
+    if (selectedStatus === 'pending') {
+      matchesStatus = isDraftPending;
+    } else if (selectedStatus === 'approved') {
+      matchesStatus = isDraftApproved;
+    } else if (selectedStatus === 'rejected') {
+      matchesStatus = isDraftRejected;
     }
 
     return matchesSearch && matchesDate && matchesChannel && matchesStatus;
@@ -4872,8 +4873,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   });
 
   const countAll = draftsBeforeStatusFilter.length;
-  const countPending = draftsBeforeStatusFilter.filter(d => d.status === 'pending').length;
-  const countApproved = draftsBeforeStatusFilter.filter(d => d.status === 'approved').length;
+  const countPending = draftsBeforeStatusFilter.filter(d => d.status === 'pending' && !d.order_id).length;
+  const countApproved = draftsBeforeStatusFilter.filter(d => d.status === 'approved' || Boolean(d.order_id)).length;
   const countRejected = draftsBeforeStatusFilter.filter(d => d.status === 'rejected').length;
 
   const STATUS_PRIORITY: Record<string, number> = {
@@ -5522,9 +5523,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     >
                       {cleanSubject(draft.email_subject)}
                     </div>
-                    <div style={{ marginTop: '2px' }}>
+                    <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                       {getChannelBadge('email')}
+                      {(draft.status === 'approved' || draft.order_id || draft.order_number) && (
+                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <CheckCircle2 size={11} color="#059669" />
+                          Pedido #{draft.order_number || (draft.order_id ? draft.order_id.slice(0, 8).toUpperCase() : '')}
+                        </span>
+                      )}
                     </div>
+                    {(draft.status === 'approved' || draft.order_id) && (draft.processed_at || draft.updated_at) && (
+                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
+                        Procesado: {new Date(draft.processed_at || draft.updated_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                     <div style={{ fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
@@ -5538,32 +5550,35 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {formatMoney(estimatedTotal)}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                    {draft.status === 'approved' ? (
+                    {(draft.status === 'approved' || draft.order_id) ? (
                       <div style={{
-                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '900',
+                        padding: '4px 9px', borderRadius: '8px', fontSize: '0.70rem', fontWeight: '900',
                         backgroundColor: '#DEF7EC',
                         color: '#03543F',
                         border: '1px solid #86EFAC',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '3px'
+                        gap: '4px',
+                        boxShadow: '0 1px 2px rgba(5, 150, 105, 0.1)'
                       }}>
-                        <CheckCircle2 size={11} color="#059669" />
-                        <span>INYECTADO {draft.order_number ? `(${draft.order_number})` : ''}</span>
+                        <CheckCircle2 size={12} color="#059669" />
+                        <span>PROCESADO</span>
                       </div>
                     ) : draft.status === 'rejected' ? (
                       <div style={{
-                        padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '900',
                         backgroundColor: '#FDE8E8',
-                        color: '#9B1C1C'
+                        color: '#9B1C1C',
+                        border: '1px solid #FCA5A5'
                       }}>
                         RECHAZADO
                       </div>
                     ) : (
                       <div style={{
-                        padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '900',
                         backgroundColor: '#FEF3C7',
-                        color: '#92400E'
+                        color: '#92400E',
+                        border: '1px solid #FCD34D'
                       }}>
                         PENDIENTE
                       </div>
@@ -5645,9 +5660,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}>
                       {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
                     </span>
-                    {draft.status === 'approved' && (
-                      <span style={{ backgroundColor: '#DEF7EC', color: '#03543F', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
-                        GESTIONADO
+                    {(draft.status === 'approved' || draft.order_id) && (
+                      <span style={{ backgroundColor: '#DEF7EC', color: '#03543F', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <CheckCircle2 size={10} color="#059669" />
+                        PROCESADO {draft.order_number ? `(#${draft.order_number})` : ''}
                       </span>
                     )}
                     {draft.status === 'rejected' && (
@@ -5655,7 +5671,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         RECHAZADO
                       </span>
                     )}
-                    {draft.status === 'pending' && (
+                    {draft.status === 'pending' && !draft.order_id && (
                       <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
                         PENDIENTE
                       </span>
@@ -6861,6 +6877,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       const matchedProd = products.find(p => p.id === item.matched_product_id);
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
                       const isActiveRow = activeDropdownRowIndex === i || focusedRowIndex === i;
+                      const isApprovedDraft = selectedDraft ? (selectedDraft.status === 'approved' || Boolean(selectedDraft.order_id)) : false;
 
                       return (
                         <tr 
@@ -6883,16 +6900,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <td style={{ padding: '0.45rem 0.4rem', textAlign: 'center', width: '35px' }}>
                             <input
                               type="checkbox"
-                              disabled={item.isDeleted}
+                              disabled={isApprovedDraft || item.isDeleted}
                               checked={selectedRowIndices.includes(i)}
                               onChange={(e) => {
+                                if (isApprovedDraft) return;
                                 if (e.target.checked) {
                                   setSelectedRowIndices(prev => [...prev, i]);
                                 } else {
                                   setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
                                 }
                               }}
-                              style={{ transform: 'scale(1.1)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
+                              style={{ transform: 'scale(1.1)', cursor: (isApprovedDraft || item.isDeleted) ? 'not-allowed' : 'pointer' }}
                             />
                           </td>
                           <td style={{ padding: '0.35rem 0.65rem', width: '35%' }}>
@@ -6955,8 +6973,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               autoCorrect="off"
                               spellCheck={false}
                               data-lpignore="true"
+                              disabled={isApprovedDraft || item.isDeleted}
+                              readOnly={isApprovedDraft}
                               value={activeDropdownRowIndex === i && activeRowSearchQuery !== null ? activeRowSearchQuery : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : ''))}
                               onFocus={(e) => {
+                                if (isApprovedDraft) return;
                                 e.target.select();
                                 setActiveDropdownRowIndex(i);
                                 setFocusedDropdownItemIndex(0);
@@ -7176,8 +7197,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 ref={el => { quantityInputRefs.current[i] = el; }}
                                 type="text"
                                 id={`draft-qty-input-${i}`}
+                                disabled={isApprovedDraft || item.isDeleted}
+                                readOnly={isApprovedDraft}
                                 value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : String(item.quantity || '').replace('.', ',')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
                                 onFocus={(e) => {
+                                  if (isApprovedDraft) return;
                                   setFocusedRowIndex(i);
                                   e.target.select();
                                   scrollToDraftRow(i);
@@ -7189,6 +7213,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   setEditableItems(newEdits);
                                 }}
                                 onChange={(e) => {
+                                  if (isApprovedDraft) return;
                                   const rawVal = e.target.value;
                                   const parsed = parseQuantity(rawVal);
                                   const newEdits = [...editableItems];
@@ -7197,6 +7222,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   setEditableItems(newEdits);
                                 }}
                                 onKeyDown={(e) => {
+                                  if (isApprovedDraft) return;
                                   if (e.key === '.' || e.key === ',') {
                                     e.preventDefault();
                                     const input = e.currentTarget;
@@ -7235,46 +7261,49 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   textAlign: 'center',
                                   fontWeight: '900',
                                   fontSize: isActiveRow ? '0.94rem' : '0.9rem',
-                                  backgroundColor: 'white',
+                                  backgroundColor: isApprovedDraft ? '#F8FAFC' : 'white',
                                   boxShadow: isActiveRow ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : 'none',
+                                  cursor: isApprovedDraft ? 'not-allowed' : 'text',
                                   transition: 'all 0.15s ease'
                                 }}
                               />
                               <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '32px', textAlign: 'left' }}>
                                 {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                               </span>
-                              <button
-                                type="button"
-                                tabIndex={-1}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSpecificRow(i);
-                                }}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  padding: '6px',
-                                  borderRadius: '8px',
-                                  color: '#94A3B8',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  transition: 'all 0.15s ease',
-                                  marginLeft: '4px'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color = '#EF4444';
-                                  e.currentTarget.style.backgroundColor = '#FEE2E2';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color = '#94A3B8';
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                }}
-                                title="Eliminar este producto del pedido"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!isApprovedDraft && (
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSpecificRow(i);
+                                  }}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    borderRadius: '8px',
+                                    color: '#94A3B8',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.15s ease',
+                                    marginLeft: '4px'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = '#EF4444';
+                                    e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = '#94A3B8';
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                  }}
+                                  title="Eliminar este producto del pedido"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -7433,7 +7462,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     Cancelar
                   </button>
 
-                  {selectedDraft.status === 'pending' && (
+                  {(selectedDraft.status === 'approved' || Boolean(selectedDraft.order_id)) ? (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '0.85rem 1.6rem',
+                      backgroundColor: '#ECFDF5',
+                      border: '2px solid #86EFAC',
+                      borderRadius: '16px',
+                      color: '#065F46',
+                      fontWeight: '800',
+                      fontSize: '0.96rem',
+                      boxShadow: '0 2px 6px rgba(5, 150, 105, 0.15)'
+                    }}>
+                      <CheckCircle2 size={20} color="#059669" />
+                      <span>PEDIDO PROCESADO #{selectedDraft.order_number || (selectedDraft.order_id ? selectedDraft.order_id.slice(0, 8).toUpperCase() : '')}</span>
+                    </div>
+                  ) : (
                     <button 
                       id="btn-approve-draft"
                       onClick={handleApprove}
