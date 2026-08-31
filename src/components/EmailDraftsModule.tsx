@@ -347,6 +347,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [excelSearchTerm, setExcelSearchTerm] = useState<string>('');
   const [excelZoomLevel, setExcelZoomLevel] = useState<number>(100);
   const [loadingAttachment, setLoadingAttachment] = useState(false);
+  const [isReparsingDraft, setIsReparsingDraft] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isAttachmentZoomed, setIsAttachmentZoomed] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
@@ -1368,6 +1369,41 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } else if (e.key === 'Escape') {
       setActiveSearchRowIndex(null);
       setFocusedProductIndex(-1);
+    }
+  };
+
+  const handleReparseDraft = async () => {
+    if (!selectedDraft) return;
+    setIsReparsingDraft(true);
+    try {
+      showToast("Extrayendo productos con Gemini...", "info");
+      const res = await fetch('/api/orders/reparse-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftId: selectedDraft.id })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "No se pudo re-extraer el documento");
+      }
+      
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        setEditableItems(data.items);
+        if (data.clientName) {
+          setSelectedDraft(prev => prev ? { ...prev, client_detected_name: data.clientName } : null);
+        }
+        if (data.address) {
+          setEditableAddress(data.address);
+        }
+        showToast(`¡Éxito! Se extrajeron ${data.items.length} productos con IA`, "success");
+      } else {
+        showToast("No se detectaron productos en el documento", "warning");
+      }
+    } catch (err: any) {
+      console.error("Error reparsing draft:", err);
+      showToast(err.message || "Error al re-extraer con IA", "error");
+    } finally {
+      setIsReparsingDraft(false);
     }
   };
 
@@ -4942,6 +4978,29 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <Zap size={13} fill="#059669" color="#059669" />
                   <span>Recepción: <strong>{new Date(selectedDraft.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</strong></span>
                 </span>
+                <button 
+                  onClick={handleReparseDraft}
+                  disabled={isReparsingDraft}
+                  title="Re-extraer productos y cliente usando Inteligencia Artificial"
+                  style={{ 
+                    padding: '6px 14px', 
+                    backgroundColor: isReparsingDraft ? '#DDD6FE' : '#7C3AED', 
+                    borderRadius: '100px', 
+                    fontSize: '0.78rem', 
+                    fontWeight: '800', 
+                    color: 'white',
+                    border: '1.5px solid #6D28D9',
+                    cursor: isReparsingDraft ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Sparkles size={14} className={isReparsingDraft ? 'animate-spin' : ''} />
+                  {isReparsingDraft ? 'Extrayendo...' : '⚡ Re-extraer con IA'}
+                </button>
                 <button 
                   onClick={() => setShowFloatingEmail(prev => !prev)}
                   title="Alternar visor del documento original"
