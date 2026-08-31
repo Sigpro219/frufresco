@@ -359,6 +359,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   // Client Pareto & Selection States
   const [clientFrequentProductIds, setClientFrequentProductIds] = useState<string[]>([]);
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
+  const [isClientDetailsExpanded, setIsClientDetailsExpanded] = useState(false);
 
   // Product Customization Modal State (Image 1 replica)
   const [customizingModalItem, setCustomizingModalItem] = useState<{
@@ -5056,206 +5057,230 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             border: `1px solid ${THEME.colors.border}`,
             transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
-            {/* Mesa de Trabajo Header: Client Validation (Identical to PDF Workstation) */}
+            {/* Mesa de Trabajo Header: TIER 1 (Ultra Clean, Compact & Powerful) */}
             <div style={{ 
-              padding: '1rem 1.75rem', 
+              padding: '0.85rem 1.5rem', 
               backgroundColor: matchedProfile ? '#F0FDF4' : '#FFF7ED', 
               borderBottom: `1px solid ${matchedProfile ? '#BBF7D0' : '#FFEDD5'}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: '1rem',
+              gap: '0.75rem',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <div style={{ color: matchedProfile ? '#16A34A' : '#D97706' }}>
-                  {matchedProfile ? <CheckCircle2 size={26} strokeWidth={1.7} /> : <AlertTriangle size={26} strokeWidth={1.7} />}
+              {/* Left Side: Client Selector, Delivery Date, Real Reception Window & Tier 2 Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ color: matchedProfile ? '#16A34A' : '#D97706', display: 'flex', alignItems: 'center' }}>
+                  {matchedProfile ? <CheckCircle2 size={24} strokeWidth={2} /> : <AlertTriangle size={24} strokeWidth={2} />}
                 </div>
-                <div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: '900', color: matchedProfile ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Validación de Cliente & Entrega (Auditoría)
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
-                    {/* Interactive Client Selector */}
-                    <div style={{ position: 'relative' }}>
-                      <button
-                        type="button"
-                        onClick={() => setIsClientSearchOpen(prev => !prev)}
-                        style={{
-                          background: '#FFFFFF',
-                          border: '1.5px solid #CBD5E1',
-                          borderRadius: '8px',
-                          padding: '4px 10px',
-                          fontSize: '0.92rem',
-                          fontWeight: '800',
-                          color: '#0F172A',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                        }}
-                      >
-                        <User size={14} color="#0D7A57" />
-                        <span>{matchedProfile?.company_name || matchedProfile?.contact_name || selectedDraft.client_detected_name || selectedDraft.source_email}</span>
-                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>▾</span>
-                      </button>
 
-                      {isClientSearchOpen && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '100%',
-                          left: 0,
-                          marginTop: '6px',
-                          width: '360px',
-                          maxHeight: '340px',
-                          backgroundColor: 'white',
-                          borderRadius: '12px',
-                          boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-                          border: '1px solid #E2E8F0',
-                          zIndex: 1000,
-                          padding: '8px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                            <Search size={14} color="#94A3B8" />
-                            <input
-                              autoFocus
-                              type="text"
-                              placeholder="Buscar cliente por nombre o NIT..."
-                              value={clientSearchQuery}
-                              onChange={e => setClientSearchQuery(e.target.value)}
-                              style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.82rem', fontWeight: 600 }}
-                            />
-                            {clientSearchQuery && (
-                              <button onClick={() => setClientSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={12} /></button>
-                            )}
-                          </div>
-                          <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
-                            {profiles
-                              .filter(p => {
-                                const q = clientSearchQuery.toLowerCase();
-                                return (p.company_name || '').toLowerCase().includes(q) ||
-                                       (p.contact_name || '').toLowerCase().includes(q) ||
-                                       (p.nit || '').toLowerCase().includes(q) ||
-                                       (p.email || '').toLowerCase().includes(q);
-                              })
-                              .slice(0, 15)
-                              .map(p => (
-                                <div
-                                  key={p.id}
-                                  onClick={() => handleSelectClientProfile(p)}
-                                  style={{
-                                    padding: '8px 10px',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8rem',
-                                    borderBottom: '1px solid #F1F5F9',
-                                    transition: 'background 0.15s'
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDF4'}
-                                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                  <div style={{ fontWeight: '800', color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>{p.company_name || p.contact_name}</span>
-                                    {p.nit && <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal' }}>NIT: {p.nit}</span>}
-                                  </div>
-                                  <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
-                                    {p.address || 'Sin dirección'} {p.phone ? `• ${p.phone}` : ''}
-                                  </div>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Delivery Date & Slot Selector */}
-                    <div style={{
+                {/* Interactive Client Selector */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsClientSearchOpen(prev => !prev)}
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1.5px solid #CBD5E1',
+                      borderRadius: '10px',
+                      padding: '5px 12px',
+                      fontSize: '0.9rem',
+                      fontWeight: '900',
+                      color: '#0F172A',
+                      cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '6px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <Building2 size={14} color="#0D7A57" />
+                    <span style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {matchedProfile?.company_name || matchedProfile?.contact_name || selectedDraft.client_detected_name || selectedDraft.source_email}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>▾</span>
+                  </button>
+
+                  {isClientSearchOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: '6px',
+                      width: '380px',
+                      maxHeight: '340px',
+                      backgroundColor: 'white',
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                      border: '1px solid #E2E8F0',
+                      zIndex: 1000,
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                        <Search size={14} color="#94A3B8" />
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Buscar cliente por nombre o NIT..."
+                          value={clientSearchQuery}
+                          onChange={e => setClientSearchQuery(e.target.value)}
+                          style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.82rem', fontWeight: 600 }}
+                        />
+                        {clientSearchQuery && (
+                          <button onClick={() => setClientSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={12} /></button>
+                        )}
+                      </div>
+                      <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
+                        {profiles
+                          .filter(p => {
+                            const q = clientSearchQuery.toLowerCase();
+                            return (p.company_name || '').toLowerCase().includes(q) ||
+                                   (p.contact_name || '').toLowerCase().includes(q) ||
+                                   (p.nit || '').toLowerCase().includes(q) ||
+                                   (p.email || '').toLowerCase().includes(q);
+                          })
+                          .slice(0, 15)
+                          .map(p => (
+                            <div
+                              key={p.id}
+                              onClick={() => handleSelectClientProfile(p)}
+                              style={{
+                                padding: '8px 10px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                borderBottom: '1px solid #F1F5F9',
+                                transition: 'background 0.15s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <div style={{ fontWeight: '800', color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{p.company_name || p.contact_name}</span>
+                                {p.nit && <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal' }}>NIT: {p.nit}</span>}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
+                                {p.address || 'Sin dirección'} {p.phone ? `• ${p.phone}` : ''}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Delivery Date Picker */}
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#FFFFFF',
+                  border: '1.5px solid #CBD5E1',
+                  padding: '4px 10px',
+                  borderRadius: '10px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}>
+                  <Calendar size={14} color="#0D7A57" />
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Entrega:</span>
+                  <input
+                    type="date"
+                    value={deliveryDate}
+                    onChange={e => setDeliveryDate(e.target.value)}
+                    style={{
+                      border: 'none',
+                      fontSize: '0.85rem',
+                      fontWeight: '800',
+                      color: '#0F172A',
+                      outline: 'none',
+                      cursor: 'pointer',
+                      background: 'transparent'
+                    }}
+                  />
+                </div>
+
+                {/* Horario de Recepción del Cliente (Real y Específico) */}
+                {(() => {
+                  const defaultWindow = matchedProfile?.delivery_restrictions || 
+                    (matchedProfile?.logistics_data?.start_time && matchedProfile?.logistics_data?.end_time 
+                      ? `${matchedProfile.logistics_data.start_time} - ${matchedProfile.logistics_data.end_time}` 
+                      : (editableDeliverySlot && editableDeliverySlot !== 'AM' && editableDeliverySlot !== 'PM' ? editableDeliverySlot : '06:00 - 11:00'));
+
+                  return (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
                       backgroundColor: '#FFFFFF',
                       border: '1.5px solid #CBD5E1',
-                      padding: '3px 10px',
-                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      borderRadius: '10px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                     }}>
-                      <Calendar size={14} color="#0D7A57" />
-                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Entrega:</span>
+                      <Clock size={14} color="#0D7A57" />
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Franja:</span>
                       <input
-                        type="date"
-                        value={deliveryDate}
-                        onChange={e => setDeliveryDate(e.target.value)}
+                        type="text"
+                        value={editableDeliverySlot || defaultWindow}
+                        onChange={e => setEditableDeliverySlot(e.target.value)}
+                        placeholder="Ej: 07:00 a 10:30"
+                        title="Franja de recepción de este cliente"
                         style={{
                           border: 'none',
-                          fontSize: '0.85rem',
+                          fontSize: '0.82rem',
                           fontWeight: '800',
                           color: '#0F172A',
                           outline: 'none',
-                          cursor: 'pointer',
+                          width: '120px',
                           background: 'transparent'
                         }}
                       />
-                      <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #CBD5E1', marginLeft: '4px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setEditableDeliverySlot('AM')}
-                          style={{
-                            padding: '2px 7px',
-                            border: 'none',
-                            fontSize: '0.7rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            backgroundColor: editableDeliverySlot === 'AM' ? '#0D7A57' : '#F1F5F9',
-                            color: editableDeliverySlot === 'AM' ? 'white' : '#475569'
-                          }}
-                        >
-                          AM
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditableDeliverySlot('PM')}
-                          style={{
-                            padding: '2px 7px',
-                            border: 'none',
-                            fontSize: '0.7rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            backgroundColor: editableDeliverySlot === 'PM' ? '#0D7A57' : '#F1F5F9',
-                            color: editableDeliverySlot === 'PM' ? 'white' : '#475569'
-                          }}
-                        >
-                          PM
-                        </button>
-                      </div>
                     </div>
+                  );
+                })()}
 
-                    {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
-                      <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <CheckCircle2 size={11} color="#15803D" /> En Cobertura
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    <span><strong>De:</strong> {selectedDraft.source_email}</span>
-                    <span>•</span>
-                    <span style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
-                      <strong>Asunto:</strong> {selectedDraft.email_subject || '(Sin Asunto)'}
-                    </span>
-                    {editableAddress && (
-                      <>
-                        <span>•</span>
-                        <span><strong>Dir:</strong> {editableAddress}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
+                {/* GPS Status Badge */}
+                {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? (
+                  <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '4px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <MapPin size={12} color="#15803D" /> GPS OK
+                  </span>
+                ) : (
+                  <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', padding: '4px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <MapPin size={12} color="#D97706" /> Sin GPS
+                  </span>
+                )}
+
+                {/* Toggle Button for Tier 2 Details Drawer */}
+                <button
+                  type="button"
+                  onClick={() => setIsClientDetailsExpanded(prev => !prev)}
+                  style={{
+                    backgroundColor: isClientDetailsExpanded ? '#0D7A57' : '#FFFFFF',
+                    color: isClientDetailsExpanded ? 'white' : '#0D7A57',
+                    border: '1.5px solid #0D7A57',
+                    borderRadius: '10px',
+                    padding: '4px 10px',
+                    fontSize: '0.75rem',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <Info size={13} />
+                  <span>{isClientDetailsExpanded ? 'Ocultar Ficha' : 'Ficha & Logística'}</span>
+                  <span style={{ transform: isClientDetailsExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', fontSize: '0.75rem' }}>▾</span>
+                </button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+
+              {/* Right Side: Quick Action Buttons & Status */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
                 {/* Real-Time Audit Progress Badge */}
                 {(() => {
                   const activeItems = editableItems.filter(it => !it.isDeleted);
@@ -5267,80 +5292,64 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       backgroundColor: isAllMatched ? '#ECFDF5' : '#FFFBEB', 
                       color: isAllMatched ? '#065F46' : '#B45309', 
                       border: `1.5px solid ${isAllMatched ? '#6EE7B7' : '#FCD34D'}`, 
-                      padding: '5px 12px', 
+                      padding: '4px 10px', 
                       borderRadius: '100px', 
-                      fontSize: '0.78rem', 
+                      fontSize: '0.76rem', 
                       fontWeight: '800',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '5px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                     }}>
                       {isAllMatched ? <CheckCircle2 size={13} color="#059669" /> : <AlertTriangle size={13} color="#D97706" />}
-                      <span>{isAllMatched ? `100% Auditado (${matchedCount}/${activeItems.length})` : `${matchedCount} de ${activeItems.length} SKUs listos`}</span>
+                      <span>{isAllMatched ? `100% Auditado (${matchedCount}/${activeItems.length})` : `${matchedCount}/${activeItems.length} SKUs listos`}</span>
                     </span>
                   );
                 })()}
 
-                <span style={{ 
-                  backgroundColor: '#ECFDF5', 
-                  color: '#065F46', 
-                  border: '1.5px solid #6EE7B7', 
-                  padding: '5px 12px', 
-                  borderRadius: '100px', 
-                  fontSize: '0.78rem', 
-                  fontWeight: '800',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  boxShadow: '0 1px 3px rgba(16, 185, 129, 0.1)'
-                }}>
-                  <Zap size={13} fill="#059669" color="#059669" />
-                  <span>Recepción: <strong>{new Date(selectedDraft.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</strong></span>
-                </span>
                 <button 
                   onClick={handleReparseDraft}
                   disabled={isReparsingDraft}
                   title="Re-extraer productos y cliente usando Inteligencia Artificial"
                   style={{ 
-                    padding: '6px 14px', 
+                    padding: '5px 12px', 
                     backgroundColor: isReparsingDraft ? '#DDD6FE' : '#7C3AED', 
                     borderRadius: '100px', 
-                    fontSize: '0.78rem', 
+                    fontSize: '0.76rem', 
                     fontWeight: '800', 
                     color: 'white',
                     border: '1.5px solid #6D28D9',
                     cursor: isReparsingDraft ? 'not-allowed' : 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)',
+                    gap: '5px',
+                    boxShadow: '0 2px 4px rgba(124, 58, 237, 0.2)',
                     transition: 'all 0.2s'
                   }}
                 >
-                  <Sparkles size={14} className={isReparsingDraft ? 'animate-spin' : ''} />
+                  <Sparkles size={13} className={isReparsingDraft ? 'animate-spin' : ''} />
                   {isReparsingDraft ? 'Extrayendo...' : '⚡ Re-extraer con IA'}
                 </button>
                 <button 
                   onClick={() => setShowFloatingEmail(prev => !prev)}
                   title="Alternar visor del documento original"
                   style={{ 
-                    padding: '6px 14px', 
+                    padding: '5px 12px', 
                     backgroundColor: showFloatingEmail ? '#DBEAFE' : '#EFF6FF', 
                     borderRadius: '100px', 
-                    fontSize: '0.78rem', 
+                    fontSize: '0.76rem', 
                     fontWeight: '800', 
                     color: '#1D4ED8',
                     border: '1.5px solid #93C5FD',
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                    gap: '5px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                     transition: 'all 0.2s'
                   }}
                 >
-                  <FileText size={14} /> {showFloatingEmail ? 'Ocultar Visor' : 'Ver Documento Lado a Lado'}
+                  <FileText size={13} /> {showFloatingEmail ? 'Ocultar Visor' : 'Ver Doc'}
                 </button>
                 <button 
                   onClick={() => setSelectedDraft(null)} 
@@ -5349,8 +5358,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     background: '#F8FAFC', 
                     cursor: 'pointer', 
                     color: '#64748B', 
-                    width: '32px', 
-                    height: '32px', 
+                    width: '30px', 
+                    height: '30px', 
                     borderRadius: '100px', 
                     display: 'flex', 
                     alignItems: 'center', 
@@ -5360,10 +5369,78 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.color = '#EF4444'; }}
                   onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#64748B'; }}
                 >
-                  <X size={18} />
+                  <X size={16} />
                 </button>
               </div>
             </div>
+
+            {/* TIER 2: DESPLEGABLE CON DETALLES COMPLETOS DE CLIENTE, GPS & LOGÍSTICA */}
+            {isClientDetailsExpanded && (
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                borderBottom: '2px solid #E2E8F0',
+                padding: '0.85rem 1.75rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                gap: '1rem',
+                fontSize: '0.8rem',
+                color: '#334155',
+                animation: 'fadeInUp 0.25s ease-out',
+                flexShrink: 0
+              }}>
+                {/* Columna 1: Dirección y GPS */}
+                <div style={{ backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: '900', color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <MapPin size={13} color="#15803D" /> Dirección de Entrega & GPS
+                  </div>
+                  <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.86rem' }}>
+                    {editableAddress || 'Dirección no registrada'}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#64748B', marginLeft: '4px' }}>
+                      ({matchedProfile?.city || 'Bogotá'})
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span><strong>GPS:</strong> {draftCoordinates ? `${draftCoordinates.lat.toFixed(5)}, ${draftCoordinates.lng.toFixed(5)}` : 'Sin geocodificar'}</span>
+                    {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
+                      <span style={{ color: '#15803D', fontWeight: '800' }}>● En Cobertura</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Columna 2: Logística y Horario de Recepción */}
+                <div style={{ backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: '900', color: '#0369A1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Clock size={13} color="#0369A1" /> Horario & Restricciones de Recepción
+                  </div>
+                  <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.86rem' }}>
+                    {matchedProfile?.delivery_restrictions || (matchedProfile?.logistics_data?.start_time ? `${matchedProfile.logistics_data.start_time} - ${matchedProfile.logistics_data.end_time}` : 'Sin restricciones horarias registradas')}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span><strong>Canastillas:</strong> {matchedProfile?.needs_crates ? '📦 Requiere canastillas' : 'No requiere'}</span>
+                    <span>•</span>
+                    <span><strong>Tipo:</strong> {matchedProfile?.role === 'b2b_client' ? 'B2B Horeca' : 'B2C Hogar'}</span>
+                  </div>
+                </div>
+
+                {/* Columna 3: Contacto, NIT y Origen */}
+                <div style={{ backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: '900', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <User size={13} color="#7C3AED" /> Encargado & Origen del Pedido
+                  </div>
+                  <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.86rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{matchedProfile?.contact_name || editableClientName || 'Encargado no asignado'}</span>
+                    {matchedProfile?.nit && <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 'normal' }}>NIT: {matchedProfile.nit}</span>}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span><strong>Tel:</strong> {matchedProfile?.phone || matchedProfile?.contact_phone || editableClientPhone || '-'}</span>
+                    <span>•</span>
+                    <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
+                      <strong>Asunto:</strong> {selectedDraft.email_subject || '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* If Order is already approved/injected, show protected notice banner */}
             {(selectedDraft.status === 'approved' || selectedDraft.order_id) && (
