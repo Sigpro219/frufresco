@@ -341,6 +341,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [showFloatingEmail, setShowFloatingEmail] = useState(true);
   const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
   const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
+  const [excelSheetsData, setExcelSheetsData] = useState<any[]>([]);
+  const [selectedExcelSheetIndex, setSelectedExcelSheetIndex] = useState<number>(0);
+  const [excelFilterOnlyWithQty, setExcelFilterOnlyWithQty] = useState<boolean>(false);
+  const [excelSearchTerm, setExcelSearchTerm] = useState<string>('');
+  const [excelZoomLevel, setExcelZoomLevel] = useState<number>(100);
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isAttachmentZoomed, setIsAttachmentZoomed] = useState(false);
@@ -355,6 +360,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   useEffect(() => {
     setActiveTab('email');
     setAttachmentHtml(null);
+    setExcelSheetsData([]);
+    setSelectedExcelSheetIndex(0);
+    setExcelFilterOnlyWithQty(false);
+    setExcelSearchTerm('');
+    setExcelZoomLevel(100);
     setAttachmentError(null);
     setPdfBlobUrl(null);
     setIsFloatingExpanded(false);
@@ -409,6 +419,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setLoadingAttachment(true);
       setAttachmentError(null);
       setAttachmentHtml(null);
+      setExcelSheetsData([]);
       
       fetch(currentUrl)
         .then(res => {
@@ -417,56 +428,116 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         })
         .then(buffer => {
           const workbook = XLSX.read(buffer, { type: 'array' });
-          let finalHtml = '';
+          const parsedSheets: any[] = [];
           
-          workbook.SheetNames.forEach((sheetName, index) => {
+          workbook.SheetNames.forEach((sheetName) => {
             const worksheet = workbook.Sheets[sheetName];
             const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
             const validRows = rawData.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''));
             
             if (validRows.length === 0) return;
 
+            // Find header row (row containing PLU, PRODUCTO, PRODCUTO, DESCRIPCION, CANT, CAN, etc.)
+            let headerRowIdx = 0;
+            for (let r = 0; r < Math.min(15, validRows.length); r++) {
+              const rowStr = validRows[r].map(c => String(c || '').toLowerCase()).join(' ');
+              if ((rowStr.includes('prod') || rowStr.includes('descrip') || rowStr.includes('item') || rowStr.includes('articulo')) && 
+                  (rowStr.includes('can') || rowStr.includes('cant') || rowStr.includes('ubm') || rowStr.includes('plu') || rowStr.includes('unid'))) {
+                headerRowIdx = r;
+                break;
+              }
+            }
+
             const maxCols = Math.max(...validRows.map(r => r.length));
-            const activeCols = new Set<number>();
+            const activeCols: number[] = [];
             for (let c = 0; c < maxCols; c++) {
               for (let r = 0; r < validRows.length; r++) {
                 const val = validRows[r][c];
                 if (val !== null && val !== undefined && String(val).trim() !== '') {
-                  activeCols.add(c);
+                  activeCols.push(c);
                   break;
                 }
               }
             }
-            const sortedActiveCols = Array.from(activeCols).sort((a, b) => a - b);
 
-            let html = `<div style="margin-bottom: ${index < workbook.SheetNames.length - 1 ? '32px' : '0'};">`;
-            html += `<div style="background-color: #E2E8F0; padding: 8px 12px; font-weight: 800; border-radius: 6px 6px 0 0; color: #1E293B; border: 1px solid #CBD5E1; border-bottom: none; display: inline-block;">Hoja: ${sheetName}</div>`;
-            html += `<table class="excel-table" style="margin-bottom: 0;"><tbody>`;
-            
-            validRows.forEach((row, rIdx) => {
-              // Consider the first row of data as the header
-              const isHeader = rIdx === 0;
-              html += `<tr style="${isHeader ? 'background-color: #F1F5F9; font-weight: 800;' : ''}">`;
-              sortedActiveCols.forEach(c => {
-                const cellVal = row[c];
-                let displayVal = (cellVal !== null && cellVal !== undefined) ? String(cellVal).trim() : '';
-                displayVal = displayVal.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                if (isHeader) {
-                  html += `<th>${displayVal}</th>`;
-                } else {
-                  html += `<td>${displayVal}</td>`;
-                }
-              });
-              html += '</tr>';
+            let qtyCol = -1;
+            let nameCol = -1;
+            let unitCol = -1;
+            let pluCol = -1;
+            const headerRow = validRows[headerRowIdx] || [];
+            headerRow.forEach((cellVal: any, colIdx: number) => {
+              const s = String(cellVal || '').toLowerCase().trim();
+              if (s === 'can' || s === 'cant' || s.includes('cantid') || s.includes('cantidad') || s === 'qty' || s === 'pedido') {
+                qtyCol = colIdx;
+              } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo')) {
+                nameCol = colIdx;
+              } else if (s === 'ubm' || s.includes('unidad') || s === 'und' || s === 'u.m') {
+                unitCol = colIdx;
+              } else if (s.includes('plu') || s.includes('codigo') || s.includes('cod') || s === 'id') {
+                pluCol = colIdx;
+              }
             });
-            html += '</tbody></table></div>';
-            finalHtml += html;
+
+            const parsedRows = validRows.map((row, rIdx) => {
+              const isHeader = rIdx === headerRowIdx;
+              const isMeta = rIdx < headerRowIdx;
+              
+              let qtyNum: number | null = null;
+              let rawQty = '';
+              if (!isHeader && !isMeta && qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
+                rawQty = String(row[qtyCol]).trim();
+                const parsed = parseFloat(rawQty.replace(',', '.'));
+                if (!isNaN(parsed) && parsed > 0) {
+                  qtyNum = parsed;
+                }
+              } else if (!isHeader && !isMeta) {
+                for (const c of activeCols) {
+                  const val = row[c];
+                  if (typeof val === 'number' && val > 0 && val < 5000) {
+                    qtyNum = val;
+                    break;
+                  }
+                }
+              }
+
+              const rowName = nameCol !== -1 ? String(row[nameCol] || '').trim() : '';
+              const rowUnit = unitCol !== -1 ? String(row[unitCol] || '').trim() : 'Kg';
+              const rowPlu = pluCol !== -1 ? String(row[pluCol] || '').trim() : '';
+
+              return {
+                rowIndex: rIdx + 1,
+                isHeader,
+                isMeta,
+                hasQty: qtyNum !== null && qtyNum > 0,
+                qtyVal: qtyNum,
+                nameVal: rowName,
+                unitVal: rowUnit,
+                pluVal: rowPlu,
+                cells: activeCols.map(c => {
+                  const v = row[c];
+                  return v !== null && v !== undefined ? String(v).trim() : '';
+                })
+              };
+            });
+
+            const countWithQty = parsedRows.filter(r => r.hasQty).length;
+
+            parsedSheets.push({
+              sheetName,
+              activeCols,
+              headerRowIdx,
+              qtyCol,
+              nameCol,
+              unitCol,
+              pluCol,
+              countWithQty,
+              totalRows: parsedRows.filter(r => !r.isHeader && !r.isMeta).length,
+              rows: parsedRows
+            });
           });
 
-          if (!finalHtml) {
-             finalHtml = '<div style="padding: 20px; text-align: center; color: #64748B;">El archivo Excel está vacío</div>';
-          }
-          setAttachmentHtml(finalHtml);
+          setExcelSheetsData(parsedSheets);
+          setAttachmentHtml(parsedSheets.length > 0 ? 'parsed' : null);
         })
         .catch(err => {
           console.error("Error loading attachment:", err);
@@ -4718,6 +4789,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {/* Real-Time Audit Progress Badge */}
+                {(() => {
+                  const activeItems = editableItems.filter(it => !it.isDeleted);
+                  const matchedCount = activeItems.filter(it => it.matched_product_id).length;
+                  const isAllMatched = activeItems.length > 0 && matchedCount === activeItems.length;
+
+                  return (
+                    <span style={{ 
+                      backgroundColor: isAllMatched ? '#ECFDF5' : '#FFFBEB', 
+                      color: isAllMatched ? '#065F46' : '#B45309', 
+                      border: `1.5px solid ${isAllMatched ? '#6EE7B7' : '#FCD34D'}`, 
+                      padding: '5px 12px', 
+                      borderRadius: '100px', 
+                      fontSize: '0.78rem', 
+                      fontWeight: '800',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                    }}>
+                      {isAllMatched ? <CheckCircle2 size={13} color="#059669" /> : <AlertTriangle size={13} color="#D97706" />}
+                      <span>{isAllMatched ? `100% Auditado (${matchedCount}/${activeItems.length})` : `${matchedCount} de ${activeItems.length} SKUs listos`}</span>
+                    </span>
+                  );
+                })()}
+
                 <span style={{ 
                   backgroundColor: '#ECFDF5', 
                   color: '#065F46', 
@@ -4753,7 +4850,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     transition: 'all 0.2s'
                   }}
                 >
-                  <FileText size={14} /> {showFloatingEmail ? 'Ocultar Visor PDF' : 'Ver Documento Lado a Lado'}
+                  <FileText size={14} /> {showFloatingEmail ? 'Ocultar Visor' : 'Ver Documento Lado a Lado'}
                 </button>
                 <button 
                   onClick={() => setSelectedDraft(null)} 
@@ -4856,14 +4953,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       {(() => {
                         const metadata = getDraftMetadata(selectedDraft);
                         let currentUrl = metadata.attachmentUrl;
+                        let currentName = metadata.attachmentName;
                         if (metadata.attachments && metadata.attachments[selectedAttachmentIndex]) {
                           currentUrl = metadata.attachments[selectedAttachmentIndex].url;
+                          currentName = metadata.attachments[selectedAttachmentIndex].name;
                         }
                         if (!currentUrl) return null;
+
+                        const ext = (currentName || '').split('.').pop()?.toLowerCase() || '';
+                        const isDoc = ['xlsx', 'xls', 'docx', 'doc', 'csv'].includes(ext);
+                        const openUrl = isDoc 
+                          ? `https://docs.google.com/viewer?url=${encodeURIComponent(currentUrl)}`
+                          : currentUrl;
+
                         return (
-                          <a href={currentUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                            <button style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Maximize2 size={11} /> Abrir Pestaña
+                          <a href={openUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                            <button style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                              <Maximize2 size={11} /> {isDoc ? 'Google Docs ↗' : 'Abrir Pestaña ↗'}
                             </button>
                           </a>
                         );
@@ -4970,7 +5076,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           );
                         }
 
-                        // Excel
+                        // Excel (.xlsx, .xls)
                         if (ext === 'xlsx' || ext === 'xls') {
                           if (loadingAttachment) {
                             return wrapContent(
@@ -4980,6 +5086,246 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               </div>
                             );
                           }
+                          
+                          if (excelSheetsData && excelSheetsData.length > 0) {
+                            const currentSheet = excelSheetsData[selectedExcelSheetIndex] || excelSheetsData[0];
+                            const filteredRows = (currentSheet.rows || []).filter((r: any) => {
+                              if (excelFilterOnlyWithQty && !r.hasQty && !r.isHeader && !r.isMeta) return false;
+                              if (excelSearchTerm) {
+                                const term = excelSearchTerm.toLowerCase();
+                                const textMatch = r.cells.some((c: string) => c.toLowerCase().includes(term));
+                                return textMatch || r.isHeader;
+                              }
+                              return true;
+                            });
+
+                            return wrapContent(
+                              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+                                {/* Excel Toolbar */}
+                                <div style={{
+                                  padding: '8px 12px',
+                                  backgroundColor: '#F1F5F9',
+                                  borderBottom: '1px solid #CBD5E1',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  flexWrap: 'wrap',
+                                  gap: '8px'
+                                }}>
+                                  {/* Sheet selector tabs */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {excelSheetsData.map((s: any, sIdx: number) => (
+                                      <button
+                                        key={sIdx}
+                                        type="button"
+                                        onClick={() => setSelectedExcelSheetIndex(sIdx)}
+                                        style={{
+                                          padding: '4px 10px',
+                                          borderRadius: '6px',
+                                          border: selectedExcelSheetIndex === sIdx ? '1.5px solid #2563EB' : '1px solid #CBD5E1',
+                                          backgroundColor: selectedExcelSheetIndex === sIdx ? '#EFF6FF' : '#FFFFFF',
+                                          color: selectedExcelSheetIndex === sIdx ? '#1D4ED8' : '#475569',
+                                          fontWeight: selectedExcelSheetIndex === sIdx ? 800 : 600,
+                                          fontSize: '0.72rem',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        📄 {s.sheetName} ({s.countWithQty} pedidos)
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Filter & Zoom Controls */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setExcelFilterOnlyWithQty(prev => !prev)}
+                                      style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        border: excelFilterOnlyWithQty ? '1.5px solid #059669' : '1px solid #CBD5E1',
+                                        backgroundColor: excelFilterOnlyWithQty ? '#ECFDF5' : '#FFFFFF',
+                                        color: excelFilterOnlyWithQty ? '#065F46' : '#334155',
+                                        fontWeight: 800,
+                                        fontSize: '0.72rem',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        boxShadow: excelFilterOnlyWithQty ? '0 1px 3px rgba(16, 185, 129, 0.15)' : 'none'
+                                      }}
+                                    >
+                                      {excelFilterOnlyWithQty ? <CheckCircle2 size={12} color="#059669" /> : <Filter size={12} />}
+                                      {excelFilterOnlyWithQty 
+                                        ? `Mostrando ${currentSheet.countWithQty} con cantidad` 
+                                        : `Ver solo ${currentSheet.countWithQty} con cantidad`}
+                                    </button>
+
+                                    <input
+                                      type="text"
+                                      value={excelSearchTerm}
+                                      onChange={e => setExcelSearchTerm(e.target.value)}
+                                      placeholder="Buscar en Excel..."
+                                      style={{
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.72rem',
+                                        width: '120px',
+                                        outline: 'none',
+                                        backgroundColor: '#FFFFFF'
+                                      }}
+                                    />
+
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => setExcelZoomLevel(prev => Math.max(70, prev - 10))}
+                                        style={{ padding: '2px 6px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 800 }}
+                                        title="Reducir zoom"
+                                      >-</button>
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0 4px', color: '#475569' }}>{excelZoomLevel}%</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setExcelZoomLevel(prev => Math.min(140, prev + 10))}
+                                        style={{ padding: '2px 6px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 800 }}
+                                        title="Aumentar zoom"
+                                      >+</button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Modern Google Sheets Table */}
+                                <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC' }}>
+                                  <table style={{
+                                    borderCollapse: 'collapse',
+                                    width: '100%',
+                                    minWidth: 'max-content',
+                                    fontSize: `${0.75 * (excelZoomLevel / 100)}rem`,
+                                    fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace'
+                                  }}>
+                                    <tbody>
+                                      {filteredRows.map((r: any, rowIdx: number) => {
+                                        const isRowHeader = r.isHeader;
+                                        const isRowMeta = r.isMeta;
+                                        const hasRowQty = r.hasQty;
+
+                                        return (
+                                          <tr
+                                            key={rowIdx}
+                                            style={{
+                                              backgroundColor: isRowHeader 
+                                                ? '#E2E8F0' 
+                                                : (hasRowQty ? '#ECFDF5' : (isRowMeta ? '#F8FAFC' : (rowIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'))),
+                                              fontWeight: isRowHeader ? 800 : (hasRowQty ? 700 : 500),
+                                              color: isRowHeader ? '#0F172A' : (hasRowQty ? '#065F46' : '#334155'),
+                                              borderBottom: hasRowQty ? '1.5px solid #86EFAC' : '1px solid #E2E8F0',
+                                              transition: 'background-color 0.15s'
+                                            }}
+                                          >
+                                            {/* Row Number */}
+                                            <td style={{
+                                              padding: '4px 8px',
+                                              textAlign: 'center',
+                                              backgroundColor: isRowHeader ? '#CBD5E1' : '#F1F5F9',
+                                              color: '#64748B',
+                                              borderRight: '1px solid #CBD5E1',
+                                              borderBottom: '1px solid #E2E8F0',
+                                              fontSize: '0.65rem',
+                                              userSelect: 'none',
+                                              width: '32px'
+                                            }}>
+                                              {r.rowIndex}
+                                            </td>
+
+                                            {/* Cells */}
+                                            {r.cells.map((cellText: string, cIdx: number) => {
+                                              const isQtyCell = cIdx === currentSheet.qtyCol && !isRowHeader && !isRowMeta;
+                                              const isNameCell = cIdx === currentSheet.nameCol && !isRowHeader && !isRowMeta;
+
+                                              return (
+                                                <td
+                                                  key={cIdx}
+                                                  style={{
+                                                    padding: '5px 8px',
+                                                    borderRight: '1px solid #E2E8F0',
+                                                    whiteSpace: 'nowrap',
+                                                    fontWeight: isQtyCell && hasRowQty ? 900 : (isNameCell && hasRowQty ? 800 : 'inherit'),
+                                                    color: isQtyCell && hasRowQty ? '#047857' : (hasRowQty ? '#065F46' : 'inherit'),
+                                                    backgroundColor: isQtyCell && hasRowQty ? '#D1FAE5' : 'transparent',
+                                                    textAlign: isQtyCell ? 'center' : 'left'
+                                                  }}
+                                                >
+                                                  {isQtyCell && hasRowQty ? (
+                                                    <span style={{
+                                                      backgroundColor: '#FEF3C7',
+                                                      color: '#B45309',
+                                                      border: '1px solid #FCD34D',
+                                                      padding: '1px 6px',
+                                                      borderRadius: '4px',
+                                                      fontWeight: 900
+                                                    }}>
+                                                      {cellText} {r.unitVal}
+                                                    </span>
+                                                  ) : (
+                                                    cellText
+                                                  )}
+                                                </td>
+                                              );
+                                            })}
+
+                                            {/* Quick Add Button for manual inspection */}
+                                            {!isRowHeader && !isRowMeta && (
+                                              <td style={{ padding: '2px 6px', textAlign: 'center', width: '50px' }}>
+                                                <button
+                                                  type="button"
+                                                  title={`Añadir "${r.nameVal || 'fila ' + r.rowIndex}" al pedido`}
+                                                  onClick={() => {
+                                                    const prodName = r.nameVal || `Item fila ${r.rowIndex}`;
+                                                    const prodQty = r.qtyVal || 1;
+                                                    const prodUnit = r.unitVal || 'Kg';
+                                                    
+                                                    // Add to editableItems
+                                                    setEditableItems(prev => [
+                                                      ...prev,
+                                                      {
+                                                        originalName: prodName,
+                                                        name: prodName,
+                                                        quantity: prodQty,
+                                                        unit: prodUnit,
+                                                        matched_product_id: null,
+                                                        searchQuery: prodName,
+                                                        skuQuery: '',
+                                                        isConfirmed: false
+                                                      }
+                                                    ]);
+                                                    showToast(`Añadido "${prodName}" (${prodQty} ${prodUnit}) a la tabla de productos`, 'info');
+                                                  }}
+                                                  style={{
+                                                    padding: '2px 6px',
+                                                    backgroundColor: hasRowQty ? '#EFF6FF' : '#F1F5F9',
+                                                    border: hasRowQty ? '1px solid #BFDBFE' : '1px solid #E2E8F0',
+                                                    borderRadius: '4px',
+                                                    color: hasRowQty ? '#1D4ED8' : '#64748B',
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer'
+                                                  }}
+                                                >
+                                                  + Sumar
+                                                </button>
+                                              </td>
+                                            )}
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          }
+                          
                           if (attachmentHtml) {
                             return wrapContent(
                               <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', padding: '10px' }}>
