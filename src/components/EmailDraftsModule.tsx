@@ -4256,7 +4256,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      {/* Sticky Banner: Pedidos por Procesar + Barra de Filtros (Fijado debajo del Navbar a top: 85px) */}
+      <div style={{
+        position: 'sticky',
+        top: '85px',
+        zIndex: 40,
+        backgroundColor: '#FFFFFF',
+        padding: '1rem 1.25rem',
+        borderRadius: '16px',
+        border: '1px solid #E2E8F0',
+        boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.06)',
+        marginBottom: '1.25rem'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
         <div>
           <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Mail size={20} style={{ color: THEME.colors.primary }} /> Pedidos por Procesar (Email Inbound)
@@ -4701,6 +4713,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <Grid size={16} color={viewMode === 'grid' ? THEME.colors.textMain : THEME.colors.textSecondary} />
           </div>
         </div>
+      </div>
       </div>
 
       {loading ? (
