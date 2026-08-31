@@ -8,7 +8,7 @@ import {
     ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, 
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
-    Settings, Plus, Package 
+    Settings, Plus, Package, Filter 
 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
