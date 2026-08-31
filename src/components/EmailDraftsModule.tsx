@@ -7347,9 +7347,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           )}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px', flexShrink: 0 }}>
-                                          <span style={{ fontSize: '0.80rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#166534' }}>
-                                            {formatMoney(contractPrices[p.id] || p.base_price)}/{p.unit_of_measure}
-                                          </span>
+                                          {(() => {
+                                            const itemPrice = contractPrices[p.id] !== undefined && contractPrices[p.id] !== null ? contractPrices[p.id] : (p.base_price || 0);
+                                            return itemPrice > 0 ? (
+                                              <span style={{ fontSize: '0.80rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#166534' }}>
+                                                {formatMoney(itemPrice)}/{p.unit_of_measure}
+                                              </span>
+                                            ) : (
+                                              <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '1px 5px', borderRadius: '4px' }}>
+                                                SIN PRECIO
+                                              </span>
+                                            );
+                                          })()}
                                         </div>
                                       </div>
                                     );
@@ -7453,30 +7462,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <span style={{ fontSize: '0.80rem', fontWeight: '800', color: '#334155', lineHeight: '1.1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                       {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                     </span>
-                                    {matchedProd && resolvedUnitPrice > 0 ? (
-                                      <span 
-                                        style={{ 
-                                          fontSize: '0.68rem', 
-                                          fontWeight: '800', 
-                                          color: '#15803D', 
-                                          backgroundColor: '#F0FDF4', 
-                                          border: '1px solid #BBF7D0',
-                                          padding: '1px 4px', 
-                                          borderRadius: '4px', 
-                                          marginTop: '2px', 
-                                          whiteSpace: 'nowrap',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '2px',
-                                          cursor: 'default'
-                                        }} 
-                                        title={`Precio unitario: ${formatMoney(resolvedUnitPrice)} | Subtotal: ${formatMoney(lineSubtotal)}`}
-                                      >
-                                        {formatMoney(resolvedUnitPrice)}
-                                      </span>
+                                    {matchedProd ? (
+                                      resolvedUnitPrice > 0 ? (
+                                        <span 
+                                          style={{ 
+                                            fontSize: '0.68rem', 
+                                            fontWeight: '800', 
+                                            color: '#15803D', 
+                                            backgroundColor: '#F0FDF4', 
+                                            border: '1px solid #BBF7D0',
+                                            padding: '1px 4px', 
+                                            borderRadius: '4px', 
+                                            marginTop: '2px', 
+                                            whiteSpace: 'nowrap',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '2px',
+                                            cursor: 'default'
+                                          }} 
+                                          title={`Precio unitario: ${formatMoney(resolvedUnitPrice)} | Subtotal: ${formatMoney(lineSubtotal)}`}
+                                        >
+                                          {formatMoney(resolvedUnitPrice)}
+                                        </span>
+                                      ) : (
+                                        <span 
+                                          style={{ 
+                                            fontSize: '0.65rem', 
+                                            fontWeight: '800', 
+                                            color: '#DC2626', 
+                                            backgroundColor: '#FEF2F2', 
+                                            border: '1px solid #FECACA', 
+                                            padding: '1px 4px', 
+                                            borderRadius: '4px', 
+                                            marginTop: '2px', 
+                                            whiteSpace: 'nowrap',
+                                            cursor: 'default'
+                                          }} 
+                                          title="Este producto no tiene precio asignado en catálogo ni acuerdo contractual ($0)"
+                                        >
+                                          SIN PRECIO
+                                        </span>
+                                      )
                                     ) : (
                                       <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '600', marginTop: '2px' }}>
-                                        $0
+                                        -
                                       </span>
                                     )}
                                   </div>
@@ -8839,7 +8868,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             )}
                           </td>
                           <td style={{ padding: '0.75rem 1.2rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatQuantity(qty)}</td>
-                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(lineTotal)}</td>
+                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+                            {lineTotal > 0 ? (
+                              formatMoney(lineTotal)
+                            ) : (
+                              <span style={{ color: '#DC2626', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.74rem', fontWeight: '800' }}>
+                                SIN PRECIO
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
