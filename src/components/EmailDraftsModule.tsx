@@ -1167,8 +1167,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [profiles, setProfiles] = useState<any[]>([]);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [focusedClientSearchIndex, setFocusedClientSearchIndex] = useState<number>(-1);
+
+  const parentMatrixIds = useMemo(() => {
+    const set = new Set<string>();
+    profiles.forEach(c => {
+      if (c.parent_id) set.add(c.parent_id);
+    });
+    return set;
+  }, [profiles]);
+
+  const matrixClientsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    profiles.forEach(c => {
+      map.set(c.id, c);
+    });
+    return map;
+  }, [profiles]);
+
+  const filteredClientProfiles = useMemo(() => {
+    if (!clientSearchQuery || clientSearchQuery.trim().length < 2) {
+      return profiles.filter(c => !parentMatrixIds.has(c.id)).slice(0, 15);
+    }
+    const query = clientSearchQuery.toLowerCase().trim();
+
+    const matchedParentMatrixIds = new Set<string>();
+    profiles.forEach(c => {
+      if (parentMatrixIds.has(c.id)) {
+        const nameMatch = (c.company_name?.toLowerCase() || '').includes(query);
+        const nitMatch = (c.nit?.toString() || '').includes(query);
+        if (nameMatch || nitMatch) matchedParentMatrixIds.add(c.id);
+      }
+    });
+
+    const deliverableClients = profiles.filter(c => !parentMatrixIds.has(c.id));
+
+    const groupA: any[] = [];
+    const groupB: any[] = [];
+
+    deliverableClients.forEach(c => {
+      const isDirectMatch = (c.company_name?.toLowerCase() || '').includes(query) ||
+                            (c.contact_name?.toLowerCase() || '').includes(query) ||
+                            (c.nit?.toString() || '').includes(query) ||
+                            (c.address?.toLowerCase() || '').includes(query) ||
+                            (c.phone?.toString() || '').includes(query) ||
+                            (c.contact_phone?.toString() || '').includes(query);
+
+      if (c.parent_id && matchedParentMatrixIds.has(c.parent_id)) {
+        groupA.push({ ...c, isDirectSearchedBranch: isDirectMatch });
+      } else if (isDirectMatch) {
+        groupB.push(c);
+      }
+    });
+
+    return [...groupA, ...groupB].slice(0, 20);
+  }, [profiles, clientSearchQuery, parentMatrixIds]);
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const quantityInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
@@ -1860,20 +1914,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       return;
     }
     try {
+      const targetProfile = profiles.find(p => p.id === profileId);
+      const relevantCustomerIds = [profileId];
+      if (targetProfile?.parent_id) {
+        if (!relevantCustomerIds.includes(targetProfile.parent_id)) {
+          relevantCustomerIds.push(targetProfile.parent_id);
+        }
+        profiles.filter(p => p.parent_id === targetProfile.parent_id).forEach(p => {
+          if (!relevantCustomerIds.includes(p.id)) relevantCustomerIds.push(p.id);
+        });
+      }
+
       // 1. Nicknames & Exceptions
       const { data: nicknames } = await supabase
         .from('product_nicknames')
         .select('*')
-        .eq('customer_id', profileId);
+        .in('customer_id', relevantCustomerIds);
       if (nicknames) setClientExceptions(nicknames);
 
       // 2. Client recent orders & Pareto frequencies
       const { data: recentOrders } = await supabase
         .from('orders')
         .select('id')
-        .eq('profile_id', profileId)
+        .in('profile_id', relevantCustomerIds)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(60);
 
       if (recentOrders && recentOrders.length > 0) {
         const orderIds = recentOrders.map(o => o.id);
@@ -1917,7 +1982,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const freqB = clientFrequentProductMap[b.id]?.count || 0;
         if (freqB !== freqA) return freqB - freqA;
         return (a.name || '').localeCompare(b.name || '');
-      }).slice(0, 10);
+      }).slice(0, 12);
     }
 
     const matched = products.filter(p => {
@@ -1962,7 +2027,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return scoreB - scoreA;
       }
       return normNameA.localeCompare(normNameB);
-    }).slice(0, 10);
+    }).slice(0, 12);
   };
 
   useEffect(() => {
@@ -1971,9 +2036,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } else {
       setClientFrequentProductIds([]);
     }
-  }, [selectedDraft?.profile_id]);
+  }, [selectedDraft?.profile_id, profiles]);
 
-  const handleSelectClientProfile = (profile: any) => {
+  const handleSelectClientProfile = async (profile: any) => {
     if (!selectedDraft) return;
     const clientName = profile.company_name || profile.contact_name || profile.name || 'Cliente';
     const updatedDraft = {
@@ -1984,6 +2049,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     };
     setSelectedDraft(updatedDraft);
     setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? updatedDraft : d));
+
+    // Persist immediately in Supabase
+    try {
+      await supabase.from('order_drafts').update({
+        profile_id: profile.id,
+        client_detected_name: clientName
+      }).eq('id', selectedDraft.id);
+    } catch (e) {
+      console.warn('Error persisting profile_id to draft:', e);
+    }
+
+    // Immediately trigger Pareto loading
+    fetchClientFrequentProducts(profile.id);
+
     if (profile.address) {
       setEditableAddress(profile.address);
     }
@@ -5572,27 +5651,34 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <div style={{ position: 'relative' }}>
                   <button
                     type="button"
-                    onClick={() => setIsClientSearchOpen(prev => !prev)}
+                    onClick={() => {
+                      setIsClientSearchOpen(prev => !prev);
+                      setFocusedClientSearchIndex(-1);
+                    }}
                     style={{
-                      background: '#FFFFFF',
-                      border: '1.5px solid #CBD5E1',
+                      background: matchedProfile ? '#FFFFFF' : '#FEF3C7',
+                      border: `1.5px solid ${matchedProfile ? '#86EFAC' : '#F59E0B'}`,
                       borderRadius: '10px',
-                      padding: '5px 12px',
+                      padding: '6px 14px',
                       fontSize: '0.9rem',
                       fontWeight: '900',
-                      color: '#0F172A',
+                      color: matchedProfile ? '#065F46' : '#92400E',
                       cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      gap: '8px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
+                      transition: 'all 0.15s ease'
                     }}
+                    title="Clic para cambiar o buscar cliente"
                   >
-                    <Building2 size={14} color="#0D7A57" />
-                    <span style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {matchedProfile?.company_name || matchedProfile?.contact_name || selectedDraft.client_detected_name || selectedDraft.source_email}
+                    <Building2 size={16} color={matchedProfile ? '#059669' : '#D97706'} />
+                    <span style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {matchedProfile 
+                        ? (matchedProfile.company_name || matchedProfile.contact_name)
+                        : (selectedDraft.client_detected_name ? `⚠️ Asignar: ${selectedDraft.client_detected_name}` : '⚠️ Seleccionar Cliente')}
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>▾</span>
+                    <span style={{ fontSize: '0.75rem', color: matchedProfile ? '#059669' : '#B45309' }}>▾</span>
                   </button>
 
                   {isClientSearchOpen && (
@@ -5600,70 +5686,110 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       position: 'absolute',
                       top: '100%',
                       left: 0,
-                      marginTop: '6px',
-                      width: '380px',
-                      maxHeight: '340px',
+                      marginTop: '8px',
+                      width: '450px',
+                      maxHeight: '380px',
                       backgroundColor: 'white',
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-                      border: '1px solid #E2E8F0',
-                      zIndex: 1000,
-                      padding: '8px',
+                      borderRadius: '14px',
+                      boxShadow: '0 15px 35px -5px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.08)',
+                      border: '1px solid #CBD5E1',
+                      zIndex: 10000,
+                      padding: '10px',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '6px'
+                      gap: '8px'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                        <Search size={14} color="#94A3B8" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1.5px solid #3B82F6' }}>
+                        <Search size={16} color="#3B82F6" />
                         <input
                           autoFocus
                           type="text"
                           autoComplete="off"
                           autoCorrect="off"
                           spellCheck={false}
-                          placeholder="Buscar cliente por nombre o NIT..."
+                          placeholder="Buscar Empresa, Sucursal, NIT, Dirección..."
                           value={clientSearchQuery}
-                          onChange={e => setClientSearchQuery(e.target.value)}
-                          style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.82rem', fontWeight: 600 }}
+                          onChange={e => {
+                            setClientSearchQuery(e.target.value);
+                            setFocusedClientSearchIndex(0);
+                          }}
+                          onKeyDown={e => {
+                            if (filteredClientProfiles.length === 0) return;
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setFocusedClientSearchIndex(prev => Math.min(prev + 1, filteredClientProfiles.length - 1));
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setFocusedClientSearchIndex(prev => Math.max(prev - 1, 0));
+                            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                              const targetIdx = focusedClientSearchIndex >= 0 ? focusedClientSearchIndex : 0;
+                              if (filteredClientProfiles[targetIdx]) {
+                                e.preventDefault();
+                                handleSelectClientProfile(filteredClientProfiles[targetIdx]);
+                              }
+                            } else if (e.key === 'Escape') {
+                              setIsClientSearchOpen(false);
+                            }
+                          }}
+                          style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.88rem', fontWeight: 600, color: '#0F172A' }}
                         />
                         {clientSearchQuery && (
-                          <button onClick={() => setClientSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={12} /></button>
+                          <button onClick={() => setClientSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={14} /></button>
                         )}
                       </div>
-                      <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
-                        {profiles
-                          .filter(p => {
-                            const q = clientSearchQuery.toLowerCase();
-                            return (p.company_name || '').toLowerCase().includes(q) ||
-                                   (p.contact_name || '').toLowerCase().includes(q) ||
-                                   (p.nit || '').toLowerCase().includes(q) ||
-                                   (p.email || '').toLowerCase().includes(q);
+
+                      <div style={{ overflowY: 'auto', maxHeight: '300px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {filteredClientProfiles.length === 0 ? (
+                          <div style={{ padding: '16px', textAlign: 'center', color: '#94A3B8', fontSize: '0.82rem' }}>
+                            No se encontraron clientes para &quot;{clientSearchQuery}&quot;
+                          </div>
+                        ) : (
+                          filteredClientProfiles.map((p: any, pIdx: number) => {
+                            const isFocused = pIdx === focusedClientSearchIndex;
+                            const parentMatrix = p.parent_id ? matrixClientsMap.get(p.parent_id) : null;
+                            const isDirectBranch = Boolean(p.isDirectSearchedBranch && parentMatrix);
+
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => handleSelectClientProfile(p)}
+                                onMouseEnter={() => setFocusedClientSearchIndex(pIdx)}
+                                style={{
+                                  padding: '10px 12px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  backgroundColor: isFocused ? '#DBEAFE' : (isDirectBranch ? '#F0FDF4' : 'transparent'),
+                                  borderLeft: isFocused ? '4px solid #2563EB' : '4px solid transparent',
+                                  borderBottom: '1px solid #F1F5F9',
+                                  transition: 'all 0.12s ease'
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                  <div style={{ fontWeight: isFocused ? 800 : 700, color: isFocused ? '#1E3A8A' : '#0F172A', fontSize: '0.86rem' }}>
+                                    {p.company_name || p.contact_name}
+                                  </div>
+                                  {parentMatrix && (
+                                    <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                      Sucursal
+                                    </span>
+                                  )}
+                                </div>
+
+                                {parentMatrix && (
+                                  <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600, marginTop: '2px' }}>
+                                    Matriz: {parentMatrix.company_name}
+                                  </div>
+                                )}
+
+                                <div style={{ fontSize: '0.74rem', color: isFocused ? '#1E40AF' : '#64748B', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                  {p.nit && <span><strong>NIT:</strong> {p.nit}</span>}
+                                  {p.address && <span>📍 {p.address} {p.city ? `(${p.city})` : ''}</span>}
+                                  {p.phone && <span>📞 {p.phone}</span>}
+                                </div>
+                              </div>
+                            );
                           })
-                          .slice(0, 15)
-                          .map(p => (
-                            <div
-                              key={p.id}
-                              onClick={() => handleSelectClientProfile(p)}
-                              style={{
-                                padding: '8px 10px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.8rem',
-                                borderBottom: '1px solid #F1F5F9',
-                                transition: 'background 0.15s'
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDF4'}
-                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >
-                              <div style={{ fontWeight: '800', color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>{p.company_name || p.contact_name}</span>
-                                {p.nit && <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal' }}>NIT: {p.nit}</span>}
-                              </div>
-                              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
-                                {p.address || 'Sin dirección'} {p.phone ? `• ${p.phone}` : ''}
-                              </div>
-                            </div>
-                          ))}
+                        )}
                       </div>
                     </div>
                   )}
@@ -6818,22 +6944,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           <span style={{ fontSize: '0.85rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#166534' }}>
                                             {formatMoney(contractPrices[p.id] || p.base_price)}/{p.unit_of_measure}
                                           </span>
-                                          {p.options_config && p.options_config.length > 0 && (
-                                            <span style={{ 
-                                              fontSize: '0.7em', 
-                                              backgroundColor: isFocused ? '#FEF08A' : '#FEF3C7', 
-                                              color: '#92400E', 
-                                              padding: '2px 6px', 
-                                              borderRadius: '6px', 
-                                              border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A',
-                                              fontWeight: '800',
-                                              display: 'inline-flex',
-                                              alignItems: 'center',
-                                              gap: '3px'
-                                            }}>
-                                              <Settings size={11} /> Opciones
-                                            </span>
-                                          )}
                                         </div>
                                       </div>
                                     );
