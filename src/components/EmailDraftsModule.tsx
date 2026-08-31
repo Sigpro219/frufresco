@@ -299,6 +299,13 @@ const detectUnitFromName = (originalName: string, product: any, productConversio
     return null;
 };
 
+const cleanSubject = (subject?: string | null): string => {
+  if (!subject) return '-';
+  // Strip technical prefix tags like [RAW_WEBHOOK], [EML-0A7C0D], [TAG], etc.
+  const cleaned = subject.replace(/^(\[[^\]]+\]\s*)+/gi, '').trim();
+  return cleaned || subject;
+};
+
 const ProductsDatalist = React.memo(({ products }: { products: any[] }) => {
   return (
     <datalist id="all-products-list">
@@ -4842,8 +4849,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     )}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#4B5563', fontWeight: '500', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {draft.email_subject || '-'}
+                    <div 
+                      title={draft.email_subject || ''} 
+                      style={{ fontSize: '0.82rem', color: '#1E293B', fontWeight: '600', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    >
+                      {cleanSubject(draft.email_subject)}
                     </div>
                     <div style={{ marginTop: '2px' }}>
                       {getChannelBadge('email')}
@@ -5001,8 +5011,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <strong>Dirección:</strong> {meta.address !== 'No detectado' ? meta.address : '-'}
                 </div>
 
-                <div style={{ fontSize: '0.8rem', color: '#4B5563' }}>
-                  <strong>Asunto:</strong> {draft.email_subject || '-'}
+                <div style={{ fontSize: '0.8rem', color: '#4B5563' }} title={draft.email_subject || ''}>
+                  <strong>Asunto:</strong> {cleanSubject(draft.email_subject)}
                 </div>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '8px' }}>
@@ -5528,8 +5538,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span><strong>Tel:</strong> {matchedProfile?.phone || matchedProfile?.contact_phone || editableClientPhone || '-'}</span>
                     <span>•</span>
-                    <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
-                      <strong>Asunto:</strong> {selectedDraft.email_subject || '-'}
+                    <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
+                      <strong>Asunto:</strong> {cleanSubject(selectedDraft.email_subject)}
                     </span>
                   </div>
                 </div>
