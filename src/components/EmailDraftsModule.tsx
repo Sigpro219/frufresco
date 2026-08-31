@@ -708,14 +708,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const matchCacheRef = useRef<Record<string, any>>({});
+  const searchQueryCacheRef = useRef<Map<string, any[]>>(new Map());
 
   const [showMapModal, setShowMapModal] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    matchCacheRef.current = {};
-  }, [products, aliases]);
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
   const [duplicateMatchConfirm, setDuplicateMatchConfirm] = useState<{
@@ -749,9 +746,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
   const [isClientDetailsExpanded, setIsClientDetailsExpanded] = useState(false);
 
+  useEffect(() => {
+    matchCacheRef.current = {};
+    searchQueryCacheRef.current.clear();
+  }, [products, aliases, clientExceptions]);
+
   // Custom Floating SKU Dropdown States
   const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
   const [focusedDropdownItemIndex, setFocusedDropdownItemIndex] = useState<number>(0);
+  const [activeRowSearchQuery, setActiveRowSearchQuery] = useState<string | null>(null);
 
   // Product Customization Modal State (Image 1 replica)
   const [customizingModalItem, setCustomizingModalItem] = useState<{
@@ -1243,30 +1246,46 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [tempDeliveryTime, setTempDeliveryTime] = useState('07:30');
   const [tempDeliveryMargin, setTempDeliveryMargin] = useState(30);
 
-  // Auto-scroll anclado: Mantiene la fila activa en la 4ª línea visible (~150px) al avanzar con Enter
+  // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 1 (Tope Absoluto, 0px)
   const scrollToDraftRow = (targetIdx: number) => {
-    const container = document.getElementById('email-draft-scroll-container');
-    const row = document.getElementById(`draft-row-${targetIdx}`);
-    if (!container || !row) return;
+    setTimeout(() => {
+      const container = document.getElementById('email-draft-scroll-container');
+      const row = document.getElementById(`draft-row-${targetIdx}`);
+      if (!container || !row) return;
 
-    if (targetIdx < 3) {
-      container.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      const anchorHeight = 150;
-      const targetTop = row.offsetTop - anchorHeight;
+      if (targetIdx === 0) {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // Anclaje al Tope Absoluto (Renglón 1) usando offsetTop físico de la fila
+      const thead = container.querySelector('thead');
+      const theadHeight = thead ? thead.clientHeight : 35;
+      const targetScroll = Math.max(0, row.offsetTop - theadHeight);
+
       container.scrollTo({
-        top: Math.max(0, targetTop),
+        top: targetScroll,
         behavior: 'smooth'
       });
-    }
+    }, 15);
   };
 
   // Auto-scroll dropdown items when navigating with Arrow Up / Down keys
   useEffect(() => {
     if (activeDropdownRowIndex !== null && focusedDropdownItemIndex >= 0) {
-      const el = document.getElementById(`dropdown-item-${activeDropdownRowIndex}-${focusedDropdownItemIndex}`);
-      if (el) {
-        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const itemEl = document.getElementById(`dropdown-item-${activeDropdownRowIndex}-${focusedDropdownItemIndex}`);
+      const dropdownContainer = document.getElementById(`dropdown-container-${activeDropdownRowIndex}`);
+      if (itemEl && dropdownContainer) {
+        const itemTop = itemEl.offsetTop;
+        const itemBottom = itemTop + itemEl.offsetHeight;
+        const containerScrollTop = dropdownContainer.scrollTop;
+        const containerHeight = dropdownContainer.clientHeight;
+
+        if (itemTop < containerScrollTop) {
+          dropdownContainer.scrollTop = itemTop;
+        } else if (itemBottom > containerScrollTop + containerHeight) {
+          dropdownContainer.scrollTop = itemBottom - containerHeight;
+        }
       }
     }
   }, [activeDropdownRowIndex, focusedDropdownItemIndex]);
@@ -2012,13 +2031,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
     const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
+    const cacheKey = `${cleanQuery}_${extractedId}_${products.length}_${clientExceptions.length}`;
+    if (searchQueryCacheRef.current.has(cacheKey)) {
+      return searchQueryCacheRef.current.get(cacheKey)!;
+    }
+
     if (!cleanQuery && !extractedId) {
-      return [...products].sort((a, b) => {
+      const defaultResults = [...products].sort((a, b) => {
         const freqA = clientFrequentProductMap[a.id]?.count || 0;
         const freqB = clientFrequentProductMap[b.id]?.count || 0;
         if (freqB !== freqA) return freqB - freqA;
         return (a.name || '').localeCompare(b.name || '');
       }).slice(0, 12);
+      searchQueryCacheRef.current.set(cacheKey, defaultResults);
+      return defaultResults;
     }
 
     const matched = products.filter(p => {
@@ -2098,6 +2124,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
       return normNameA.localeCompare(normNameB);
     }).slice(0, 12);
+
+    searchQueryCacheRef.current.set(cacheKey, finalResults);
+    return finalResults;
   };
 
   useEffect(() => {
@@ -3260,19 +3289,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
 
         if (!foundDbConversion) {
-          const isLibra = parsedUnit === 'Lb';
-          conversionFactor = isLibra ? 0.5 : (item.conversion_factor || 1);
-          finalUnit = prod?.unit_of_measure || (isLibra ? 'Kg' : parsedUnit);
-
-          if (initialQty >= 100 && !isLibra) {
-            const targetUnit = prod?.unit_of_measure || 'Kg';
-            if (targetUnit === 'Kg') {
-              conversionFactor = 0.001;
-              finalUnit = 'Kg';
-            } else if (targetUnit === 'Atado') {
-              conversionFactor = 0.002;
-              finalUnit = 'Atado';
-            }
+          const normPUnit = normalizeUnitName(parsedUnit);
+          const isLibra = normPUnit === 'libra' || parsedUnit === 'Lb';
+          const isGram = normPUnit === 'gramo' || normPUnit === 'gramos' || normPUnit === 'gr' || normPUnit === 'g';
+          
+          if (isLibra) {
+            conversionFactor = 0.5;
+            finalUnit = prod?.unit_of_measure || 'Kg';
+          } else if (isGram) {
+            conversionFactor = 0.001;
+            finalUnit = prod?.unit_of_measure || 'Kg';
+          } else {
+            conversionFactor = item.conversion_factor || 1;
+            finalUnit = prod?.unit_of_measure || parsedUnit;
           }
         }
 
@@ -3561,24 +3590,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       };
 
       const originalClean = cleanText(originalName);
-      const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
+      const strippedClean = originalClean
+        .replace(/\b\d+(?:[\.,]\d+)?\s*(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+        .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+        .trim();
 
+      // 1. Direct exact catalog match (full name or stripped name)
+      const exact = products.find(p => {
+        const pClean = cleanText(p.name);
+        return pClean === originalClean || (strippedClean && pClean === strippedClean);
+      });
+      if (exact) return exact;
+
+      // 2. Token based matching prioritized by shortest word difference
+      const originalWords = (strippedClean || originalClean).split(/\s+/).filter(w => w.length > 1);
       let bestMatch: any = null;
       let highestScore = -999;
 
       for (const p of products) {
         const productClean = cleanText(p.name);
-        
-        if (productClean === originalClean) {
-          return p;
-        }
-
         const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
         const sharedWords = originalWords.filter(w => productWords.includes(w));
         
         if (sharedWords.length > 0) {
           const extraWords = Math.abs(productWords.length - sharedWords.length);
-          const score = sharedWords.length * 10 - extraWords;
+          const score = sharedWords.length * 20 - extraWords * 5;
           if (score > highestScore) {
             highestScore = score;
             bestMatch = p;
@@ -3586,24 +3622,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
 
-      if (bestMatch) {
-        const hasOnlyGenericSharedWords = originalWords.filter(w => {
-          const productClean = cleanText(bestMatch.name || '');
-          return productClean.split(/\s+/).includes(w);
-        }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en', 'bulto', 'bultos', 'kilo', 'kilos', 'kg', 'g', 'gr', 'gramos', 'libra', 'libras', 'lb', 'litro', 'litros', 'l', 'lt', 'unidad', 'unidades', 'paquete', 'paquetes', 'atado', 'atados', 'canastilla', 'canastillas', 'caja', 'cajas', 'bolsa', 'bolsas', 'x'].includes(w));
-
-        if (highestScore < 8 || hasOnlyGenericSharedWords) {
-          bestMatch = null;
-        }
+      if (bestMatch && highestScore >= 10) {
+        return bestMatch;
       }
 
-      if (!bestMatch) {
-        if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
-          bestMatch = products.find((p: any) => {
-            const productClean = cleanText(p.name);
-            return productClean.includes(originalClean) || originalClean.includes(productClean);
-          });
-        }
+      if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
+        bestMatch = products.find((p: any) => {
+          const productClean = cleanText(p.name);
+          return productClean.includes(originalClean) || originalClean.includes(productClean);
+        });
       }
 
       return bestMatch;
@@ -3639,7 +3666,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     selectedProductForVariant: null as any,
     selectedRowForVariant: null as any,
     variantConfigProduct: null as any,
-    manageConversionsProduct: null as any
+    manageConversionsProduct: null as any,
+    customizingModalItem: null as any
   });
 
   useEffect(() => {
@@ -3661,17 +3689,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       selectedProductForVariant,
       selectedRowForVariant,
       variantConfigProduct,
-      manageConversionsProduct
+      manageConversionsProduct,
+      customizingModalItem
     };
   }, [
     isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal,
     activeEquivalenceRow, activeVariantRow, actionConfirm, deleteConfirm, obsModal,
     rejectModal, showShortcuts, selectedDraftIds, selectedProductForVariant, selectedRowForVariant,
-    variantConfigProduct, manageConversionsProduct
+    variantConfigProduct, manageConversionsProduct, customizingModalItem
   ]);
 
   useEffect(() => {
-    const isAnyModalOpen = !!(selectedDraft || showConfirmModal || rejectModal || obsModal || actionConfirm || deleteConfirm || showShortcuts);
+    const isAnyModalOpen = !!(selectedDraft || showConfirmModal || rejectModal || obsModal || actionConfirm || deleteConfirm || showShortcuts || customizingModalItem);
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -3680,7 +3709,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return () => {
       document.body.style.overflow = '';
     };
-  }, [selectedDraft, showConfirmModal, rejectModal, obsModal, actionConfirm, deleteConfirm, showShortcuts]);
+  }, [selectedDraft, showConfirmModal, rejectModal, obsModal, actionConfirm, deleteConfirm, showShortcuts, customizingModalItem]);
 
   useEffect(() => {
     if (manageConversionsProduct) {
@@ -3714,8 +3743,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         selectedProductForVariant,
         selectedRowForVariant,
         variantConfigProduct,
-        manageConversionsProduct
+        manageConversionsProduct,
+        customizingModalItem
       } = stateRef.current;
+
+      if (customizingModalItem) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          const rowToFocus = customizingModalItem.rowIndex;
+          setCustomizingModalItem(null);
+          setTimeout(() => {
+            const currentInput = document.getElementById(`sku-input-${rowToFocus}`) as HTMLInputElement | null;
+            if (currentInput) {
+              currentInput.focus();
+              currentInput.select();
+            }
+          }, 50);
+          return;
+        }
+      }
 
       if (variantConfigProduct || manageConversionsProduct) {
         if (e.key === 'Escape') {
@@ -4492,7 +4538,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       // 4. Open floating modal confirmation (invoice) instead of redirecting
       setSaving(false);
       setSendConfirmationEmail(true);
-      setIsAuthorizedForChanges(false);
       setDeliverySlot(editableDeliverySlot === 'PM' ? 'PM' : 'AM');
       setShowConfirmModal(true);
     } catch (e) {
@@ -4837,22 +4882,67 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     approved: 3
   };
 
-  const sortedFilteredDrafts = [...filteredDrafts].sort((a, b) => {
-    const priorityA = STATUS_PRIORITY[a.status] || 99;
-    const priorityB = STATUS_PRIORITY[b.status] || 99;
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  const sortedFilteredDrafts = useMemo(() => {
+    return [...filteredDrafts].sort((a, b) => {
+      const priorityA = STATUS_PRIORITY[a.status] || 99;
+      const priorityB = STATUS_PRIORITY[b.status] || 99;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [filteredDrafts]);
 
-  const totalValue = editableItems.filter(item => !item.isDeleted).reduce((acc, item) => {
-    const matchedProd = products.find(p => p.id === item.matched_product_id);
-    const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
-    return acc + (matchedProd ? (resolvedPrice * (item.quantity || 0)) : 0);
-  }, 0);
+  const draftTotalsMap = useMemo(() => {
+    const map = new Map<string, { total: number; weight: number; count: number }>();
+    drafts.forEach(draft => {
+      const items = getDraftItems(draft);
+      let estTotal = 0;
+      let estWeight = 0;
+      items.forEach((item: any) => {
+        let matchedProd = products.find(p => p.id === item.matched_product_id);
+        if (!matchedProd && !item.matched_product_id && item.originalName) {
+          matchedProd = findMatchedProduct(item.originalName);
+        }
+        const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+        estTotal += (resolvedPrice * (item.quantity || 0));
+        const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
+        const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
+        estWeight += (weightFactor * (item.quantity || 0));
+      });
+      map.set(draft.id, { total: estTotal, weight: estWeight, count: items.length });
+    });
+    return map;
+  }, [drafts, products, aliases]);
 
-  const hasUnmatchedItems = editableItems.some(item => !item.isDeleted && !item.matched_product_id);
+  const activeEditableTotals = useMemo(() => {
+    const active = editableItems.filter(itm => !itm.isDeleted);
+    let sub = 0;
+    let tax = 0;
+    let unmatched = false;
+
+    active.forEach(item => {
+      if (!item.matched_product_id) unmatched = true;
+      const prod = products.find(p => p.id === item.matched_product_id);
+      const qty = Number(item.quantity) || 0;
+      const price = prod ? (contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0)) : 0;
+      const lineSub = qty * price;
+      const iva = prod?.iva_rate ? (Number(prod.iva_rate) / 100) : 0;
+      sub += lineSub;
+      tax += lineSub * iva;
+    });
+
+    return {
+      activeItems: active,
+      subtotal: sub,
+      totalTax: tax,
+      totalPayable: sub + tax,
+      hasUnmatchedItems: unmatched
+    };
+  }, [editableItems, products, contractPrices]);
+
+  const { activeItems, subtotal, totalTax, totalPayable, hasUnmatchedItems } = activeEditableTotals;
+  const totalValue = totalPayable;
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
@@ -5357,26 +5447,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <tbody>
               {sortedFilteredDrafts.map((draft) => {
                 const meta = getDraftMetadata(draft);
-                const items = getDraftItems(draft);
-                const itemsCount = items.length;
-                const estimatedTotal = items.reduce((acc: number, item: any) => {
-                  let matchedProd = products.find(p => p.id === item.matched_product_id);
-                  if (!matchedProd && !item.matched_product_id && item.originalName) {
-                    matchedProd = findMatchedProduct(item.originalName);
-                  }
-                  const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
-                  return acc + (resolvedPrice * (item.quantity || 0));
-                }, 0);
-
-                const estimatedWeight = items.reduce((acc: number, item: any) => {
-                  let matchedProd = products.find(p => p.id === item.matched_product_id);
-                  if (!matchedProd && !item.matched_product_id && item.originalName) {
-                    matchedProd = findMatchedProduct(item.originalName);
-                  }
-                  const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
-                  const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
-                  return acc + (weightFactor * (item.quantity || 0));
-                }, 0);
+                const draftTotals = draftTotalsMap.get(draft.id) || { total: 0, weight: 0, count: 0 };
+                const itemsCount = draftTotals.count;
+                const estimatedTotal = draftTotals.total;
+                const estimatedWeight = draftTotals.weight;
 
                 return (
                 <tr 
@@ -5753,7 +5827,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }}>
             {/* Mesa de Trabajo Header: TIER 1 (Ultra Clean, Compact & Powerful) */}
             <div style={{ 
-              padding: '0.85rem 1.5rem', 
+              padding: '0.85rem 3.5rem 0.85rem 1.5rem', 
               backgroundColor: matchedProfile ? '#F0FDF4' : '#FFF7ED', 
               borderBottom: `1px solid ${matchedProfile ? '#BBF7D0' : '#FFEDD5'}`,
               display: 'flex',
@@ -5761,7 +5835,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               alignItems: 'center',
               flexWrap: 'wrap',
               gap: '0.75rem',
-              flexShrink: 0
+              flexShrink: 0,
+              position: 'relative'
             }}>
               {/* Left Side: Client Selector, Delivery Date, Real Reception Window & Tier 2 Toggle */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -6035,27 +6110,35 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <Sparkles size={13} className={isReparsingDraft ? 'animate-spin' : ''} />
                   {isReparsingDraft ? 'Extrayendo...' : '⚡ Re-extraer con IA'}
                 </button>
-                <button 
-                  onClick={() => setSelectedDraft(null)} 
-                  style={{ 
-                    border: 'none', 
-                    background: '#F8FAFC', 
-                    cursor: 'pointer', 
-                    color: '#64748B', 
-                    width: '30px', 
-                    height: '30px', 
-                    borderRadius: '100px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    transition: 'all 0.15s' 
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.color = '#EF4444'; }}
-                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#64748B'; }}
-                >
-                  <X size={16} />
-                </button>
               </div>
+
+              {/* Permanent Top-Right Corner Close Button */}
+              <button 
+                onClick={() => setSelectedDraft(null)} 
+                title="Cerrar mesa de trabajo"
+                style={{ 
+                  position: 'absolute',
+                  top: '12px',
+                  right: '16px',
+                  zIndex: 50,
+                  border: '1.5px solid #CBD5E1', 
+                  background: '#FFFFFF', 
+                  cursor: 'pointer', 
+                  color: '#64748B', 
+                  width: '32px', 
+                  height: '32px', 
+                  borderRadius: '100px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                  transition: 'all 0.15s ease' 
+                }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.borderColor = '#FCA5A5'; e.currentTarget.style.color = '#EF4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#64748B'; }}
+              >
+                <X size={17} strokeWidth={2.5} />
+              </button>
             </div>
 
             {/* TIER 2: DESPLEGABLE CON DETALLES COMPLETOS DE CLIENTE, GPS & LOGÍSTICA */}
@@ -6768,29 +6851,36 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                         />
                       </th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '35%' }}>NOMBRE EN DOCUMENTO</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '42%' }}>TU PRODUCTO (ID)</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>CANT.</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '35%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '42%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'center', width: '23%', fontSize: '0.74rem' }}>CANT.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {editableItems.map((item: any, i: number) => {
                       const matchedProd = products.find(p => p.id === item.matched_product_id);
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
+                      const isActiveRow = activeDropdownRowIndex === i || focusedRowIndex === i;
 
                       return (
                         <tr 
                           key={i} 
                           id={`draft-row-${i}`}
                           style={{ 
-                            borderBottom: '1px solid #F8FAFC',
-                            backgroundColor: item.isConfirmed 
-                              ? '#F0FDF4' 
-                              : (matchedProd ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED'),
-                            transition: 'background-color 0.2s'
+                            borderBottom: '1px solid #F1F5F9',
+                            backgroundColor: isActiveRow 
+                              ? '#FFFFFF' 
+                              : (item.isConfirmed ? '#F0FDF4' : (matchedProd ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED')),
+                            transform: isActiveRow ? 'scale(1.02)' : 'scale(1)',
+                            transformOrigin: 'left center',
+                            boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.18), 0 2px 6px rgba(0, 0, 0, 0.04)' : 'none',
+                            borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent',
+                            zIndex: isActiveRow ? 20 : 1,
+                            position: 'relative',
+                            transition: 'all 0.16s cubic-bezier(0.16, 1, 0.3, 1)'
                           }}
                         >
-                          <td style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '35px' }}>
+                          <td style={{ padding: '0.45rem 0.4rem', textAlign: 'center', width: '35px' }}>
                             <input
                               type="checkbox"
                               disabled={item.isDeleted}
@@ -6802,48 +6892,61 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
                                 }
                               }}
-                              style={{ transform: 'scale(1.2)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
+                              style={{ transform: 'scale(1.1)', cursor: item.isDeleted ? 'not-allowed' : 'pointer' }}
                             />
                           </td>
-                          <td style={{ padding: '0.8rem 1.25rem', width: '35%' }}>
+                          <td style={{ padding: '0.35rem 0.65rem', width: '35%' }}>
                             <div 
                               onClick={() => matchedProd && openCustomizingModal(matchedProd, i)}
                               style={{ 
-                                fontSize: '0.88rem', 
-                                fontWeight: '700', 
-                                color: '#1E293B',
-                                cursor: matchedProd ? 'pointer' : 'default'
+                                fontSize: isActiveRow ? '0.90rem' : '0.82rem', 
+                                fontWeight: isActiveRow ? '800' : '700', 
+                                color: isActiveRow ? '#0F172A' : '#1E293B',
+                                cursor: matchedProd ? 'pointer' : 'default',
+                                transition: 'font-size 0.15s ease'
                               }}
                               title={matchedProd ? 'Clic para personalizar producto' : undefined}
                             >
                               {item.originalName || item.name || item.producto || item.item || ''}
                             </div>
-                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 7px', borderRadius: '6px', fontWeight: '900' }}>
+                            <div style={{ fontSize: '0.68rem', fontWeight: '600', color: '#64748B', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                              <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FBBF24', padding: '1px 5px', borderRadius: '5px', fontWeight: '900', fontSize: '0.65rem' }}>
                                 {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
                               </span>
                               {matchedProd ? (
                                 <span 
                                   onClick={() => openCustomizingModal(matchedProd, i)}
-                                  style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}
+                                  style={{ 
+                                    backgroundColor: item.isConfirmed ? '#DCFCE7' : '#F0FDF4', 
+                                    color: '#15803D', 
+                                    border: '1px solid #86EFAC', 
+                                    padding: '1px 5px', 
+                                    borderRadius: '5px', 
+                                    fontSize: '0.65rem', 
+                                    fontWeight: '800', 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '2px', 
+                                    cursor: 'pointer' 
+                                  }}
                                   title="Personalizar variantes / equivalencias"
                                 >
-                                  <CheckCircle2 size={11} color="#15803D" /> {item.confidenceScore ? `${item.confidenceScore}%` : '98%'}
-                                  {clientFrequentProductIds.includes(matchedProd.id) && <span style={{ marginLeft: '2px', color: '#D97706' }}>⭐</span>}
+                                  <CheckCircle2 size={10} color="#15803D" /> {item.isConfirmed ? 'Confirmado' : 'Match'}
+                                  {clientFrequentProductIds.includes(matchedProd.id) && <span style={{ marginLeft: '2px', color: '#D97706' }}>⭐ Habitual</span>}
                                 </span>
                               ) : (
-                                <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                  <AlertCircle size={11} color="#B91C1C" /> Sin Match
+                                <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 5px', borderRadius: '5px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                  <AlertCircle size={10} color="#B91C1C" /> Sin Match
                                 </span>
                               )}
                               {item.variant_label && (
-                                <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>
+                                <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 5px', borderRadius: '5px', fontSize: '0.65rem', fontWeight: '800' }}>
                                   {item.variant_label}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '42%' }}>
+                          <td style={{ padding: '0.35rem 0.65rem', position: 'relative', width: '42%' }}>
                             <input 
                               ref={el => { productInputRefs.current[i] = el; }}
                               type="text"
@@ -6852,14 +6955,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               autoCorrect="off"
                               spellCheck={false}
                               data-lpignore="true"
-                              value={item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : '')}
+                              value={activeDropdownRowIndex === i && activeRowSearchQuery !== null ? activeRowSearchQuery : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : ''))}
                               onFocus={(e) => {
                                 e.target.select();
                                 setActiveDropdownRowIndex(i);
                                 setFocusedDropdownItemIndex(0);
+                                setActiveRowSearchQuery(null);
                                 scrollToDraftRow(i);
                               }}
-                              onBlur={() => {
+                              onBlur={(e) => {
+                                const val = e.target.value;
+                                const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
+                                if (exactProduct) {
+                                  selectProduct(exactProduct, i);
+                                }
+                                setActiveRowSearchQuery(null);
                                 setTimeout(() => {
                                   setActiveDropdownRowIndex(prev => prev === i ? null : prev);
                                 }, 250);
@@ -6867,7 +6977,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               className="sku-search-input"
                               id={`sku-input-${i}`}
                               onKeyDown={(e) => {
-                                const currentQuery = item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : '');
+                                const currentQuery = activeDropdownRowIndex === i && activeRowSearchQuery !== null 
+                                  ? activeRowSearchQuery 
+                                  : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : ''));
                                 const scoredList = getScoredProductsForQuery(currentQuery);
 
                                 if (e.key === 'Tab') {
@@ -6876,6 +6988,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   if (p) {
                                     e.preventDefault(); 
                                     selectProduct(p, i);
+                                    setActiveRowSearchQuery(null);
                                     setActiveDropdownRowIndex(null);
                                     openCustomizingModal(p, i);
                                   }
@@ -6885,12 +6998,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   if (selectedProd) {
                                     selectProduct(selectedProd, i);
                                   }
+                                  setActiveRowSearchQuery(null);
                                   setActiveDropdownRowIndex(null);
                                   
                                   const nextIdx = i + 1;
                                   const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                   if (nextInput) {
-                                    nextInput.focus();
+                                    nextInput.focus({ preventScroll: true });
                                     nextInput.select();
                                     scrollToDraftRow(nextIdx);
                                   } else {
@@ -6904,7 +7018,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     const nextIdx = i + 1;
                                     const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                     if (nextInput) {
-                                      nextInput.focus();
+                                      nextInput.focus({ preventScroll: true });
                                       nextInput.select();
                                       scrollToDraftRow(nextIdx);
                                     }
@@ -6918,13 +7032,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     if (prevIdx >= 0) {
                                       const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
                                       if (prevInput) {
-                                        prevInput.focus();
+                                        prevInput.focus({ preventScroll: true });
                                         prevInput.select();
                                         scrollToDraftRow(prevIdx);
                                       }
                                     }
                                   }
                                 } else if (e.key === 'Escape') {
+                                  setActiveRowSearchQuery(null);
                                   setActiveDropdownRowIndex(null);
                                 }
                               }}
@@ -6932,57 +7047,54 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 const val = e.target.value;
                                 setActiveDropdownRowIndex(i);
                                 setFocusedDropdownItemIndex(0);
-                                const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
-                                
-                                const newEdits = [...editableItems];
-                                if (exactProduct) {
-                                  newEdits[i].matched_product_id = exactProduct.id;
-                                  newEdits[i].searchQuery = `${exactProduct.name} (${getAccountingIdDisplay(exactProduct)})`;
-                                  newEdits[i].skuQuery = exactProduct.sku || '';
-                                } else {
-                                  newEdits[i].matched_product_id = null;
-                                  newEdits[i].searchQuery = val;
-                                  newEdits[i].skuQuery = '';
-                                }
-                                setEditableItems(newEdits);
+                                setActiveRowSearchQuery(val);
                               }}
                               style={{ 
                                 width: '100%', 
-                                padding: '9px 12px', 
-                                borderRadius: '10px', 
-                                border: matchedProd ? (isConfidenceHigh ? '2px solid #E2E8F0' : '2px solid #FCD34D') : '2px solid #F97316',
-                                fontSize: '0.92rem',
-                                fontWeight: '700',
+                                padding: isActiveRow ? '7px 12px' : '5px 8px', 
+                                borderRadius: '8px', 
+                                border: isActiveRow 
+                                  ? '2px solid #2563EB' 
+                                  : (matchedProd ? (isConfidenceHigh ? '1.5px solid #E2E8F0' : '1.5px solid #FCD34D') : '1.5px solid #F97316'),
+                                fontSize: isActiveRow ? '0.90rem' : '0.82rem',
+                                fontWeight: '800',
                                 backgroundColor: matchedProd ? '#FFFFFF' : '#FFFBEB',
                                 outline: 'none',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                boxShadow: isActiveRow ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
+                                transition: 'all 0.15s ease'
                               }}
                             />
 
                             {/* Custom Pareto Floating Dropdown (Exact Replica of Ingesta PDF - Imagen 2) */}
                             {activeDropdownRowIndex === i && (() => {
-                              const currentQuery = item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : '');
+                              const currentQuery = (activeDropdownRowIndex === i && activeRowSearchQuery !== null)
+                                ? activeRowSearchQuery 
+                                : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : ''));
                               const scoredList = getScoredProductsForQuery(currentQuery);
 
                               if (scoredList.length === 0) return null;
 
-                              // Display above if near the end of table to avoid clipping
-                              const openUpward = i >= Math.max(2, editableItems.length - 4);
+                              const openUpward = false;
 
                               return (
-                                <div style={{
-                                  position: 'absolute',
-                                  ...(openUpward ? { bottom: '100%', marginBottom: '6px' } : { top: '100%', marginTop: '6px' }),
-                                  left: 0,
-                                  minWidth: '520px',
-                                  zIndex: 9999,
-                                  backgroundColor: 'white',
-                                  borderRadius: '12px',
-                                  boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0,0,0,0.1)',
-                                  border: '1px solid #CBD5E1',
-                                  maxHeight: '310px',
-                                  overflowY: 'auto'
-                                }}>
+                                <div 
+                                  id={`dropdown-container-${i}`}
+                                  style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    marginTop: '4px',
+                                    right: 0,
+                                    minWidth: '490px',
+                                    maxWidth: '560px',
+                                    zIndex: 9999,
+                                    backgroundColor: 'white',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0,0,0,0.08)',
+                                    border: '1px solid #CBD5E1',
+                                    maxHeight: '290px',
+                                    overflowY: 'auto'
+                                  }}
+                                >
                                   {scoredList.map((p, idx) => {
                                     const exc = clientExceptions.find(e => e.product_id === p.id);
                                     const freq = clientFrequentProductMap[p.id];
@@ -7001,49 +7113,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             openCustomizingModal(p, i);
                                           }
                                         }}
-                                        onMouseEnter={() => setFocusedDropdownItemIndex(idx)}
+                                        onMouseMove={() => {
+                                          if (focusedDropdownItemIndex !== idx) {
+                                            setFocusedDropdownItemIndex(idx);
+                                          }
+                                        }}
                                         style={{
-                                          padding: '0.85rem 1.15rem',
+                                          padding: '0.55rem 0.85rem',
                                           cursor: 'pointer',
-                                          borderBottom: '1px solid #E2E8F0',
-                                          borderLeft: isFocused ? '6px solid #2563EB' : '6px solid transparent',
+                                          borderBottom: '1px solid #F1F5F9',
+                                          borderLeft: isFocused ? '5px solid #2563EB' : '5px solid transparent',
                                           display: 'flex',
                                           justifyContent: 'space-between',
                                           alignItems: 'center',
                                           backgroundColor: isFocused 
                                             ? '#DBEAFE' 
                                             : (isClientHabitual ? '#F0FDF4' : 'white'),
-                                          boxShadow: isFocused ? 'inset 0 0 0 1px #93C5FD, 0 2px 4px rgba(37, 99, 235, 0.08)' : 'none',
-                                          transition: 'all 0.12s ease-in-out'
+                                          boxShadow: isFocused ? 'inset 0 0 0 1px #93C5FD' : 'none',
+                                          transition: 'all 0.1s ease-in-out'
                                         }}
                                       >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                           <span style={{ 
                                             fontWeight: isFocused ? '900' : '700', 
                                             color: isFocused ? '#1E3A8A' : '#111827',
-                                            fontSize: '0.9rem'
+                                            fontSize: '0.82rem'
                                           }}>
-                                            {p.name} <span style={{ fontSize: '0.8em', color: isFocused ? '#2563EB' : '#6B7280', fontWeight: '600' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
+                                            {p.name} <span style={{ fontSize: '0.78em', color: isFocused ? '#2563EB' : '#64748B', fontWeight: '600' }}>(ID: {getAccountingIdDisplay(p)})</span>
                                           </span>
                                           {isClientHabitual && (
                                             <span style={{ 
-                                              fontSize: '0.7rem', 
+                                              fontSize: '0.65rem', 
                                               backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
                                               color: '#15803D', 
-                                              padding: '2px 8px', 
+                                              padding: '1px 6px', 
                                               borderRadius: '999px', 
                                               fontWeight: '800', 
                                               display: 'inline-flex', 
                                               alignItems: 'center', 
-                                              gap: '4px',
-                                              border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                              gap: '3px',
+                                              border: isFocused ? '1px solid #22C55E' : '1px solid #86EFAC'
                                             }}>
-                                              ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                              ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(${exc.nickname})` : ''}
                                             </span>
                                           )}
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', flexShrink: 0 }}>
-                                          <span style={{ fontSize: '0.85rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#166534' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px', flexShrink: 0 }}>
+                                          <span style={{ fontSize: '0.80rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#166534' }}>
                                             {formatMoney(contractPrices[p.id] || p.base_price)}/{p.unit_of_measure}
                                           </span>
                                         </div>
@@ -7054,7 +7170,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               );
                             })()}
                           </td>
-                          <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
+                          <td style={{ padding: '0.45rem 0.65rem', textAlign: 'center', width: '23%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <input 
                                 ref={el => { quantityInputRefs.current[i] = el; }}
@@ -7112,14 +7228,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   }
                                 }}
                                 style={{ 
-                                  width: '75px', 
-                                  padding: '9px', 
+                                  width: isActiveRow ? '68px' : '64px', 
+                                  padding: isActiveRow ? '7px 8px' : '6px 8px', 
                                   borderRadius: '8px', 
-                                  border: '2px solid #E2E8F0', 
+                                  border: isActiveRow ? '2px solid #2563EB' : '1.5px solid #E2E8F0', 
                                   textAlign: 'center',
-                                  fontWeight: '800',
-                                  fontSize: '1rem',
-                                  backgroundColor: 'white'
+                                  fontWeight: '900',
+                                  fontSize: isActiveRow ? '0.94rem' : '0.9rem',
+                                  backgroundColor: 'white',
+                                  boxShadow: isActiveRow ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : 'none',
+                                  transition: 'all 0.15s ease'
                                 }}
                               />
                               <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '32px', textAlign: 'left' }}>
@@ -7164,6 +7282,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     })}
                   </tbody>
                 </table>
+
+                {/* Bottom Spacer: Gives the scroll container guaranteed room to anchor any row to the top */}
+                <div style={{ height: '380px', pointerEvents: 'none' }} />
 
                 {/* Bottom of Right Panel: Add Row & Actions */}
                 <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9' }}>
@@ -7234,26 +7355,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div> {/* Closes Split Canvas Body */}
 
           {/* Master Sticky Bottom Floating Ribbon (Exact Replica of Ingesta PDF - Imagen 3) */}
-          {(() => {
-            const activeItems = editableItems.filter(itm => !itm.isDeleted);
-            let subtotal = 0;
-            let totalTax = 0;
-
-            activeItems.forEach(item => {
-              const prod = products.find(p => p.id === item.matched_product_id);
-              const qty = Number(item.quantity) || 0;
-              const price = prod ? (contractPrices[prod.id] || prod.base_price || 0) : 0;
-              const lineSubtotal = qty * price;
-              const ivaRate = prod?.iva_rate ? (Number(prod.iva_rate) / 100) : 0;
-              subtotal += lineSubtotal;
-              totalTax += lineSubtotal * ivaRate;
-            });
-
-            const totalPayable = subtotal + totalTax;
-
-            return (
-              <div style={{
-                padding: '0.85rem 2rem',
+          <div style={{
+            padding: '0.85rem 2rem',
                 borderTop: `1.5px solid #E2E8F0`,
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -7381,8 +7484,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   )}
                 </div>
               </div>
-            );
-          })()}
         </div>
       </div>
     );
@@ -8422,14 +8523,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (!item.matched_product_id) return null;
                       const prod = products.find(p => p.id === item.matched_product_id);
                       const qty = parseFloat(item.quantity?.toString() || '0');
+                      const unitPrice = prod ? (contractPrices[prod.id] || prod.base_price || 0) : 0;
+                      const lineTotal = unitPrice * qty;
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
                           <td style={{ padding: '0.75rem 1.2rem' }}>
                             <div style={{ fontWeight: 600 }}>{prod?.name}</div>
                             <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{item.originalName}</div>
                           </td>
-                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{qty}</td>
-                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney((prod?.base_price || 0) * qty)}</td>
+                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatQuantity(qty)}</td>
+                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(lineTotal)}</td>
                         </tr>
                       );
                     })}
@@ -9563,20 +9666,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           ...prev,
                           options: { ...prev.options, [opt.name]: val }
                         } : null);
-                        if (val) {
-                          setTimeout(() => {
-                            const nextOpt = document.getElementById(`modal-opt-select-${optIdx + 1}`) as HTMLSelectElement | null;
-                            if (nextOpt) {
-                              nextOpt.focus();
-                            } else {
-                              const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
-                              if (qtyInput) {
-                                qtyInput.focus();
-                                qtyInput.select();
-                              }
-                            }
-                          }, 50);
-                        }
                       }}
                       onFocus={e => {
                         e.currentTarget.style.borderColor = '#2563EB';
@@ -9600,6 +9689,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               qtyInput.focus();
                               qtyInput.select();
                             }
+                          }
+                        } else if (e.key === 'Tab' && e.shiftKey) {
+                          if (optIdx > 0) {
+                            e.preventDefault();
+                            const prevOpt = document.getElementById(`modal-opt-select-${optIdx - 1}`) as HTMLSelectElement | null;
+                            if (prevOpt) prevOpt.focus();
                           }
                         }
                       }}
@@ -9663,6 +9758,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         e.preventDefault();
                         const addBtn = document.getElementById('btn-modal-add') as HTMLButtonElement | null;
                         if (addBtn) addBtn.focus();
+                      } else if (e.key === 'Tab' && e.shiftKey) {
+                        e.preventDefault();
+                        if (normalizedOptionsConfig && normalizedOptionsConfig.length > 0) {
+                          const lastOpt = document.getElementById(`modal-opt-select-${normalizedOptionsConfig.length - 1}`) as HTMLSelectElement | null;
+                          if (lastOpt) lastOpt.focus();
+                        }
                       }
                     }}
                     style={{
@@ -9713,9 +9814,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               {/* Action Buttons */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
                 <button
+                  id="btn-modal-cancel"
                   type="button"
                   tabIndex={(normalizedOptionsConfig?.length || 0) + 3}
-                  onClick={() => setCustomizingModalItem(null)}
+                  onClick={() => {
+                    const rowToFocus = customizingModalItem.rowIndex;
+                    setCustomizingModalItem(null);
+                    setTimeout(() => {
+                      const currentInput = document.getElementById(`sku-input-${rowToFocus}`) as HTMLInputElement | null;
+                      if (currentInput) {
+                        currentInput.focus();
+                        currentInput.select();
+                      }
+                    }, 50);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      const rowToFocus = customizingModalItem.rowIndex;
+                      setCustomizingModalItem(null);
+                      setTimeout(() => {
+                        const currentInput = document.getElementById(`sku-input-${rowToFocus}`) as HTMLInputElement | null;
+                        if (currentInput) {
+                          currentInput.focus();
+                          currentInput.select();
+                        }
+                      }, 50);
+                    } else if (e.key === 'Tab' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (normalizedOptionsConfig && normalizedOptionsConfig.length > 0) {
+                        const firstOpt = document.getElementById('modal-opt-select-0') as HTMLSelectElement | null;
+                        if (firstOpt) firstOpt.focus();
+                      } else {
+                        const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+                        if (qtyInput) {
+                          qtyInput.focus();
+                          qtyInput.select();
+                        }
+                      }
+                    } else if (e.key === 'Tab' && e.shiftKey) {
+                      e.preventDefault();
+                      const addBtn = document.getElementById('btn-modal-add') as HTMLButtonElement | null;
+                      if (addBtn) addBtn.focus();
+                    }
+                  }}
                   style={{
                     padding: '0.85rem',
                     borderRadius: '12px',
@@ -9744,6 +9886,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       saveCustomizingModal();
+                    } else if (e.key === 'Tab' && !e.shiftKey) {
+                      e.preventDefault();
+                      const cancelBtn = document.getElementById('btn-modal-cancel') as HTMLButtonElement | null;
+                      if (cancelBtn) cancelBtn.focus();
+                    } else if (e.key === 'Tab' && e.shiftKey) {
+                      e.preventDefault();
+                      const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+                      if (qtyInput) {
+                        qtyInput.focus();
+                        qtyInput.select();
+                      }
                     }
                   }}
                   style={{

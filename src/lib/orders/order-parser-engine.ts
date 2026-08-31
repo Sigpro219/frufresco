@@ -161,10 +161,17 @@ export function findBestProductMatchDetails(
     return { product: null, confidence: 'LOW', confidenceScore: 0, matchSource: 'NONE', matchReason: 'Sin datos de entrada' };
   }
 
+  // Limpiar gramajes y unidades como '1000 gr', '500g', '1 kg', 'und', 'paquete'
+  const strippedInput = cleanInput
+    .replace(/\b\d+(?:[\.,]\d+)?\s*(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+    .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
+    .trim();
+
   // Prioridad 1: Memoria Histórica Aprendida para este Cliente
   if (learnedMemory.length > 0) {
     const memMatch = learnedMemory.find(m => 
       m.normalized_text === cleanInput || 
+      (strippedInput && m.normalized_text === strippedInput) ||
       cleanInput.includes(m.normalized_text) ||
       m.normalized_text.includes(cleanInput)
     );
@@ -182,52 +189,50 @@ export function findBestProductMatchDetails(
     }
   }
 
-  // Prioridad 2: Coincidencia exacta o por contención directa en catálogo
-  let match = products.find(p => {
+  // Prioridad 2: Coincidencia EXACTA con nombre de catálogo (con o sin unidades)
+  let exactMatch = products.find(p => {
     const cleanPName = sanitizeDocText(p.name);
-    return cleanInput === cleanPName;
+    return cleanInput === cleanPName || (strippedInput && strippedInput === cleanPName);
   });
-  if (match) {
+  if (exactMatch) {
     return {
-      product: match,
+      product: exactMatch,
       confidence: 'HIGH',
-      confidenceScore: 98,
+      confidenceScore: 100,
       matchSource: 'EXACT',
       matchReason: 'Coincidencia exacta de catálogo'
     };
   }
 
-  // Substring contención directa
-  match = products.find(p => {
-    const cleanPName = sanitizeDocText(p.name);
-    return cleanInput.includes(cleanPName) || cleanPName.includes(cleanInput);
-  });
-  if (match) {
-    return {
-      product: match,
-      confidence: 'HIGH',
-      confidenceScore: 90,
-      matchSource: 'EXACT',
-      matchReason: 'Nombre contenido en catálogo'
-    };
-  }
-
-  // Prioridad 3: Coincidencia por tokens / palabras individuales (Manejo de plurales)
-  const tokens = cleanInput.split(' ').filter(t => t.length > 2);
-  if (tokens.length > 0) {
-    const firstToken = tokens[0];
-    const stemToken = firstToken.endsWith('s') ? firstToken.slice(0, -1) : firstToken;
-    match = products.find(p => {
-      const cleanPName = sanitizeDocText(p.name);
-      return cleanPName.includes(firstToken) || cleanPName.includes(stemToken);
+  // Prioridad 3: Coincidencia por tokens / palabras individuales (Priorizar el producto base más corto)
+  // Por ejemplo: 'espinaca' debe coincidir con 'Espinaca' y NO con 'Espinaca sin raiz'
+  const queryTokens = (strippedInput || cleanInput).split(/\s+/).filter(t => t.length > 2);
+  if (queryTokens.length > 0) {
+    const candidates = products.filter(p => {
+      const pClean = sanitizeDocText(p.name);
+      const pTokens = pClean.split(/\s+/).filter(t => t.length > 2);
+      return queryTokens.every(qt => pTokens.some(pt => pt.startsWith(qt) || qt.startsWith(pt)));
     });
-    if (match) {
+
+    if (candidates.length > 0) {
+      // Ordenar: primero el que tenga menor diferencia de longitud con la búsqueda (el producto base)
+      const targetQuery = strippedInput || cleanInput;
+      candidates.sort((a, b) => {
+        const cleanA = sanitizeDocText(a.name);
+        const cleanB = sanitizeDocText(b.name);
+        const diffA = Math.abs(cleanA.length - targetQuery.length);
+        const diffB = Math.abs(cleanB.length - targetQuery.length);
+        return diffA - diffB;
+      });
+
+      const best = candidates[0];
+      const isVeryClose = sanitizeDocText(best.name).length <= targetQuery.length + 4;
       return {
-        product: match,
-        confidence: 'MEDIUM',
-        confidenceScore: 75,
+        product: best,
+        confidence: isVeryClose ? 'HIGH' : 'MEDIUM',
+        confidenceScore: isVeryClose ? 95 : 75,
         matchSource: 'TOKEN',
-        matchReason: 'Sugerencia por palabra clave'
+        matchReason: isVeryClose ? 'Coincidencia base de catálogo' : 'Sugerencia por palabra clave'
       };
     }
   }

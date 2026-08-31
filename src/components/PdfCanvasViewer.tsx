@@ -13,7 +13,7 @@ export default function PdfCanvasViewer({ file, fileUrl }: PdfCanvasViewerProps)
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [numPages, setNumPages] = useState<number>(0);
-    const [zoom, setZoom] = useState<number>(1.25);
+    const [zoom, setZoom] = useState<number>(0.95);
     const [pdfDoc, setPdfDoc] = useState<any>(null);
 
     // 1. Cargar el script de PDF.js si no existe

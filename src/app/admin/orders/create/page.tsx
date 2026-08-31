@@ -1793,23 +1793,27 @@ function CreateOrderContent() {
         }
     };
 
-    // Auto-scroll anclado: Mantiene la fila activa en la 4ª línea visible (~205px) al avanzar con Enter
+    // Auto-scroll anclado: Fija siempre el SKU activo en el Renglón 1 (Tope Absoluto, 0px)
     const scrollToStagedRow = (targetIdx: number) => {
-        const container = document.getElementById('staged-table-scroll-container');
-        const row = document.getElementById(`staged-row-${targetIdx}`);
-        if (!container || !row) return;
+        setTimeout(() => {
+            const container = document.getElementById('staged-table-scroll-container');
+            const row = document.getElementById(`staged-row-${targetIdx}`);
+            if (!container || !row) return;
 
-        if (targetIdx < 3) {
-            container.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            // A partir de la fila #4 (targetIdx >= 3), mantener el cursor en la 4ª posición visual
-            const anchorHeight = 205;
-            const targetTop = row.offsetTop - anchorHeight;
+            if (targetIdx === 0) {
+                container.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+
+            const thead = container.querySelector('thead');
+            const theadHeight = thead ? thead.clientHeight : 35;
+            const targetScroll = Math.max(0, row.offsetTop - theadHeight);
+
             container.scrollTo({
-                top: Math.max(0, targetTop),
+                top: targetScroll,
                 behavior: 'smooth'
             });
-        }
+        }, 15);
     };
 
     const openModalForStagedItem = (
@@ -4214,6 +4218,8 @@ function CreateOrderContent() {
                                                     })}
                                                 </tbody>
                                             </table>
+                                            {/* Bottom Spacer: Gives the scroll container guaranteed room to anchor any row to the top */}
+                                            <div style={{ height: '380px', pointerEvents: 'none' }} />
                                         </div>
                                     </div>
 
@@ -5071,7 +5077,7 @@ function CreateOrderContent() {
                 });
 
                 const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
                         e.preventDefault();
                         if (index < totalOptions - 1) {
                             const nextSelect = document.getElementById(`modal-select-${index + 1}`);
@@ -5082,6 +5088,12 @@ function CreateOrderContent() {
                                 (qtyInput as HTMLElement).focus();
                                 (qtyInput as HTMLInputElement).select();
                             }
+                        }
+                    } else if (e.key === 'Tab' && e.shiftKey) {
+                        if (index > 0) {
+                            e.preventDefault();
+                            const prevSelect = document.getElementById(`modal-select-${index - 1}`);
+                            if (prevSelect) (prevSelect as HTMLElement).focus();
                         }
                     }
                 };
@@ -5572,6 +5584,15 @@ function CreateOrderContent() {
                                                     unitSel.focus();
                                                 } else {
                                                     confirmModalAdd();
+                                                }
+                                            } else if (e.key === 'Tab' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                const unitSel = document.getElementById('modal-unit-select');
+                                                if (unitSel) {
+                                                    unitSel.focus();
+                                                } else {
+                                                    const confirmBtn = document.getElementById('modal-confirm-btn');
+                                                    if (confirmBtn) confirmBtn.focus();
                                                 }
                                             }
                                         }}
