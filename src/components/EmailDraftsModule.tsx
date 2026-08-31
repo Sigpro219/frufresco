@@ -1236,6 +1236,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [sendingReceipt, setSendingReceipt] = useState(false);
   const [receiptSent, setReceiptSent] = useState(false);
+  const [isManualDelivery, setIsManualDelivery] = useState(false);
+  const [manualDeliveryTime, setManualDeliveryTime] = useState('');
+  const [manualDeliveryMargin, setManualDeliveryMargin] = useState(30);
+  const [showDeliveryTimeModal, setShowDeliveryTimeModal] = useState(false);
+  const [tempDeliveryTime, setTempDeliveryTime] = useState('07:30');
+  const [tempDeliveryMargin, setTempDeliveryMargin] = useState(30);
 
   const scrollToDraftRow = (targetIdx: number) => {
     const container = document.getElementById('email-draft-scroll-container');
@@ -2508,7 +2514,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         clientId: clientId,
         clientType: isB2C ? 'b2c_client' : 'b2b_client',
         deliveryDate: deliveryDate,
-        deliverySlot: editableDeliverySlot || 'AM',
+        deliverySlot: isManualDelivery ? manualDeliveryTime : (editableDeliverySlot || 'AM'),
+        manual_delivery_time: isManualDelivery ? manualDeliveryTime : null,
+        manual_delivery_margin: isManualDelivery ? manualDeliveryMargin : null,
         address: editableAddress || selectedDraft.address || 'Bogotá',
         notes: adminNotes || '',
         items: validItems,
@@ -5702,9 +5710,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <span style={{ maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {matchedProfile 
                         ? (matchedProfile.company_name || matchedProfile.contact_name)
-                        : (selectedDraft.client_detected_name ? `⚠️ Asignar: ${selectedDraft.client_detected_name}` : '⚠️ Seleccionar Cliente')}
+                        : (selectedDraft.client_detected_name ? `Asignar: ${selectedDraft.client_detected_name}` : 'Seleccionar Cliente')}
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: matchedProfile ? '#059669' : '#B45309' }}>▾</span>
+                    <ChevronDown size={14} color={matchedProfile ? '#059669' : '#B45309'} />
                   </button>
 
                   {isClientSearchOpen && (
@@ -5807,10 +5815,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   </div>
                                 )}
 
-                                <div style={{ fontSize: '0.74rem', color: isFocused ? '#1E40AF' : '#64748B', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: '0.74rem', color: isFocused ? '#1E40AF' : '#64748B', marginTop: '3px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                                   {p.nit && <span><strong>NIT:</strong> {p.nit}</span>}
-                                  {p.address && <span>📍 {p.address} {p.city ? `(${p.city})` : ''}</span>}
-                                  {p.phone && <span>📞 {p.phone}</span>}
+                                  {p.address && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><MapPin size={11} color="#64748B" /> {p.address} {p.city ? `(${p.city})` : ''}</span>}
+                                  {p.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Phone size={11} color="#64748B" /> {p.phone}</span>}
                                 </div>
                               </div>
                             );
@@ -5995,15 +6003,58 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
 
                 {/* Columna 2: Logística y Horario de Recepción */}
-                <div style={{ backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: '900', color: '#0369A1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Clock size={13} color="#0369A1" /> Horario & Restricciones de Recepción
+                <div style={{ 
+                  backgroundColor: 'white', 
+                  padding: '0.75rem 1rem', 
+                  borderRadius: '12px', 
+                  border: isManualDelivery ? '1.5px solid #10B981' : '1px solid #E2E8F0', 
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  position: 'relative'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: '900', color: isManualDelivery ? '#15803D' : '#0369A1', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={13} color={isManualDelivery ? '#15803D' : '#0369A1'} /> 
+                      {isManualDelivery ? 'Hora de Entrega Prioritaria' : 'Horario & Restricciones'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempDeliveryTime(manualDeliveryTime || '07:30');
+                        setTempDeliveryMargin(manualDeliveryMargin || 30);
+                        setShowDeliveryTimeModal(true);
+                      }}
+                      style={{
+                        background: isManualDelivery ? '#DCFCE7' : '#F1F5F9',
+                        color: isManualDelivery ? '#166534' : '#0F172A',
+                        border: `1px solid ${isManualDelivery ? '#86EFAC' : '#CBD5E1'}`,
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                        fontSize: '0.7rem',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Cambiar hora de entrega y tolerancia"
+                    >
+                      <Edit2 size={10} />
+                      {isManualDelivery ? 'Modificar' : 'Cambiar hora de entrega'}
+                    </button>
                   </div>
-                  <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.86rem' }}>
-                    {matchedProfile?.delivery_restrictions || (matchedProfile?.logistics_data?.start_time ? `${matchedProfile.logistics_data.start_time} - ${matchedProfile.logistics_data.end_time}` : 'Sin restricciones horarias registradas')}
+                  <div style={{ fontWeight: '900', color: isManualDelivery ? '#166534' : '#0F172A', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {isManualDelivery ? (
+                      <>
+                        <span>{manualDeliveryTime} (±{manualDeliveryMargin} min)</span>
+                        <span style={{ fontSize: '0.65rem', backgroundColor: '#10B981', color: 'white', padding: '1px 6px', borderRadius: '4px', fontWeight: '900' }}>PRIORITARIO</span>
+                      </>
+                    ) : (
+                      <span>{matchedProfile?.delivery_restrictions || (matchedProfile?.logistics_data?.start_time ? `${matchedProfile.logistics_data.start_time} - ${matchedProfile.logistics_data.end_time}` : '06:30 - 11:00')}</span>
+                    )}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span><strong>Canastillas:</strong> {matchedProfile?.needs_crates ? '📦 Requiere canastillas' : 'No requiere'}</span>
+                    <span><strong>Canastillas:</strong> {matchedProfile?.needs_crates ? 'Requiere canastillas' : 'No requiere'}</span>
                     <span>•</span>
                     <span><strong>Tipo:</strong> {matchedProfile?.role === 'b2b_client' ? 'B2B Horeca' : 'B2C Hogar'}</span>
                   </div>
@@ -9449,6 +9500,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           }, 50);
                         }
                       }}
+                      onFocus={e => {
+                        e.currentTarget.style.borderColor = '#2563EB';
+                        e.currentTarget.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.25)';
+                        e.currentTarget.style.backgroundColor = '#FFFFFF';
+                      }}
+                      onBlur={e => {
+                        e.currentTarget.style.borderColor = '#CBD5E1';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.backgroundColor = '#F8FAFC';
+                      }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
                           e.preventDefault();
@@ -9467,13 +9528,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       style={{
                         width: '100%',
                         padding: '0.75rem 1rem',
-                        border: '2px solid #E2E8F0',
+                        border: '2px solid #CBD5E1',
                         borderRadius: '10px',
                         fontSize: '0.95rem',
-                        fontWeight: '700',
+                        fontWeight: '800',
                         backgroundColor: '#F8FAFC',
                         outline: 'none',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
                       }}
                     >
                       <option value="">Seleccionar {opt.name}...</option>
@@ -9485,7 +9547,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 );
               })}
 
-              {/* Quantity and Unit Row */}
+              {/* Quantity and Fixed Unit Row (Exact Ingesta PDF Flow) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', margin: '1.25rem 0', textAlign: 'left' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -9497,7 +9559,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     type="text"
                     inputMode="decimal"
                     value={quantity}
-                    onFocus={e => e.target.select()}
+                    onFocus={e => {
+                      e.target.select();
+                      e.target.style.borderColor = '#2563EB';
+                      e.target.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.25)';
+                    }}
+                    onBlur={e => {
+                      e.target.style.borderColor = '#E2E8F0';
+                      e.target.style.boxShadow = 'none';
+                    }}
                     onChange={e => {
                       const val = e.target.value.replace(/[^0-9.,]/g, '');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: val } : null);
@@ -9520,7 +9590,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       fontWeight: '800',
                       fontSize: '1.1rem',
                       textAlign: 'center',
-                      outline: 'none'
+                      outline: 'none',
+                      transition: 'all 0.15s ease'
                     }}
                   />
                 </div>
@@ -9536,41 +9607,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </span>
                     )}
                   </div>
-                  <select
-                    id="modal-unit-select"
-                    tabIndex={(normalizedOptionsConfig?.length || 0) + 2}
-                    value={unit}
-                    onChange={e => {
-                      const sel = e.target.value;
-                      const matched = modalOptionsList.find(o => o.unit === sel);
-                      setCustomizingModalItem(prev => prev ? {
-                        ...prev,
-                        unit: sel,
-                        factor: matched ? matched.factor : 1
-                      } : null);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveCustomizingModal();
-                      }
-                    }}
+                  <input
+                    readOnly
+                    tabIndex={-1}
+                    value={modalOptionsList.find(o => o.unit === unit)?.label || `${unit} (Base)`}
                     style={{
                       width: '100%',
                       padding: '0.7rem 0.8rem',
                       borderRadius: '10px',
                       border: '2px solid #E2E8F0',
-                      fontWeight: '700',
+                      fontWeight: '800',
                       fontSize: '0.95rem',
-                      backgroundColor: '#F8FAFC',
+                      backgroundColor: '#F1F5F9',
+                      color: '#475569',
                       outline: 'none',
-                      cursor: 'pointer'
+                      cursor: 'default'
                     }}
-                  >
-                    {modalOptionsList.map(o => (
-                      <option key={o.unit} value={o.unit}>{o.label}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -9578,12 +9631,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
                 <button
                   type="button"
-                  tabIndex={(normalizedOptionsConfig?.length || 0) + 4}
+                  tabIndex={(normalizedOptionsConfig?.length || 0) + 3}
                   onClick={() => setCustomizingModalItem(null)}
                   style={{
                     padding: '0.85rem',
                     borderRadius: '12px',
-                    border: '1.5px solid #E2E8F0',
+                    border: '1.5px solid #CBD5E1',
                     backgroundColor: 'white',
                     color: '#475569',
                     fontWeight: '800',
@@ -9596,8 +9649,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <button
                   id="btn-modal-add"
                   type="button"
-                  tabIndex={(normalizedOptionsConfig?.length || 0) + 3}
+                  tabIndex={(normalizedOptionsConfig?.length || 0) + 2}
                   onClick={saveCustomizingModal}
+                  onFocus={e => {
+                    e.currentTarget.style.boxShadow = '0 0 0 4px rgba(13, 122, 87, 0.4)';
+                  }}
+                  onBlur={e => {
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(13, 122, 87, 0.25)';
+                  }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
@@ -9613,7 +9672,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     fontWeight: '800',
                     fontSize: '0.95rem',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
+                    transition: 'all 0.15s ease'
                   }}
                 >
                   Agregar
@@ -9623,6 +9683,156 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         );
       })()}
+
+      {/* DELIVERY TIME & TOLERANCE MODAL (EXACT INGESTA PDF REPLICA) */}
+      {showDeliveryTimeModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 16000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '440px',
+            padding: '1.75rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #E2E8F0',
+            animation: 'fadeInUp 0.2s ease-out'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A' }}>Hora de Entrega</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Configura la hora y tolerancia para este pedido</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeliveryTimeModal(false)}
+                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                  Hora Específica de Entrega
+                </label>
+                <input
+                  type="time"
+                  value={tempDeliveryTime}
+                  onChange={e => setTempDeliveryTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.9rem',
+                    borderRadius: '10px',
+                    border: '2px solid #CBD5E1',
+                    fontSize: '1.1rem',
+                    fontWeight: '800',
+                    color: '#0F172A',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                  Margen de Tolerancia (± Minutos)
+                </label>
+                <select
+                  value={tempDeliveryMargin}
+                  onChange={e => setTempDeliveryMargin(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.9rem',
+                    borderRadius: '10px',
+                    border: '2px solid #CBD5E1',
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                    color: '#0F172A',
+                    outline: 'none',
+                    backgroundColor: '#F8FAFC'
+                  }}
+                >
+                  <option value={15}>± 15 Minutos</option>
+                  <option value={30}>± 30 Minutos (Recomendado)</option>
+                  <option value={45}>± 45 Minutos</option>
+                  <option value={60}>± 60 Minutos (1 Hora)</option>
+                </select>
+              </div>
+
+              {matchedProfile && (
+                <div style={{ padding: '0.75rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.75rem', color: '#64748B' }}>
+                  <strong>Horario habitual del cliente:</strong> {matchedProfile?.delivery_restrictions || '06:30 - 11:00'}
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManualDelivery(false);
+                    setManualDeliveryTime('');
+                    setShowDeliveryTimeModal(false);
+                  }}
+                  style={{
+                    padding: '0.75rem',
+                    borderRadius: '10px',
+                    border: '1.5px solid #CBD5E1',
+                    backgroundColor: 'white',
+                    color: '#475569',
+                    fontWeight: '800',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Restablecer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (tempDeliveryTime) {
+                      setIsManualDelivery(true);
+                      setManualDeliveryTime(tempDeliveryTime);
+                      setManualDeliveryMargin(tempDeliveryMargin);
+                      setShowDeliveryTimeModal(false);
+                      showToast(`Hora de entrega fijada: ${tempDeliveryTime} (±${tempDeliveryMargin} min)`, 'success');
+                    } else {
+                      showToast('Por favor selecciona una hora', 'warning');
+                    }
+                  }}
+                  style={{
+                    padding: '0.75rem',
+                    borderRadius: '10px',
+                    border: 'none',
+                    backgroundColor: '#0D7A57',
+                    color: 'white',
+                    fontWeight: '800',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)'
+                  }}
+                >
+                  Guardar Horario
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {variantConfigProduct && (
           <VariantModal
