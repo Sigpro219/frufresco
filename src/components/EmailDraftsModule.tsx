@@ -3619,7 +3619,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [deliverySlot, setDeliverySlot] = useState('AM');
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
-  const [isAuthorizedForChanges, setIsAuthorizedForChanges] = useState(false);
+  const [notifyClientOfModifications, setNotifyClientOfModifications] = useState(false);
 
   const stateRef = useRef({
     isEditing,
@@ -8467,60 +8467,75 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div>
 
             {/* Confirmation Email Option */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <div>
-                <div style={{
+            {/* Confirmation Email & Novedades Options */}
+            <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div 
+                style={{
                   backgroundColor: sendConfirmationEmail ? '#F0FDF4' : '#F8FAF9',
                   border: `1.5px solid ${sendConfirmationEmail ? '#86EFAC' : '#E2E8F0'}`,
                   borderRadius: '12px',
-                  padding: '1rem',
+                  padding: '1rem 1.25rem',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  transition: 'all 0.15s ease'
                 }}
                 onClick={() => {
                   const newVal = !sendConfirmationEmail;
                   setSendConfirmationEmail(newVal);
-                  if (!newVal) setIsAuthorizedForChanges(false);
+                  if (!newVal) setNotifyClientOfModifications(false);
                 }}
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={sendConfirmationEmail} 
-                    onChange={(e) => {
-                      // Handled by parent div
-                    }} 
-                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: THEME.colors.primary }}
-                  />
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: sendConfirmationEmail ? '#065F46' : '#4B5563', marginBottom: '2px', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                      Enviar correo de confirmación al cliente
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: sendConfirmationEmail ? '#047857' : '#9CA3AF', fontWeight: '600' }}>
-                      {sendConfirmationEmail 
-                        ? 'Se enviará un correo con el resumen y estado final del pedido.' 
-                        : 'No se notificará al cliente sobre la creación de este pedido.'}
-                    </div>
+              >
+                <input 
+                  type="checkbox" 
+                  checked={sendConfirmationEmail} 
+                  onChange={() => {}} 
+                  style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: THEME.colors.primary }}
+                />
+                <div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: '800', color: sendConfirmationEmail ? '#065F46' : '#4B5563', marginBottom: '2px', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                    Enviar correo de confirmación al cliente
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: sendConfirmationEmail ? '#047857' : '#9CA3AF', fontWeight: '600' }}>
+                    {sendConfirmationEmail 
+                      ? 'Se enviará el correo al cliente con el resumen y estado final de los productos aprobados.' 
+                      : 'No se notificará al cliente sobre la creación de este pedido.'}
                   </div>
                 </div>
               </div>
 
               {isInvoiceModified() && sendConfirmationEmail && (
-                <div style={{
-                  gridColumn: 'span 2',
-                  backgroundColor: '#FFFBEB',
-                  border: '1.5px solid #FCD34D',
-                  borderRadius: '12px',
-                  padding: '0.85rem 1.15rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}>
-                  <Info size={18} color="#D97706" style={{ flexShrink: 0 }} />
-                  <div style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: 600, lineHeight: '1.4' }}>
-                    <strong>Novedades aplicadas:</strong> Se detectaron modificaciones en los productos originales. El correo de confirmación incluirá el detalle final de los SKUs autorizados.
+                <div 
+                  style={{
+                    backgroundColor: notifyClientOfModifications ? '#FFFBEB' : '#F8FAFC',
+                    border: `1.5px solid ${notifyClientOfModifications ? '#FCD34D' : '#E2E8F0'}`,
+                    borderRadius: '12px',
+                    padding: '0.9rem 1.25rem',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onClick={() => setNotifyClientOfModifications(!notifyClientOfModifications)}
+                >
+                  <input 
+                    type="checkbox" 
+                    id="chk-notify-modifications"
+                    checked={notifyClientOfModifications} 
+                    onChange={() => {}} 
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '2px', accentColor: '#D97706' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: '0.86rem', fontWeight: '800', color: notifyClientOfModifications ? '#92400E' : '#334155' }}>
+                      Notificar novedades / faltantes de existencias al cliente
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: notifyClientOfModifications ? '#B45309' : '#64748B', marginTop: '2px', lineHeight: '1.4' }}>
+                      {notifyClientOfModifications
+                        ? '✔ Activado: El correo incluirá un apartado especial detallando los productos no disponibles o retirados por falta de stock.'
+                        : '✖ Desactivado (Recomendado si fue una corrección interna): El cliente recibirá su confirmación limpia solo con los productos aprobados, sin avisarle de ningún error o borrado de digitación.'}
+                    </div>
                   </div>
                 </div>
               )}
