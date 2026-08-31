@@ -7028,23 +7028,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
                   <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                     <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
-                      <th style={{ padding: '1rem', textAlign: 'center', width: '35px' }}>
-                        <input
-                          type="checkbox"
-                          checked={editableItems.length > 0 && selectedRowIndices.length === editableItems.length}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedRowIndices(editableItems.map((_, idx) => idx));
-                            } else {
-                              setSelectedRowIndices([]);
-                            }
-                          }}
-                          style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
-                        />
-                      </th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '32%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '38%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'center', width: '30%', fontSize: '0.74rem' }}>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', width: '33%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'left', width: '39%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'center', width: '28%', fontSize: '0.74rem' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
                           <span>CANT. / PRECIO</span>
                           <div 
@@ -7136,23 +7122,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             transition: 'all 0.16s cubic-bezier(0.16, 1, 0.3, 1)'
                           }}
                         >
-                          <td style={{ padding: '0.45rem 0.4rem', textAlign: 'center', width: '35px' }}>
-                            <input
-                              type="checkbox"
-                              disabled={isApprovedDraft || item.isDeleted}
-                              checked={selectedRowIndices.includes(i)}
-                              onChange={(e) => {
-                                if (isApprovedDraft) return;
-                                if (e.target.checked) {
-                                  setSelectedRowIndices(prev => [...prev, i]);
-                                } else {
-                                  setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
-                                }
-                              }}
-                              style={{ transform: 'scale(1.1)', cursor: (isApprovedDraft || item.isDeleted) ? 'not-allowed' : 'pointer' }}
-                            />
-                          </td>
-                          <td style={{ padding: '0.35rem 0.65rem', width: '35%' }}>
+                          <td style={{ padding: '0.45rem 0.85rem', width: '33%' }}>
                             <div 
                               onClick={() => matchedProd && openCustomizingModal(matchedProd, i)}
                               style={{ 
@@ -7203,7 +7173,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '0.35rem 0.65rem', position: 'relative', width: '42%' }}>
+                          <td style={{ padding: '0.35rem 0.65rem', position: 'relative', width: '39%' }}>
                             <input 
                               ref={el => { productInputRefs.current[i] = el; }}
                               type="text"
@@ -7439,7 +7409,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               );
                             })()}
                           </td>
-                          <td style={{ padding: '0.45rem 0.65rem', textAlign: 'center', width: '30%' }}>
+                          <td style={{ padding: '0.45rem 0.65rem', textAlign: 'center', width: '28%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <input 
                                 ref={el => { quantityInputRefs.current[i] = el; }}
@@ -7626,7 +7596,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     })}
                     {editableItems.filter(it => !it.isDeleted).length === 0 && (
                       <tr>
-                        <td colSpan={4} style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+                        <td colSpan={3} style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
                           <div style={{
                             padding: '2.5rem 1.5rem',
                             textAlign: 'center',
@@ -7808,19 +7778,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <span style={{ color: '#CBD5E1' }}>•</span>
                     <span>IVA Est.: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(totalTax)}</strong></span>
                   </div>
-
-                  {/* Action: Delete selected */}
-                  {isEditing && selectedRowIndices.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleBatchDelete}
-                      style={{
-                        background: 'none', border: 'none', color: '#DC2626', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '0.5rem'
-                      }}
-                    >
-                      <Trash2 size={15} /> Eliminar ({selectedRowIndices.length})
-                    </button>
-                  )}
                 </div>
 
                 {/* RIGHT: Big Total & Action Button */}
