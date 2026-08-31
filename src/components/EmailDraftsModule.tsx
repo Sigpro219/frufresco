@@ -1983,9 +1983,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   };
 
   const getScoredProductsForQuery = (query: string) => {
-    const cleanQuery = (query || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    let raw = (query || '').trim();
+    let extractedId = '';
+    const idMatch = raw.match(/\(([^)]+)\)$/);
+    if (idMatch) {
+      extractedId = idMatch[1].trim().toLowerCase();
+    }
+    const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-    if (!cleanQuery) {
+    if (!cleanQuery && !extractedId) {
       return [...products].sort((a, b) => {
         const freqA = clientFrequentProductMap[a.id]?.count || 0;
         const freqB = clientFrequentProductMap[b.id]?.count || 0;
@@ -2001,11 +2007,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const exc = clientExceptions.find(e => e.product_id === p.id);
       const normNickname = exc?.nickname ? exc.nickname.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
 
+      if (extractedId && (normAcc === extractedId || normSku === extractedId)) {
+        return true;
+      }
+
+      if (!cleanQuery) return false;
+
       return normName.includes(cleanQuery) ||
              normSku.includes(cleanQuery) ||
              normAcc.includes(cleanQuery) ||
              normNickname.includes(cleanQuery);
     });
+
+    if (matched.length === 0) {
+      return [];
+    }
 
     return matched.sort((a, b) => {
       const excA = clientExceptions.find(e => e.product_id === a.id);
@@ -2015,6 +2031,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       let scoreA = 0;
       let scoreB = 0;
+
+      // Exact match with extracted accounting ID or SKU gets highest boost
+      if (extractedId) {
+        if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 5000;
+        if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 5000;
+      }
 
       // Prioritize client exceptions/nicknames (highest boost)
       if (excA) scoreA += 1000;
@@ -2027,10 +2049,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       // Name match prefix boost
       const normNameA = (a.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const normNameB = (b.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (normNameA.startsWith(cleanQuery)) scoreA += 50;
-      if (normNameB.startsWith(cleanQuery)) scoreB += 50;
-      if (normNameA === cleanQuery) scoreA += 100;
-      if (normNameB === cleanQuery) scoreB += 100;
+      if (cleanQuery && normNameA.startsWith(cleanQuery)) scoreA += 50;
+      if (cleanQuery && normNameB.startsWith(cleanQuery)) scoreB += 50;
+      if (cleanQuery && normNameA === cleanQuery) scoreA += 100;
+      if (cleanQuery && normNameB === cleanQuery) scoreB += 100;
 
       if (scoreB !== scoreA) {
         return scoreB - scoreA;
@@ -6871,34 +6893,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
 
                             {/* Custom Pareto Floating Dropdown (Exact Replica of Ingesta PDF - Imagen 2) */}
-                            {activeDropdownRowIndex === i && (
-                              <div style={{
-                                position: 'absolute',
-                                top: '100%',
-                                left: 0,
-                                minWidth: '520px',
-                                zIndex: 9999,
-                                backgroundColor: 'white',
-                                borderRadius: '12px',
-                                boxShadow: '0 15px 35px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.08)',
-                                border: '1px solid #CBD5E1',
-                                marginTop: '4px',
-                                maxHeight: '310px',
-                                overflowY: 'auto'
-                              }}>
-                                {(() => {
-                                  const currentQuery = item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : '');
-                                  const scoredList = getScoredProductsForQuery(currentQuery);
+                            {activeDropdownRowIndex === i && (() => {
+                              const currentQuery = item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : '');
+                              const scoredList = getScoredProductsForQuery(currentQuery);
 
-                                  if (scoredList.length === 0) {
-                                    return (
-                                      <div style={{ padding: '14px', fontSize: '0.85rem', color: '#94A3B8', textAlign: 'center', fontWeight: '600' }}>
-                                        No se encontraron productos coincidentes
-                                      </div>
-                                    );
-                                  }
+                              if (scoredList.length === 0) return null;
 
-                                  return scoredList.map((p, idx) => {
+                              return (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  left: 0,
+                                  minWidth: '520px',
+                                  zIndex: 9999,
+                                  backgroundColor: 'white',
+                                  borderRadius: '12px',
+                                  boxShadow: '0 15px 35px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.08)',
+                                  border: '1px solid #CBD5E1',
+                                  marginTop: '4px',
+                                  maxHeight: '310px',
+                                  overflowY: 'auto'
+                                }}>
+                                  {scoredList.map((p, idx) => {
                                     const exc = clientExceptions.find(e => e.product_id === p.id);
                                     const freq = clientFrequentProductMap[p.id];
                                     const isClientHabitual = Boolean(exc || freq);
