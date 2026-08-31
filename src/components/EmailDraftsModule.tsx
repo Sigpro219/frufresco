@@ -859,7 +859,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [variantQuantity, setVariantQuantity] = useState<string>('1');
   const [selectedUnit, setSelectedUnit] = useState<string>('Kg');
   const [selectedConversionFactor, setSelectedConversionFactor] = useState<number>(1);
-  const [clientExceptions, setClientExceptions] = useState<any[]>([]);
 
   useEffect(() => {
     if (selectedProductForVariant) {
