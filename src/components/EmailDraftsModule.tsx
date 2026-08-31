@@ -6262,6 +6262,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
                       <span style={{ color: '#15803D', fontWeight: '800' }}>● En Cobertura</span>
                     )}
+                    {(selectedDraft?.source_email || matchedProfile?.email) && (
+                      <>
+                        <span style={{ color: '#CBD5E1' }}>•</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#1D4ED8', fontWeight: '700' }}>
+                          <Mail size={11} color="#2563EB" /> {selectedDraft?.source_email || matchedProfile?.email}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -6334,6 +6342,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span><strong>Tel:</strong> {matchedProfile?.phone || matchedProfile?.contact_phone || editableClientPhone || '-'}</span>
+                    {(selectedDraft?.source_email || matchedProfile?.email) && (
+                      <>
+                        <span>•</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#6B21A8', fontWeight: '700' }}>
+                          <Mail size={11} color="#7C3AED" /> {selectedDraft?.source_email || matchedProfile?.email}
+                        </span>
+                      </>
+                    )}
                     <span>•</span>
                     <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
                       <strong>Asunto:</strong> {cleanSubject(selectedDraft.email_subject)}
