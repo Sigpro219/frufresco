@@ -467,7 +467,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             const headerRow = validRows[headerRowIdx] || [];
             headerRow.forEach((cellVal: any, colIdx: number) => {
               const s = String(cellVal || '').toLowerCase().trim();
-              if (s === 'can' || s === 'cant' || s.includes('cantid') || s.includes('cantidad') || s === 'qty' || s === 'pedido') {
+              if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s.includes('cantidad') || s === 'qty' || s === 'pedido') {
                 qtyCol = colIdx;
               } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo')) {
                 nameCol = colIdx;
@@ -486,17 +486,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               let rawQty = '';
               if (!isHeader && !isMeta && qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
                 rawQty = String(row[qtyCol]).trim();
-                const parsed = parseFloat(rawQty.replace(',', '.'));
-                if (!isNaN(parsed) && parsed > 0) {
+                const cleaned = rawQty.replace(',', '.').replace(/[^0-9.]/g, '');
+                const parsed = parseFloat(cleaned);
+                if (!isNaN(parsed) && parsed > 0 && rawQty !== '') {
                   qtyNum = parsed;
-                }
-              } else if (!isHeader && !isMeta) {
-                for (const c of activeCols) {
-                  const val = row[c];
-                  if (typeof val === 'number' && val > 0 && val < 5000) {
-                    qtyNum = val;
-                    break;
-                  }
                 }
               }
 
@@ -1260,9 +1253,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   ${r.cells.map((c: string, cIdx: number) => {
                     const isQty = cIdx === sheet.qtyCol && !r.isHeader && !r.isMeta;
                     const isName = cIdx === sheet.nameCol && !r.isHeader && !r.isMeta;
+                    const hasValidQty = isQty && r.hasQty && r.qtyVal;
                     return `
-                      <td class="${isQty && r.hasQty ? 'qty-cell' : ''} ${isName && r.hasQty ? 'name-cell' : ''}">
-                        ${isQty && r.hasQty ? `<span class="badge-qty">${c} ${r.unitVal}</span>` : c}
+                      <td class="${hasValidQty ? 'qty-cell' : ''} ${isName && r.hasQty ? 'name-cell' : ''}">
+                        ${hasValidQty ? `<span class="badge-qty">${r.qtyVal} ${r.unitVal}</span>` : c}
                       </td>
                     `;
                   }).join('')}
@@ -5377,13 +5371,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                     padding: '5px 8px',
                                                     borderRight: '1px solid #E2E8F0',
                                                     whiteSpace: 'nowrap',
-                                                    fontWeight: isQtyCell && hasRowQty ? 900 : (isNameCell && hasRowQty ? 800 : 'inherit'),
-                                                    color: isQtyCell && hasRowQty ? '#047857' : (hasRowQty ? '#065F46' : 'inherit'),
-                                                    backgroundColor: isQtyCell && hasRowQty ? '#D1FAE5' : 'transparent',
+                                                    fontWeight: isQtyCell && hasRowQty && r.qtyVal ? 900 : (isNameCell && hasRowQty ? 800 : 'inherit'),
+                                                    color: isQtyCell && hasRowQty && r.qtyVal ? '#047857' : (hasRowQty ? '#065F46' : 'inherit'),
+                                                    backgroundColor: isQtyCell && hasRowQty && r.qtyVal ? '#D1FAE5' : 'transparent',
                                                     textAlign: isQtyCell ? 'center' : 'left'
                                                   }}
                                                 >
-                                                  {isQtyCell && hasRowQty ? (
+                                                  {isQtyCell && hasRowQty && r.qtyVal ? (
                                                     <span style={{
                                                       backgroundColor: '#FEF3C7',
                                                       color: '#B45309',
@@ -5392,7 +5386,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                       borderRadius: '4px',
                                                       fontWeight: 900
                                                     }}>
-                                                      {cellText} {r.unitVal}
+                                                      {r.qtyVal} {r.unitVal}
                                                     </span>
                                                   ) : (
                                                     cellText
