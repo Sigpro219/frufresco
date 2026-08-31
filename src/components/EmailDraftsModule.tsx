@@ -11,7 +11,7 @@ import {
     Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart,
     ZoomIn, ZoomOut, RotateCw, RefreshCw 
 } from 'lucide-react';
-import { Map, Marker } from '@vis.gl/react-google-maps';
+import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import VariantModal from './VariantModal';
@@ -7434,7 +7434,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Map Container */}
             <div style={{ width: '100%', height: '400px', backgroundColor: '#F3F4F6', position: 'relative' }}>
-              <Map
+              <GoogleMapComponent
                 key={`${draftCoordinates.lat}-${draftCoordinates.lng}`}
                 defaultCenter={draftCoordinates}
                 defaultZoom={15}
@@ -7442,7 +7442,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 style={{ width: '100%', height: '100%' }}
               >
                 <Marker position={draftCoordinates} />
-              </Map>
+              </GoogleMapComponent>
             </div>
 
             {/* Footer / Actions */}
