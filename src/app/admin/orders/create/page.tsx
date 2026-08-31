@@ -23,6 +23,7 @@ import {
     RotateCcw,
     AlertTriangle,
     Info,
+    Calculator,
     FolderOpen,
     Sparkles,
     Settings,
@@ -257,6 +258,7 @@ function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
+    const [showFormulaTooltip, setShowFormulaTooltip] = useState(false);
 
     // Safe math expression evaluator for Excel-style formulas (+900/24, =900/24, 15*12, etc.)
     const evaluateMathExpression = (val: string | number | null | undefined): number => {
@@ -4055,7 +4057,71 @@ function CreateOrderContent() {
                                                         </th>
                                                         <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 1.25rem', textAlign: 'left', width: '32%' }}>NOMBRE EN DOCUMENTO</th>
                                                         <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
-                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>CANT.</th>
+                                                        <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '23%' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
+                                                                <span>CANT.</span>
+                                                                <div 
+                                                                    style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
+                                                                    onMouseEnter={() => setShowFormulaTooltip(true)}
+                                                                    onMouseLeave={() => setShowFormulaTooltip(false)}
+                                                                    onClick={(e) => { e.stopPropagation(); setShowFormulaTooltip(prev => !prev); }}
+                                                                    title="Haz clic para ver cómo usar fórmulas matemáticas"
+                                                                >
+                                                                    <div style={{
+                                                                        width: '16px',
+                                                                        height: '16px',
+                                                                        borderRadius: '50%',
+                                                                        backgroundColor: '#EFF6FF',
+                                                                        border: '1px solid #93C5FD',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        boxShadow: '0 1px 2px rgba(37, 99, 235, 0.1)'
+                                                                    }}>
+                                                                        <Info size={11} color="#2563EB" />
+                                                                    </div>
+                                                                    
+                                                                    {showFormulaTooltip && (
+                                                                        <div style={{
+                                                                            position: 'absolute',
+                                                                            top: '100%',
+                                                                            right: '-12px',
+                                                                            marginTop: '8px',
+                                                                            width: '260px',
+                                                                            backgroundColor: '#1E293B',
+                                                                            color: '#FFFFFF',
+                                                                            padding: '12px 14px',
+                                                                            borderRadius: '10px',
+                                                                            fontSize: '0.73rem',
+                                                                            lineHeight: '1.45',
+                                                                            textAlign: 'left',
+                                                                            zIndex: 9999,
+                                                                            boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+                                                                            border: '1px solid #334155',
+                                                                            fontWeight: 'normal',
+                                                                            textTransform: 'none'
+                                                                        }}>
+                                                                            <div style={{ fontWeight: '800', color: '#60A5FA', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem' }}>
+                                                                                <Calculator size={13} color="#60A5FA" />
+                                                                                <span>Fórmulas rápidas tipo Excel</span>
+                                                                            </div>
+                                                                            <p style={{ margin: '0 0 6px 0', color: '#E2E8F0' }}>
+                                                                                Puedes escribir operaciones matemáticas directas en cualquier celda de cantidad:
+                                                                            </p>
+                                                                            <div style={{ backgroundColor: '#0F172A', padding: '6px 8px', borderRadius: '6px', fontFamily: 'monospace', color: '#38BDF8', fontSize: '0.72rem', lineHeight: '1.5' }}>
+                                                                                <div><strong style={{ color: '#FCD34D' }}>+900/24</strong> &nbsp;→ <strong>37,5</strong> <span style={{ color: '#64748B' }}>(cubetas)</span></div>
+                                                                                <div><strong style={{ color: '#FCD34D' }}>15*12</strong> &nbsp;&nbsp;&nbsp;→ <strong>180</strong> <span style={{ color: '#64748B' }}>(cajas)</span></div>
+                                                                                <div><strong style={{ color: '#FCD34D' }}>10+5+2,5</strong> → <strong>17,5</strong></div>
+                                                                                <div><strong style={{ color: '#FCD34D' }}>500/1000</strong> → <strong>0,5</strong> <span style={{ color: '#64748B' }}>(kg)</span></div>
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '6px' }}>
+                                                                                Presiona <strong style={{ color: '#FFFFFF' }}>Enter</strong> o <strong style={{ color: '#FFFFFF' }}>Tab</strong> para calcular y formatear automáticamente.
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
