@@ -6958,11 +6958,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                         />
                       </th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '35%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '42%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'center', width: '23%', fontSize: '0.74rem' }}>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '32%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'left', width: '38%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
+                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 0.85rem', textAlign: 'center', width: '30%', fontSize: '0.74rem' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
-                          <span>CANT.</span>
+                          <span>CANT. / PRECIO</span>
                           <div 
                             style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
                             onMouseEnter={() => setShowFormulaTooltip(true)}
@@ -7346,7 +7346,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               );
                             })()}
                           </td>
-                          <td style={{ padding: '0.45rem 0.65rem', textAlign: 'center', width: '23%' }}>
+                          <td style={{ padding: '0.45rem 0.65rem', textAlign: 'center', width: '30%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <input 
                                 ref={el => { quantityInputRefs.current[i] = el; }}
@@ -7416,22 +7416,61 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   }
                                 }}
                                 style={{ 
-                                  width: isActiveRow ? '68px' : '64px', 
-                                  padding: isActiveRow ? '7px 8px' : '6px 8px', 
+                                  width: isActiveRow ? '62px' : '56px', 
+                                  padding: isActiveRow ? '6px 4px' : '5px 4px', 
                                   borderRadius: '8px', 
-                                  border: isActiveRow ? '2px solid #2563EB' : '1.5px solid #E2E8F0', 
+                                  border: isActiveRow ? '2px solid #2563EB' : '1.5px solid #CBD5E1', 
                                   textAlign: 'center',
                                   fontWeight: '900',
-                                  fontSize: isActiveRow ? '0.94rem' : '0.9rem',
+                                  fontSize: isActiveRow ? '0.92rem' : '0.88rem',
                                   backgroundColor: isApprovedDraft ? '#F8FAFC' : 'white',
                                   boxShadow: isActiveRow ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : 'none',
                                   cursor: isApprovedDraft ? 'not-allowed' : 'text',
                                   transition: 'all 0.15s ease'
                                 }}
                               />
-                              <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#475569', minWidth: '32px', textAlign: 'left' }}>
-                                {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                              </span>
+
+                              {/* Unit & Unit Price Display */}
+                              {(() => {
+                                const resolvedUnitPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
+                                const qtyNum = Number(item.quantity) || 0;
+                                const lineSubtotal = resolvedUnitPrice * qtyNum;
+
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '62px', maxWidth: '85px', overflow: 'hidden' }}>
+                                    <span style={{ fontSize: '0.80rem', fontWeight: '800', color: '#334155', lineHeight: '1.1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {item.originalUnit || item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                    </span>
+                                    {matchedProd && resolvedUnitPrice > 0 ? (
+                                      <span 
+                                        style={{ 
+                                          fontSize: '0.68rem', 
+                                          fontWeight: '800', 
+                                          color: '#15803D', 
+                                          backgroundColor: '#F0FDF4', 
+                                          border: '1px solid #BBF7D0',
+                                          padding: '1px 4px', 
+                                          borderRadius: '4px', 
+                                          marginTop: '2px', 
+                                          whiteSpace: 'nowrap',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '2px',
+                                          cursor: 'default'
+                                        }} 
+                                        title={`Precio unitario: ${formatMoney(resolvedUnitPrice)} | Subtotal: ${formatMoney(lineSubtotal)}`}
+                                      >
+                                        {formatMoney(resolvedUnitPrice)}
+                                      </span>
+                                    ) : (
+                                      <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '600', marginTop: '2px' }}>
+                                        $0
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
                               {!isApprovedDraft && (
                                 <button
                                   type="button"
@@ -7444,14 +7483,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     background: 'transparent',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    padding: '6px',
-                                    borderRadius: '8px',
+                                    padding: '5px',
+                                    borderRadius: '6px',
                                     color: '#94A3B8',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     transition: 'all 0.15s ease',
-                                    marginLeft: '4px'
+                                    marginLeft: '2px',
+                                    flexShrink: 0
                                   }}
                                   onMouseEnter={(e) => {
                                     e.currentTarget.style.color = '#EF4444';
