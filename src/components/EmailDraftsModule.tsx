@@ -9592,15 +9592,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     onBlur={e => {
                       e.target.style.borderColor = '#E2E8F0';
                       e.target.style.boxShadow = 'none';
-                      const parsed = parseFloat(String(quantity).replace(',', '.'));
+                      const parsed = parseFloat(String(quantity || '').replace(',', '.'));
                       if (isNaN(parsed) || parsed <= 0) {
                         setCustomizingModalItem(prev => prev ? { ...prev, quantity: '1' } : null);
-                      } else {
-                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: String(parsed) } : null);
                       }
                     }}
                     onChange={e => {
-                      const val = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
+                      const val = e.target.value.replace(/[^0-9.,]/g, '');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: val } : null);
                     }}
                     onKeyDown={e => {
