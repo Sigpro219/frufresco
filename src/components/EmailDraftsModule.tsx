@@ -8,7 +8,8 @@ import {
     ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, 
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
-    Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart 
+    Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart,
+    ZoomIn, ZoomOut, RotateCw, RefreshCw 
 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
@@ -316,6 +317,190 @@ const ProductsDatalist = React.memo(({ products }: { products: any[] }) => {
   );
 });
 ProductsDatalist.displayName = 'ProductsDatalist';
+
+const ImageZoomViewer = ({ src, alt }: { src: string; alt: string }) => {
+  const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleZoomIn = () => setScale(prev => Math.min(Number((prev + 0.25).toFixed(2)), 4));
+  const handleZoomOut = () => setScale(prev => Math.max(Number((prev - 0.25).toFixed(2)), 0.5));
+  const handleReset = () => {
+    setScale(1);
+    setRotation(0);
+    setPosition({ x: 0, y: 0 });
+  };
+  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (scale > 1 || isFullscreen) {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging) {
+      e.preventDefault();
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    }
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.stopPropagation();
+    if (e.deltaY < 0) {
+      setScale(prev => Math.min(Number((prev + 0.15).toFixed(2)), 4));
+    } else {
+      setScale(prev => Math.max(Number((prev - 0.15).toFixed(2)), 0.5));
+    }
+  };
+
+  return (
+    <div 
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
+      style={{
+        position: isFullscreen ? 'fixed' : 'relative',
+        top: isFullscreen ? 0 : undefined,
+        left: isFullscreen ? 0 : undefined,
+        width: isFullscreen ? '100vw' : '100%',
+        height: isFullscreen ? '100vh' : '100%',
+        zIndex: isFullscreen ? 99999 : 1,
+        backgroundColor: '#0F172A',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+        borderRadius: isFullscreen ? '0' : '8px',
+        userSelect: 'none'
+      }}
+    >
+      {/* Floating Interactive Toolbar */}
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          top: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 20,
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255, 255, 255, 0.18)',
+          borderRadius: '30px',
+          padding: '5px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+          color: 'white'
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleZoomOut}
+          title="Alejar (-)"
+          style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '6px' }}
+        >
+          <ZoomOut size={16} />
+        </button>
+
+        <span 
+          onClick={handleReset}
+          title="Click para restablecer al 100%"
+          style={{ fontSize: '0.76rem', fontWeight: '800', color: '#38BDF8', minWidth: '44px', textAlign: 'center', cursor: 'pointer' }}
+        >
+          {Math.round(scale * 100)}%
+        </span>
+
+        <button
+          type="button"
+          onClick={handleZoomIn}
+          title="Acercar (+)"
+          style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '6px' }}
+        >
+          <ZoomIn size={16} />
+        </button>
+
+        <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+
+        <button
+          type="button"
+          onClick={handleRotate}
+          title="Girar 90°"
+          style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '6px' }}
+        >
+          <RotateCw size={15} />
+        </button>
+
+        <button
+          type="button"
+          onClick={handleReset}
+          title="Restablecer posición y zoom"
+          style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '6px' }}
+        >
+          <RefreshCw size={13} />
+        </button>
+
+        <div style={{ width: '1px', height: '14px', backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+
+        <button
+          type="button"
+          onClick={() => setIsFullscreen(!isFullscreen)}
+          title={isFullscreen ? "Cerrar Pantalla Completa" : "Ver en Pantalla Completa"}
+          style={{ background: 'none', border: 'none', color: '#FCD34D', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '6px' }}
+        >
+          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
+      </div>
+
+      {/* Image with Dynamic Transforms */}
+      <div
+        style={{
+          transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotation}deg)`,
+          transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          maxWidth: '100%',
+          maxHeight: '100%'
+        }}
+      >
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          style={{
+            maxWidth: isFullscreen ? '90vw' : '100%',
+            maxHeight: isFullscreen ? '90vh' : '100%',
+            objectFit: 'contain',
+            borderRadius: '6px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+            pointerEvents: 'none'
+          }}
+        />
+      </div>
+
+      {/* Instructions footer */}
+      <div style={{ position: 'absolute', bottom: '8px', right: '12px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }}>
+        Rueda: Zoom • Arrastrar: Mover
+      </div>
+    </div>
+  );
+};
 
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
@@ -1419,8 +1604,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       
       if (Array.isArray(data.items) && data.items.length > 0) {
         setEditableItems(data.items);
+        setSelectedDraft(prev => {
+          if (!prev) return null;
+          const raw = prev.extracted_items || [];
+          const meta = (Array.isArray(raw) ? raw.find((it: any) => it.isMetadata) : {}) || {};
+          if (data.clientName) meta.clientInDocument = data.clientName;
+          if (data.address) meta.address = data.address;
+          if (data.nit) meta.nit = data.nit;
+          return {
+            ...prev,
+            client_detected_name: data.clientName || prev.client_detected_name,
+            extracted_items: [meta, ...data.items]
+          };
+        });
         if (data.clientName) {
-          setSelectedDraft(prev => prev ? { ...prev, client_detected_name: data.clientName } : null);
+          setEditableClientName(data.clientName);
         }
         if (data.address) {
           setEditableAddress(data.address);
@@ -2569,8 +2767,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       
       // Initialize editable items
       const rawItems = (() => {
-        if (meta.attachments && Array.isArray(meta.attachments) && meta.attachments[selectedAttachmentIndex]) {
-          return meta.attachments[selectedAttachmentIndex].items || [];
+        if (meta.attachments && Array.isArray(meta.attachments) && meta.attachments[selectedAttachmentIndex]?.items?.length > 0) {
+          return meta.attachments[selectedAttachmentIndex].items;
         }
         return getDraftItems(selectedDraft);
       })();
@@ -6065,11 +6263,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           }
                         }
 
-                        // Imagen
+                        // Imagen con Sistema de Zoom, Panorámica y Rotación
                         if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
                           return wrapContent(
-                            <div style={{ flex: 1, backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '12px' }}>
-                              <img src={currentUrl} alt={attachmentName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }} />
+                            <div style={{ flex: 1, backgroundColor: '#0F172A', display: 'flex', position: 'relative', overflow: 'hidden', minHeight: '380px' }}>
+                              <ImageZoomViewer src={currentUrl} alt={attachmentName} />
                             </div>
                           );
                         }
