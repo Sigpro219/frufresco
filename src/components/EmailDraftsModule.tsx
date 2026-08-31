@@ -1509,9 +1509,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const executeSelectProduct = (product: any, rowIndex: number) => {
     const newEdits = [...editableItems];
     newEdits[rowIndex].matched_product_id = product.id;
-    newEdits[rowIndex].searchQuery = product.name;
+    newEdits[rowIndex].name = product.name;
+    newEdits[rowIndex].searchQuery = `${product.name} (${getAccountingIdDisplay(product)})`;
     newEdits[rowIndex].skuQuery = product.sku || '';
-    newEdits[rowIndex].isConfirmed = false;
+    newEdits[rowIndex].isConfirmed = true;
     
     const currentOriginalUnit = newEdits[rowIndex].originalUnit || newEdits[rowIndex].unit || 'Kg';
     let conversionFactor = 1;
@@ -3190,6 +3191,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             originalUnit: parsedUnit,
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
+            name: prod ? prod.name : cleanName,
+            searchQuery: prod ? `${prod.name} (${getAccountingIdDisplay(prod)})` : '',
             skuQuery: prod?.sku || '',
             unit: finalUnit,
             observations: (() => {
