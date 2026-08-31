@@ -8,7 +8,7 @@ import {
     ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, 
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
-    Settings, Plus, Package, Filter 
+    Settings, Plus, Package, Filter, User, ExternalLink 
 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
@@ -355,6 +355,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
   const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
   const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
+
+  // Client Pareto & Selection States
+  const [clientFrequentProductIds, setClientFrequentProductIds] = useState<string[]>([]);
+  const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
+
+  // Product Customization Modal State (Image 1 replica)
+  const [customizingModalItem, setCustomizingModalItem] = useState<{
+    rowIndex: number;
+    product: any;
+    originalText: string;
+    originalQuantity: number;
+    originalUnit: string;
+    options: Record<string, string>;
+    quantity: string;
+    unit: string;
+    factor: number;
+  } | null>(null);
 
   const [isFloatingExpanded, setIsFloatingExpanded] = useState(false);
 
@@ -1429,6 +1446,138 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
     return list;
   })();
+
+  const fetchClientFrequentProducts = async (profileId: string) => {
+    if (!profileId) {
+      setClientFrequentProductIds([]);
+      return;
+    }
+    try {
+      const { data: recentOrders } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('profile_id', profileId)
+        .order('created_at', { ascending: false })
+        .limit(25);
+
+      if (recentOrders && recentOrders.length > 0) {
+        const orderIds = recentOrders.map(o => o.id);
+        const { data: items } = await supabase
+          .from('order_items')
+          .select('product_id')
+          .in('order_id', orderIds);
+
+        if (items && items.length > 0) {
+          const counts: Record<string, number> = {};
+          items.forEach(it => {
+            if (it.product_id) counts[it.product_id] = (counts[it.product_id] || 0) + 1;
+          });
+          const sortedIds = Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([pid]) => pid);
+          setClientFrequentProductIds(sortedIds);
+          return;
+        }
+      }
+      setClientFrequentProductIds([]);
+    } catch (err) {
+      console.error('Error fetching client frequent products:', err);
+      setClientFrequentProductIds([]);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedDraft?.profile_id) {
+      fetchClientFrequentProducts(selectedDraft.profile_id);
+    } else {
+      setClientFrequentProductIds([]);
+    }
+  }, [selectedDraft?.profile_id]);
+
+  const handleSelectClientProfile = (profile: any) => {
+    if (!selectedDraft) return;
+    const clientName = profile.company_name || profile.contact_name || profile.name || 'Cliente';
+    const updatedDraft = {
+      ...selectedDraft,
+      profile_id: profile.id,
+      client_detected_name: clientName,
+      profiles: profile
+    };
+    setSelectedDraft(updatedDraft);
+    setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? updatedDraft : d));
+    if (profile.address) {
+      setEditableAddress(profile.address);
+    }
+    if (profile.phone || profile.contact_phone) {
+      setEditableClientPhone(profile.phone || profile.contact_phone);
+    }
+    if (profile.nit) {
+      setEditableClientNit(profile.nit);
+    }
+    setIsClientSearchOpen(false);
+    setClientSearchQuery('');
+    showToast(`Cliente asignado: ${clientName}`, 'success');
+  };
+
+  const openCustomizingModal = (product: any, rowIndex: number) => {
+    if (!product) return;
+    const item = editableItems[rowIndex] || {};
+    const rawQty = item.quantity !== undefined && item.quantity !== null ? String(item.quantity) : '1';
+    const unit = item.originalUnit || item.unit || product.unit_of_measure || 'Kg';
+    const opts = { ...(item.selected_options || {}) };
+
+    setCustomizingModalItem({
+      rowIndex,
+      product,
+      originalText: item.originalName || item.name || product.name,
+      originalQuantity: item.originalQuantity || item.quantity || 1,
+      originalUnit: item.originalUnit || item.unit || 'Kg',
+      options: opts,
+      quantity: rawQty,
+      unit,
+      factor: item.conversion_factor || 1
+    });
+  };
+
+  const saveCustomizingModal = () => {
+    if (!customizingModalItem) return;
+    const { rowIndex, product, options, quantity, unit, factor } = customizingModalItem;
+    const parsedQty = parseFloat(quantity.replace(',', '.')) || 1;
+    
+    const optionValues = Object.values(options).filter(Boolean);
+    const variantLabel = optionValues.join(' - ');
+
+    const newEdits = [...editableItems];
+    newEdits[rowIndex] = {
+      ...newEdits[rowIndex],
+      matched_product_id: product.id,
+      name: product.name,
+      searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
+      skuQuery: product.sku || '',
+      quantity: parsedQty,
+      originalQuantity: parsedQty,
+      unit: unit,
+      originalUnit: unit,
+      conversion_factor: factor,
+      selected_options: options,
+      variant_label: variantLabel || newEdits[rowIndex].observations || undefined,
+      isConfirmed: true
+    };
+
+    setEditableItems(newEdits);
+    setCustomizingModalItem(null);
+    showToast(`Producto ${product.name} actualizado ✅`, 'success');
+
+    setTimeout(() => {
+      const nextIdx = rowIndex + 1;
+      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+        scrollToDraftRow(nextIdx);
+      }
+    }, 50);
+  };
 
   const [pricingModels, setPricingModels] = useState<any[]>([]);
   const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
@@ -3415,11 +3564,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             ...editableItems
           ];
 
+          const genOrderNumber = order.order_number || ('PED-' + order.id.slice(0, 8).toUpperCase());
+
           if (isLastAttachment) {
             await supabase
               .from('order_drafts')
               .update({ 
                 status: 'approved',
+                order_id: order.id,
+                order_number: genOrderNumber,
+                delivery_date: deliveryDate,
                 extracted_items: updatedExtractedItems
               })
               .eq('id', selectedDraft.id);
@@ -3853,11 +4007,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         return itm;
       });
 
+      const genOrderNumber = order.order_number || ('PED-' + order.id.slice(0, 8).toUpperCase());
+
       if (isLastAttachment) {
         await supabase
           .from('order_drafts')
           .update({ 
             status: 'approved',
+            order_id: order.id,
+            order_number: genOrderNumber,
+            delivery_date: deliveryDate,
             extracted_items: updatedExtractedItems
           })
           .eq('id', selectedDraft.id);
@@ -4612,11 +4771,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                     {draft.status === 'approved' ? (
                       <div style={{
-                        padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                        padding: '3px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '900',
                         backgroundColor: '#DEF7EC',
-                        color: '#03543F'
+                        color: '#03543F',
+                        border: '1px solid #86EFAC',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px'
                       }}>
-                        GESTIONADO
+                        <CheckCircle2 size={11} color="#059669" />
+                        <span>INYECTADO {draft.order_number ? `(${draft.order_number})` : ''}</span>
                       </div>
                     ) : draft.status === 'rejected' ? (
                       <div style={{
@@ -4894,7 +5058,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }}>
             {/* Mesa de Trabajo Header: Client Validation (Identical to PDF Workstation) */}
             <div style={{ 
-              padding: '1.1rem 1.75rem', 
+              padding: '1rem 1.75rem', 
               backgroundColor: matchedProfile ? '#F0FDF4' : '#FFF7ED', 
               borderBottom: `1px solid ${matchedProfile ? '#BBF7D0' : '#FFEDD5'}`,
               display: 'flex',
@@ -4910,20 +5074,176 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', fontWeight: '900', color: matchedProfile ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Validación de Cliente (Auditoría)
+                    Validación de Cliente & Entrega (Auditoría)
                   </div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Documento detectado para: <span style={{ textDecoration: 'underline' }}>{matchedProfile?.company_name || matchedProfile?.contact_name || selectedDraft.client_detected_name || selectedDraft.source_email}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                    {/* Interactive Client Selector */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        onClick={() => setIsClientSearchOpen(prev => !prev)}
+                        style={{
+                          background: '#FFFFFF',
+                          border: '1.5px solid #CBD5E1',
+                          borderRadius: '8px',
+                          padding: '4px 10px',
+                          fontSize: '0.92rem',
+                          fontWeight: '800',
+                          color: '#0F172A',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}
+                      >
+                        <User size={14} color="#0D7A57" />
+                        <span>{matchedProfile?.company_name || matchedProfile?.contact_name || selectedDraft.client_detected_name || selectedDraft.source_email}</span>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>▾</span>
+                      </button>
+
+                      {isClientSearchOpen && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          marginTop: '6px',
+                          width: '360px',
+                          maxHeight: '340px',
+                          backgroundColor: 'white',
+                          borderRadius: '12px',
+                          boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                          border: '1px solid #E2E8F0',
+                          zIndex: 1000,
+                          padding: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                            <Search size={14} color="#94A3B8" />
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Buscar cliente por nombre o NIT..."
+                              value={clientSearchQuery}
+                              onChange={e => setClientSearchQuery(e.target.value)}
+                              style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.82rem', fontWeight: 600 }}
+                            />
+                            {clientSearchQuery && (
+                              <button onClick={() => setClientSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={12} /></button>
+                            )}
+                          </div>
+                          <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
+                            {profiles
+                              .filter(p => {
+                                const q = clientSearchQuery.toLowerCase();
+                                return (p.company_name || '').toLowerCase().includes(q) ||
+                                       (p.contact_name || '').toLowerCase().includes(q) ||
+                                       (p.nit || '').toLowerCase().includes(q) ||
+                                       (p.email || '').toLowerCase().includes(q);
+                              })
+                              .slice(0, 15)
+                              .map(p => (
+                                <div
+                                  key={p.id}
+                                  onClick={() => handleSelectClientProfile(p)}
+                                  style={{
+                                    padding: '8px 10px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem',
+                                    borderBottom: '1px solid #F1F5F9',
+                                    transition: 'background 0.15s'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                  <div style={{ fontWeight: '800', color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>{p.company_name || p.contact_name}</span>
+                                    {p.nit && <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal' }}>NIT: {p.nit}</span>}
+                                  </div>
+                                  <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
+                                    {p.address || 'Sin dirección'} {p.phone ? `• ${p.phone}` : ''}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Delivery Date & Slot Selector */}
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: '#FFFFFF',
+                      border: '1.5px solid #CBD5E1',
+                      padding: '3px 10px',
+                      borderRadius: '8px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}>
+                      <Calendar size={14} color="#0D7A57" />
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Entrega:</span>
+                      <input
+                        type="date"
+                        value={deliveryDate}
+                        onChange={e => setDeliveryDate(e.target.value)}
+                        style={{
+                          border: 'none',
+                          fontSize: '0.85rem',
+                          fontWeight: '800',
+                          color: '#0F172A',
+                          outline: 'none',
+                          cursor: 'pointer',
+                          background: 'transparent'
+                        }}
+                      />
+                      <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #CBD5E1', marginLeft: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditableDeliverySlot('AM')}
+                          style={{
+                            padding: '2px 7px',
+                            border: 'none',
+                            fontSize: '0.7rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            backgroundColor: editableDeliverySlot === 'AM' ? '#0D7A57' : '#F1F5F9',
+                            color: editableDeliverySlot === 'AM' ? 'white' : '#475569'
+                          }}
+                        >
+                          AM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditableDeliverySlot('PM')}
+                          style={{
+                            padding: '2px 7px',
+                            border: 'none',
+                            fontSize: '0.7rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            backgroundColor: editableDeliverySlot === 'PM' ? '#0D7A57' : '#F1F5F9',
+                            color: editableDeliverySlot === 'PM' ? 'white' : '#475569'
+                          }}
+                        >
+                          PM
+                        </button>
+                      </div>
+                    </div>
+
                     {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
-                      <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                         <CheckCircle2 size={11} color="#15803D" /> En Cobertura
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                     <span><strong>De:</strong> {selectedDraft.source_email}</span>
                     <span>•</span>
-                    <span style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
+                    <span style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
                       <strong>Asunto:</strong> {selectedDraft.email_subject || '(Sin Asunto)'}
                     </span>
                     {editableAddress && (
@@ -5044,6 +5364,55 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </button>
               </div>
             </div>
+
+            {/* If Order is already approved/injected, show protected notice banner */}
+            {(selectedDraft.status === 'approved' || selectedDraft.order_id) && (
+              <div style={{
+                backgroundColor: '#ECFDF5',
+                borderBottom: '2px solid #86EFAC',
+                padding: '0.85rem 1.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                flexWrap: 'wrap',
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckCircle2 size={24} color="#059669" />
+                  <div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#065F46' }}>
+                      Este pedido ya fue procesado con la orden #{selectedDraft.order_number || selectedDraft.order_id?.slice(0, 8).toUpperCase() || 'PED-PROCESADO'}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '1px' }}>
+                      Fecha de entrega programada: <strong>{selectedDraft.delivery_date || deliveryDate}</strong>. Si necesitas modificar cantidades o agregar productos, puedes editarlo directamente en la sección de pedidos de ese día.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <a
+                    href={`/admin/orders?date=${selectedDraft.delivery_date || deliveryDate}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: '#059669',
+                      color: 'white',
+                      borderRadius: '8px',
+                      fontWeight: '800',
+                      fontSize: '0.78rem',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 6px rgba(5, 150, 105, 0.25)'
+                    }}
+                  >
+                    <ExternalLink size={13} /> Ir a Gestión de Pedidos de ese día
+                  </a>
+                </div>
+              </div>
+            )}
 
             {/* Split Canvas Body: Left (Document/Email Viewer 48%) & Right (Products Table 52%) */}
             <div style={{
@@ -5578,11 +5947,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 className="premium-scrollbar"
                 style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: 'calc(93vh - 150px)', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
               >
-                {/* Global Datalist for SKUs */}
+                {/* Global Datalist for SKUs (Pareto Prioritized) */}
                 <datalist id="all-products-list">
-                  {products.map(p => (
-                    <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
-                  ))}
+                  {(() => {
+                    const sorted = [...products].sort((a, b) => {
+                      const aFreq = clientFrequentProductIds.includes(a.id);
+                      const bFreq = clientFrequentProductIds.includes(b.id);
+                      if (aFreq && !bFreq) return -1;
+                      if (!aFreq && bFreq) return 1;
+                      return (a.name || '').localeCompare(b.name || '');
+                    });
+                    return sorted.map(p => {
+                      const isFreq = clientFrequentProductIds.includes(p.id);
+                      return (
+                        <option 
+                          key={p.id} 
+                          value={`${p.name} (${getAccountingIdDisplay(p)})`}
+                          label={isFreq ? '⭐ Frecuente (Pareto Cliente)' : undefined}
+                        />
+                      );
+                    });
+                  })()}
                 </datalist>
 
                 <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
@@ -5640,7 +6025,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </td>
                           <td style={{ padding: '0.8rem 1.25rem', width: '35%' }}>
-                            <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#1E293B' }}>
+                            <div 
+                              onClick={() => matchedProd && openCustomizingModal(matchedProd, i)}
+                              style={{ 
+                                fontSize: '0.88rem', 
+                                fontWeight: '700', 
+                                color: '#1E293B',
+                                cursor: matchedProd ? 'pointer' : 'default'
+                              }}
+                              title={matchedProd ? 'Clic para personalizar producto' : undefined}
+                            >
                               {item.originalName || item.name || item.producto || item.item || ''}
                             </div>
                             <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -5648,12 +6042,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
                               </span>
                               {matchedProd ? (
-                                <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <span 
+                                  onClick={() => openCustomizingModal(matchedProd, i)}
+                                  style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}
+                                  title="Personalizar variantes / equivalencias"
+                                >
                                   <CheckCircle2 size={11} color="#15803D" /> {item.confidenceScore ? `${item.confidenceScore}%` : '98%'}
+                                  {clientFrequentProductIds.includes(matchedProd.id) && <span style={{ marginLeft: '2px', color: '#D97706' }}>⭐</span>}
                                 </span>
                               ) : (
                                 <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                   <AlertCircle size={11} color="#B91C1C" /> Sin Match
+                                </span>
+                              )}
+                              {item.variant_label && (
+                                <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>
+                                  {item.variant_label}
                                 </span>
                               )}
                             </div>
@@ -5674,10 +6078,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               onKeyDown={(e) => {
                                 if (e.key === 'Tab') {
                                   const val = e.currentTarget.value;
-                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || matchedProd;
                                   if (p) {
                                     e.preventDefault(); 
-                                    openVariantModalForItem(p, i);
+                                    openCustomizingModal(p, i);
                                   }
                                 } else if (e.key === 'Enter') {
                                   e.preventDefault();
@@ -8093,6 +8497,297 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
               </div>
           );
+      })()}
+
+      {/* PRODUCT CUSTOMIZATION MODAL (EXACT REPLICA OF PDF INGEST WORKSTATION - IMAGE 1) */}
+      {customizingModalItem && (() => {
+        const { product, originalText, originalQuantity, originalUnit, options, quantity, unit, factor } = customizingModalItem;
+        const normalizedOptionsConfig = (product.options_config || []).slice().sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+
+        const modalOptionsList = [{ unit: product.unit_of_measure || 'Kg', factor: 1, label: `${product.unit_of_measure || 'Kg'} (Base)` }];
+        const prodConvs = conversions ? conversions.filter(c => c.product_id === product.id) : [];
+        prodConvs.forEach(c => {
+          let displayUnit = c.from_unit || '';
+          const norm = normalizeUnitName(displayUnit);
+          if (norm === 'libra') displayUnit = 'libra';
+          else if (norm === 'kg') displayUnit = 'Kg';
+          else if (norm === 'unidad') displayUnit = 'Unidad';
+          else if (norm === 'litro') displayUnit = 'Litro';
+
+          if (!modalOptionsList.some(l => normalizeUnitName(l.unit) === norm)) {
+            modalOptionsList.push({
+              unit: displayUnit,
+              factor: parseFloat(c.conversion_factor) || 1,
+              label: `${displayUnit} (${parseFloat(c.conversion_factor)} ${product.unit_of_measure || 'Kg'})`
+            });
+          }
+        });
+
+        const parsedQty = parseFloat(quantity.replace(',', '.')) || 0;
+        const calculatedTotalKg = parsedQty * factor;
+
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 15000,
+            padding: '1.5rem'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '24px',
+              width: '100%',
+              maxWidth: '560px',
+              padding: '2rem',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)',
+              position: 'relative',
+              animation: 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}>
+              {/* Close Button */}
+              <button
+                onClick={() => setCustomizingModalItem(null)}
+                style={{
+                  position: 'absolute',
+                  top: '1.25rem',
+                  right: '1.25rem',
+                  border: 'none',
+                  background: '#F1F5F9',
+                  borderRadius: '100px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748B'
+                }}
+              >
+                <X size={16} />
+              </button>
+
+              {/* Header: Product Icon + Title + Detected Text Box */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '16px',
+                    backgroundColor: '#F1F5F9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#0D7A57'
+                  }}>
+                    <Package size={28} />
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0F172A', margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>
+                      {product.name}
+                    </h2>
+                    <p style={{ fontSize: '0.82rem', color: '#64748B', margin: '3px 0 0 0', fontWeight: '600' }}>
+                      Personaliza tu producto:
+                    </p>
+                  </div>
+                </div>
+
+                {/* Detected Context Box */}
+                {originalText && (
+                  <div style={{
+                    backgroundColor: '#F8FAFC',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '14px',
+                    padding: '8px 12px',
+                    textAlign: 'right',
+                    maxWidth: '220px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>Texto detectado:</span>
+                      <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FCD34D', padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '900' }}>
+                        {formatDetectedUnit(originalQuantity, originalUnit)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', fontStyle: 'italic', color: '#334155', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={originalText}>
+                      &quot;{originalText}&quot;
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Links */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', fontSize: '0.75rem', color: '#94A3B8', marginBottom: '1.25rem', fontWeight: '700' }}>
+                <button
+                  type="button"
+                  onClick={() => setVariantConfigProduct(product)}
+                  style={{ background: 'none', border: 'none', color: '#475569', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Settings size={12} /> Editar Variantes
+                </button>
+                <span>|</span>
+                <button
+                  type="button"
+                  onClick={() => setManageConversionsProduct(product)}
+                  style={{ background: 'none', border: 'none', color: '#475569', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Scale size={12} /> Editar Equivalencias
+                </button>
+              </div>
+
+              {/* Dynamic Options Dropdowns */}
+              {normalizedOptionsConfig && normalizedOptionsConfig.length > 0 && normalizedOptionsConfig.map((opt: any) => {
+                const currentVal = options[opt.name] || '';
+                return (
+                  <div key={opt.name} style={{ marginBottom: '1rem', textAlign: 'left' }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {opt.name}
+                    </label>
+                    <select
+                      value={currentVal}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setCustomizingModalItem(prev => prev ? {
+                          ...prev,
+                          options: { ...prev.options, [opt.name]: val }
+                        } : null);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 1rem',
+                        border: '2px solid #E2E8F0',
+                        borderRadius: '10px',
+                        fontSize: '0.95rem',
+                        fontWeight: '700',
+                        backgroundColor: '#F8FAFC',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="">Seleccionar {opt.name}...</option>
+                      {(opt.values || []).map((v: string) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+
+              {/* Quantity and Unit Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', margin: '1.25rem 0', textAlign: 'left' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Cantidad
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={quantity}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9.,]/g, '');
+                      setCustomizingModalItem(prev => prev ? { ...prev, quantity: val } : null);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveCustomizingModal();
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.8rem',
+                      borderRadius: '10px',
+                      border: '2px solid #E2E8F0',
+                      fontWeight: '800',
+                      fontSize: '1.1rem',
+                      textAlign: 'center',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                      Unidad de Medida
+                    </label>
+                    {calculatedTotalKg > 0 && factor !== 1 && (
+                      <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#059669', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '6px' }}>
+                        Total: {calculatedTotalKg.toFixed(2)} kg
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={unit}
+                    onChange={e => {
+                      const sel = e.target.value;
+                      const matched = modalOptionsList.find(o => o.unit === sel);
+                      setCustomizingModalItem(prev => prev ? {
+                        ...prev,
+                        unit: sel,
+                        factor: matched ? matched.factor : 1
+                      } : null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.8rem',
+                      borderRadius: '10px',
+                      border: '2px solid #E2E8F0',
+                      fontWeight: '700',
+                      fontSize: '0.95rem',
+                      backgroundColor: '#F8FAFC',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {modalOptionsList.map(o => (
+                      <option key={o.unit} value={o.unit}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setCustomizingModalItem(null)}
+                  style={{
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: '1.5px solid #E2E8F0',
+                    backgroundColor: 'white',
+                    color: '#475569',
+                    fontWeight: '800',
+                    fontSize: '0.95rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={saveCustomizingModal}
+                  style={{
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: 'none',
+                    backgroundColor: '#0D7A57',
+                    color: 'white',
+                    fontWeight: '800',
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                  }}
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
       })()}
       
       {variantConfigProduct && (
