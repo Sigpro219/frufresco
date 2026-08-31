@@ -502,6 +502,200 @@ const ImageZoomViewer = ({ src, alt }: { src: string; alt: string }) => {
   );
 };
 
+const GmailMessageViewer = ({
+  draft,
+  metadata,
+  onSwitchToAttachment
+}: {
+  draft: any;
+  metadata: any;
+  onSwitchToAttachment?: (index?: number) => void;
+}) => {
+  const [showDetails, setShowDetails] = useState(false);
+  const senderEmail = draft.source_email || 'desconocido';
+  const clientName = draft.client_detected_name || 'Cliente';
+  const subject = cleanSubject(draft.email_subject);
+  const rawHtml = metadata?.emailHtml || draft?.extracted_items?.debug_payload?.html || null;
+  const rawPlain = draft?.email_body || draft?.extracted_items?.debug_payload?.plain || null;
+  const attachments = metadata?.attachments || [];
+
+  // Generate avatar initial and color
+  const initial = (clientName || senderEmail || 'U').charAt(0).toUpperCase();
+  const avatarColors = ['#EA4335', '#FBBC05', '#34A853', '#4285F4', '#9333EA', '#0D9488', '#E11D48'];
+  const charCode = (clientName || 'U').charCodeAt(0);
+  const avatarBg = avatarColors[charCode % avatarColors.length];
+
+  // Resolve CID inline images in HTML
+  const resolvedHtml = (() => {
+    if (!rawHtml) return null;
+    let html = rawHtml;
+    if (attachments.length > 0) {
+      attachments.forEach((att: any) => {
+        const name = att.name || att.file_name || att.filename;
+        if (name && att.url) {
+          const cleanName = name.replace(/[^a-zA-Z0-9.-]/g, '');
+          html = html.replace(new RegExp(`src=["']cid:[^"']*${cleanName}[^"']*["']`, 'gi'), `src="${att.url}"`);
+          html = html.replace(new RegExp(`src=["']cid:${name}["']`, 'gi'), `src="${att.url}"`);
+        }
+      });
+    }
+    return html;
+  })();
+
+  const dateStr = draft.created_at ? new Date(draft.created_at).toLocaleString('es-CO', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : '';
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#FFFFFF', overflow: 'hidden', height: '100%' }}>
+      {/* Gmail Top Subject Bar */}
+      <div style={{ padding: '14px 20px 10px 20px', borderBottom: '1px solid #F1F5F9', backgroundColor: '#FFFFFF' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {subject}
+          </h2>
+          <span style={{ backgroundColor: '#E2E8F0', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700 }}>
+            Recibidos
+          </span>
+        </div>
+      </div>
+
+      {/* Gmail Sender Header Row */}
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid #F1F5F9', backgroundColor: '#FAFAFA' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+            {/* Avatar Circle */}
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: avatarBg, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1rem', flexShrink: 0, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              {initial}
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#0F172A' }}>
+                  {clientName}
+                </span>
+                <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                  &lt;{senderEmail}&gt;
+                </span>
+              </div>
+
+              <div 
+                onClick={() => setShowDetails(!showDetails)}
+                style={{ fontSize: '0.72rem', color: '#64748B', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '2px', marginTop: '2px' }}
+              >
+                <span>para mi</span>
+                <ChevronDown size={12} style={{ transform: showDetails ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </div>
+
+              {/* Collapsible Email Details Card */}
+              {showDetails && (
+                <div style={{ marginTop: '8px', padding: '10px 14px', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '0.75rem', color: '#334155', lineHeight: '1.6', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                  <div><strong>De:</strong> {clientName} &lt;{senderEmail}&gt;</div>
+                  <div><strong>Para:</strong> pedidos@frufresco.com</div>
+                  <div><strong>Fecha:</strong> {dateStr}</div>
+                  <div><strong>Asunto:</strong> {draft.email_subject}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Date Stamp */}
+          <div style={{ fontSize: '0.75rem', color: '#64748B', whiteSpace: 'nowrap', fontWeight: 600 }}>
+            {dateStr}
+          </div>
+        </div>
+      </div>
+
+      {/* Gmail Message Body Area */}
+      <div className="premium-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', backgroundColor: '#FFFFFF' }}>
+        {resolvedHtml ? (
+          <div style={{ width: '100%', minHeight: '260px' }}>
+            <iframe
+              srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:8px;}table{border-collapse:collapse;}img{max-width:100%;height:auto;border-radius:6px;}</style></head><body>${resolvedHtml}</body></html>`}
+              style={{ width: '100%', minHeight: '380px', border: 'none', backgroundColor: 'transparent' }}
+              sandbox="allow-same-origin allow-popups"
+            />
+          </div>
+        ) : rawPlain ? (
+          <div style={{ fontSize: '0.86rem', color: '#1E293B', lineHeight: '1.7', whiteSpace: 'pre-wrap', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+            {rawPlain}
+          </div>
+        ) : (
+          <div style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontSize: '0.85rem' }}>
+            (Sin contenido en el cuerpo del correo)
+          </div>
+        )}
+
+        {/* Gmail Attachment Chips Strip */}
+        {attachments.length > 0 && (
+          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#475569', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Paperclip size={14} color="#64748B" />
+              <span>{attachments.length} archivo{attachments.length > 1 ? 's' : ''} adjunto{attachments.length > 1 ? 's' : ''}</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {attachments.map((att: any, attIdx: number) => {
+                const name = att.name || att.file_name || att.filename || `Adjunto_${attIdx + 1}`;
+                const lowerName = name.toLowerCase();
+                const isImg = lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp');
+                const isPdf = lowerName.endsWith('.pdf');
+                const isXls = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+
+                return (
+                  <div
+                    key={attIdx}
+                    onClick={() => onSwitchToAttachment && onSwitchToAttachment(attIdx)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      backgroundColor: '#F8FAFC',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      maxWidth: '260px'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                    title={`Ver adjunto: ${name}`}
+                  >
+                    {isImg ? (
+                      <span style={{ color: '#059669', display: 'flex', alignItems: 'center' }}><FileText size={18} /></span>
+                    ) : isPdf ? (
+                      <span style={{ color: '#DC2626', display: 'flex', alignItems: 'center' }}><FileText size={18} /></span>
+                    ) : isXls ? (
+                      <span style={{ color: '#16A34A', display: 'flex', alignItems: 'center' }}><FileText size={18} /></span>
+                    ) : (
+                      <span style={{ color: '#64748B', display: 'flex', alignItems: 'center' }}><Paperclip size={18} /></span>
+                    )}
+
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {name}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#2563EB', fontWeight: 600 }}>
+                        Click para ver en Visor
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -6284,18 +6478,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         );
                       }
 
-                      // PESTAÑA: Correo (Default)
-                      if (metadata.emailHtml) {
-                        return (
-                          <div style={{ flex: 1, backgroundColor: 'white', position: 'relative', overflow: 'hidden' }}>
-                            <iframe srcDoc={metadata.emailHtml} style={{ width: '100%', height: '100%', border: 'none', backgroundColor: 'white' }} sandbox="allow-same-origin allow-popups" />
-                          </div>
-                        );
-                      }
+                      // PESTAÑA: Correo (Default - Réplica Fiel a Gmail)
                       return (
-                        <div className="premium-scrollbar" style={{ padding: '16px', overflowY: 'auto', flex: 1, fontSize: '0.825rem', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap', backgroundColor: '#FCFDFE', fontFamily: 'SFMono-Regular, Consolas, monospace' }}>
-                          {selectedDraft.email_body || '(Sin cuerpo de correo)'}
-                        </div>
+                        <GmailMessageViewer
+                          draft={selectedDraft}
+                          metadata={metadata}
+                          onSwitchToAttachment={(idx) => {
+                            if (typeof idx === 'number') {
+                              setSelectedAttachmentIndex(idx);
+                            }
+                            setSelectedViewerTab('attachment');
+                          }}
+                        />
                       );
                     })()}
                   </div>
