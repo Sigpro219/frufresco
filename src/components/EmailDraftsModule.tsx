@@ -1167,6 +1167,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [profiles, setProfiles] = useState<any[]>([]);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [focusedClientSearchIndex, setFocusedClientSearchIndex] = useState<number>(-1);
 
