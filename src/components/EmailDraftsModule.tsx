@@ -6487,7 +6487,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             if (typeof idx === 'number') {
                               setSelectedAttachmentIndex(idx);
                             }
-                            setSelectedViewerTab('attachment');
+                            setActiveTab('attachment');
                           }}
                         />
                       );
