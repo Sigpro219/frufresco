@@ -275,7 +275,7 @@ export async function POST(req: Request) {
       console.error('[Email Ingest] Error pre-fetching active products:', e);
     }
 
-    const draftUuid = crypto.randomUUID();
+    const draftUuid = mailRecord?.id || crypto.randomUUID();
     let attachmentUrl: string | null = null;
     let attachmentName: string | null = null;
 
@@ -1512,7 +1512,7 @@ export async function POST(req: Request) {
 
     const { data: insertedDrafts, error: draftError } = await supabaseAdmin
       .from('order_drafts')
-      .insert(draftsToInsert)
+      .upsert(draftsToInsert)
       .select();
 
     if (draftError) {
@@ -1785,17 +1785,14 @@ export async function POST(req: Request) {
         }
       };
 
-      // Execute background processing using Next.js after() to keep the serverless container alive
-      after(async () => {
-        try {
-          await processMailAsync();
-        } catch (err) {
-          console.error('[Email Inbound] Fatal background process execution error:', err);
-        }
-      });
+      // Execute complete email parsing and AI extraction synchronously
+      try {
+        await processMailAsync();
+      } catch (err: any) {
+        console.error('[Email Inbound] Process execution error:', err);
+      }
 
-      // Return immediate 200 OK to CloudMailin to prevent serverless function timeout
-      return NextResponse.json({ success: true, message: 'Email received and queued for processing.', mailId: mailRecord?.id });
+      return NextResponse.json({ success: true, message: 'Email received and processed.', mailId: mailRecord?.id });
 
     } catch (err: any) {
       console.error('[Email Inbound] Webhook handler error:', err);
