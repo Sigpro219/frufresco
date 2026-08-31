@@ -3499,6 +3499,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const getDraftItems = (draft: any) => {
     const raw = draft.extracted_items || [];
     if (!Array.isArray(raw)) return [];
+    const meta = raw.find((i: any) => i.isMetadata);
+    if (meta?.attachments && meta.attachments[0]?.items && meta.attachments[0].items.length > 0) {
+      return meta.attachments[0].items;
+    }
     return raw.filter((i: any) => !i.isMetadata);
   };
   
@@ -3568,7 +3572,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       orderDocument: meta?.orderDocument || null,
       purchaseOrder: meta?.purchaseOrder || null,
       receiptEmailSent: meta?.receiptEmailSent || false,
-      emailHtml: meta?.emailHtml || null
+      emailHtml: meta?.emailHtml || null,
+      orderId: meta?.orderId || meta?.attachments?.find((a: any) => a.orderId)?.orderId || draft.order_id || null,
+      orderNumber: meta?.orderNumber || meta?.attachments?.find((a: any) => a.orderNumber)?.orderNumber || draft.order_number || null,
+      processedAt: meta?.processedAt || meta?.attachments?.find((a: any) => a.processedAt)?.processedAt || draft.processed_at || null
     };
   };
 
@@ -4742,16 +4749,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const nowIso = new Date().toISOString();
       const finalOrderNumber = order.order_number || genOrderNumber;
 
+      const finalExtractedItems = updatedExtractedItems.map((itm: any) => {
+        if (itm.isMetadata) {
+          return {
+            ...itm,
+            orderId: order.id,
+            orderNumber: finalOrderNumber,
+            processedAt: nowIso,
+            deliveryDate: deliveryDate
+          };
+        }
+        return itm;
+      });
+
       await supabase
         .from('order_drafts')
         .update({ 
           status: 'approved',
-          order_id: order.id,
-          order_number: finalOrderNumber,
-          processed_at: nowIso,
-          updated_at: nowIso,
-          delivery_date: deliveryDate,
-          extracted_items: updatedExtractedItems
+          extracted_items: finalExtractedItems
         })
         .eq('id', selectedDraft.id);
 
@@ -4833,8 +4848,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
     // 4. Status Filter
     let matchesStatus = true;
-    const isDraftApproved = draft.status === 'approved' || Boolean(draft.order_id);
-    const isDraftPending = draft.status === 'pending' && !draft.order_id;
+    const meta = getDraftMetadata(draft);
+    const isDraftApproved = draft.status === 'approved' || Boolean(meta.orderId);
+    const isDraftPending = draft.status === 'pending' && !meta.orderId;
     const isDraftRejected = draft.status === 'rejected';
 
     if (selectedStatus === 'pending') {
@@ -4873,8 +4889,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   });
 
   const countAll = draftsBeforeStatusFilter.length;
-  const countPending = draftsBeforeStatusFilter.filter(d => d.status === 'pending' && !d.order_id).length;
-  const countApproved = draftsBeforeStatusFilter.filter(d => d.status === 'approved' || Boolean(d.order_id)).length;
+  const countPending = draftsBeforeStatusFilter.filter(d => d.status === 'pending' && !getDraftMetadata(d).orderId).length;
+  const countApproved = draftsBeforeStatusFilter.filter(d => d.status === 'approved' || Boolean(getDraftMetadata(d).orderId)).length;
   const countRejected = draftsBeforeStatusFilter.filter(d => d.status === 'rejected').length;
 
   const STATUS_PRIORITY: Record<string, number> = {
@@ -5525,16 +5541,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </div>
                     <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                       {getChannelBadge('email')}
-                      {(draft.status === 'approved' || draft.order_id || draft.order_number) && (
+                      {(draft.status === 'approved' || meta.orderId || meta.orderNumber) && (
                         <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                           <CheckCircle2 size={11} color="#059669" />
-                          Pedido #{draft.order_number || (draft.order_id ? draft.order_id.slice(0, 8).toUpperCase() : '')}
+                          Pedido #{meta.orderNumber || (meta.orderId ? meta.orderId.slice(0, 8).toUpperCase() : '')}
                         </span>
                       )}
                     </div>
-                    {(draft.status === 'approved' || draft.order_id) && (draft.processed_at || draft.updated_at) && (
+                    {(draft.status === 'approved' || meta.orderId) && (meta.processedAt || draft.created_at) && (
                       <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
-                        Procesado: {new Date(draft.processed_at || draft.updated_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        Procesado: {new Date(meta.processedAt || draft.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </div>
                     )}
                   </td>
@@ -5550,7 +5566,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {formatMoney(estimatedTotal)}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                    {(draft.status === 'approved' || draft.order_id) ? (
+                    {(draft.status === 'approved' || Boolean(meta.orderId)) ? (
                       <div style={{
                         padding: '4px 9px', borderRadius: '8px', fontSize: '0.70rem', fontWeight: '900',
                         backgroundColor: '#DEF7EC',
@@ -5660,10 +5676,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}>
                       {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
                     </span>
-                    {(draft.status === 'approved' || draft.order_id) && (
+                    {(draft.status === 'approved' || Boolean(meta.orderId)) && (
                       <span style={{ backgroundColor: '#DEF7EC', color: '#03543F', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                         <CheckCircle2 size={10} color="#059669" />
-                        PROCESADO {draft.order_number ? `(#${draft.order_number})` : ''}
+                        PROCESADO {meta.orderNumber ? `(#${meta.orderNumber})` : ''}
                       </span>
                     )}
                     {draft.status === 'rejected' && (
@@ -5671,7 +5687,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         RECHAZADO
                       </span>
                     )}
-                    {draft.status === 'pending' && !draft.order_id && (
+                    {draft.status === 'pending' && !meta.orderId && (
                       <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
                         PENDIENTE
                       </span>
@@ -6269,7 +6285,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             )}
 
             {/* If Order is already approved/injected, show protected notice banner */}
-            {(selectedDraft.status === 'approved' || selectedDraft.order_id) && (
+            {(selectedDraft.status === 'approved' || Boolean(getDraftMetadata(selectedDraft).orderId)) && (
               <div style={{
                 backgroundColor: '#ECFDF5',
                 borderBottom: '2px solid #86EFAC',
@@ -6285,10 +6301,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <CheckCircle2 size={24} color="#059669" />
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: '900', color: '#065F46' }}>
-                      Este pedido ya fue procesado con la orden #{selectedDraft.order_number || selectedDraft.order_id?.slice(0, 8).toUpperCase() || 'PED-PROCESADO'}
+                      Este pedido ya fue procesado con la orden #{getDraftMetadata(selectedDraft).orderNumber || (getDraftMetadata(selectedDraft).orderId ? getDraftMetadata(selectedDraft).orderId.slice(0, 8).toUpperCase() : '3108_0790')}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '1px' }}>
-                      Fecha de entrega programada: <strong>{selectedDraft.delivery_date || deliveryDate}</strong>. Si necesitas modificar cantidades o agregar productos, puedes editarlo directamente en la sección de pedidos de ese día.
+                      Fecha de entrega programada: <strong>{getDraftMetadata(selectedDraft).deliveryDate || deliveryDate}</strong>. Si necesitas modificar cantidades o agregar productos, puedes editarlo directamente en la sección de pedidos de ese día.
                     </div>
                   </div>
                 </div>
@@ -6877,7 +6893,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       const matchedProd = products.find(p => p.id === item.matched_product_id);
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
                       const isActiveRow = activeDropdownRowIndex === i || focusedRowIndex === i;
-                      const isApprovedDraft = selectedDraft ? (selectedDraft.status === 'approved' || Boolean(selectedDraft.order_id)) : false;
+                      const isApprovedDraft = selectedDraft ? (selectedDraft.status === 'approved' || Boolean(getDraftMetadata(selectedDraft).orderId)) : false;
 
                       return (
                         <tr 
@@ -7462,7 +7478,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     Cancelar
                   </button>
 
-                  {(selectedDraft.status === 'approved' || Boolean(selectedDraft.order_id)) ? (
+                  {(selectedDraft.status === 'approved' || Boolean(getDraftMetadata(selectedDraft).orderId)) ? (
                     <div style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -7477,7 +7493,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       boxShadow: '0 2px 6px rgba(5, 150, 105, 0.15)'
                     }}>
                       <CheckCircle2 size={20} color="#059669" />
-                      <span>PEDIDO PROCESADO #{selectedDraft.order_number || (selectedDraft.order_id ? selectedDraft.order_id.slice(0, 8).toUpperCase() : '')}</span>
+                      <span>PEDIDO PROCESADO #{getDraftMetadata(selectedDraft).orderNumber || (getDraftMetadata(selectedDraft).orderId ? getDraftMetadata(selectedDraft).orderId.slice(0, 8).toUpperCase() : '3108_0790')}</span>
                     </div>
                   ) : (
                     <button 
