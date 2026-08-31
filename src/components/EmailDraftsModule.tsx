@@ -4256,22 +4256,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
-      {/* Sticky Header: Title, Controls, Date & Status Filter Bar */}
-      <div style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 30,
-        backgroundColor: '#FFFFFF',
-        paddingTop: '0.85rem',
-        paddingBottom: '0.85rem',
-        paddingLeft: '1rem',
-        paddingRight: '1rem',
-        marginBottom: '1rem',
-        borderBottom: '1.5px solid #E2E8F0',
-        boxShadow: '0 4px 14px -2px rgba(0, 0, 0, 0.05)',
-        borderRadius: '16px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Mail size={20} style={{ color: THEME.colors.primary }} /> Pedidos por Procesar (Email Inbound)
@@ -4717,7 +4702,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </div>
         </div>
       </div>
-      </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>Cargando correos...</div>
@@ -4731,7 +4715,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         <>
           <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ position: 'sticky', top: '105px', zIndex: 25, backgroundColor: '#F8FAFB', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+              <thead>
                 <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
                   <th style={{ padding: '1rem', width: '40px', textAlign: 'center', ...THEME.typography?.tableHeader }}>
                     <input
