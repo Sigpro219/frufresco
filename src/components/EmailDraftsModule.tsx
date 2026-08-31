@@ -6307,20 +6307,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               }}
                             />
 
-                            {/* Custom Pareto Floating Dropdown */}
+                            {/* Custom Pareto Floating Dropdown (Exact Replica of Ingesta PDF - Imagen 2) */}
                             {activeDropdownRowIndex === i && (
                               <div style={{
                                 position: 'absolute',
                                 top: '100%',
-                                left: '0.5rem',
-                                right: '0.5rem',
-                                zIndex: 1000,
+                                left: 0,
+                                minWidth: '520px',
+                                zIndex: 9999,
                                 backgroundColor: 'white',
                                 borderRadius: '12px',
-                                boxShadow: '0 12px 32px rgba(0,0,0,0.22)',
-                                border: '1.5px solid #CBD5E1',
+                                boxShadow: '0 15px 35px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.08)',
+                                border: '1px solid #CBD5E1',
                                 marginTop: '4px',
-                                maxHeight: '290px',
+                                maxHeight: '310px',
                                 overflowY: 'auto'
                               }}>
                                 {(() => {
@@ -6329,7 +6329,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                                   if (scoredList.length === 0) {
                                     return (
-                                      <div style={{ padding: '12px', fontSize: '0.82rem', color: '#94A3B8', textAlign: 'center' }}>
+                                      <div style={{ padding: '14px', fontSize: '0.85rem', color: '#94A3B8', textAlign: 'center', fontWeight: '600' }}>
                                         No se encontraron productos coincidentes
                                       </div>
                                     );
@@ -6354,56 +6354,66 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         }}
                                         onMouseEnter={() => setFocusedDropdownItemIndex(idx)}
                                         style={{
-                                          padding: '9px 12px',
+                                          padding: '0.85rem 1.15rem',
                                           cursor: 'pointer',
-                                          borderBottom: '1px solid #F1F5F9',
-                                          borderLeft: isFocused ? '4px solid #0D7A57' : '4px solid transparent',
-                                          backgroundColor: isFocused ? '#F0FDF4' : (isClientHabitual ? '#F8FAF9' : 'white'),
+                                          borderBottom: '1px solid #E2E8F0',
+                                          borderLeft: isFocused ? '6px solid #2563EB' : '6px solid transparent',
                                           display: 'flex',
                                           justifyContent: 'space-between',
                                           alignItems: 'center',
-                                          transition: 'background 0.1s'
+                                          backgroundColor: isFocused 
+                                            ? '#DBEAFE' 
+                                            : (isClientHabitual ? '#F0FDF4' : 'white'),
+                                          boxShadow: isFocused ? 'inset 0 0 0 1px #93C5FD, 0 2px 4px rgba(37, 99, 235, 0.08)' : 'none',
+                                          transition: 'all 0.12s ease-in-out'
                                         }}
                                       >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                          <span style={{ fontWeight: isFocused ? '900' : '700', color: '#0F172A', fontSize: '0.85rem' }}>
-                                            {p.name}
-                                          </span>
-                                          <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
-                                            ({getAccountingIdDisplay(p)})
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                          <span style={{ 
+                                            fontWeight: isFocused ? '900' : '700', 
+                                            color: isFocused ? '#1E3A8A' : '#111827',
+                                            fontSize: '0.9rem'
+                                          }}>
+                                            {p.name} <span style={{ fontSize: '0.8em', color: isFocused ? '#2563EB' : '#6B7280', fontWeight: '600' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
                                           </span>
                                           {isClientHabitual && (
-                                            <span style={{
-                                              fontSize: '0.68rem',
-                                              backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7',
-                                              color: '#15803D',
-                                              padding: '2px 7px',
-                                              borderRadius: '100px',
+                                            <span style={{ 
+                                              fontSize: '0.7rem', 
+                                              backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
+                                              color: '#15803D', 
+                                              padding: '2px 8px', 
+                                              borderRadius: '999px', 
+                                              fontWeight: '800', 
+                                              display: 'inline-flex', 
+                                              alignItems: 'center', 
+                                              gap: '4px',
+                                              border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                            }}>
+                                              ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', flexShrink: 0 }}>
+                                          <span style={{ fontSize: '0.85rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#166534' }}>
+                                            {formatMoney(contractPrices[p.id] || p.base_price)}/{p.unit_of_measure}
+                                          </span>
+                                          {p.options_config && p.options_config.length > 0 && (
+                                            <span style={{ 
+                                              fontSize: '0.7em', 
+                                              backgroundColor: isFocused ? '#FEF08A' : '#FEF3C7', 
+                                              color: '#92400E', 
+                                              padding: '2px 6px', 
+                                              borderRadius: '6px', 
+                                              border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A',
                                               fontWeight: '800',
-                                              border: '1px solid #86EFAC',
                                               display: 'inline-flex',
                                               alignItems: 'center',
                                               gap: '3px'
                                             }}>
-                                              ⭐ {freq ? `Habitual (${freq.count} ped)` : `Alias: ${exc?.nickname}`}
-                                            </span>
-                                          )}
-                                          {p.options_config && p.options_config.length > 0 && (
-                                            <span style={{
-                                              fontSize: '0.65rem',
-                                              backgroundColor: '#FEF3C7',
-                                              color: '#92400E',
-                                              padding: '1px 5px',
-                                              borderRadius: '4px',
-                                              fontWeight: '800'
-                                            }}>
-                                              Variantes
+                                              <Settings size={11} /> Opciones
                                             </span>
                                           )}
                                         </div>
-                                        <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0D7A57', marginLeft: '8px' }}>
-                                          {formatMoney(contractPrices[p.id] || p.base_price)}/{p.unit_of_measure}
-                                        </span>
                                       </div>
                                     );
                                   });
