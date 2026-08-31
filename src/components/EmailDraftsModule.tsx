@@ -9685,154 +9685,157 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       })()}
 
       {/* DELIVERY TIME & TOLERANCE MODAL (EXACT INGESTA PDF REPLICA) */}
-      {showDeliveryTimeModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.65)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 16000,
-          padding: '1rem'
-        }}>
+      {showDeliveryTimeModal && (() => {
+        const activeProfile = selectedDraft?.profile_id ? profiles.find(p => p.id === selectedDraft.profile_id) : null;
+        return (
           <div style={{
-            backgroundColor: 'white',
-            borderRadius: '20px',
-            width: '100%',
-            maxWidth: '440px',
-            padding: '1.75rem',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid #E2E8F0',
-            animation: 'fadeInUp 0.2s ease-out'
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 16000,
+            padding: '1rem'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
-                  <Clock size={20} />
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              width: '100%',
+              maxWidth: '440px',
+              padding: '1.75rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #E2E8F0',
+              animation: 'fadeInUp 0.2s ease-out'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+                    <Clock size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A' }}>Hora de Entrega</h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Configura la hora y tolerancia para este pedido</p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDeliveryTimeModal(false)}
+                  style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748B' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#0F172A' }}>Hora de Entrega</h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Configura la hora y tolerancia para este pedido</p>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                    Hora Específica de Entrega
+                  </label>
+                  <input
+                    type="time"
+                    value={tempDeliveryTime}
+                    onChange={e => setTempDeliveryTime(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.9rem',
+                      borderRadius: '10px',
+                      border: '2px solid #CBD5E1',
+                      fontSize: '1.1rem',
+                      fontWeight: '800',
+                      color: '#0F172A',
+                      outline: 'none'
+                    }}
+                  />
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDeliveryTimeModal(false)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748B' }}
-              >
-                <X size={14} />
-              </button>
-            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
-                  Hora Específica de Entrega
-                </label>
-                <input
-                  type="time"
-                  value={tempDeliveryTime}
-                  onChange={e => setTempDeliveryTime(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.7rem 0.9rem',
-                    borderRadius: '10px',
-                    border: '2px solid #CBD5E1',
-                    fontSize: '1.1rem',
-                    fontWeight: '800',
-                    color: '#0F172A',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
-                  Margen de Tolerancia (± Minutos)
-                </label>
-                <select
-                  value={tempDeliveryMargin}
-                  onChange={e => setTempDeliveryMargin(Number(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '0.7rem 0.9rem',
-                    borderRadius: '10px',
-                    border: '2px solid #CBD5E1',
-                    fontSize: '0.95rem',
-                    fontWeight: '700',
-                    color: '#0F172A',
-                    outline: 'none',
-                    backgroundColor: '#F8FAFC'
-                  }}
-                >
-                  <option value={15}>± 15 Minutos</option>
-                  <option value={30}>± 30 Minutos (Recomendado)</option>
-                  <option value={45}>± 45 Minutos</option>
-                  <option value={60}>± 60 Minutos (1 Hora)</option>
-                </select>
-              </div>
-
-              {matchedProfile && (
-                <div style={{ padding: '0.75rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.75rem', color: '#64748B' }}>
-                  <strong>Horario habitual del cliente:</strong> {matchedProfile?.delivery_restrictions || '06:30 - 11:00'}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '900', color: '#475569', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                    Margen de Tolerancia (± Minutos)
+                  </label>
+                  <select
+                    value={tempDeliveryMargin}
+                    onChange={e => setTempDeliveryMargin(Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '0.7rem 0.9rem',
+                      borderRadius: '10px',
+                      border: '2px solid #CBD5E1',
+                      fontSize: '0.95rem',
+                      fontWeight: '700',
+                      color: '#0F172A',
+                      outline: 'none',
+                      backgroundColor: '#F8FAFC'
+                    }}
+                  >
+                    <option value={15}>± 15 Minutos</option>
+                    <option value={30}>± 30 Minutos (Recomendado)</option>
+                    <option value={45}>± 45 Minutos</option>
+                    <option value={60}>± 60 Minutos (1 Hora)</option>
+                  </select>
                 </div>
-              )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsManualDelivery(false);
-                    setManualDeliveryTime('');
-                    setShowDeliveryTimeModal(false);
-                  }}
-                  style={{
-                    padding: '0.75rem',
-                    borderRadius: '10px',
-                    border: '1.5px solid #CBD5E1',
-                    backgroundColor: 'white',
-                    color: '#475569',
-                    fontWeight: '800',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Restablecer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (tempDeliveryTime) {
-                      setIsManualDelivery(true);
-                      setManualDeliveryTime(tempDeliveryTime);
-                      setManualDeliveryMargin(tempDeliveryMargin);
+                {activeProfile && (
+                  <div style={{ padding: '0.75rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.75rem', color: '#64748B' }}>
+                    <strong>Horario habitual del cliente:</strong> {activeProfile?.delivery_restrictions || (activeProfile?.logistics_data?.start_time ? `${activeProfile.logistics_data.start_time} - ${activeProfile.logistics_data.end_time}` : '06:30 - 11:00')}
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsManualDelivery(false);
+                      setManualDeliveryTime('');
                       setShowDeliveryTimeModal(false);
-                      showToast(`Hora de entrega fijada: ${tempDeliveryTime} (±${tempDeliveryMargin} min)`, 'success');
-                    } else {
-                      showToast('Por favor selecciona una hora', 'warning');
-                    }
-                  }}
-                  style={{
-                    padding: '0.75rem',
-                    borderRadius: '10px',
-                    border: 'none',
-                    backgroundColor: '#0D7A57',
-                    color: 'white',
-                    fontWeight: '800',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)'
-                  }}
-                >
-                  Guardar Horario
-                </button>
+                    }}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #CBD5E1',
+                      backgroundColor: 'white',
+                      color: '#475569',
+                      fontWeight: '800',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Restablecer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (tempDeliveryTime) {
+                        setIsManualDelivery(true);
+                        setManualDeliveryTime(tempDeliveryTime);
+                        setManualDeliveryMargin(tempDeliveryMargin);
+                        setShowDeliveryTimeModal(false);
+                        showToast(`Hora de entrega fijada: ${tempDeliveryTime} (±${tempDeliveryMargin} min)`, 'success');
+                      } else {
+                        showToast('Por favor selecciona una hora', 'warning');
+                      }
+                    }}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: '#0D7A57',
+                      color: 'white',
+                      fontWeight: '800',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)'
+                    }}
+                  >
+                    Guardar Horario
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       
       {variantConfigProduct && (
           <VariantModal
