@@ -5886,6 +5886,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 transform: translateY(0) scale(1);
               }
             }
+
+            /* Animación de llamado a la acción: Salto y Brillo (Pulse & Glow) */
+            @keyframes logisticsPulseGlow {
+              0%, 100% {
+                transform: scale(1);
+                border-color: #10B981;
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4), 0 2px 4px rgba(0, 0, 0, 0.05);
+              }
+              50% {
+                transform: scale(1.06) translateY(-1px);
+                border-color: #059669;
+                box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.25), 0 4px 12px rgba(16, 185, 129, 0.35);
+              }
+            }
             
             .scroll-row-animate {
               animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -6129,11 +6143,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   type="button"
                   onClick={() => setIsClientDetailsExpanded(prev => !prev)}
                   style={{
-                    backgroundColor: isClientDetailsExpanded ? '#0D7A57' : '#FFFFFF',
-                    color: isClientDetailsExpanded ? 'white' : '#0D7A57',
-                    border: '1.5px solid #0D7A57',
+                    backgroundColor: isClientDetailsExpanded ? '#0D7A57' : '#ECFDF5',
+                    color: isClientDetailsExpanded ? 'white' : '#065F46',
+                    border: isClientDetailsExpanded ? '1.5px solid #0D7A57' : '2px solid #10B981',
                     borderRadius: '10px',
-                    padding: '4px 10px',
+                    padding: '4px 11px',
                     fontSize: '0.75rem',
                     fontWeight: '800',
                     cursor: 'pointer',
@@ -6141,7 +6155,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     alignItems: 'center',
                     gap: '5px',
                     transition: 'all 0.2s',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    boxShadow: isClientDetailsExpanded ? '0 1px 2px rgba(0,0,0,0.05)' : '0 0 8px rgba(16, 185, 129, 0.3)',
+                    animation: !isClientDetailsExpanded ? 'logisticsPulseGlow 1.6s infinite ease-in-out' : 'none'
                   }}
                 >
                   <Info size={13} />
