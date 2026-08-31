@@ -6987,10 +6987,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         </div>
                                       </div>
                                     );
-                                  });
-                                })()}
-                              </div>
-                            )}
+                                  })}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
