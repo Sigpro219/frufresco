@@ -2098,6 +2098,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
   };
 
+  useEffect(() => {
+    if (customizingModalItem) {
+      setTimeout(() => {
+        const firstSelect = document.getElementById('modal-opt-select-0') as HTMLSelectElement | null;
+        if (firstSelect) {
+          firstSelect.focus();
+        } else {
+          const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+          if (qtyInput) {
+            qtyInput.focus();
+            qtyInput.select();
+          }
+        }
+      }, 60);
+    }
+  }, [customizingModalItem]);
+
   const saveCustomizingModal = () => {
     if (!customizingModalItem) return;
     const { rowIndex, product, options, quantity, unit, factor } = customizingModalItem;
@@ -9451,7 +9468,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
 
               {/* Dynamic Options Dropdowns */}
-              {normalizedOptionsConfig && normalizedOptionsConfig.length > 0 && normalizedOptionsConfig.map((opt: any) => {
+              {normalizedOptionsConfig && normalizedOptionsConfig.length > 0 && normalizedOptionsConfig.map((opt: any, optIdx: number) => {
                 const currentVal = options[opt.name] || '';
                 return (
                   <div key={opt.name} style={{ marginBottom: '1rem', textAlign: 'left' }}>
@@ -9459,6 +9476,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       {opt.name}
                     </label>
                     <select
+                      id={`modal-opt-select-${optIdx}`}
+                      tabIndex={optIdx + 1}
                       value={currentVal}
                       onChange={e => {
                         const val = e.target.value;
@@ -9466,6 +9485,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           ...prev,
                           options: { ...prev.options, [opt.name]: val }
                         } : null);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                          e.preventDefault();
+                          const nextOpt = document.getElementById(`modal-opt-select-${optIdx + 1}`) as HTMLSelectElement | null;
+                          if (nextOpt) {
+                            nextOpt.focus();
+                          } else {
+                            const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+                            if (qtyInput) {
+                              qtyInput.focus();
+                              qtyInput.select();
+                            }
+                          }
+                        }
                       }}
                       style={{
                         width: '100%',
@@ -9495,6 +9529,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     Cantidad
                   </label>
                   <input
+                    id="modal-qty-input"
+                    tabIndex={(normalizedOptionsConfig?.length || 0) + 1}
                     type="text"
                     inputMode="decimal"
                     value={quantity}
@@ -9506,6 +9542,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (e.key === 'Enter') {
                         e.preventDefault();
                         saveCustomizingModal();
+                      } else if (e.key === 'Tab' && !e.shiftKey) {
+                        e.preventDefault();
+                        const addBtn = document.getElementById('btn-modal-add') as HTMLButtonElement | null;
+                        if (addBtn) addBtn.focus();
                       }
                     }}
                     style={{
@@ -9533,6 +9573,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     )}
                   </div>
                   <select
+                    id="modal-unit-select"
+                    tabIndex={(normalizedOptionsConfig?.length || 0) + 2}
                     value={unit}
                     onChange={e => {
                       const sel = e.target.value;
@@ -9542,6 +9584,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         unit: sel,
                         factor: matched ? matched.factor : 1
                       } : null);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveCustomizingModal();
+                      }
                     }}
                     style={{
                       width: '100%',
@@ -9566,6 +9614,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
                 <button
                   type="button"
+                  tabIndex={(normalizedOptionsConfig?.length || 0) + 4}
                   onClick={() => setCustomizingModalItem(null)}
                   style={{
                     padding: '0.85rem',
@@ -9581,8 +9630,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   Cancelar
                 </button>
                 <button
+                  id="btn-modal-add"
                   type="button"
+                  tabIndex={(normalizedOptionsConfig?.length || 0) + 3}
                   onClick={saveCustomizingModal}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      saveCustomizingModal();
+                    }
+                  }}
                   style={{
                     padding: '0.85rem',
                     borderRadius: '12px',
