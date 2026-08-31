@@ -8354,12 +8354,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <div style={{
             backgroundColor: 'white',
             borderRadius: '24px',
-            padding: '2rem 2.5rem',
+            padding: '2.25rem 3rem',
             width: '95%',
-            maxWidth: '820px',
-            maxHeight: '90vh',
+            maxWidth: '1100px',
+            maxHeight: '92vh',
             overflowY: 'auto',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.3)',
             border: `1px solid ${THEME.colors.border}`,
             textAlign: 'left'
           }}>
@@ -8513,53 +8513,48 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   backgroundColor: '#FFFBEB',
                   border: '1.5px solid #FCD34D',
                   borderRadius: '12px',
-                  padding: '1rem',
+                  padding: '0.85rem 1.15rem',
                   display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px'
+                  alignItems: 'center',
+                  gap: '10px'
                 }}>
-                  <input 
-                    type="checkbox" 
-                    id="chk-authorize-changes"
-                    checked={isAuthorizedForChanges} 
-                    onChange={(e) => setIsAuthorizedForChanges(e.target.checked)} 
-                    style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '2px', accentColor: '#D97706' }}
-                  />
-                  <label htmlFor="chk-authorize-changes" style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: 600, cursor: 'pointer', lineHeight: '1.4' }}>
-                    <strong>Confirmación de novedades:</strong> Se detectaron modificaciones en los productos originales de la orden. Confirmo que las novedades reflejadas son las autorizadas para notificar al cliente.
-                  </label>
+                  <Info size={18} color="#D97706" style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: 600, lineHeight: '1.4' }}>
+                    <strong>Novedades aplicadas:</strong> Se detectaron modificaciones en los productos originales. El correo de confirmación incluirá el detalle final de los SKUs autorizados.
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Confirm Actions */}
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
               <button
                 onClick={() => setShowConfirmModal(false)}
                 disabled={confirmingOrder}
-                style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: '#4B5563', fontWeight: '700', cursor: 'pointer', transition: 'all 0.15s' }}
+                style={{ flex: 1, padding: '0.85rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, backgroundColor: 'white', color: '#4B5563', fontWeight: '800', cursor: 'pointer', transition: 'all 0.15s' }}
               >
                 Cancelar
               </button>
               <button
                 id="btn-confirm-order-final"
                 onClick={handleConfirmOrderDirectly}
-                disabled={confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)}
+                disabled={confirmingOrder}
                 style={{
                   flex: 2,
-                  padding: '0.8rem',
+                  padding: '0.85rem',
                   borderRadius: '12px',
                   border: 'none',
-                  backgroundColor: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#D1D5DB' : THEME.colors.primary,
-                  color: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#9CA3AF' : 'white',
+                  backgroundColor: THEME.colors.primary,
+                  color: 'white',
                   fontWeight: '800',
+                  fontSize: '0.95rem',
                   fontFamily: 'var(--font-outfit), sans-serif',
-                  cursor: (confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)) ? 'not-allowed' : 'pointer',
+                  cursor: confirmingOrder ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
-                  boxShadow: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(13, 122, 87, 0.3)',
                   transition: 'all 0.2s'
                 }}
               >
