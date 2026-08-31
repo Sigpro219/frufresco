@@ -1158,6 +1158,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [editableClientName, setEditableClientName] = useState<string>('');
   const [editableClientPhone, setEditableClientPhone] = useState<string>('');
   const [editableClientNit, setEditableClientNit] = useState<string>('');
+  const [editableClientEmail, setEditableClientEmail] = useState<string>('');
   const [editableClientType, setEditableClientType] = useState<'b2b_client' | 'b2c_client'>('b2c_client');
   const [editableDeliverySlot, setEditableDeliverySlot] = useState<string>('');
   const [priceList, setPriceList] = useState<string>('');
@@ -2253,6 +2254,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (profile.nit) {
       setEditableClientNit(profile.nit);
     }
+    if (profile.email || profile.contact_email) {
+      setEditableClientEmail(profile.email || profile.contact_email || '');
+    }
     setIsClientSearchOpen(false);
     setClientSearchQuery('');
     showToast(`Cliente asignado: ${clientName}`, 'success');
@@ -3261,6 +3265,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setEditableClientName(selectedDraft.client_detected_name || '');
       setEditableClientPhone(meta.phone && meta.phone !== 'No detectado' ? meta.phone : '');
       setEditableClientNit(meta.nit && meta.nit !== 'No detectado' ? meta.nit : '');
+      setEditableClientEmail(matchedProfile?.email || matchedProfile?.contact_email || (selectedDraft.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : ''));
       setEditableClientType(meta.clientType || 'b2c_client');
       
       if (meta.latitude && meta.longitude) {
@@ -3563,6 +3568,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setEditableClientName('');
       setEditableClientPhone('');
       setEditableClientNit('');
+      setEditableClientEmail('');
       setEditableClientType('b2c_client');
       setEditableDeliverySlot('');
       setPriceList('');
