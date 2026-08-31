@@ -17,6 +17,7 @@ import * as XLSX from 'xlsx';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
+import { getFriendlyOrderId } from '@/lib/orderUtils';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -4423,9 +4424,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             };
           });
 
+          const friendlyCode = order.sequence_id ? `#${order.sequence_id}` : getFriendlyOrderId(order);
+
           const attachmentEmailData = {
             client: clientName,
-            order_number: shortCode,
+            order_number: friendlyCode,
             delivery_date: deliveryDate,
             delivery_slot: editableDeliverySlot || matchedProfile?.delivery_restrictions || '06:30 AM - 11:00 AM',
             delivery_address: editableAddress || matchedProfile?.address || 'Dirección de despacho registrada',
@@ -4438,7 +4441,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
           const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
             to_email: selectedDraft.source_email,
-            subject: `¡Hemos recibido tu pedido! (#${shortCode})`,
+            subject: `¡Hemos recibido tu pedido! (${friendlyCode})`,
             message: { html: emailHtml, text: emailText },
             template: { name: 'order_confirmation', data: attachmentEmailData },
             status: 'pending'
@@ -4833,9 +4836,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           };
         });
 
+        const friendlyOrderNumber = order.sequence_id ? `#${order.sequence_id}` : getFriendlyOrderId(order);
+
         const orderEmailData = {
           client: selectedDraft.client_detected_name || matchedProfile?.company_name || matchedProfile?.contact_name || 'Cliente',
-          order_number: order.id.slice(0, 6).toUpperCase(),
+          order_number: friendlyOrderNumber,
           delivery_date: deliveryDate,
           delivery_slot: editableDeliverySlot || matchedProfile?.delivery_restrictions || '06:30 AM - 11:00 AM',
           delivery_address: editableAddress || matchedProfile?.address || getDraftMetadata(selectedDraft).address || 'Dirección de despacho registrada',
@@ -4848,7 +4853,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
           to_email: targetConfirmationEmail,
-          subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
+          subject: `¡Confirmación de Pedido FruFresco N° ${friendlyOrderNumber}!`,
           message: { html: emailHtml, text: emailText },
           template: {
             name: 'order_confirmation',

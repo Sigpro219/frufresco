@@ -528,37 +528,38 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
           <div style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 99999,
-            padding: '2rem'
+            padding: '1.25rem'
           }}>
             <div style={{
               backgroundColor: 'white',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '750px',
-              maxHeight: '88vh',
+              borderRadius: '20px',
+              width: '95%',
+              maxWidth: '1100px',
+              maxHeight: '92vh',
               display: 'flex',
               flexDirection: 'column',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
               textAlign: 'left'
             }}>
               {/* Modal Header */}
-              <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '1.5rem 1.75rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
-                  <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
+                  <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
                 </div>
-                <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: '6px', borderRadius: '8px' }}>
                   <X size={24} />
                 </button>
               </div>
 
               {/* Modal Body (Email HTML Preview) */}
-              <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, backgroundColor: THEME.colors.background }}>
+              <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, backgroundColor: THEME.colors.background }}>
                 {isSandboxModal && (
                   <div style={{
                     backgroundColor: '#FEF3C7',
@@ -566,13 +567,13 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                     borderRadius: '10px',
                     padding: '10px 14px',
                     marginBottom: '1rem',
-                    fontSize: '0.78rem',
+                    fontSize: '0.8rem',
                     color: '#92400E',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px'
                   }}>
-                    <span style={{ fontSize: '1rem' }}>🟡</span>
+                    <span style={{ fontSize: '1.1rem' }}>🟡</span>
                     <div>
                       <strong>MODO PRUEBAS ACTIVO:</strong> Este correo fue generado en entorno de pruebas y redirigido a tu buzón de auditoría (<u>no</u> fue enviado al cliente real).
                     </div>
@@ -580,13 +581,13 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 )}
 
                 {previewHtml ? (
-                  <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', overflow: 'hidden', backgroundColor: 'white' }}>
+                  <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: '14px', overflow: 'hidden', backgroundColor: 'white', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
                     <iframe
                       srcDoc={previewHtml}
                       title="Vista previa del correo"
                       style={{
                         width: '100%',
-                        height: '520px',
+                        height: '620px',
                         border: 'none',
                         display: 'block'
                       }}

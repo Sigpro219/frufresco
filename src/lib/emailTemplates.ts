@@ -37,16 +37,16 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
 
     return `
       <tr style="background-color: ${isEven ? '#FFFFFF' : '#F8FAF9'}; border-bottom: 1px solid #E2E8F0;">
-        <td style="padding: 10px 12px; font-weight: 600; color: #1E293B; font-size: 13px;">
+        <td style="padding: 10px 14px; font-weight: 600; color: #1E293B; font-size: 13px;">
           ${item.name}
         </td>
-        <td style="padding: 10px 8px; text-align: center; font-weight: 800; color: #0F172A; font-size: 13px; white-space: nowrap;">
+        <td style="padding: 10px 10px; text-align: center; font-weight: 800; color: #0F172A; font-size: 13px; white-space: nowrap;">
           ${qtyStr}
         </td>
-        <td style="padding: 10px 8px; text-align: right; color: #64748B; font-size: 12px; white-space: nowrap;">
+        <td style="padding: 10px 10px; text-align: right; color: #64748B; font-size: 12px; white-space: nowrap;">
           $${priceStr}
         </td>
-        <td style="padding: 10px 12px; text-align: right; font-weight: 800; color: #0D7A57; font-size: 13px; white-space: nowrap;">
+        <td style="padding: 10px 14px; text-align: right; font-weight: 800; color: #0D7A57; font-size: 13px; white-space: nowrap;">
           $${totalStr}
         </td>
       </tr>
@@ -66,37 +66,51 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
 <body style="margin: 0; padding: 25px 10px; background-color: #F1F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1E293B; -webkit-font-smoothing: antialiased;">
 
   <!-- Contenedor Principal de Correo -->
-  <div style="max-width: 620px; margin: 0 auto; background-color: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(8, 28, 21, 0.08); border: 1px solid #E2E8F0;">
+  <div style="max-width: 650px; margin: 0 auto; background-color: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(8, 28, 21, 0.08); border: 1px solid #E2E8F0;">
     
-    <!-- 1. HEADER HERO (Diseño Editorial Verde Bosque y Ámbar) -->
+    <!-- 1. HEADER HERO (Diseño Editorial Verde Bosque con Logo Optimizado) -->
     <div style="background: linear-gradient(135deg, #081c15 0%, #1a4d2e 100%); padding: 36px 28px 30px; text-align: center; color: white;">
-      <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="160" alt="Investments Cortés" style="margin-bottom: 16px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); border: 0; display: inline-block;">
+      <div style="margin-bottom: 14px; display: inline-block;">
+        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="140" height="auto" alt="Investments Cortés" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); border: 0; display: inline-block; max-height: 80px; object-fit: contain;">
+      </div>
       
-      <div style="display: inline-block; background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #86EFAC; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 100px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
-        ✓ Pedido Confirmado & En Alistamiento
+      <div style="display: block; margin-bottom: 12px;">
+        <span style="display: inline-flex; align-items: center; gap: 5px; background-color: rgba(16, 185, 129, 0.18); border: 1px solid rgba(16, 185, 129, 0.4); color: #86EFAC; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#86EFAC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><polyline points="20 6 9 17 4 12"/></svg>
+          Pedido Confirmado & En Alistamiento
+        </span>
       </div>
 
       <h1 style="font-family: 'Outfit', -apple-system, sans-serif; font-size: 25px; font-weight: 900; margin: 0 0 6px 0; color: #FFFFFF; letter-spacing: -0.5px; line-height: 1.2;">
         ¡Gracias por tu compra, <span style="font-family: 'Instrument Serif', Georgia, 'Playfair Display', serif; font-style: italic; font-weight: 400; color: #d4a373;">${clientName}</span>!
       </h1>
       <p style="margin: 0; font-size: 13px; color: #CBD5E1; font-weight: 500;">
-        Orden <strong style="color: #FFFFFF; font-family: 'Outfit', sans-serif;">#${orderNumber}</strong> • Del campo directamente a tu negocio
+        Pedido N° <strong style="color: #FFFFFF; font-family: 'Outfit', sans-serif; letter-spacing: 0.5px;">#${orderNumber}</strong> • Del campo directamente a tu negocio
       </p>
     </div>
 
-    <!-- 2. CUADRÍCULA DE LOGÍSTICA & DESPACHO -->
+    <!-- 2. CUADRÍCULA DE LOGÍSTICA & DESPACHO CON ÍCONOS LUCIDE SVG -->
     <div style="padding: 22px 28px 10px;">
       <div style="background-color: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 14px; padding: 16px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>
-          <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">📅 Fecha de Entrega</span>
+          <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; margin-bottom: 3px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+            Fecha de Entrega
+          </span>
           <strong style="font-size: 13px; color: #0F172A; font-family: 'Outfit', sans-serif;">${deliveryDate}</strong>
         </div>
         <div>
-          <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">⏰ Horario Estimado</span>
+          <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; margin-bottom: 3px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Horario Estimado
+          </span>
           <strong style="font-size: 13px; color: #0F172A; font-family: 'Outfit', sans-serif;">${deliverySlot}</strong>
         </div>
         <div style="grid-column: span 2; border-top: 1px dashed #86EFAC; padding-top: 10px; margin-top: 2px;">
-          <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">📍 Dirección de Recepción</span>
+          <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; margin-bottom: 3px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+            Dirección de Recepción
+          </span>
           <strong style="font-size: 13px; color: #0F172A;">${deliveryAddress}</strong>
         </div>
       </div>
@@ -113,10 +127,10 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
       <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden;">
         <thead>
           <tr style="background-color: #F8FAFC; border-bottom: 2px solid #E2E8F0; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-            <th style="padding: 10px 12px; text-align: left; font-weight: 800;">Producto</th>
-            <th style="padding: 10px 8px; text-align: center; font-weight: 800;">Cant.</th>
-            <th style="padding: 10px 8px; text-align: right; font-weight: 800;">V. Unit.</th>
-            <th style="padding: 10px 12px; text-align: right; font-weight: 800;">Total</th>
+            <th style="padding: 10px 14px; text-align: left; font-weight: 800;">Producto</th>
+            <th style="padding: 10px 10px; text-align: center; font-weight: 800;">Cant.</th>
+            <th style="padding: 10px 10px; text-align: right; font-weight: 800;">V. Unit.</th>
+            <th style="padding: 10px 14px; text-align: right; font-weight: 800;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -136,11 +150,16 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
       </div>
     </div>
 
-    <!-- 5. BANNER DE SOPORTE & ATENCIÓN AL CLIENTE -->
-    <div style="margin: 10px 28px 24px; background-color: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px; padding: 14px 18px; font-size: 12px; color: #92400E; line-height: 1.5;">
-      <strong>¿Necesitas modificar o adicionar algún producto antes de la hora de corte?</strong><br>
-      Puedes responder directamente a este correo o escribir a nuestra línea de operaciones: 
-      <strong style="color: #B45309;">(601) 683 8640</strong>.
+    <!-- 5. BANNER DE SOPORTE CON ÍCONO LUCIDE PHONE -->
+    <div style="margin: 10px 28px 24px; background-color: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px; padding: 14px 18px; font-size: 12px; color: #92400E; line-height: 1.5; display: flex; align-items: flex-start; gap: 10px;">
+      <div style="margin-top: 2px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </div>
+      <div>
+        <strong>¿Necesitas modificar o adicionar algún producto antes de la hora de corte?</strong><br>
+        Puedes responder directamente a este correo o comunicarte con nuestra línea de operaciones: 
+        <strong style="color: #B45309;">(601) 683 8640</strong>.
+      </div>
     </div>
 
     <!-- 6. FOOTER CORPORATIVO -->
