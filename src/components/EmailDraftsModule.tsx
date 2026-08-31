@@ -5219,6 +5219,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <input
                           autoFocus
                           type="text"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          spellCheck={false}
                           placeholder="Buscar cliente por nombre o NIT..."
                           value={clientSearchQuery}
                           onChange={e => setClientSearchQuery(e.target.value)}
@@ -6215,6 +6218,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               ref={el => { productInputRefs.current[i] = el; }}
                               type="text"
                               placeholder="Buscar ID..."
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              data-lpignore="true"
                               value={item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : '')}
                               onFocus={(e) => {
                                 e.target.select();
