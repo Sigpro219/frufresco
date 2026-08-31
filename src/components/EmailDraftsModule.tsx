@@ -2033,27 +2033,45 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let scoreA = 0;
       let scoreB = 0;
 
-      // Exact match with extracted accounting ID or SKU gets highest boost
-      if (extractedId) {
-        if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 5000;
-        if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 5000;
-      }
-
-      // Prioritize client exceptions/nicknames (highest boost)
-      if (excA) scoreA += 1000;
-      if (excB) scoreB += 1000;
-
-      // Prioritize historical purchase frequency and volume
-      if (freqA) scoreA += (freqA.count * 100) + Math.min(freqA.totalQty, 500);
-      if (freqB) scoreB += (freqB.count * 100) + Math.min(freqB.totalQty, 500);
-
-      // Name match prefix boost
       const normNameA = (a.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const normNameB = (b.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (cleanQuery && normNameA.startsWith(cleanQuery)) scoreA += 50;
-      if (cleanQuery && normNameB.startsWith(cleanQuery)) scoreB += 50;
-      if (cleanQuery && normNameA === cleanQuery) scoreA += 100;
-      if (cleanQuery && normNameB === cleanQuery) scoreB += 100;
+
+      const wordsA = normNameA.split(/\s+/).filter(Boolean);
+      const wordsB = normNameB.split(/\s+/).filter(Boolean);
+      const queryWords = cleanQuery.split(/\s+/).filter(Boolean);
+
+      // Exact whole word token match gets maximum priority (e.g. 'papa' matches 'papa pastusa' not 'papaya')
+      if (queryWords.length > 0) {
+        const hasAllWordsA = queryWords.every(qw => wordsA.includes(qw));
+        const hasAllWordsB = queryWords.every(qw => wordsB.includes(qw));
+        if (hasAllWordsA) scoreA += 10000;
+        if (hasAllWordsB) scoreB += 10000;
+
+        if (wordsA[0] === queryWords[0]) scoreA += 5000;
+        if (wordsB[0] === queryWords[0]) scoreB += 5000;
+      }
+
+      // Exact match with extracted accounting ID or SKU gets highest boost
+      if (extractedId) {
+        if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 8000;
+        if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 8000;
+      }
+
+      // Exact full name match
+      if (cleanQuery && normNameA === cleanQuery) scoreA += 3000;
+      if (cleanQuery && normNameB === cleanQuery) scoreB += 3000;
+
+      // Prefix match on whole product name
+      if (cleanQuery && normNameA.startsWith(cleanQuery)) scoreA += 1000;
+      if (cleanQuery && normNameB.startsWith(cleanQuery)) scoreB += 1000;
+
+      // Prioritize client exceptions/nicknames
+      if (excA) scoreA += 500;
+      if (excB) scoreB += 500;
+
+      // Prioritize historical purchase frequency and volume
+      if (freqA) scoreA += Math.min(freqA.count * 20, 300) + Math.min(freqA.totalQty, 100);
+      if (freqB) scoreB += Math.min(freqB.count * 20, 300) + Math.min(freqB.totalQty, 100);
 
       if (scoreB !== scoreA) {
         return scoreB - scoreA;
