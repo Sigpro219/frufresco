@@ -1226,6 +1226,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   }, [profiles, clientSearchQuery, parentMatrixIds]);
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const quantityInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const firstModalSelectRef = useRef<HTMLSelectElement | null>(null);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [obsModal, setObsModal] = useState<{
     isOpen: boolean;
@@ -2101,17 +2102,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   useEffect(() => {
     if (customizingModalItem) {
       setTimeout(() => {
-        const firstSelect = document.getElementById('modal-opt-select-0') as HTMLSelectElement | null;
-        if (firstSelect) {
-          firstSelect.focus();
+        if (firstModalSelectRef.current) {
+          firstModalSelectRef.current.focus();
         } else {
-          const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
-          if (qtyInput) {
-            qtyInput.focus();
-            qtyInput.select();
+          const firstSelect = document.getElementById('modal-opt-select-0') as HTMLSelectElement | null;
+          if (firstSelect) {
+            firstSelect.focus();
+          } else {
+            const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+            if (qtyInput) {
+              qtyInput.focus();
+              qtyInput.select();
+            }
           }
         }
-      }, 60);
+      }, 50);
     }
   }, [customizingModalItem]);
 
@@ -9476,6 +9481,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       {opt.name}
                     </label>
                     <select
+                      ref={optIdx === 0 ? firstModalSelectRef : undefined}
+                      autoFocus={optIdx === 0}
                       id={`modal-opt-select-${optIdx}`}
                       tabIndex={optIdx + 1}
                       value={currentVal}
@@ -9485,6 +9492,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           ...prev,
                           options: { ...prev.options, [opt.name]: val }
                         } : null);
+                        if (val) {
+                          setTimeout(() => {
+                            const nextOpt = document.getElementById(`modal-opt-select-${optIdx + 1}`) as HTMLSelectElement | null;
+                            if (nextOpt) {
+                              nextOpt.focus();
+                            } else {
+                              const qtyInput = document.getElementById('modal-qty-input') as HTMLInputElement | null;
+                              if (qtyInput) {
+                                qtyInput.focus();
+                                qtyInput.select();
+                              }
+                            }
+                          }, 50);
+                        }
                       }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
@@ -9534,6 +9555,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     type="text"
                     inputMode="decimal"
                     value={quantity}
+                    onFocus={e => e.target.select()}
                     onChange={e => {
                       const val = e.target.value.replace(/[^0-9.,]/g, '');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: val } : null);
