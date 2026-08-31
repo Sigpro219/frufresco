@@ -6199,7 +6199,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }}
                 >
                   <Sparkles size={13} className={isReparsingDraft ? 'animate-spin' : ''} />
-                  {isReparsingDraft ? 'Extrayendo...' : '⚡ Re-extraer con IA'}
+                  {isReparsingDraft ? 'Extrayendo...' : 'Re-extraer con IA'}
                 </button>
               </div>
 
