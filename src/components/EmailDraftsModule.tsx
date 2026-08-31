@@ -5699,7 +5699,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     title="Clic para cambiar o buscar cliente"
                   >
                     <Building2 size={16} color={matchedProfile ? '#059669' : '#D97706'} />
-                    <span style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {matchedProfile 
                         ? (matchedProfile.company_name || matchedProfile.contact_name)
                         : (selectedDraft.client_detected_name ? `⚠️ Asignar: ${selectedDraft.client_detected_name}` : '⚠️ Seleccionar Cliente')}
@@ -5850,46 +5850,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   />
                 </div>
 
-                {/* Horario de Recepción del Cliente (Real y Específico) */}
-                {(() => {
-                  const defaultWindow = matchedProfile?.delivery_restrictions || 
-                    (matchedProfile?.logistics_data?.start_time && matchedProfile?.logistics_data?.end_time 
-                      ? `${matchedProfile.logistics_data.start_time} - ${matchedProfile.logistics_data.end_time}` 
-                      : (editableDeliverySlot && editableDeliverySlot !== 'AM' && editableDeliverySlot !== 'PM' ? editableDeliverySlot : '06:00 - 11:00'));
-
-                  return (
-                    <div style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      backgroundColor: '#FFFFFF',
-                      border: '1.5px solid #CBD5E1',
-                      padding: '4px 10px',
-                      borderRadius: '10px',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                    }}>
-                      <Clock size={14} color="#0D7A57" />
-                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>Franja:</span>
-                      <input
-                        type="text"
-                        value={editableDeliverySlot || defaultWindow}
-                        onChange={e => setEditableDeliverySlot(e.target.value)}
-                        placeholder="Ej: 07:00 a 10:30"
-                        title="Franja de recepción de este cliente"
-                        style={{
-                          border: 'none',
-                          fontSize: '0.82rem',
-                          fontWeight: '800',
-                          color: '#0F172A',
-                          outline: 'none',
-                          width: '120px',
-                          background: 'transparent'
-                        }}
-                      />
-                    </div>
-                  );
-                })()}
-
                 {/* GPS Status Badge */}
                 {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? (
                   <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '4px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -5977,27 +5937,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 >
                   <Sparkles size={13} className={isReparsingDraft ? 'animate-spin' : ''} />
                   {isReparsingDraft ? 'Extrayendo...' : '⚡ Re-extraer con IA'}
-                </button>
-                <button 
-                  onClick={() => setShowFloatingEmail(prev => !prev)}
-                  title="Alternar visor del documento original"
-                  style={{ 
-                    padding: '5px 12px', 
-                    backgroundColor: showFloatingEmail ? '#DBEAFE' : '#EFF6FF', 
-                    borderRadius: '100px', 
-                    fontSize: '0.76rem', 
-                    fontWeight: '800', 
-                    color: '#1D4ED8',
-                    border: '1.5px solid #93C5FD',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <FileText size={13} /> {showFloatingEmail ? 'Ocultar Visor' : 'Ver Doc'}
                 </button>
                 <button 
                   onClick={() => setSelectedDraft(null)} 
