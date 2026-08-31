@@ -1228,6 +1228,123 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }, 50);
   };
 
+  const handleOpenExcelInNewTab = (currentUrl: string, currentName: string) => {
+    if (!excelSheetsData || excelSheetsData.length === 0) {
+      window.open(currentUrl, '_blank');
+      return;
+    }
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      window.open(currentUrl, '_blank');
+      return;
+    }
+
+    const clientName = selectedDraft?.client_detected_name || 'Cliente';
+    const sheetHtml = excelSheetsData.map((sheet: any, sIdx: number) => {
+      return `
+        <div class="sheet-container" id="sheet-${sIdx}" style="${sIdx > 0 ? 'display: none;' : ''}">
+          <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 0.95rem; font-weight: 800; color: #0D7A57;">
+              📄 Hoja: ${sheet.sheetName} · <span style="color: #10B981;">${sheet.countWithQty} ítems con pedido</span> / ${sheet.totalRows} filas
+            </div>
+            <div style="font-size: 0.8rem; color: #64748B;">
+              ${sheet.countWithQty > 0 ? '🟢 Filas con cantidad resaltadas en verde' : ''}
+            </div>
+          </div>
+          <table class="sheets-table">
+            <tbody>
+              ${sheet.rows.map((r: any) => `
+                <tr class="${r.isHeader ? 'header-row' : ''} ${r.hasQty ? 'qty-row' : ''} ${r.isMeta ? 'meta-row' : ''}">
+                  <td class="row-num">${r.rowIndex}</td>
+                  ${r.cells.map((c: string, cIdx: number) => {
+                    const isQty = cIdx === sheet.qtyCol && !r.isHeader && !r.isMeta;
+                    const isName = cIdx === sheet.nameCol && !r.isHeader && !r.isMeta;
+                    return `
+                      <td class="${isQty && r.hasQty ? 'qty-cell' : ''} ${isName && r.hasQty ? 'name-cell' : ''}">
+                        ${isQty && r.hasQty ? `<span class="badge-qty">${c} ${r.unitVal}</span>` : c}
+                      </td>
+                    `;
+                  }).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }).join('');
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <title>${currentName} - ${clientName} | FruFresco</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; }
+          .topbar { background: linear-gradient(135deg, #0D7A57, #15803D); color: white; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
+          .topbar h1 { font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em; }
+          .topbar-actions { display: flex; align-items: center; gap: 10px; }
+          .btn { padding: 7px 16px; border-radius: 8px; font-weight: 800; font-size: 0.82rem; cursor: pointer; border: none; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+          .btn-white { background: white; color: #0D7A57; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+          .btn-white:hover { background: #ECFDF5; transform: translateY(-1px); }
+          .btn-outline { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: white; }
+          .btn-outline:hover { background: rgba(255,255,255,0.25); }
+          .tabs-bar { background-color: #F1F5F9; padding: 10px 28px; display: flex; gap: 8px; border-bottom: 1px solid #CBD5E1; }
+          .tab-btn { padding: 6px 18px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; border: 1px solid #CBD5E1; background: white; cursor: pointer; color: #475569; transition: all 0.15s; }
+          .tab-btn.active { background: #0D7A57; color: white; border-color: #0D7A57; box-shadow: 0 2px 6px rgba(13,122,87,0.2); }
+          .content { padding: 24px 28px; overflow-x: auto; }
+          .sheets-table { border-collapse: collapse; width: 100%; min-width: max-content; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-size: 0.82rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; border: 1px solid #E2E8F0; }
+          .sheets-table td, .sheets-table th { border: 1px solid #E2E8F0; padding: 8px 12px; text-align: left; }
+          .header-row { background-color: #E2E8F0; font-weight: 800; color: #0F172A; position: sticky; top: 60px; z-index: 10; }
+          .meta-row { background-color: #F8FAFC; color: #64748B; font-weight: 600; }
+          .row-num { background-color: #F1F5F9; color: #64748B; text-align: center; font-weight: 700; width: 44px; font-size: 0.72rem; border-right: 1px solid #CBD5E1; user-select: none; }
+          .qty-row { background-color: #ECFDF5 !important; border-bottom: 1.5px solid #86EFAC !important; }
+          .name-cell { font-weight: 800; color: #065F46; }
+          .qty-cell { text-align: center; }
+          .badge-qty { background-color: #FEF3C7; color: #B45309; border: 1.5px solid #FCD34D; padding: 2px 8px; border-radius: 6px; font-weight: 900; font-size: 0.85rem; display: inline-block; }
+          @media print {
+            .topbar, .tabs-bar { display: none !important; }
+            .content { padding: 0 !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <h1>📊 Documento Excel: ${currentName} · <span style="font-weight: 500; font-size: 0.95rem; opacity: 0.9;">${clientName}</span></h1>
+          <div class="topbar-actions">
+            <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir Hoja</button>
+            <a class="btn btn-white" href="${currentUrl}" download="${currentName}">⬇️ Descargar .xlsx Original</a>
+          </div>
+        </div>
+        ${excelSheetsData.length > 1 ? `
+          <div class="tabs-bar">
+            ${excelSheetsData.map((s: any, idx: number) => `
+              <button class="tab-btn ${idx === 0 ? 'active' : ''}" onclick="showSheet(${idx})">📄 ${s.sheetName} (${s.countWithQty} pedidos)</button>
+            `).join('')}
+          </div>
+        ` : ''}
+        <div class="content">
+          ${sheetHtml}
+        </div>
+        <script>
+          function showSheet(idx) {
+            document.querySelectorAll('.sheet-container').forEach((el, i) => {
+              el.style.display = i === idx ? 'block' : 'none';
+            });
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+              if (i === idx) btn.classList.add('active');
+              else btn.classList.remove('active');
+            });
+          }
+        </script>
+      </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
   const handleProductSearchKeyDown = (e: React.KeyboardEvent, rowIndex: number, filtered: any[]) => {
     if (filtered.length === 0) return;
     
@@ -4961,15 +5078,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         if (!currentUrl) return null;
 
                         const ext = (currentName || '').split('.').pop()?.toLowerCase() || '';
-                        const isDoc = ['xlsx', 'xls', 'docx', 'doc', 'csv'].includes(ext);
-                        const openUrl = isDoc 
-                          ? `https://docs.google.com/viewer?url=${encodeURIComponent(currentUrl)}`
-                          : currentUrl;
+                        const isExcel = ext === 'xlsx' || ext === 'xls';
+
+                        if (isExcel) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenExcelInNewTab(currentUrl, currentName || 'documento.xlsx')}
+                              style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                              title="Abrir hoja de cálculo completa en una pestaña nueva"
+                            >
+                              <Maximize2 size={11} /> Abrir Pestaña Completa ↗
+                            </button>
+                          );
+                        }
 
                         return (
-                          <a href={openUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                          <a href={currentUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
                             <button style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                              <Maximize2 size={11} /> {isDoc ? 'Google Docs ↗' : 'Abrir Pestaña ↗'}
+                              <Maximize2 size={11} /> Abrir Pestaña ↗
                             </button>
                           </a>
                         );
