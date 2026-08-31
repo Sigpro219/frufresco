@@ -4354,9 +4354,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               .from('order_drafts')
               .update({ 
                 status: 'approved',
-                order_id: order.id,
-                order_number: genOrderNumber,
-                delivery_date: deliveryDate,
                 extracted_items: updatedExtractedItems
               })
               .eq('id', selectedDraft.id);
@@ -4790,7 +4787,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       });
 
       const nowIso = new Date().toISOString();
-      const finalOrderNumber = order.order_number || genOrderNumber;
+      const finalOrderNumber = order.order_number || ('PED-' + order.id.slice(0, 8).toUpperCase());
 
       const finalExtractedItems = updatedExtractedItems.map((itm: any) => {
         if (itm.isMetadata) {
