@@ -57,6 +57,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Error al actualizar borrador: ${draftError.message}` }, { status: 500 });
     }
 
+    // If it is simply not an order (newsletter, spam, notification), do not send email notification
+    if (reason === 'no_es_pedido' || reason === 'spam') {
+      return NextResponse.json({ success: true, emailSent: false });
+    }
+
     // 2. Trigger email sending in the background without awaiting it
     const addressStr = address || 'No especificada';
     const isMontoMinimo = reason === 'monto_minimo';

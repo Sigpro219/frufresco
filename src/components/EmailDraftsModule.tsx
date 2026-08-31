@@ -1980,6 +1980,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   };
 
+  const handleQuickRejectNonOrder = async (draftToReject?: any) => {
+    const targetDraft = draftToReject || selectedDraft;
+    if (!targetDraft) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/orders/reject-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId: targetDraft.id,
+          address: editableAddress || '',
+          sourceEmail: targetDraft.source_email || '',
+          reason: 'no_es_pedido'
+        })
+      });
+
+      const data = await safeFetchJson(res);
+      if (res.ok && data.success) {
+        showToast('Correo descartado como "No es Pedido".', 'info');
+        if (selectedDraft?.id === targetDraft.id) {
+          setSelectedDraft(null);
+        }
+        fetchDrafts();
+      } else {
+        showToast(data.error || 'Error al descartar el correo', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Error al descartar: ${e.message}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const optionsList = (() => {
     if (!selectedProductForVariant) return [];
     const list = [{ unit: selectedProductForVariant.unit_of_measure || 'Kg', factor: 1, label: `${selectedProductForVariant.unit_of_measure || 'Kg'} (Base)` }];
@@ -6192,6 +6226,36 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   );
                 })()}
 
+                {/* Botón de Descarte Rápido cuando no hay productos detectados */}
+                {editableItems.filter(it => !it.isDeleted).length === 0 && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleQuickRejectNonOrder()}
+                    title="Descartar este correo porque no contiene productos ni pedido"
+                    style={{
+                      padding: '5px 12px',
+                      backgroundColor: '#FEF2F2',
+                      color: '#DC2626',
+                      border: '1.5px solid #FCA5A5',
+                      borderRadius: '100px',
+                      fontSize: '0.76rem',
+                      fontWeight: '800',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      boxShadow: '0 1px 3px rgba(220, 38, 38, 0.1)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEE2E2'; e.currentTarget.style.borderColor = '#EF4444'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.borderColor = '#FCA5A5'; }}
+                  >
+                    <Trash2 size={13} color="#DC2626" />
+                    <span>Rechazar (No es Pedido)</span>
+                  </button>
+                )}
+
                 <button 
                   onClick={handleReparseDraft}
                   disabled={isReparsingDraft}
@@ -7560,7 +7624,77 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         </tr>
                       );
                     })}
-                  </tbody>
+                    {editableItems.filter(it => !it.isDeleted).length === 0 && (
+                      <tr>
+                        <td colSpan={4} style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+                          <div style={{
+                            padding: '2.5rem 1.5rem',
+                            textAlign: 'center',
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: '16px',
+                            border: '1.5px dashed #CBD5E1',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '10px'
+                          }}>
+                            <div style={{ width: '46px', height: '46px', borderRadius: '50%', backgroundColor: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
+                              <Mail size={22} />
+                            </div>
+                            <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.96rem' }}>
+                              No se detectaron productos ni orden de compra en este correo
+                            </div>
+                            <p style={{ color: '#64748B', fontSize: '0.82rem', margin: 0, maxWidth: '420px', lineHeight: '1.45' }}>
+                              Si se trata de un boletín informativo, spam, soporte o notificación, puedes descartarlo de inmediato con un solo clic.
+                            </p>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => handleQuickRejectNonOrder()}
+                                style={{
+                                  padding: '8px 18px',
+                                  backgroundColor: '#DC2626',
+                                  color: '#FFFFFF',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  fontWeight: '800',
+                                  fontSize: '0.84rem',
+                                  cursor: saving ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  boxShadow: '0 2px 5px rgba(220, 38, 38, 0.25)',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                <Trash2 size={15} /> Descartar (No es Pedido)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAddManualItem}
+                                style={{
+                                  padding: '8px 16px',
+                                  backgroundColor: '#FFFFFF',
+                                  color: '#1D4ED8',
+                                  border: '1.5px solid #BFDBFE',
+                                  borderRadius: '8px',
+                                  fontWeight: '700',
+                                  fontSize: '0.84rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <Plus size={15} /> Agregar Producto Manual
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </tbody>
                 </table>
 
                 {/* Bottom Spacer: Gives the scroll container guaranteed room to anchor any row to the top */}
@@ -8499,6 +8633,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }}
                 >
                   <option value="">-- Selecciona una causa --</option>
+                  <option value="no_es_pedido">No es un pedido (Boletín / Spam / Notificación externa)</option>
                   <option value="cobertura">Falta de cobertura geográfica</option>
                   <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
                   <option value="no_comercializado">Productos no comercializados (Construcción, etc.)</option>
