@@ -8,7 +8,7 @@ import {
     ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, 
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
-    Settings, Plus, Package, Filter, User, ExternalLink, Clock 
+    Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart 
 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
@@ -6568,142 +6568,156 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
             </div> {/* Closes Split Canvas Body */}
 
-          {/* Master Sticky Bottom Footer */}
-          <div style={{
-            padding: '1rem 2rem',
-            borderTop: `1px solid ${THEME.colors.border}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            backgroundColor: '#FFFFFF',
-            flexShrink: 0,
-            boxShadow: '0 -4px 15px rgba(0, 0, 0, 0.03)'
-          }}>
-            {/* Botones de acción reubicados al footer */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {isEditing && selectedRowIndices.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleBatchDelete}
-                  style={{
-                    background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                  }}
-                >
-                  <Trash2 size={16} /> Eliminar Seleccionados ({selectedRowIndices.length})
-                </button>
-              )}
-              
-              {selectedDraft.status === 'pending' && (
-                <button
-                  id="btn-reject-draft"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => {
-                    setRejectReason('');
-                    setRejectModal({
-                      isOpen: true, draftId: selectedDraft.id, address: getDraftMetadata(selectedDraft).address || 'No detectada', sourceEmail: selectedDraft.source_email, totalValue: totalValue
-                    });
-                  }}
-                  style={{
-                    background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                  }}
-                >
-                  <Trash2 size={16} /> Rechazar Pedido
-                </button>
-              )}
+          {/* Master Sticky Bottom Floating Ribbon (Exact Replica of Ingesta PDF - Imagen 3) */}
+          {(() => {
+            const activeItems = editableItems.filter(itm => !itm.isDeleted);
+            let subtotal = 0;
+            let totalTax = 0;
 
-              {selectedDraft.status === 'pending' && selectedDraft.source_email && (
-                <button
-                  id="btn-send-receipt"
-                  type="button"
-                  disabled={sendingReceipt}
-                  onClick={handleSendManualReceipt}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: receiptSent ? '#059669' : '#2563EB',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    cursor: sendingReceipt ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Send size={16} />
-                  {sendingReceipt ? 'Enviando...' : receiptSent ? 'Acuse Enviado' : 'Enviar Acuse de Recibo'}
-                </button>
-              )}
-            </div>
+            activeItems.forEach(item => {
+              const prod = products.find(p => p.id === item.matched_product_id);
+              const qty = Number(item.quantity) || 0;
+              const price = prod ? (contractPrices[prod.id] || prod.base_price || 0) : 0;
+              const lineSubtotal = qty * price;
+              const ivaRate = prod?.iva_rate ? (Number(prod.iva_rate) / 100) : 0;
+              subtotal += lineSubtotal;
+              totalTax += lineSubtotal * ivaRate;
+            });
 
-            {/* Right Side: Totals & Approval Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', backgroundColor: '#F3F4F6', padding: '2px 8px', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
-                    {editableItems.filter(itm => !itm.isDeleted).length} prod.
-                  </span>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: THEME.colors.textSecondary, letterSpacing: '0.05em', fontFamily: 'var(--font-outfit), sans-serif' }}>TOTAL ESTIMADO</span>
+            const totalPayable = subtotal + totalTax;
+
+            return (
+              <div style={{
+                padding: '0.85rem 2rem',
+                borderTop: `1.5px solid #E2E8F0`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: '#FFFFFF',
+                flexShrink: 0,
+                boxShadow: '0 -6px 25px rgba(0, 0, 0, 0.06)',
+                flexWrap: 'wrap',
+                gap: '1.25rem',
+                borderRadius: '0 0 24px 24px'
+              }}>
+                {/* LEFT: Quick Items & Financial Badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.4rem', flexWrap: 'wrap' }}>
+                  {/* Items Badge */}
+                  <div style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.55rem', 
+                    backgroundColor: activeItems.length > 0 ? '#E8F5EE' : '#F1F5F9', 
+                    color: activeItems.length > 0 ? '#0D7A57' : '#64748B', 
+                    padding: '0.5rem 1.15rem', 
+                    borderRadius: '100px', 
+                    fontWeight: '800', 
+                    fontSize: '0.88rem',
+                    border: `1.5px solid ${activeItems.length > 0 ? '#A7D7C5' : '#E2E8F0'}`,
+                    boxShadow: activeItems.length > 0 ? '0 2px 8px rgba(13, 122, 87, 0.1)' : 'none'
+                  }}>
+                    <ShoppingCart size={17} />
+                    <span>{activeItems.length} {activeItems.length === 1 ? 'Ítem' : 'Ítems en Pedido'}</span>
+                  </div>
+
+                  {/* Subtotal & IVA */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.88rem', color: '#4B5563' }}>
+                    <span>Subtotal: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(subtotal)}</strong></span>
+                    <span style={{ color: '#CBD5E1' }}>•</span>
+                    <span>IVA Est.: <strong style={{ color: '#1A231E', fontWeight: '800' }}>{formatMoney(totalTax)}</strong></span>
+                  </div>
+
+                  {/* Action: Delete selected */}
+                  {isEditing && selectedRowIndices.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleBatchDelete}
+                      style={{
+                        background: 'none', border: 'none', color: '#DC2626', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '0.5rem'
+                      }}
+                    >
+                      <Trash2 size={15} /> Eliminar ({selectedRowIndices.length})
+                    </button>
+                  )}
                 </div>
-                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: THEME.colors.primary, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalValue)}</span>
+
+                {/* RIGHT: Big Total & Action Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.6rem', flexWrap: 'wrap' }}>
+                  {hasUnmatchedItems && (
+                    <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertCircle size={14} color="#EF4444" /> Debe mapear todos los productos
+                    </span>
+                  )}
+
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#0D7A57', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      TOTAL A PAGAR
+                    </span>
+                    <span style={{ fontSize: '1.6rem', fontWeight: '900', color: '#0D7A57', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+                      {formatMoney(totalPayable)}
+                    </span>
+                  </div>
+
+                  <button 
+                    onClick={() => setSelectedDraft(null)}
+                    style={{ padding: '0.85rem 1.4rem', backgroundColor: '#F8FAFC', border: `1.5px solid #CBD5E1`, borderRadius: '14px', fontWeight: 700, color: '#475569', cursor: 'pointer', transition: 'all 0.15s', fontSize: '0.92rem' }}
+                  >
+                    Cancelar
+                  </button>
+
+                  {selectedDraft.status === 'pending' && (
+                    <button 
+                      id="btn-approve-draft"
+                      onClick={handleApprove}
+                      disabled={saving || hasUnmatchedItems || activeItems.length === 0}
+                      style={{
+                        padding: '0.9rem 2.2rem',
+                        borderRadius: '16px',
+                        background: (!hasUnmatchedItems && activeItems.length > 0) ? 'linear-gradient(135deg, #0D7A57 0%, #064E3B 100%)' : '#94A3B8',
+                        color: 'white',
+                        border: 'none',
+                        fontWeight: '800',
+                        fontSize: '1.05rem',
+                        letterSpacing: '0.02em',
+                        cursor: (saving || hasUnmatchedItems || activeItems.length === 0) ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.65rem',
+                        boxShadow: (!hasUnmatchedItems && activeItems.length > 0) ? '0 6px 20px -2px rgba(13, 122, 87, 0.45)' : 'none',
+                        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+                      }}
+                      onMouseOver={(e) => {
+                        if (!hasUnmatchedItems && activeItems.length > 0 && !saving) {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #0A5F43 0%, #04382A 100%)';
+                          e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+                          e.currentTarget.style.boxShadow = '0 10px 25px -2px rgba(13, 122, 87, 0.55)';
+                        }
+                      }}
+                      onMouseOut={(e) => {
+                        if (!hasUnmatchedItems && activeItems.length > 0 && !saving) {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #0D7A57 0%, #064E3B 100%)';
+                          e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                          e.currentTarget.style.boxShadow = '0 6px 20px -2px rgba(13, 122, 87, 0.45)';
+                        }
+                      }}
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2 size={19} style={{ animation: 'spin 1s linear infinite' }} />
+                          <span>Creando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={19} />
+                          <span>CONFIRMAR PEDIDO</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
-
-              {hasUnmatchedItems && (
-                <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <AlertCircle size={13} color="#EF4444" /> Debe mapear todos los productos
-                </span>
-              )}
-
-              {(() => {
-                const metadata = getDraftMetadata(selectedDraft);
-                if (!metadata || !metadata.attachments || !Array.isArray(metadata.attachments)) return null;
-                const pendingDocs = metadata.attachments.filter((a: any) => !a.processed).length;
-                if (pendingDocs > 1) {
-                  return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FCD34D' }}>
-                      <FileText size={14} color="#92400E" />
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>
-                        Aprobando 1 de {pendingDocs} adjuntos
-                      </span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              <button 
-                onClick={() => setSelectedDraft(null)}
-                style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer', transition: 'all 0.15s' }}
-              >
-                Cancelar
-              </button>
-              {selectedDraft.status === 'pending' && (
-                <button 
-                  id="btn-approve-draft"
-                  onClick={handleApprove}
-                  disabled={saving || hasUnmatchedItems}
-                  style={{
-                    padding: '0.75rem 1.5rem',
-                    backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
-                    color: 'white',
-                    borderRadius: '10px',
-                    fontWeight: '800',
-                    fontFamily: 'var(--font-outfit), sans-serif',
-                    border: 'none',
-                    cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
-                    opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: hasUnmatchedItems ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
-                </button>
-              )}
-            </div>
-          </div>
+            );
+          })()}
         </div>
       </div>
     );
