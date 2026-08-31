@@ -258,6 +258,47 @@ function CreateOrderContent() {
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
 
+    // Safe math expression evaluator for Excel-style formulas (+900/24, =900/24, 15*12, etc.)
+    const evaluateMathExpression = (val: string | number | null | undefined): number => {
+        if (val === undefined || val === null || val === '') return 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        
+        let str = String(val).trim();
+        if (!str) return 0;
+
+        if (str.startsWith('=') || str.startsWith('+')) {
+            str = str.substring(1).trim();
+        }
+
+        str = str.replace(/,/g, '.').replace(/x/gi, '*');
+
+        if (!/^[\d\s.+\-*/()]+$/.test(str)) {
+            const fallback = parseFloat(str.replace(/[^0-9.]/g, ''));
+            return isNaN(fallback) ? 0 : fallback;
+        }
+
+        try {
+            const result = new Function(`'use strict'; return (${str});`)();
+            if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+                return parseFloat(result.toFixed(4));
+            }
+        } catch {
+            const sanitized = str.replace(/[+\-*/]+$/, '');
+            try {
+                const result = new Function(`'use strict'; return (${sanitized});`)();
+                if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+                    return parseFloat(result.toFixed(4));
+                }
+            } catch {
+                const fallback = parseFloat(str);
+                return isNaN(fallback) ? 0 : fallback;
+            }
+        }
+
+        const fallback = parseFloat(str);
+        return isNaN(fallback) ? 0 : fallback;
+    };
+
     // Helpers to format inputs with thousands separator (.) and decimal (,)
     const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
         if (qtyStr === undefined || qtyStr === null) return '';
@@ -4167,7 +4208,7 @@ function CreateOrderContent() {
                                                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                                                         <input 
-                                                                            type="number"
+                                                                            type="text"
                                                                             id={`staged-qty-input-${idx}`}
                                                                             value={item.originalQty !== undefined ? item.originalQty : item.quantity}
                                                                             onFocus={(e) => {
@@ -4177,6 +4218,13 @@ function CreateOrderContent() {
                                                                             onKeyDown={(e) => {
                                                                                 if (e.key === 'Enter') {
                                                                                     e.preventDefault();
+                                                                                    const val = evaluateMathExpression(e.currentTarget.value);
+                                                                                    if (item.originalQty !== undefined) {
+                                                                                        updateStagedItem(item.id, 'originalQty', val);
+                                                                                        updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
+                                                                                    } else {
+                                                                                        updateStagedItem(item.id, 'quantity', val);
+                                                                                    }
                                                                                     const nextIdx = idx + 1;
                                                                                     const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                                                                     if (nextInput) {
@@ -4188,13 +4236,23 @@ function CreateOrderContent() {
                                                                                     }
                                                                                 }
                                                                             }}
-                                                                            onChange={(e) => {
-                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                            onBlur={(e) => {
+                                                                                const val = evaluateMathExpression(e.currentTarget.value);
                                                                                 if (item.originalQty !== undefined) {
                                                                                     updateStagedItem(item.id, 'originalQty', val);
                                                                                     updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
                                                                                 } else {
                                                                                     updateStagedItem(item.id, 'quantity', val);
+                                                                                }
+                                                                            }}
+                                                                            onChange={(e) => {
+                                                                                const rawVal = e.target.value;
+                                                                                const val = evaluateMathExpression(rawVal);
+                                                                                if (item.originalQty !== undefined) {
+                                                                                    updateStagedItem(item.id, 'originalQty', rawVal);
+                                                                                    updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(3)));
+                                                                                } else {
+                                                                                    updateStagedItem(item.id, 'quantity', rawVal);
                                                                                 }
                                                                             }}
                                                                             style={{ 
@@ -5565,20 +5623,17 @@ function CreateOrderContent() {
                                         id="modal-qty-input"
                                         autoComplete="off"
                                         type="text"
-                                        inputMode={isDiscreteUnit ? "numeric" : "decimal"}
                                         value={modalQuantity}
                                         onChange={(e) => {
-                                            if (isDiscreteUnit) {
-                                                const val = e.target.value.replace(/[^0-9]/g, '');
-                                                setModalQuantity(val);
-                                            } else {
-                                                const val = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
-                                                setModalQuantity(val);
-                                            }
+                                            const val = e.target.value.replace(/[^0-9.,+\-*/()=xX ]/g, '');
+                                            setModalQuantity(val);
                                         }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 e.preventDefault();
+                                                const evaluated = evaluateMathExpression(modalQuantity);
+                                                const finalVal = evaluated > 0 ? String(evaluated) : '1';
+                                                setModalQuantity(finalVal);
                                                 const unitSel = document.getElementById('modal-unit-select');
                                                 if (unitSel) {
                                                     unitSel.focus();
@@ -5587,6 +5642,9 @@ function CreateOrderContent() {
                                                 }
                                             } else if (e.key === 'Tab' && !e.shiftKey) {
                                                 e.preventDefault();
+                                                const evaluated = evaluateMathExpression(modalQuantity);
+                                                const finalVal = evaluated > 0 ? String(evaluated) : '1';
+                                                setModalQuantity(finalVal);
                                                 const unitSel = document.getElementById('modal-unit-select');
                                                 if (unitSel) {
                                                     unitSel.focus();
@@ -5615,21 +5673,9 @@ function CreateOrderContent() {
                                         onBlur={(e) => {
                                             e.target.style.borderColor = '#E2E8F0';
                                             e.target.style.boxShadow = 'none';
-                                            if (isDiscreteUnit) {
-                                                const parsed = parseInt(String(modalQuantity).replace(/[^0-9]/g, ''), 10);
-                                                if (isNaN(parsed) || parsed <= 0) {
-                                                    setModalQuantity('1');
-                                                } else {
-                                                    setModalQuantity(String(parsed));
-                                                }
-                                            } else {
-                                                const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
-                                                if (isNaN(parsed) || parsed <= 0) {
-                                                    setModalQuantity('1');
-                                                } else {
-                                                    setModalQuantity(String(parsed));
-                                                }
-                                            }
+                                            const evaluated = evaluateMathExpression(modalQuantity);
+                                            const finalVal = evaluated > 0 ? String(evaluated) : '1';
+                                            setModalQuantity(finalVal);
                                         }}
                                     />
                                 </div>

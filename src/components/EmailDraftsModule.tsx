@@ -1384,11 +1384,47 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
   };
 
-  const parseQuantity = (val: string): number => {
-    if (!val) return 0;
-    const normalized = val.replace(/\./g, '').replace(',', '.');
-    const parsed = parseFloat(normalized);
-    return isNaN(parsed) ? 0 : parsed;
+  const parseQuantity = (val: string | number | null | undefined): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    
+    let str = String(val).trim();
+    if (!str) return 0;
+
+    // Remove leading Excel formula markers like '=' or '+'
+    if (str.startsWith('=') || str.startsWith('+')) {
+      str = str.substring(1).trim();
+    }
+
+    // Replace comma with dot for decimals, and 'x' / 'X' with '*'
+    str = str.replace(/,/g, '.').replace(/x/gi, '*');
+
+    // Validate allowed characters: numbers, whitespace, and operators +, -, *, /, (, )
+    if (!/^[\d\s.+\-*/()]+$/.test(str)) {
+      const fallback = parseFloat(str.replace(/[^0-9.]/g, ''));
+      return isNaN(fallback) ? 0 : fallback;
+    }
+
+    try {
+      const result = new Function(`'use strict'; return (${str});`)();
+      if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+        return parseFloat(result.toFixed(4));
+      }
+    } catch {
+      const sanitized = str.replace(/[+\-*/]+$/, '');
+      try {
+        const result = new Function(`'use strict'; return (${sanitized});`)();
+        if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+          return parseFloat(result.toFixed(4));
+        }
+      } catch {
+        const fallback = parseFloat(str);
+        return isNaN(fallback) ? 0 : fallback;
+      }
+    }
+
+    const fallback = parseFloat(str);
+    return isNaN(fallback) ? 0 : fallback;
   };
 
   const safeFetchJson = async (res: Response) => {
@@ -1597,11 +1633,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const isKg = uNorm === 'kg' || uNorm === 'kilo' || uNorm === 'kilos' || uNorm === 'kilogramo' || uNorm === 'kilogramos';
       const isLibra = uNorm === 'lb' || uNorm === 'libra' || uNorm === 'libras';
       const isGram = uNorm === 'g' || uNorm === 'gr' || uNorm === 'gramo' || uNorm === 'gramos';
+      const isUnits = uNorm === 'unidad' || uNorm === 'unidades' || uNorm === 'und' || uNorm === 'unds' || uNorm === 'ud' || uNorm === 'uds';
+
+      const packMatch = product?.name ? product.name.match(/\bx\s*(\d+(?:[.,]\d+)?)\s*(?:und|unid|unidades|paq|pqt|gr|g|kg)?\b/i) : null;
+      const packSize = packMatch ? parseFloat(packMatch[1].replace(',', '.')) : null;
 
       if (isLibra) {
         conversionFactor = 0.5;
       } else if (isGram && targetUnit === 'Kg') {
         conversionFactor = 0.001;
+      } else if (isUnits && packSize && packSize > 1) {
+        conversionFactor = parseFloat((1 / packSize).toFixed(5));
       } else {
         conversionFactor = 1;
       }
@@ -7274,6 +7316,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     }, 10);
                                   } else if (e.key === 'Enter') {
                                     e.preventDefault();
+                                    const rawVal = e.currentTarget.value;
+                                    const parsed = parseQuantity(rawVal);
+                                    const newEdits = [...editableItems];
+                                    newEdits[i].quantity_text = undefined;
+                                    newEdits[i].quantity = parsed;
+                                    setEditableItems(newEdits);
+
                                     const nextIdx = i + 1;
                                     const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                     if (nextInput) {
