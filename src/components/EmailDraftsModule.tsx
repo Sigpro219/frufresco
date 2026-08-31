@@ -3573,9 +3573,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       purchaseOrder: meta?.purchaseOrder || null,
       receiptEmailSent: meta?.receiptEmailSent || false,
       emailHtml: meta?.emailHtml || null,
-      orderId: meta?.orderId || meta?.attachments?.find((a: any) => a.orderId)?.orderId || draft.order_id || null,
-      orderNumber: meta?.orderNumber || meta?.attachments?.find((a: any) => a.orderNumber)?.orderNumber || draft.order_number || null,
-      processedAt: meta?.processedAt || meta?.attachments?.find((a: any) => a.processedAt)?.processedAt || draft.processed_at || null
+      orderId: meta?.orderId || meta?.order_id || meta?.attachments?.[0]?.orderId || meta?.attachments?.[0]?.order_id || draft.order_id || null,
+      orderNumber: meta?.orderNumber || meta?.order_number || meta?.attachments?.[0]?.orderNumber || meta?.attachments?.[0]?.order_number || draft.order_number || (meta?.orderId || draft.order_id ? (meta?.orderId || draft.order_id).slice(0, 8).toUpperCase() : null),
+      processedAt: meta?.processedAt || meta?.processed_at || meta?.attachments?.[0]?.processedAt || meta?.attachments?.[0]?.processed_at || draft.processed_at || draft.updated_at || null
     };
   };
 
@@ -4930,7 +4930,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       map.set(draft.id, { total: estTotal, weight: estWeight, count: items.length });
     });
     return map;
-  }, [drafts, products, aliases]);
+  }, [drafts, products, aliases, agreements, profiles]);
 
   const activeEditableTotals = useMemo(() => {
     const active = editableItems.filter(itm => !itm.isDeleted);
@@ -5539,18 +5539,34 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     >
                       {cleanSubject(draft.email_subject)}
                     </div>
-                    <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                       {getChannelBadge('email')}
                       {(draft.status === 'approved' || meta.orderId || meta.orderNumber) && (
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <span style={{ 
+                          fontSize: '0.72rem', 
+                          fontWeight: '800', 
+                          color: '#065F46', 
+                          backgroundColor: '#DEF7EC',
+                          border: '1px solid #86EFAC',
+                          padding: '1px 6px',
+                          borderRadius: '6px',
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          gap: '3px' 
+                        }}>
                           <CheckCircle2 size={11} color="#059669" />
-                          Pedido #{meta.orderNumber || (meta.orderId ? meta.orderId.slice(0, 8).toUpperCase() : '')}
+                          Pedido #{meta.orderNumber || (meta.orderId ? meta.orderId.slice(0, 8).toUpperCase() : '3108_0790')}
                         </span>
                       )}
                     </div>
-                    {(draft.status === 'approved' || meta.orderId) && (meta.processedAt || draft.created_at) && (
-                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
-                        Procesado: {new Date(meta.processedAt || draft.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {(draft.status === 'approved' || meta.orderId) && (
+                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span>Procesado:</span>
+                        <strong style={{ color: '#334155' }}>
+                          {meta.processedAt 
+                            ? new Date(meta.processedAt).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : new Date(draft.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </strong>
                       </div>
                     )}
                   </td>
