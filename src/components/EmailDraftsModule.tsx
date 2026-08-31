@@ -8661,6 +8661,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           padding: '1.5rem'
         }}>
           <div style={{
+            position: 'relative',
             backgroundColor: 'white',
             borderRadius: '24px',
             padding: '2.25rem 3rem',
@@ -8672,7 +8673,38 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             border: `1px solid ${THEME.colors.border}`,
             textAlign: 'left'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '1rem' }}>
+            {/* Permanent Top-Right Corner Close Button */}
+            <button 
+              onClick={() => setShowConfirmModal(false)}
+              disabled={confirmingOrder}
+              title="Cerrar previsualización"
+              style={{ 
+                position: 'sticky',
+                top: '-0.75rem',
+                right: '-1.5rem',
+                float: 'right',
+                zIndex: 60,
+                border: '1.5px solid #CBD5E1', 
+                background: '#FFFFFF', 
+                cursor: 'pointer', 
+                color: '#64748B', 
+                width: '34px', 
+                height: '34px', 
+                borderRadius: '100px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                transition: 'all 0.15s ease',
+                marginBottom: '-34px'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; e.currentTarget.style.borderColor = '#FCA5A5'; e.currentTarget.style.color = '#EF4444'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#64748B'; }}
+            >
+              <X size={18} strokeWidth={2.5} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '1rem', paddingRight: '40px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                 <div style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FileText size={20} />
@@ -8681,13 +8713,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   Previsualización de Factura / Pedido
                 </h3>
               </div>
-              <button 
-                onClick={() => setShowConfirmModal(false)}
-                disabled={confirmingOrder}
-                style={{ background: '#F8FAF9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
-              >
-                <X size={18} />
-              </button>
             </div>
 
             {/* Client info summary */}
