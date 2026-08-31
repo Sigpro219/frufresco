@@ -8816,8 +8816,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
                           <td style={{ padding: '0.75rem 1.2rem' }}>
-                            <div style={{ fontWeight: 600 }}>{prod?.name}</div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{item.originalName}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                              <span style={{ fontWeight: '800', color: '#0D7A57', fontSize: '0.90rem' }}>
+                                {prod?.name}
+                              </span>
+                              {prod && (
+                                <span style={{ 
+                                  fontSize: '0.74rem', 
+                                  fontWeight: '800', 
+                                  color: '#2563EB', 
+                                  backgroundColor: '#EFF6FF', 
+                                  border: '1px solid #BFDBFE', 
+                                  padding: '1px 6px', 
+                                  borderRadius: '5px' 
+                                }}>
+                                  ID: {getAccountingIdDisplay(prod)}
+                                </span>
+                              )}
+                            </div>
+                            {item.originalName && (
+                              <div style={{ fontSize: '0.74rem', color: '#64748B', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ color: '#94A3B8', fontWeight: '600' }}>Doc:</span>
+                                <span>{item.originalName}</span>
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '0.75rem 1.2rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatQuantity(qty)}</td>
                           <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(lineTotal)}</td>
