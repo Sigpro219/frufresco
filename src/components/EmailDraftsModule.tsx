@@ -1243,6 +1243,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [tempDeliveryTime, setTempDeliveryTime] = useState('07:30');
   const [tempDeliveryMargin, setTempDeliveryMargin] = useState(30);
 
+  // Auto-scroll anclado: Mantiene la fila activa en la 4ª línea visible (~150px) al avanzar con Enter
   const scrollToDraftRow = (targetIdx: number) => {
     const container = document.getElementById('email-draft-scroll-container');
     const row = document.getElementById(`draft-row-${targetIdx}`);
@@ -1251,7 +1252,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (targetIdx < 3) {
       container.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      const anchorHeight = 220;
+      const anchorHeight = 150;
       const targetTop = row.offsetTop - anchorHeight;
       container.scrollTo({
         top: Math.max(0, targetTop),
@@ -6933,18 +6934,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               if (scoredList.length === 0) return null;
 
+                              // Display above if near the end of table to avoid clipping
+                              const openUpward = i >= Math.max(2, editableItems.length - 4);
+
                               return (
                                 <div style={{
                                   position: 'absolute',
-                                  top: '100%',
+                                  ...(openUpward ? { bottom: '100%', marginBottom: '6px' } : { top: '100%', marginTop: '6px' }),
                                   left: 0,
                                   minWidth: '520px',
                                   zIndex: 9999,
                                   backgroundColor: 'white',
                                   borderRadius: '12px',
-                                  boxShadow: '0 15px 35px -5px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.08)',
+                                  boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0,0,0,0.1)',
                                   border: '1px solid #CBD5E1',
-                                  marginTop: '4px',
                                   maxHeight: '310px',
                                   overflowY: 'auto'
                                 }}>
