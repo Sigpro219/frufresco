@@ -1175,6 +1175,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [focusedClientSearchIndex, setFocusedClientSearchIndex] = useState<number>(-1);
 
+  const matchedProfile = selectedDraft ? profiles.find(p => p.id === selectedDraft.profile_id) : null;
+
   const parentMatrixIds = useMemo(() => {
     const set = new Set<string>();
     profiles.forEach(c => {
