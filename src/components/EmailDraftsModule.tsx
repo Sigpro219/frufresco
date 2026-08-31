@@ -1554,16 +1554,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
       targetUnit = normalizedUnit;
 
-      const isLibra = currentOriginalUnit === 'Lb';
-      conversionFactor = isLibra ? 0.5 : 1;
-      
-      const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 1);
-      if (origQty >= 100 && !isLibra) {
-        if (targetUnit === 'Kg') {
-          conversionFactor = 0.001;
-        } else if (targetUnit === 'Atado') {
-          conversionFactor = 0.002;
-        }
+      const uNorm = currentOriginalUnit.toLowerCase().trim();
+      const isKg = uNorm === 'kg' || uNorm === 'kilo' || uNorm === 'kilos' || uNorm === 'kilogramo' || uNorm === 'kilogramos';
+      const isLibra = uNorm === 'lb' || uNorm === 'libra' || uNorm === 'libras';
+      const isGram = uNorm === 'g' || uNorm === 'gr' || uNorm === 'gramo' || uNorm === 'gramos';
+
+      if (isLibra) {
+        conversionFactor = 0.5;
+      } else if (isGram && targetUnit === 'Kg') {
+        conversionFactor = 0.001;
+      } else {
+        conversionFactor = 1;
       }
     }
 
@@ -2111,7 +2112,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const openCustomizingModal = (product: any, rowIndex: number) => {
     if (!product) return;
     const item = editableItems[rowIndex] || {};
-    const rawQty = item.quantity !== undefined && item.quantity !== null ? String(item.quantity) : '1';
+    const origQtyNum = Number(item.originalQuantity);
+    const currQtyNum = Number(item.quantity);
+    let initialQtyStr = '1';
+    if (!isNaN(currQtyNum) && currQtyNum > 0) {
+      initialQtyStr = String(currQtyNum);
+    } else if (!isNaN(origQtyNum) && origQtyNum > 0) {
+      initialQtyStr = String(origQtyNum);
+    }
     const unit = item.originalUnit || item.unit || product.unit_of_measure || 'Kg';
     const opts = { ...(item.selected_options || {}) };
 
@@ -2122,7 +2130,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       originalQuantity: item.originalQuantity || item.quantity || 1,
       originalUnit: item.originalUnit || item.unit || 'Kg',
       options: opts,
-      quantity: rawQty,
+      quantity: initialQtyStr,
       unit,
       factor: item.conversion_factor || 1
     });
@@ -9574,6 +9582,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     tabIndex={(normalizedOptionsConfig?.length || 0) + 1}
                     type="text"
                     inputMode="decimal"
+                    autoComplete="off"
                     value={quantity}
                     onFocus={e => {
                       e.target.select();
@@ -9583,9 +9592,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     onBlur={e => {
                       e.target.style.borderColor = '#E2E8F0';
                       e.target.style.boxShadow = 'none';
+                      const parsed = parseFloat(String(quantity).replace(',', '.'));
+                      if (isNaN(parsed) || parsed <= 0) {
+                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: '1' } : null);
+                      } else {
+                        setCustomizingModalItem(prev => prev ? { ...prev, quantity: String(parsed) } : null);
+                      }
                     }}
                     onChange={e => {
-                      const val = e.target.value.replace(/[^0-9.,]/g, '');
+                      const val = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: val } : null);
                     }}
                     onKeyDown={e => {
