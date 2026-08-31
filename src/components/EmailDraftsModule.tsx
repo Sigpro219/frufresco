@@ -8291,26 +8291,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         );
       })()}
 
-      {showConfirmModal && selectedDraft && (
+      {/* ORDER CONFIRMATION MODAL */}
+      {showConfirmModal && (
         <div style={{
           position: 'fixed',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.5)',
-          backdropFilter: 'blur(4px)',
+          backgroundColor: 'rgba(15, 23, 42, 0.55)',
+          backdropFilter: 'blur(5px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 11000
+          zIndex: 11000,
+          padding: '1.5rem'
         }}>
           <div style={{
             backgroundColor: 'white',
             borderRadius: '24px',
             padding: '2rem 2.5rem',
-            width: '90%',
-            maxWidth: '580px',
+            width: '95%',
+            maxWidth: '820px',
             maxHeight: '90vh',
             overflowY: 'auto',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -8336,8 +8338,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div>
 
             {/* Client info summary */}
-            <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
-              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: THEME.colors.textMain, marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontFamily: 'var(--font-outfit), sans-serif' }}>
+            <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1.2rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: THEME.colors.textMain, marginBottom: '0.6rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontFamily: 'var(--font-outfit), sans-serif' }}>
                 <span>CLIENTE DETECTADO</span>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
@@ -8350,7 +8352,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   )}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1.5rem' }}>
                 <div><strong>Nombre:</strong> {selectedDraft.client_detected_name || 'Desconocido'}</div>
                 <div><strong>Celular:</strong> {getDraftMetadata(selectedDraft).phone || 'No especificado'}</div>
                 <div><strong>NIT/Cédula:</strong> {getDraftMetadata(selectedDraft).nit || 'No especificado'}</div>
@@ -8366,9 +8368,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#F8FAF9', borderBottom: '1px solid #E2E8F0', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                      <th style={{ padding: '0.65rem 1rem' }}>Producto (Mapeado)</th>
-                      <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Cant.</th>
-                      <th style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>Total</th>
+                      <th style={{ padding: '0.75rem 1.2rem' }}>Producto (Mapeado)</th>
+                      <th style={{ padding: '0.75rem 1.2rem', textAlign: 'center' }}>Cant.</th>
+                      <th style={{ padding: '0.75rem 1.2rem', textAlign: 'right' }}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -8378,27 +8380,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       const qty = parseFloat(item.quantity?.toString() || '0');
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
-                          <td style={{ padding: '0.65rem 1rem' }}>
+                          <td style={{ padding: '0.75rem 1.2rem' }}>
                             <div style={{ fontWeight: 600 }}>{prod?.name}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{item.originalName}</div>
+                            <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{item.originalName}</div>
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{qty}</td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney((prod?.base_price || 0) * qty)}</td>
+                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'center', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{qty}</td>
+                          <td style={{ padding: '0.75rem 1.2rem', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>{formatMoney((prod?.base_price || 0) * qty)}</td>
                         </tr>
                       );
                     })}
                     <tr style={{ backgroundColor: '#F8FAF9', borderTop: '2px solid #E2E8F0', fontWeight: 'bold', fontSize: '0.95rem', color: THEME.colors.textMain }}>
-                      <td style={{ padding: '0.8rem 1rem', fontFamily: 'var(--font-outfit), sans-serif' }}>TOTAL</td>
-                      <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>-</td>
-                      <td style={{ padding: '0.8rem 1rem', textAlign: 'right', color: THEME.colors.primary, fontSize: '1.15rem', fontWeight: 900, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalValue)}</td>
+                      <td style={{ padding: '0.85rem 1.2rem', fontFamily: 'var(--font-outfit), sans-serif' }}>TOTAL</td>
+                      <td style={{ padding: '0.85rem 1.2rem', textAlign: 'center' }}>-</td>
+                      <td style={{ padding: '0.85rem 1.2rem', textAlign: 'right', color: THEME.colors.primary, fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-outfit), sans-serif', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalValue)}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {/* Delivery and payment inputs */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+            {/* Delivery Date */}
+            <div style={{ marginBottom: '1.5rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>FECHA DE ENTREGA:</label>
                 <input 
@@ -8415,66 +8417,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }
                     setDeliveryDate(newDate);
                   }} 
-                  style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700 }}
+                  style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.9rem', fontWeight: 700 }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>FRANJA HORARIA:</label>
-                {(() => {
-                  const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
-                  const hasCustomSchedule = matchedProfile?.logistics_data && 
-                    (matchedProfile.logistics_data.start_time || matchedProfile.logistics_data.end_time);
-                  return (
-                    <>
-                      <select 
-                        value={deliverySlot} 
-                        onChange={(e) => setDeliverySlot(e.target.value)} 
-                        disabled={!!hasCustomSchedule}
-                        style={{ 
-                          width: '100%', 
-                          padding: '0.65rem 0.8rem', 
-                          borderRadius: '10px', 
-                          border: `1.5px solid ${THEME.colors.border}`, 
-                          outline: 'none', 
-                          fontSize: '0.85rem', 
-                          fontWeight: 700, 
-                          cursor: hasCustomSchedule ? 'not-allowed' : 'pointer', 
-                          backgroundColor: hasCustomSchedule ? '#F3F4F6' : 'white',
-                          color: hasCustomSchedule ? '#9CA3AF' : '#111827'
-                        }}
-                      >
-                        <option value="AM">Mañana (AM)</option>
-                        <option value="PM">Tarde (PM)</option>
-                      </select>
-                      {hasCustomSchedule && (
-                        <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, marginTop: '0.25rem', fontWeight: 500 }}>
-                          Horario establecido: {formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'}
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-              <div style={{ gridColumn: 'span 2' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', fontFamily: 'var(--font-outfit), sans-serif' }}>MÉTODO DE PAGO:</label>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => setPaymentMethod(e.target.value)} 
-                  style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', backgroundColor: 'white' }}
-                >
-                  <option value="credit">Crédito Comercial (B2B)</option>
-                  <option value="cash_on_delivery">Contra Entrega / Efectivo</option>
-                  <option value="transfer">Transferencia Bancaria (Bancolombia)</option>
-                  <option value="wompi">Link de Pago / Tarjeta (Wompi)</option>
-                </select>
-              </div>
+            </div>
 
-              <div style={{ 
-                gridColumn: 'span 2', 
-                marginTop: '0.5rem', 
-                borderTop: '1px solid #E2E8F0', 
-                paddingTop: '1.25rem' 
-              }}>
+            {/* Confirmation Email Option */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div>
                 <div style={{
                   backgroundColor: sendConfirmationEmail ? '#F0FDF4' : '#F8FAF9',
                   border: `1.5px solid ${sendConfirmationEmail ? '#86EFAC' : '#E2E8F0'}`,
