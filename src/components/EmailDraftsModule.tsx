@@ -357,9 +357,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
 
   // Client Pareto & Selection States
+  const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+  const [clientFrequentProductMap, setClientFrequentProductMap] = useState<Record<string, { count: number; totalQty: number; nickname?: string }>>({});
   const [clientFrequentProductIds, setClientFrequentProductIds] = useState<string[]>([]);
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
   const [isClientDetailsExpanded, setIsClientDetailsExpanded] = useState(false);
+
+  // Custom Floating SKU Dropdown States
+  const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
+  const [focusedDropdownItemIndex, setFocusedDropdownItemIndex] = useState<number>(0);
 
   // Product Customization Modal State (Image 1 replica)
   const [customizingModalItem, setCustomizingModalItem] = useState<{
@@ -1450,41 +1456,115 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const fetchClientFrequentProducts = async (profileId: string) => {
     if (!profileId) {
+      setClientExceptions([]);
+      setClientFrequentProductMap({});
       setClientFrequentProductIds([]);
       return;
     }
     try {
+      // 1. Nicknames & Exceptions
+      const { data: nicknames } = await supabase
+        .from('product_nicknames')
+        .select('*')
+        .eq('customer_id', profileId);
+      if (nicknames) setClientExceptions(nicknames);
+
+      // 2. Client recent orders & Pareto frequencies
       const { data: recentOrders } = await supabase
         .from('orders')
         .select('id')
         .eq('profile_id', profileId)
         .order('created_at', { ascending: false })
-        .limit(25);
+        .limit(50);
 
       if (recentOrders && recentOrders.length > 0) {
         const orderIds = recentOrders.map(o => o.id);
         const { data: items } = await supabase
           .from('order_items')
-          .select('product_id')
+          .select('product_id, quantity, nickname')
           .in('order_id', orderIds);
 
         if (items && items.length > 0) {
-          const counts: Record<string, number> = {};
+          const freqMap: Record<string, { count: number; totalQty: number; nickname?: string }> = {};
           items.forEach(it => {
-            if (it.product_id) counts[it.product_id] = (counts[it.product_id] || 0) + 1;
+            if (!it.product_id) return;
+            if (!freqMap[it.product_id]) {
+              freqMap[it.product_id] = { count: 0, totalQty: 0, nickname: it.nickname || undefined };
+            }
+            freqMap[it.product_id].count += 1;
+            freqMap[it.product_id].totalQty += (Number(it.quantity) || 0);
           });
-          const sortedIds = Object.entries(counts)
-            .sort((a, b) => b[1] - a[1])
-            .map(([pid]) => pid);
+          setClientFrequentProductMap(freqMap);
+          const sortedIds = Object.keys(freqMap).sort((a, b) => freqMap[b].count - freqMap[a].count);
           setClientFrequentProductIds(sortedIds);
           return;
         }
       }
+      setClientFrequentProductMap({});
       setClientFrequentProductIds([]);
     } catch (err) {
-      console.error('Error fetching client frequent products:', err);
+      console.warn('Error fetching client frequent products & exceptions:', err);
+      setClientExceptions([]);
+      setClientFrequentProductMap({});
       setClientFrequentProductIds([]);
     }
+  };
+
+  const getScoredProductsForQuery = (query: string) => {
+    const cleanQuery = (query || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    if (!cleanQuery) {
+      return [...products].sort((a, b) => {
+        const freqA = clientFrequentProductMap[a.id]?.count || 0;
+        const freqB = clientFrequentProductMap[b.id]?.count || 0;
+        if (freqB !== freqA) return freqB - freqA;
+        return (a.name || '').localeCompare(b.name || '');
+      }).slice(0, 10);
+    }
+
+    const matched = products.filter(p => {
+      const normName = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normSku = (p.sku || '').toLowerCase();
+      const normAcc = (getAccountingIdDisplay(p) || '').toLowerCase();
+      const exc = clientExceptions.find(e => e.product_id === p.id);
+      const normNickname = exc?.nickname ? exc.nickname.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+
+      return normName.includes(cleanQuery) ||
+             normSku.includes(cleanQuery) ||
+             normAcc.includes(cleanQuery) ||
+             normNickname.includes(cleanQuery);
+    });
+
+    return matched.sort((a, b) => {
+      const excA = clientExceptions.find(e => e.product_id === a.id);
+      const excB = clientExceptions.find(e => e.product_id === b.id);
+      const freqA = clientFrequentProductMap[a.id];
+      const freqB = clientFrequentProductMap[b.id];
+
+      let scoreA = 0;
+      let scoreB = 0;
+
+      // Prioritize client exceptions/nicknames (highest boost)
+      if (excA) scoreA += 1000;
+      if (excB) scoreB += 1000;
+
+      // Prioritize historical purchase frequency and volume
+      if (freqA) scoreA += (freqA.count * 100) + Math.min(freqA.totalQty, 500);
+      if (freqB) scoreB += (freqB.count * 100) + Math.min(freqB.totalQty, 500);
+
+      // Name match prefix boost
+      const normNameA = (a.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normNameB = (b.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (normNameA.startsWith(cleanQuery)) scoreA += 50;
+      if (normNameB.startsWith(cleanQuery)) scoreB += 50;
+      if (normNameA === cleanQuery) scoreA += 100;
+      if (normNameB === cleanQuery) scoreB += 100;
+
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      return normNameA.localeCompare(normNameB);
+    }).slice(0, 10);
   };
 
   useEffect(() => {
@@ -6024,29 +6104,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 className="premium-scrollbar"
                 style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: 'calc(93vh - 150px)', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
               >
-                {/* Global Datalist for SKUs (Pareto Prioritized) */}
-                <datalist id="all-products-list">
-                  {(() => {
-                    const sorted = [...products].sort((a, b) => {
-                      const aFreq = clientFrequentProductIds.includes(a.id);
-                      const bFreq = clientFrequentProductIds.includes(b.id);
-                      if (aFreq && !bFreq) return -1;
-                      if (!aFreq && bFreq) return 1;
-                      return (a.name || '').localeCompare(b.name || '');
-                    });
-                    return sorted.map(p => {
-                      const isFreq = clientFrequentProductIds.includes(p.id);
-                      return (
-                        <option 
-                          key={p.id} 
-                          value={`${p.name} (${getAccountingIdDisplay(p)})`}
-                          label={isFreq ? '⭐ Frecuente (Pareto Cliente)' : undefined}
-                        />
-                      );
-                    });
-                  })()}
-                </datalist>
-
                 <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
                   <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                     <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
@@ -6144,34 +6201,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               ref={el => { productInputRefs.current[i] = el; }}
                               type="text"
                               placeholder="Buscar ID..."
-                              defaultValue={matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : (item.searchQuery || '')}
-                              list="all-products-list"
+                              value={item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : '')}
                               onFocus={(e) => {
                                 e.target.select();
+                                setActiveDropdownRowIndex(i);
+                                setFocusedDropdownItemIndex(0);
                                 scrollToDraftRow(i);
+                              }}
+                              onBlur={() => {
+                                setTimeout(() => {
+                                  setActiveDropdownRowIndex(prev => prev === i ? null : prev);
+                                }, 250);
                               }}
                               className="sku-search-input"
                               id={`sku-input-${i}`}
                               onKeyDown={(e) => {
+                                const currentQuery = item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : '');
+                                const scoredList = getScoredProductsForQuery(currentQuery);
+
                                 if (e.key === 'Tab') {
                                   const val = e.currentTarget.value;
-                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || matchedProd;
+                                  const p = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || matchedProd;
                                   if (p) {
                                     e.preventDefault(); 
+                                    selectProduct(p, i);
+                                    setActiveDropdownRowIndex(null);
                                     openCustomizingModal(p, i);
                                   }
                                 } else if (e.key === 'Enter') {
                                   e.preventDefault();
-                                  const val = e.currentTarget.value;
-                                  const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                  const newEdits = [...editableItems];
-                                  if (p) {
-                                    newEdits[i].matched_product_id = p.id;
-                                    newEdits[i].searchQuery = `${p.name} (${getAccountingIdDisplay(p)})`;
-                                    newEdits[i].skuQuery = p.sku || '';
+                                  const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || matchedProd;
+                                  if (selectedProd) {
+                                    selectProduct(selectedProd, i);
                                   }
-                                  newEdits[i].isConfirmed = true;
-                                  setEditableItems(newEdits);
+                                  setActiveDropdownRowIndex(null);
                                   
                                   const nextIdx = i + 1;
                                   const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
@@ -6184,39 +6247,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   }
                                 } else if (e.key === 'ArrowDown') {
                                   e.preventDefault();
-                                  const nextIdx = i + 1;
-                                  const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                  if (nextInput) {
-                                    nextInput.focus();
-                                    nextInput.select();
-                                    scrollToDraftRow(nextIdx);
+                                  if (activeDropdownRowIndex === i && scoredList.length > 0) {
+                                    setFocusedDropdownItemIndex(prev => Math.min(prev + 1, scoredList.length - 1));
+                                  } else {
+                                    const nextIdx = i + 1;
+                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                    if (nextInput) {
+                                      nextInput.focus();
+                                      nextInput.select();
+                                      scrollToDraftRow(nextIdx);
+                                    }
                                   }
                                 } else if (e.key === 'ArrowUp') {
                                   e.preventDefault();
-                                  const prevIdx = i - 1;
-                                  if (prevIdx >= 0) {
-                                    const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
-                                    if (prevInput) {
-                                      prevInput.focus();
-                                      prevInput.select();
-                                      scrollToDraftRow(prevIdx);
+                                  if (activeDropdownRowIndex === i && focusedDropdownItemIndex > 0) {
+                                    setFocusedDropdownItemIndex(prev => Math.max(prev - 1, 0));
+                                  } else {
+                                    const prevIdx = i - 1;
+                                    if (prevIdx >= 0) {
+                                      const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
+                                      if (prevInput) {
+                                        prevInput.focus();
+                                        prevInput.select();
+                                        scrollToDraftRow(prevIdx);
+                                      }
                                     }
                                   }
+                                } else if (e.key === 'Escape') {
+                                  setActiveDropdownRowIndex(null);
                                 }
                               }}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                if (p) {
-                                  selectProduct(p, i);
+                                setActiveDropdownRowIndex(i);
+                                setFocusedDropdownItemIndex(0);
+                                const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
+                                
+                                const newEdits = [...editableItems];
+                                if (exactProduct) {
+                                  newEdits[i].matched_product_id = exactProduct.id;
+                                  newEdits[i].searchQuery = `${exactProduct.name} (${getAccountingIdDisplay(exactProduct)})`;
+                                  newEdits[i].skuQuery = exactProduct.sku || '';
                                 } else {
-                                  const newEdits = [...editableItems];
                                   newEdits[i].matched_product_id = null;
                                   newEdits[i].searchQuery = val;
                                   newEdits[i].skuQuery = '';
-                                  newEdits[i].selected_options = {};
-                                  setEditableItems(newEdits);
                                 }
+                                setEditableItems(newEdits);
                               }}
                               style={{ 
                                 width: '100%', 
@@ -6230,6 +6307,110 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                               }}
                             />
+
+                            {/* Custom Pareto Floating Dropdown */}
+                            {activeDropdownRowIndex === i && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: '0.5rem',
+                                right: '0.5rem',
+                                zIndex: 1000,
+                                backgroundColor: 'white',
+                                borderRadius: '12px',
+                                boxShadow: '0 12px 32px rgba(0,0,0,0.22)',
+                                border: '1.5px solid #CBD5E1',
+                                marginTop: '4px',
+                                maxHeight: '290px',
+                                overflowY: 'auto'
+                              }}>
+                                {(() => {
+                                  const currentQuery = item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : '');
+                                  const scoredList = getScoredProductsForQuery(currentQuery);
+
+                                  if (scoredList.length === 0) {
+                                    return (
+                                      <div style={{ padding: '12px', fontSize: '0.82rem', color: '#94A3B8', textAlign: 'center' }}>
+                                        No se encontraron productos coincidentes
+                                      </div>
+                                    );
+                                  }
+
+                                  return scoredList.map((p, idx) => {
+                                    const exc = clientExceptions.find(e => e.product_id === p.id);
+                                    const freq = clientFrequentProductMap[p.id];
+                                    const isClientHabitual = Boolean(exc || freq);
+                                    const isFocused = idx === focusedDropdownItemIndex;
+
+                                    return (
+                                      <div
+                                        key={p.id}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          selectProduct(p, i);
+                                          setActiveDropdownRowIndex(null);
+                                          if (p.options_config && p.options_config.length > 0) {
+                                            openCustomizingModal(p, i);
+                                          }
+                                        }}
+                                        onMouseEnter={() => setFocusedDropdownItemIndex(idx)}
+                                        style={{
+                                          padding: '9px 12px',
+                                          cursor: 'pointer',
+                                          borderBottom: '1px solid #F1F5F9',
+                                          borderLeft: isFocused ? '4px solid #0D7A57' : '4px solid transparent',
+                                          backgroundColor: isFocused ? '#F0FDF4' : (isClientHabitual ? '#F8FAF9' : 'white'),
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center',
+                                          transition: 'background 0.1s'
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                          <span style={{ fontWeight: isFocused ? '900' : '700', color: '#0F172A', fontSize: '0.85rem' }}>
+                                            {p.name}
+                                          </span>
+                                          <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
+                                            ({getAccountingIdDisplay(p)})
+                                          </span>
+                                          {isClientHabitual && (
+                                            <span style={{
+                                              fontSize: '0.68rem',
+                                              backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7',
+                                              color: '#15803D',
+                                              padding: '2px 7px',
+                                              borderRadius: '100px',
+                                              fontWeight: '800',
+                                              border: '1px solid #86EFAC',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '3px'
+                                            }}>
+                                              ⭐ {freq ? `Habitual (${freq.count} ped)` : `Alias: ${exc?.nickname}`}
+                                            </span>
+                                          )}
+                                          {p.options_config && p.options_config.length > 0 && (
+                                            <span style={{
+                                              fontSize: '0.65rem',
+                                              backgroundColor: '#FEF3C7',
+                                              color: '#92400E',
+                                              padding: '1px 5px',
+                                              borderRadius: '4px',
+                                              fontWeight: '800'
+                                            }}>
+                                              Variantes
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0D7A57', marginLeft: '8px' }}>
+                                          {formatMoney(contractPrices[p.id] || p.base_price)}/{p.unit_of_measure}
+                                        </span>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
