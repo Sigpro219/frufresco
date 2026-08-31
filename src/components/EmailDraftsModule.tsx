@@ -4811,7 +4811,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .eq('id', selectedDraft.id);
 
       // 5. Send confirmation email (queue in mail table)
-      if (selectedDraft.source_email && sendConfirmationEmail) {
+      const targetConfirmationEmail = matchedProfile?.email || matchedProfile?.contact_email || matchedProfile?.email_2 || (selectedDraft.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : null);
+
+      if (targetConfirmationEmail && sendConfirmationEmail) {
         const formattedItems = editableItems.map(item => {
           const prod = products.find(p => p.id === item.matched_product_id);
           const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
@@ -4825,7 +4827,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         });
 
         await supabase.from('mail').insert({
-          to_email: selectedDraft.source_email,
+          to_email: targetConfirmationEmail,
           subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
           template: {
             name: 'order_confirmation',
@@ -6274,14 +6276,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
                       <span style={{ color: '#15803D', fontWeight: '800' }}>● En Cobertura</span>
                     )}
-                    {(selectedDraft?.source_email || matchedProfile?.email) && (
-                      <>
-                        <span style={{ color: '#CBD5E1' }}>•</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#1D4ED8', fontWeight: '700' }}>
-                          <Mail size={11} color="#2563EB" /> {selectedDraft?.source_email || matchedProfile?.email}
-                        </span>
-                      </>
-                    )}
+                    {(() => {
+                      const clientBillingEmail = matchedProfile?.email || matchedProfile?.contact_email || matchedProfile?.additional_billing_emails || matchedProfile?.email_2 || editableClientEmail || (selectedDraft?.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : null);
+                      return clientBillingEmail ? (
+                        <>
+                          <span style={{ color: '#CBD5E1' }}>•</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#1D4ED8', fontWeight: '700' }} title="Email de Facturación / Base de datos">
+                            <Mail size={11} color="#2563EB" /> {clientBillingEmail}
+                          </span>
+                        </>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
 
@@ -6354,14 +6359,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span><strong>Tel:</strong> {matchedProfile?.phone || matchedProfile?.contact_phone || editableClientPhone || '-'}</span>
-                    {(selectedDraft?.source_email || matchedProfile?.email) && (
-                      <>
-                        <span>•</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#6B21A8', fontWeight: '700' }}>
-                          <Mail size={11} color="#7C3AED" /> {selectedDraft?.source_email || matchedProfile?.email}
-                        </span>
-                      </>
-                    )}
+                    {(() => {
+                      const clientBillingEmail = matchedProfile?.email || matchedProfile?.contact_email || matchedProfile?.additional_billing_emails || matchedProfile?.email_2 || editableClientEmail || (selectedDraft?.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : null);
+                      return clientBillingEmail ? (
+                        <>
+                          <span>•</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#6B21A8', fontWeight: '700' }} title="Email de Facturación / Base de datos">
+                            <Mail size={11} color="#7C3AED" /> {clientBillingEmail}
+                          </span>
+                        </>
+                      ) : null;
+                    })()}
                     <span>•</span>
                     <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedDraft.email_subject}>
                       <strong>Asunto:</strong> {cleanSubject(selectedDraft.email_subject)}
@@ -8815,7 +8823,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <div><strong>Nombre:</strong> {selectedDraft.client_detected_name || 'Desconocido'}</div>
                 <div><strong>Celular:</strong> {getDraftMetadata(selectedDraft).phone || 'No especificado'}</div>
                 <div><strong>NIT/Cédula:</strong> {getDraftMetadata(selectedDraft).nit || 'No especificado'}</div>
-                <div><strong>Email:</strong> {selectedDraft.source_email || 'No especificado'}</div>
+                <div><strong>Email:</strong> {matchedProfile?.email || matchedProfile?.contact_email || matchedProfile?.additional_billing_emails || matchedProfile?.email_2 || editableClientEmail || (selectedDraft.source_email && !selectedDraft.source_email.includes('@frufresco.com') ? selectedDraft.source_email : 'No especificado')}</div>
                 <div style={{ gridColumn: 'span 2' }}><strong>Dirección:</strong> {getDraftMetadata(selectedDraft).address || 'No especificada'}</div>
               </div>
             </div>
