@@ -167,6 +167,7 @@ export async function POST(req: Request) {
           }
           senderEmail = senderEmail.trim().toLowerCase();
 
+          const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'admin@frufresco.com', 'investcortes@gmail.com', 'contacto@investmentscortes.com'];
           let isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co') || senderEmail.includes('vercel') || senderEmail.includes('supabase');
 
           // If sender is corporate/internal (or forwarded email), override senderEmail with extracted original email if available
@@ -229,21 +230,80 @@ export async function POST(req: Request) {
           const cleanInboxOrders = inboxOrders.toLowerCase().trim();
           const cleanInboxCommercial = inboxCommercial.toLowerCase().trim();
 
-          // Check if matches Commercial Inbox address
-          if (recipientEmail === cleanInboxCommercial) {
-            console.log(`[Email Inbound] Route: COMMERCIAL inbox (${recipientEmail}). Skipping AI extraction.`);
-            if (mailId) {
-              await supabaseAdmin
-                .from('mail')
-                .update({ 
-                  is_inbound: true,
-                  inbox_type: 'commercial',
-                  status: 'received',
-                  to_email: recipientEmail,
+          // Check if matches Commercial Inbox address (investcortes@gmail.com)
+          const isCommercialRecipient = recipientEmail === cleanInboxCommercial || recipientEmail === 'investcortes@gmail.com' || cleanInboxCommercial.includes(recipientEmail);
+          if (isCommercialRecipient) {
+            console.log(`[Email Inbound] Route: COMMERCIAL inbox (${recipientEmail}). Processing attachments and saving to mail table.`);
+            
+            // Upload attachments if present
+            const commercialUploadedAttachments: any[] = [];
+            for (let i = 0; i < attachments.length; i++) {
+              const att = attachments[i];
+              try {
+                const attFileName = att.file_name || att.filename || `adjunto_${i}.bin`;
+                const base64Data = att.content;
+                let mimeType = att.content_type || 'application/octet-stream';
+                const lowerName = attFileName.toLowerCase();
+                
+                if (!att.content_type || att.content_type === 'application/octet-stream') {
+                  if (lowerName.endsWith('.pdf')) mimeType = 'application/pdf';
+                  else if (lowerName.endsWith('.png')) mimeType = 'image/png';
+                  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+                  else if (lowerName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                  else if (lowerName.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
+                  else if (lowerName.endsWith('.csv')) mimeType = 'text/csv';
+                }
+
+                try {
+                  await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+                } catch (_) {}
+
+                const buffer = Buffer.from(base64Data, 'base64');
+                const sanitizedFilename = attFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+                const storagePath = `commercial_${Date.now()}_${i}_${sanitizedFilename}`;
+                const { error: uploadError } = await supabaseAdmin.storage
+                  .from('order-attachments')
+                  .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
+
+                if (!uploadError) {
+                  const { data: { publicUrl } } = supabaseAdmin.storage
+                    .from('order-attachments')
+                    .getPublicUrl(storagePath);
+                  commercialUploadedAttachments.push({
+                    name: attFileName,
+                    filename: attFileName,
+                    url: publicUrl,
+                    content_type: mimeType,
+                    size: buffer.length
+                  });
+                }
+              } catch (attErr) {
+                console.error('[Email Inbound] Error saving commercial attachment:', attErr);
+              }
+            }
+
+            // Insert cleanly into mail table
+            await supabaseAdmin
+              .from('mail')
+              .insert([{
+                to_email: recipientEmail,
+                subject: cleanSubject || subject || '(Sin Asunto)',
+                status: 'pending',
+                is_inbound: true,
+                inbox_type: 'commercial',
+                message: {
+                  text: cleanedBodyText,
+                  html: htmlText,
                   sender_email: senderEmail,
-                  message: { text: plainText, html: htmlText }
-                })
-                .eq('id', mailId);
+                  sender_name: forwardedOriginalName || fromField,
+                  attachments: commercialUploadedAttachments,
+                  received_at: new Date().toISOString()
+                }
+              }]);
+
+            // Clean up temporary order_drafts record
+            if (mailId) {
+              await supabaseAdmin.from('order_drafts').delete().eq('id', mailId);
             }
             return;
           }
