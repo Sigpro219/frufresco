@@ -3661,7 +3661,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       receiptEmailSent: meta?.receiptEmailSent || false,
       emailHtml: meta?.emailHtml || null,
       orderId: meta?.orderId || meta?.order_id || meta?.attachments?.[0]?.orderId || meta?.attachments?.[0]?.order_id || draft.order_id || null,
-      orderNumber: meta?.orderNumber || meta?.order_number || meta?.attachments?.[0]?.orderNumber || meta?.attachments?.[0]?.order_number || draft.order_number || (meta?.orderId || draft.order_id ? (meta?.orderId || draft.order_id).slice(0, 8).toUpperCase() : null),
+      orderNumber: (() => {
+        const raw = meta?.orderNumber || meta?.order_number || meta?.attachments?.[0]?.orderNumber || meta?.attachments?.[0]?.order_number || draft.order_number;
+        if (raw && !raw.startsWith('PED-') && !raw.includes('-')) return raw.replace(/^#/, '');
+        if (draft.created_at) return getFriendlyOrderId({ created_at: draft.created_at, sequence_id: meta?.sequenceId || meta?.sequence_id, id: meta?.orderId || draft.order_id });
+        return raw ? raw.replace(/^#/, '') : null;
+      })(),
       processedAt: meta?.processedAt || meta?.processed_at || meta?.attachments?.[0]?.processedAt || meta?.attachments?.[0]?.processed_at || draft.processed_at || draft.updated_at || null
     };
   };
@@ -4391,7 +4396,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             ...editableItems
           ];
 
-          const genOrderNumber = order.order_number || ('PED-' + order.id.slice(0, 8).toUpperCase());
+          const genOrderNumber = getFriendlyOrderId(order);
 
           if (isLastAttachment) {
             await supabase
@@ -4796,7 +4801,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       });
 
       const nowIso = new Date().toISOString();
-      const finalOrderNumber = order.order_number || ('PED-' + order.id.slice(0, 8).toUpperCase());
+      const finalOrderNumber = getFriendlyOrderId(order);
 
       const finalExtractedItems = updatedExtractedItems.map((itm: any) => {
         if (itm.isMetadata) {
@@ -5627,7 +5632,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           gap: '3px' 
                         }}>
                           <CheckCircle2 size={11} color="#059669" />
-                          Pedido #{meta.orderNumber || (meta.orderId ? meta.orderId.slice(0, 8).toUpperCase() : '3108_0790')}
+                          Pedido #{meta.orderNumber ? meta.orderNumber.replace(/^#/, '') : getFriendlyOrderId({ created_at: draft.created_at, id: meta.orderId || draft.id })}
                         </span>
                       )}
                     </div>
