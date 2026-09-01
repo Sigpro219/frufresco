@@ -398,6 +398,7 @@ function CreateOrderContent() {
     // Client Exceptions (Product Nicknames & Notes) and Frequent Demand History
     const [clientExceptions, setClientExceptions] = useState<any[]>([]);
     const [clientFrequentProductMap, setClientFrequentProductMap] = useState<Record<string, { count: number; totalQty: number; nickname?: string }>>({});
+    const [clientFrequentProductIds, setClientFrequentProductIds] = useState<string[]>([]);
 
     const activeCustomerId = selectedClient || (clientType === 'B2C' && selectedClientB2C ? selectedClientB2C : null);
 
@@ -405,6 +406,7 @@ function CreateOrderContent() {
         if (!activeCustomerId) {
             setClientExceptions([]);
             setClientFrequentProductMap({});
+            setClientFrequentProductIds([]);
             return;
         }
         async function fetchClientData() {
@@ -442,10 +444,17 @@ function CreateOrderContent() {
                             freqMap[it.product_id].totalQty += (Number(it.quantity) || 0);
                         });
                         setClientFrequentProductMap(freqMap);
+                        const sortedIds = Object.keys(freqMap).sort((a, b) => freqMap[b].count - freqMap[a].count);
+                        setClientFrequentProductIds(sortedIds);
                     }
+                } else {
+                    setClientFrequentProductMap({});
+                    setClientFrequentProductIds([]);
                 }
             } catch (err) {
                 console.warn('Error loading client purchase history frequency:', err);
+                setClientFrequentProductMap({});
+                setClientFrequentProductIds([]);
             }
         }
         fetchClientData();
