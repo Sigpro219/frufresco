@@ -7282,7 +7282,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: 'calc(93vh - 150px)', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
               >
                 {/* Multi-Attachment Staging Segment Filter Bar */}
-                {metadata.attachments && metadata.attachments.length > 1 && (
+                {metadata.attachments && metadata.attachments.filter((a: any) => !a.name?.match(/\.(png|jpg|jpeg|gif|webp)$/i) || a.items?.length > 0).length > 1 && (
                   <div style={{
                     padding: '8px 12px',
                     backgroundColor: '#F8FAFC',
@@ -7315,18 +7315,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       Todos ({editableItems.filter(i => !i.isDeleted && !i.isMetadata).length})
                     </button>
                     {metadata.attachments.map((att: any, attIdx: number) => {
+                      const isImg = att.name?.match(/\.(png|jpg|jpeg|gif|webp)$/i);
                       const isSelected = attachmentFilterIndex === attIdx;
                       const attCount = editableItems.filter(i => !i.isDeleted && !i.isMetadata && (
                         i.attachment_index === attIdx || 
                         (i.source_attachment_name && i.source_attachment_name.toLowerCase().includes(att.name.toLowerCase()))
                       )).length;
 
+                      if (isImg && attCount === 0) return null;
+
                       return (
                         <button
                           key={attIdx}
                           type="button"
                           onClick={() => {
-                            setAttachmentFilterIndex(attIdx);
+                            setAttachmentFilterIndex(isSelected ? 'all' : attIdx);
                             setSelectedAttachmentIndex(attIdx);
                             setActiveTab('attachment');
                           }}
@@ -7429,9 +7432,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       if (item.isDeleted || item.isMetadata) return null;
                       if (attachmentFilterIndex !== 'all') {
                         const filterAtt = metadata.attachments?.[attachmentFilterIndex];
-                        const belongs = item.attachment_index === attachmentFilterIndex || 
-                          (item.source_attachment_name && filterAtt && item.source_attachment_name.toLowerCase().includes(filterAtt.name.toLowerCase()));
-                        if (!belongs) return null;
+                        const anyItemHasAttachmentTag = editableItems.some(it => it.attachment_index !== undefined || Boolean(it.source_attachment_name));
+                        if (anyItemHasAttachmentTag) {
+                          const belongs = item.attachment_index === attachmentFilterIndex || 
+                            (item.source_attachment_name && filterAtt && item.source_attachment_name.toLowerCase().includes(filterAtt.name.toLowerCase()));
+                          if (!belongs) return null;
+                        }
                       }
 
                       const matchedProd = products.find(p => p.id === item.matched_product_id);
