@@ -996,6 +996,7 @@ export default function CostMatrixPage() {
 
             let updatedCount = 0;
             const updatesToPerform: any[] = [];
+            const purchasesToPerform: any[] = [];
             const nowIso = new Date().toISOString();
 
             for (const row of jsonData) {
@@ -1054,6 +1055,17 @@ export default function CostMatrixPage() {
                         updated_by: 'EXCEL-IMPORT',
                         is_active: true
                     });
+                    purchasesToPerform.push({
+                        product_id: matchedProduct.id,
+                        quantity: 1,
+                        unit_price: newCost,
+                        total_cost: newCost,
+                        payment_method: 'cash',
+                        purchase_unit: matchedProduct.unit_of_measure || 'Kg',
+                        raw_data_source: 'EXCEL_IMPORT_SYNC',
+                        created_at: nowIso,
+                        status: 'received_ok'
+                    });
                 }
             }
 
@@ -1061,6 +1073,7 @@ export default function CostMatrixPage() {
                 throw new Error('No se encontraron filas válidas con ID_CONTABLE/SKU/ID y la columna de costo diligenciada.');
             }
 
+            // Upsert in commercial_cost_matrix
             for (let i = 0; i < updatesToPerform.length; i += 50) {
                 const batch = updatesToPerform.slice(i, i + 50);
                 const { error: upsertErr } = await supabase.from('commercial_cost_matrix').upsert(batch);
@@ -1068,7 +1081,13 @@ export default function CostMatrixPage() {
                 updatedCount += batch.length;
             }
 
-            setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos correctamente con fecha de hoy.`);
+            // Insert in purchases to register as recent purchase event with today's date
+            for (let i = 0; i < purchasesToPerform.length; i += 15) {
+                const pBatch = purchasesToPerform.slice(i, i + 15);
+                await supabase.from('purchases').insert(pBatch);
+            }
+
+            setImportSuccess(`¡Carga exitosa! Se registraron ${updatedCount} compras con fecha de hoy y se actualizaron los costos base.`);
             await fetchData();
 
             setTimeout(() => {
