@@ -3648,10 +3648,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
       clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
       deliveryDate: meta?.deliveryDate || null,
-      deliverySlot: deliverySlot,
-      attachmentUrl: meta?.attachmentUrl || null,
-      attachmentName: meta?.attachmentName || null,
-      attachments: meta?.attachments || null,
+      attachmentUrl: meta?.attachmentUrl || meta?.attachments?.[0]?.url || null,
+      attachmentName: meta?.attachmentName || meta?.attachments?.[0]?.name || null,
+      attachments: meta?.attachments || (meta?.attachmentUrl ? [{ url: meta.attachmentUrl, name: meta.attachmentName || 'documento.pdf' }] : []),
       rejectReason: meta?.rejectReason || null,
       latitude: meta?.latitude || null,
       longitude: meta?.longitude || null,
@@ -6527,7 +6526,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       </span>
                       {(() => {
                         const metadata = getDraftMetadata(selectedDraft);
-                        if (!metadata.attachmentUrl) return null;
+                        const hasAttachments = !!(
+                          metadata.attachmentUrl || 
+                          (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) ||
+                          metadata.attachmentName
+                        );
+                        if (!hasAttachments) return null;
                         return (
                           <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', borderRadius: '6px', padding: '2px', marginLeft: '6px' }}>
                             <button
@@ -6628,10 +6632,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         let currentUrl = metadata.attachmentUrl;
                         let currentName = metadata.attachmentName;
                         if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
-                          const selectedAtt = metadata.attachments[selectedAttachmentIndex];
+                          const selectedAtt = metadata.attachments[selectedAttachmentIndex] || metadata.attachments[0];
                           if (selectedAtt) {
-                            currentUrl = selectedAtt.url;
-                            currentName = selectedAtt.name;
+                            currentUrl = selectedAtt.url || currentUrl;
+                            currentName = selectedAtt.name || currentName;
                           }
                         }
 
