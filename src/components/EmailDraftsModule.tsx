@@ -9,7 +9,7 @@ import {
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
     Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart,
-    ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator 
+    ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock 
 } from 'lucide-react';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
@@ -763,6 +763,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
   const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
   const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
+
+  // Inactive Client Gating & Unlock States
+  const [unlockedInactiveDraftIds, setUnlockedInactiveDraftIds] = useState<Set<string>>(new Set());
+  const [showInactiveUnlockModal, setShowInactiveUnlockModal] = useState<boolean>(false);
+  const [isReactivatingProfile, setIsReactivatingProfile] = useState<boolean>(false);
 
   // Client Pareto & Selection States
   const [clientExceptions, setClientExceptions] = useState<any[]>([]);
@@ -2803,8 +2808,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id, parent_id')
-        .eq('is_active', true)
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id, parent_id, is_active')
         .order('company_name', { ascending: true });
       if (data) setProfiles(data);
     } catch (e) {
@@ -4644,6 +4648,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleConfirmOrderDirectly = async () => {
     if (!selectedDraft) return;
+
+    // Check if client is inactive and not unlocked yet
+    const currentMatchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+    if (currentMatchedProfile && currentMatchedProfile.is_active === false && !unlockedInactiveDraftIds.has(selectedDraft.id)) {
+      setShowInactiveUnlockModal(true);
+      return;
+    }
+
     setConfirmingOrder(true);
 
     try {
@@ -5961,6 +5973,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       {/* Modal de Aprobación */}
       {selectedDraft && (() => {
         const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+        const isClientInactive = Boolean(matchedProfile && matchedProfile.is_active === false && !unlockedInactiveDraftIds.has(selectedDraft.id));
+        const isClientUnlocked = Boolean(matchedProfile && matchedProfile.is_active === false && unlockedInactiveDraftIds.has(selectedDraft.id));
         return (
           <div style={{
           position: 'fixed',
@@ -6050,8 +6064,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Mesa de Trabajo Header: TIER 1 (Ultra Clean, Compact & Powerful) */}
             <div style={{ 
               padding: '0.85rem 3.5rem 0.85rem 1.5rem', 
-              backgroundColor: matchedProfile ? '#F0FDF4' : '#FFF7ED', 
-              borderBottom: `1px solid ${matchedProfile ? '#BBF7D0' : '#FFEDD5'}`,
+              backgroundColor: isClientInactive ? '#FFFBEB' : (matchedProfile ? '#F0FDF4' : '#FFF7ED'), 
+              borderBottom: `1px solid ${isClientInactive ? '#FDE68A' : (matchedProfile ? '#BBF7D0' : '#FFEDD5')}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
@@ -6062,12 +6076,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }}>
               {/* Left Side: Client Selector, Delivery Date, Real Reception Window & Tier 2 Toggle */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <div style={{ color: matchedProfile ? '#16A34A' : '#D97706', display: 'flex', alignItems: 'center' }}>
-                  {matchedProfile ? <CheckCircle2 size={24} strokeWidth={2} /> : <AlertTriangle size={24} strokeWidth={2} />}
+                <div style={{ color: isClientInactive ? '#D97706' : (matchedProfile ? '#16A34A' : '#D97706'), display: 'flex', alignItems: 'center' }}>
+                  {isClientInactive ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#FEF3C7', border: '1px solid #FCD34D' }} title="Sede Inactiva">
+                      <Lock size={16} strokeWidth={2.5} color="#D97706" />
+                    </div>
+                  ) : matchedProfile ? (
+                    <CheckCircle2 size={24} strokeWidth={2} />
+                  ) : (
+                    <AlertTriangle size={24} strokeWidth={2} />
+                  )}
                 </div>
 
                 {/* Interactive Client Selector */}
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -6075,13 +6097,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       setFocusedClientSearchIndex(-1);
                     }}
                     style={{
-                      background: matchedProfile ? '#FFFFFF' : '#FEF3C7',
-                      border: `1.5px solid ${matchedProfile ? '#86EFAC' : '#F59E0B'}`,
+                      background: isClientInactive ? '#FEF3C7' : (matchedProfile ? '#FFFFFF' : '#FEF3C7'),
+                      border: `1.5px solid ${isClientInactive ? '#F59E0B' : (matchedProfile ? '#86EFAC' : '#F59E0B')}`,
                       borderRadius: '10px',
                       padding: '6px 14px',
                       fontSize: '0.9rem',
                       fontWeight: '900',
-                      color: matchedProfile ? '#065F46' : '#92400E',
+                      color: isClientInactive ? '#92400E' : (matchedProfile ? '#065F46' : '#92400E'),
                       cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -6091,14 +6113,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}
                     title="Clic para cambiar o buscar cliente"
                   >
-                    <Building2 size={16} color={matchedProfile ? '#059669' : '#D97706'} />
+                    {isClientInactive ? (
+                      <Lock size={15} color="#D97706" />
+                    ) : (
+                      <Building2 size={16} color={matchedProfile ? '#059669' : '#D97706'} />
+                    )}
                     <span style={{ maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {matchedProfile 
-                        ? (matchedProfile.company_name || matchedProfile.contact_name)
-                        : (selectedDraft.client_detected_name ? `Asignar: ${selectedDraft.client_detected_name}` : 'Seleccionar Cliente')}
+                      {isClientInactive ? (
+                        <>🔒 <strong>Inactiva:</strong> {matchedProfile?.company_name || matchedProfile?.contact_name}</>
+                      ) : matchedProfile ? (
+                        <>{matchedProfile.company_name || matchedProfile.contact_name} {isClientUnlocked && <span style={{ fontSize: '0.7rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: '4px', marginLeft: '4px' }}>🔓 Desbloqueada</span>}</>
+                      ) : (
+                        selectedDraft.client_detected_name ? `Asignar: ${selectedDraft.client_detected_name}` : 'Seleccionar Cliente'
+                      )}
                     </span>
-                    <ChevronDown size={14} color={matchedProfile ? '#059669' : '#B45309'} />
+                    <ChevronDown size={14} color={isClientInactive ? '#B45309' : (matchedProfile ? '#059669' : '#B45309')} />
                   </button>
+
+                  {isClientInactive && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowInactiveUnlockModal(true);
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        backgroundColor: '#F59E0B',
+                        color: 'white',
+                        border: 'none',
+                        fontSize: '0.78rem',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.35)',
+                        transition: 'all 0.15s'
+                      }}
+                      title="Desbloquear sede inactiva para este pedido"
+                    >
+                      <Unlock size={13} /> Desbloquear
+                    </button>
+                  )}
 
                   {isClientSearchOpen && (
                     <div style={{
@@ -6186,13 +6244,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                                   <div style={{ fontWeight: isFocused ? 800 : 700, color: isFocused ? '#1E3A8A' : '#0F172A', fontSize: '0.86rem' }}>
+                                    {p.is_active === false && <span style={{ marginRight: '6px' }}>🔒</span>}
                                     {p.company_name || p.contact_name}
                                   </div>
-                                  {parentMatrix && (
-                                    <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                                      Sucursal
-                                    </span>
-                                  )}
+                                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                    {p.is_active === false && (
+                                      <span style={{ fontSize: '0.66rem', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                        Inactiva
+                                      </span>
+                                    )}
+                                    {parentMatrix && (
+                                      <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                        Sucursal
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {parentMatrix && (
@@ -6493,6 +6559,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <span><strong>Canastillas:</strong> {matchedProfile?.needs_crates ? 'Requiere canastillas' : 'No requiere'}</span>
                     <span>•</span>
                     <span><strong>Tipo:</strong> {matchedProfile?.role === 'b2b_client' ? 'B2B Horeca' : 'B2C Hogar'}</span>
+                    {isClientInactive && (
+                      <span style={{ fontSize: '0.66rem', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <Lock size={10} /> Sede Inactiva
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -10629,6 +10700,147 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               readOnly={false}
           />
       )}
+
+      {/* Inactive Client Unlock & Reactivation Modal */}
+      {showInactiveUnlockModal && selectedDraft && (() => {
+        const currentProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+        const clientName = currentProfile?.company_name || currentProfile?.contact_name || selectedDraft.client_detected_name || 'Cliente';
+
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '1.25rem'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1.5px solid #FCD34D'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '1.2rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Lock size={22} color="#D97706" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em' }}>
+                    Sede Inactiva en Sistema
+                  </h3>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#64748B', lineHeight: '1.4' }}>
+                    La sede <strong>{clientName}</strong> se encuentra deshabilitada o inactiva en el catálogo corporativo.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '12px', padding: '12px 14px', marginBottom: '1.5rem', fontSize: '0.82rem', color: '#92400E', lineHeight: '1.45' }}>
+                💡 <strong>¿Cómo deseas proceder con este pedido?</strong><br />
+                Puedes autorizar el procesamiento de este pedido puntual sin alterar el catálogo, o reactivar la sede de forma permanente.
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {/* Option 1: Reactivate permanently */}
+                <button
+                  type="button"
+                  disabled={isReactivatingProfile}
+                  onClick={async () => {
+                    if (!currentProfile) return;
+                    setIsReactivatingProfile(true);
+                    try {
+                      const { error } = await supabase
+                        .from('profiles')
+                        .update({ is_active: true })
+                        .eq('id', currentProfile.id);
+                      if (error) throw error;
+
+                      setProfiles(prev => prev.map(p => p.id === currentProfile.id ? { ...p, is_active: true } : p));
+                      setUnlockedInactiveDraftIds(prev => new Set([...prev, selectedDraft.id]));
+                      setShowInactiveUnlockModal(false);
+                      showToast(`Sede ${clientName} reactivada permanentemente con éxito`, 'success');
+                    } catch (err: any) {
+                      console.error('Error reactivating profile:', err);
+                      showToast('Error al reactivar la sede en la base de datos', 'error');
+                    } finally {
+                      setIsReactivatingProfile(false);
+                    }
+                  }}
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    backgroundColor: '#10B981',
+                    color: 'white',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 10px rgba(16, 185, 129, 0.25)'
+                  }}
+                >
+                  {isReactivatingProfile ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  Reactivar Sede en el Sistema Permanentemente
+                </button>
+
+                {/* Option 2: Authorize for this order only */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnlockedInactiveDraftIds(prev => new Set([...prev, selectedDraft.id]));
+                    setShowInactiveUnlockModal(false);
+                    showToast(`Sede autorizada para este pedido`, 'info');
+                  }}
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    backgroundColor: '#F8FAFC',
+                    color: '#334155',
+                    border: '1.5px solid #CBD5E1',
+                    fontWeight: 800,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <Unlock size={16} color="#D97706" />
+                  Autorizar Solo para Este Pedido
+                </button>
+
+                {/* Cancel */}
+                <button
+                  type="button"
+                  onClick={() => setShowInactiveUnlockModal(false)}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'none',
+                    color: '#64748B',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    marginTop: '4px'
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
