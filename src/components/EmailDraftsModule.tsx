@@ -6073,6 +6073,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
         const isClientInactive = Boolean(matchedProfile && matchedProfile.is_active === false && !unlockedInactiveDraftIds.has(selectedDraft.id));
         const isClientUnlocked = Boolean(matchedProfile && matchedProfile.is_active === false && unlockedInactiveDraftIds.has(selectedDraft.id));
+        const metadata = getDraftMetadata(selectedDraft);
         return (
           <div style={{
           position: 'fixed',
