@@ -904,23 +904,66 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               }
             }
 
-            let qtyCol = -1;
+            const qtyCandidates: number[] = [];
             let nameCol = -1;
             let unitCol = -1;
             let pluCol = -1;
             const headerRow = validRows[headerRowIdx] || [];
             headerRow.forEach((cellVal: any, colIdx: number) => {
               const s = String(cellVal || '').toLowerCase().trim();
-              if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s.includes('cantidad') || s === 'qty' || s === 'pedido') {
-                qtyCol = colIdx;
-              } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo')) {
+              if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s.includes('cantidad') || s === 'qty' || s === 'pedido' || s === 'total' || s.includes('total') || s.includes('solic') || s.includes('requer')) {
+                qtyCandidates.push(colIdx);
+              } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo') || s.includes('item')) {
                 nameCol = colIdx;
-              } else if (s === 'ubm' || s.includes('unidad') || s === 'und' || s === 'u.m') {
+              } else if (s === 'ubm' || s.includes('unidad') || s === 'und' || s === 'u.m' || s.includes('medida')) {
                 unitCol = colIdx;
-              } else if (s.includes('plu') || s.includes('codigo') || s.includes('cod') || s === 'id') {
+              } else if (s.includes('plu') || s.includes('codigo') || s.includes('cod') || s === 'id' || s.includes('ref')) {
                 pluCol = colIdx;
               }
             });
+
+            // If multiple qty candidates (e.g. empty CANT vs filled TOTAL), determine the best column by finding positive numeric values
+            let qtyCol = -1;
+            if (qtyCandidates.length > 0) {
+              let bestCount = -1;
+              qtyCandidates.forEach(candCol => {
+                let positiveCount = 0;
+                for (let r = headerRowIdx + 1; r < validRows.length; r++) {
+                  const val = validRows[r]?.[candCol];
+                  if (val !== undefined && val !== null && String(val).trim() !== '') {
+                    const cleanNum = parseFloat(String(val).replace(',', '.').replace(/[^0-9.]/g, ''));
+                    if (!isNaN(cleanNum) && cleanNum > 0) {
+                      positiveCount++;
+                    }
+                  }
+                }
+                if (positiveCount > bestCount) {
+                  bestCount = positiveCount;
+                  qtyCol = candCol;
+                }
+              });
+            }
+
+            // Fallback: If no qty candidate header matched, auto-detect any active column with positive numbers
+            if (qtyCol === -1 || qtyCandidates.length === 0) {
+              for (const candCol of activeCols) {
+                if (candCol === nameCol || candCol === pluCol) continue;
+                let positiveCount = 0;
+                for (let r = headerRowIdx + 1; r < validRows.length; r++) {
+                  const val = validRows[r]?.[candCol];
+                  if (val !== undefined && val !== null && String(val).trim() !== '') {
+                    const cleanNum = parseFloat(String(val).replace(',', '.').replace(/[^0-9.]/g, ''));
+                    if (!isNaN(cleanNum) && cleanNum > 0) {
+                      positiveCount++;
+                    }
+                  }
+                }
+                if (positiveCount > 0) {
+                  qtyCol = candCol;
+                  break;
+                }
+              }
+            }
 
             const parsedRows = validRows.map((row, rIdx) => {
               const isHeader = rIdx === headerRowIdx;
@@ -928,12 +971,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               
               let qtyNum: number | null = null;
               let rawQty = '';
-              if (!isHeader && !isMeta && qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
-                rawQty = String(row[qtyCol]).trim();
-                const cleaned = rawQty.replace(',', '.').replace(/[^0-9.]/g, '');
-                const parsed = parseFloat(cleaned);
-                if (!isNaN(parsed) && parsed > 0 && rawQty !== '') {
-                  qtyNum = parsed;
+              if (!isHeader && !isMeta) {
+                // 1. Try primary qtyCol
+                if (qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
+                  rawQty = String(row[qtyCol]).trim();
+                  const cleaned = rawQty.replace(',', '.').replace(/[^0-9.]/g, '');
+                  const parsed = parseFloat(cleaned);
+                  if (!isNaN(parsed) && parsed > 0 && rawQty !== '') {
+                    qtyNum = parsed;
+                  }
+                }
+
+                // 2. Fallback to any qty candidate column if primary was 0 or empty for this row
+                if (qtyNum === null) {
+                  for (const candCol of qtyCandidates) {
+                    if (candCol === qtyCol) continue;
+                    const cVal = row[candCol];
+                    if (cVal !== undefined && cVal !== null && String(cVal).trim() !== '') {
+                      const cleaned = String(cVal).replace(',', '.').replace(/[^0-9.]/g, '');
+                      const parsed = parseFloat(cleaned);
+                      if (!isNaN(parsed) && parsed > 0) {
+                        qtyNum = parsed;
+                        break;
+                      }
+                    }
+                  }
                 }
               }
 
@@ -963,7 +1025,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               sheetName,
               activeCols,
               headerRowIdx,
-              qtyCol,
+              qtyCol: qtyCol !== -1 ? qtyCol : 0,
               nameCol,
               unitCol,
               pluCol,
@@ -7023,8 +7085,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                                             {/* Cells */}
                                             {r.cells.map((cellText: string, cIdx: number) => {
-                                              const isQtyCell = cIdx === currentSheet.qtyCol && !isRowHeader && !isRowMeta;
-                                              const isNameCell = cIdx === currentSheet.nameCol && !isRowHeader && !isRowMeta;
+                                              const realCol = currentSheet.activeCols ? currentSheet.activeCols[cIdx] : cIdx;
+                                              const isQtyCell = realCol === currentSheet.qtyCol && !isRowHeader && !isRowMeta;
+                                              const isNameCell = realCol === currentSheet.nameCol && !isRowHeader && !isRowMeta;
 
                                               return (
                                                 <td
