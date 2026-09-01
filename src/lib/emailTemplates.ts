@@ -70,8 +70,10 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
     
     <!-- 1. HEADER HERO (Diseño Editorial Verde Bosque con Logo Optimizado) -->
     <div style="background: linear-gradient(135deg, #081c15 0%, #1a4d2e 100%); padding: 36px 28px 30px; text-align: center; color: white;">
-      <div style="margin-bottom: 14px; display: inline-block;">
-        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="140" height="auto" alt="Investments Cortés" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); border: 0; display: inline-block; max-height: 80px; object-fit: contain;">
+      <div style="margin-bottom: 16px; display: inline-block;">
+        <div style="background-color: #FFFFFF; border-radius: 14px; padding: 10px 18px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+          <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="130" height="auto" alt="Investments Cortés" style="border: 0; display: block; max-height: 75px; object-fit: contain;">
+        </div>
       </div>
       
       <div style="display: block; margin-bottom: 12px;">
