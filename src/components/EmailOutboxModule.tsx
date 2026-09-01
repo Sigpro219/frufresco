@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2 } from 'lucide-react';
+import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2, Printer, Download } from 'lucide-react';
 import { generateOrderConfirmationHtml } from '@/lib/emailTemplates';
 
 interface EmailOutboxModuleProps {
@@ -548,14 +548,91 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
               textAlign: 'left'
             }}>
               {/* Modal Header */}
-              <div style={{ padding: '1.5rem 1.75rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '1.25rem 1.75rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.2rem', color: THEME.colors.textMain, fontWeight: 800 }}>{selectedEmail.subject}</h3>
                   <p style={{ margin: '4px 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: 600 }}>Para: {selectedEmail.to_email}</p>
                 </div>
-                <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: '6px', borderRadius: '8px' }}>
-                  <X size={24} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {previewHtml && (
+                    <>
+                      <button
+                        onClick={() => {
+                          const fileName = `Pedido_${(selectedEmail.template?.data?.order_number || selectedEmail.subject || 'confirmacion').toString().replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+                          const blob = new Blob([previewHtml], { type: 'text/html;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = fileName;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          URL.revokeObjectURL(url);
+                        }}
+                        style={{
+                          padding: '0.45rem 0.85rem',
+                          backgroundColor: '#F8FAFC',
+                          border: `1.5px solid #CBD5E1`,
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          color: '#334155',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                        title="Descargar HTML"
+                      >
+                        <Download size={14} />
+                        Descargar
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow) {
+                            printWindow.document.write(previewHtml);
+                            printWindow.document.close();
+                            printWindow.focus();
+                            setTimeout(() => {
+                              printWindow.print();
+                              printWindow.close();
+                            }, 350);
+                          }
+                        }}
+                        style={{
+                          padding: '0.45rem 0.95rem',
+                          backgroundColor: '#0D7A57',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 800,
+                          fontSize: '0.8rem',
+                          color: 'white',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#0B6447'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0D7A57'}
+                        title="Imprimir o guardar como PDF"
+                      >
+                        <Printer size={14} />
+                        Imprimir
+                      </button>
+                    </>
+                  )}
+
+                  <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', padding: '6px', borderRadius: '8px' }}>
+                    <X size={22} />
+                  </button>
+                </div>
               </div>
 
               {/* Modal Body (Email HTML Preview) */}
@@ -611,26 +688,116 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
               </div>
 
               {/* Modal Footer */}
-              <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', backgroundColor: THEME.colors.background, borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
-                <button
-                  onClick={() => setSelectedEmail(null)}
-                style={{
-                  padding: '0.5rem 1.25rem',
-                  backgroundColor: 'white',
-                  border: `1.5px solid ${THEME.colors.border}`,
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  color: THEME.colors.textSecondary,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-              >
-                Cerrar
-              </button>
-            </div>
+              <div style={{
+                padding: '1.25rem 1.75rem',
+                borderTop: `1px solid ${THEME.colors.border}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: 'white',
+                borderBottomLeftRadius: '20px',
+                borderBottomRightRadius: '20px'
+              }}>
+                <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>
+                  Investments Cortés S.A.S • Confirmación Oficial de Pedido
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {previewHtml && (
+                    <>
+                      <button
+                        onClick={() => {
+                          const fileName = `Pedido_${(selectedEmail.template?.data?.order_number || selectedEmail.subject || 'confirmacion').toString().replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+                          const blob = new Blob([previewHtml], { type: 'text/html;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = fileName;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          URL.revokeObjectURL(url);
+                        }}
+                        style={{
+                          padding: '0.55rem 1.1rem',
+                          backgroundColor: '#F8FAFC',
+                          border: `1.5px solid #CBD5E1`,
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '0.85rem',
+                          color: '#334155',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                        title="Descargar correo como archivo HTML"
+                      >
+                        <Download size={15} />
+                        Descargar HTML
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow) {
+                            printWindow.document.write(previewHtml);
+                            printWindow.document.close();
+                            printWindow.focus();
+                            setTimeout(() => {
+                              printWindow.print();
+                              printWindow.close();
+                            }, 350);
+                          }
+                        }}
+                        style={{
+                          padding: '0.55rem 1.25rem',
+                          backgroundColor: '#0D7A57',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 800,
+                          fontSize: '0.85rem',
+                          color: 'white',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 8px rgba(13, 122, 87, 0.25)',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#0B6447'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0D7A57'}
+                        title="Imprimir o guardar como PDF"
+                      >
+                        <Printer size={15} />
+                        Imprimir / Guardar PDF
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedEmail(null)}
+                    style={{
+                      padding: '0.55rem 1.25rem',
+                      backgroundColor: 'white',
+                      border: `1.5px solid ${THEME.colors.border}`,
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      color: THEME.colors.textSecondary,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
           </div>
         </div>
       );
