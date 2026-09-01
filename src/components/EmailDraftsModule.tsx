@@ -3403,13 +3403,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         triggerGeocoding(meta.address);
       }
       
-      // Initialize editable items
-      const rawItems = (() => {
-        if (meta.attachments && Array.isArray(meta.attachments) && meta.attachments[selectedAttachmentIndex]?.items?.length > 0) {
-          return meta.attachments[selectedAttachmentIndex].items;
-        }
-        return getDraftItems(selectedDraft);
-      })();
+      // Initialize editable items with all products consolidated
+      const rawItems = getDraftItems(selectedDraft);
       const initialEdits = rawItems.map((item: any) => {
         let cleanName = item.originalName || item.name || '';
         const rawOriginalName = cleanName;
