@@ -775,6 +775,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [clientFrequentProductIds, setClientFrequentProductIds] = useState<string[]>([]);
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
   const [isClientDetailsExpanded, setIsClientDetailsExpanded] = useState(false);
+  const [attachmentFilterIndex, setAttachmentFilterIndex] = useState<number | 'all'>('all');
 
   useEffect(() => {
     matchCacheRef.current = {};
@@ -830,11 +831,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
     
     setSelectedAttachmentIndex(defaultIndex);
+    setAttachmentFilterIndex('all');
     setIsAttachmentZoomed(false);
   }, [selectedDraft?.id]);
 
   useEffect(() => {
     setIsAttachmentZoomed(false);
+    if (activeTab === 'attachment' && selectedDraft) {
+      const metadata = getDraftMetadata(selectedDraft);
+      const currentAtt = metadata.attachments?.[selectedAttachmentIndex];
+      if (currentAtt) {
+        const itemIdx = editableItems.findIndex(i => !i.isDeleted && !i.isMetadata && (
+          i.attachment_index === selectedAttachmentIndex ||
+          (i.source_attachment_name && currentAtt.name && i.source_attachment_name.toLowerCase().includes(currentAtt.name.toLowerCase()))
+        ));
+        if (itemIdx >= 0) {
+          scrollToDraftRow(itemIdx);
+        }
+      }
+    }
   }, [selectedAttachmentIndex]);
 
   useEffect(() => {
@@ -1003,6 +1018,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               const rowUnit = unitCol !== -1 ? String(row[unitCol] || '').trim() : 'Kg';
               const rowPlu = pluCol !== -1 ? String(row[pluCol] || '').trim() : '';
 
+              const isDateRow = row.some(cell => {
+                const s = String(cell || '').toLowerCase();
+                return s.includes('fecha') || s.includes('solicitud') || s.includes('entrega');
+              });
+
               return {
                 rowIndex: rIdx + 1,
                 isHeader,
@@ -1014,7 +1034,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 pluVal: rowPlu,
                 cells: activeCols.map(c => {
                   const v = row[c];
-                  return v !== null && v !== undefined ? String(v).trim() : '';
+                  if (v === null || v === undefined) return '';
+                  const s = String(v).trim();
+                  const num = Number(s);
+                  if (!isNaN(num) && (isDateRow || (num >= 35000 && num <= 60000 && Number.isInteger(num)))) {
+                    try {
+                      const utc_days = Math.floor(num - 25569);
+                      const utc_value = utc_days * 86400;
+                      const date_info = new Date(utc_value * 1000);
+                      const day = String(date_info.getUTCDate()).padStart(2, '0');
+                      const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+                      const year = date_info.getUTCFullYear();
+                      if (year >= 2020 && year <= 2035) {
+                        return `${day}/${month}/${year}`;
+                      }
+                    } catch {}
+                  }
+                  return s;
                 })
               };
             });
@@ -7244,8 +7280,79 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 className="premium-scrollbar"
                 style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: 'calc(93vh - 150px)', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
               >
+                {/* Multi-Attachment Staging Segment Filter Bar */}
+                {metadata.attachments && metadata.attachments.length > 1 && (
+                  <div style={{
+                    padding: '8px 12px',
+                    backgroundColor: '#F8FAFC',
+                    borderBottom: '1px solid #E2E8F0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    flexWrap: 'wrap',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 15
+                  }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Paperclip size={11} /> Filtrar por Anexo:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachmentFilterIndex('all')}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        border: attachmentFilterIndex === 'all' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                        backgroundColor: attachmentFilterIndex === 'all' ? '#ECFDF5' : '#FFFFFF',
+                        color: attachmentFilterIndex === 'all' ? '#065F46' : '#475569',
+                        fontSize: '0.7rem',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Todos ({editableItems.filter(i => !i.isDeleted && !i.isMetadata).length})
+                    </button>
+                    {metadata.attachments.map((att: any, attIdx: number) => {
+                      const isSelected = attachmentFilterIndex === attIdx;
+                      const attCount = editableItems.filter(i => !i.isDeleted && !i.isMetadata && (
+                        i.attachment_index === attIdx || 
+                        (i.source_attachment_name && i.source_attachment_name.toLowerCase().includes(att.name.toLowerCase()))
+                      )).length;
+
+                      return (
+                        <button
+                          key={attIdx}
+                          type="button"
+                          onClick={() => {
+                            setAttachmentFilterIndex(attIdx);
+                            setSelectedAttachmentIndex(attIdx);
+                            setActiveTab('attachment');
+                          }}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            border: isSelected ? '1.5px solid #2563EB' : '1px solid #CBD5E1',
+                            backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                            color: isSelected ? '#1D4ED8' : '#475569',
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Paperclip size={10} />
+                          {att.name.replace(/\.xlsx|\.pdf/i, '')} {attCount > 0 ? `(${attCount})` : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
-                  <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <thead style={{ position: 'sticky', top: metadata.attachments && metadata.attachments.length > 1 ? '40px' : 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                     <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
                       <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', width: '33%', fontSize: '0.74rem' }}>NOMBRE EN DOCUMENTO</th>
                       <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'left', width: '39%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
@@ -7318,6 +7425,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </thead>
                   <tbody>
                     {editableItems.map((item: any, i: number) => {
+                      if (item.isDeleted || item.isMetadata) return null;
+                      if (attachmentFilterIndex !== 'all') {
+                        const filterAtt = metadata.attachments?.[attachmentFilterIndex];
+                        const belongs = item.attachment_index === attachmentFilterIndex || 
+                          (item.source_attachment_name && filterAtt && item.source_attachment_name.toLowerCase().includes(filterAtt.name.toLowerCase()));
+                        if (!belongs) return null;
+                      }
+
                       const matchedProd = products.find(p => p.id === item.matched_product_id);
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
                       const isActiveRow = activeDropdownRowIndex === i || focusedRowIndex === i;
@@ -7359,6 +7474,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FBBF24', padding: '1px 5px', borderRadius: '5px', fontWeight: '900', fontSize: '0.65rem' }}>
                                 {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
                               </span>
+                              {item.source_attachment_name && (
+                                <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700 }} title={`Anexo: ${item.source_attachment_name}`}>
+                                  📎 {item.purchase_order ? `OC: ${item.purchase_order}` : item.source_attachment_name.replace(/\.xlsx|\.pdf/i, '')}
+                                </span>
+                              )}
                               {matchedProd ? (
                                 <span 
                                   onClick={() => openCustomizingModal(matchedProd, i)}

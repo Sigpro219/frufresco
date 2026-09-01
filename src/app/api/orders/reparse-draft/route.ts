@@ -53,106 +53,183 @@ export async function POST(req: Request) {
 
     let parsedSuccessfully = false;
 
-    // 1. Intento con archivo adjunto si existe URL
-    if (attachmentUrl) {
+    const attachmentsList: Array<{ url: string; name: string }> = [];
+    if (metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
+      metadata.attachments.forEach((att: any) => {
+        if (att.url) attachmentsList.push({ url: att.url, name: att.name || 'documento' });
+      });
+    } else if (attachmentUrl) {
+      attachmentsList.push({ url: attachmentUrl, name: attachmentName });
+    }
+
+    // 1. Process each attachment independently
+    for (let attIdx = 0; attIdx < attachmentsList.length; attIdx++) {
+      const att = attachmentsList[attIdx];
       try {
-        const fileRes = await fetch(attachmentUrl);
-        if (fileRes.ok) {
-          const fileBuf = await fileRes.arrayBuffer();
-          const ext = attachmentName.split('.').pop()?.toLowerCase() || '';
+        const fileRes = await fetch(att.url);
+        if (!fileRes.ok) continue;
 
-          if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
-            const base64 = Buffer.from(fileBuf).toString('base64');
-            const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        const fileBuf = await fileRes.arrayBuffer();
+        const ext = (att.name || '').split('.').pop()?.toLowerCase() || '';
 
-            const prompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
-Extrae la información en formato JSON estricto:
+        if (ext === 'xlsx' || ext === 'xls') {
+          const workbook = XLSX.read(fileBuf, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 }) as any[][];
+          if (!rawData || rawData.length === 0) continue;
+
+          let poNumber = '';
+          let headerRowIdx = -1;
+          const qtyCandidates: number[] = [];
+          let nameCol = -1;
+          let unitCol = -1;
+          let obsCol = -1;
+          let pluCol = -1;
+
+          // Scan top rows for metadata (PEDIDO, OC, DIRECCION, etc.)
+          for (let r = 0; r < Math.min(15, rawData.length); r++) {
+            const rowStr = (rawData[r] || []).map(c => String(c || '')).join(' ');
+            const poMatch = rowStr.match(/PEDIDO:\s*([0-9A-Za-z-]+)/i) || rowStr.match(/OC:\s*([0-9A-Za-z-]+)/i);
+            if (poMatch && !poNumber) poNumber = poMatch[1].trim();
+
+            if (headerRowIdx === -1) {
+              const rowLower = rowStr.toLowerCase();
+              if ((rowLower.includes('plu') || rowLower.includes('prod') || rowLower.includes('articulo')) && 
+                  (rowLower.includes('cant') || rowLower.includes('total') || rowLower.includes('pedido') || rowLower.includes('ubm'))) {
+                headerRowIdx = r;
+                const headerRow = rawData[r] || [];
+                headerRow.forEach((c: any, cIdx: number) => {
+                  const s = String(c || '').toLowerCase().trim();
+                  if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s === 'qty' || s === 'total' || s.includes('total') || s.includes('solic')) {
+                    qtyCandidates.push(cIdx);
+                  } else if (s.includes('prod') || s.includes('descrip') || s.includes('nombre') || s.includes('articulo') || s.includes('item')) {
+                    nameCol = cIdx;
+                  } else if (s === 'ubm' || s.includes('unidad') || s === 'und' || s === 'u.m' || s.includes('medida')) {
+                    unitCol = cIdx;
+                  } else if (s.includes('observ') || s.includes('nota')) {
+                    obsCol = cIdx;
+                  } else if (s.includes('plu') || s.includes('codigo') || s.includes('cod') || s === 'id') {
+                    pluCol = cIdx;
+                  }
+                });
+              }
+            }
+          }
+
+          // Auto-select best qty column with positive numbers
+          let qtyCol = -1;
+          if (qtyCandidates.length > 0) {
+            let bestCount = -1;
+            qtyCandidates.forEach(candCol => {
+              let posCount = 0;
+              for (let r = (headerRowIdx !== -1 ? headerRowIdx + 1 : 0); r < rawData.length; r++) {
+                const val = rawData[r]?.[candCol];
+                if (val !== undefined && val !== null && String(val).trim() !== '') {
+                  const num = parseFloat(String(val).replace(',', '.').replace(/[^0-9.]/g, ''));
+                  if (!isNaN(num) && num > 0) posCount++;
+                }
+              }
+              if (posCount > bestCount) {
+                bestCount = posCount;
+                qtyCol = candCol;
+              }
+            });
+          }
+
+          if (headerRowIdx !== -1 && nameCol !== -1) {
+            for (let r = headerRowIdx + 1; r < rawData.length; r++) {
+              const row = rawData[r] || [];
+              let qtyNum: number | null = null;
+
+              if (qtyCol !== -1 && row[qtyCol] !== undefined && row[qtyCol] !== null) {
+                const rawVal = String(row[qtyCol]).trim();
+                const num = parseFloat(rawVal.replace(',', '.').replace(/[^0-9.]/g, ''));
+                if (!isNaN(num) && num > 0) qtyNum = num;
+              }
+
+              if (qtyNum === null) {
+                for (const candCol of qtyCandidates) {
+                  if (candCol === qtyCol) continue;
+                  const cVal = row[candCol];
+                  if (cVal !== undefined && cVal !== null && String(cVal).trim() !== '') {
+                    const num = parseFloat(String(cVal).replace(',', '.').replace(/[^0-9.]/g, ''));
+                    if (!isNaN(num) && num > 0) {
+                      qtyNum = num;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (qtyNum !== null && qtyNum > 0) {
+                const rawName = String(row[nameCol] || '').trim();
+                const rawUnit = unitCol !== -1 ? String(row[unitCol] || '').trim() : 'Kg';
+                const rawObs = obsCol !== -1 ? String(row[obsCol] || '').trim() : '';
+                if (rawName) {
+                  extractedData.items.push({
+                    name: rawName,
+                    quantity: qtyNum,
+                    unit: rawUnit || 'Kg',
+                    observations: rawObs,
+                    source_attachment_name: att.name,
+                    purchase_order: poNumber || undefined,
+                    attachment_index: attIdx
+                  } as any);
+                  parsedSuccessfully = true;
+                }
+              }
+            }
+          }
+        } else if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+          const base64 = Buffer.from(fileBuf).toString('base64');
+          const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+
+          const prompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos (Fruver y abarrotes).
+Extrae la información del documento "${att.name}" en formato JSON estricto:
 - clientName: Razón social del cliente o empresa compradora.
 - nit: NIT o documento de identificación fiscal.
 - address: Dirección de entrega completa.
 - deliveryDate: Fecha de entrega solicitada (formato YYYY-MM-DD o DD/MM/YYYY).
-- items: Lista de productos ordenados. Ignora filas con cantidad 0 o vacías. Limpia nombres de productos (une palabras separadas por espacios anormales como "A GUA CATES" -> "Aguacate", "ARRA CACHA" -> "Arracacha").
+- purchaseOrder: Número de orden de compra o pedido si está presente.
+- items: Lista de productos ordenados. Ignora filas con cantidad 0 o vacías.
 Cada item debe tener:
   * name: Nombre comercial del producto limpio.
   * quantity: Número decimal o entero mayor a cero.
   * unit: Unidad de medida (Kg, Uds, Atado, Bandeja, etc.).
   * observations: Notas, especificaciones (madurez, corte, calibre) si existen.
 
-Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
+Responde ÚNICAMENTE en JSON válido:
 {
   "clientName": "...",
   "nit": "...",
   "address": "...",
   "deliveryDate": "...",
+  "purchaseOrder": "...",
   "items": [
     { "name": "...", "quantity": 10, "unit": "Kg", "observations": "..." }
   ]
 }`;
 
-            const gJson = await fetchGeminiExtraction(apiKey, prompt, base64, mimeType);
-            if (gJson && Array.isArray(gJson.items)) {
-              extractedData = gJson;
-              parsedSuccessfully = true;
-            }
-          } else if (ext === 'xlsx' || ext === 'xls') {
-            const workbook = XLSX.read(fileBuf, { type: 'array' });
-            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:Z100');
+          const gJson = await fetchGeminiExtraction(apiKey, prompt, base64, mimeType);
+          if (gJson && Array.isArray(gJson.items) && gJson.items.length > 0) {
+            if (!extractedData.clientName && gJson.clientName) extractedData.clientName = gJson.clientName;
+            if (!extractedData.nit && gJson.nit) extractedData.nit = gJson.nit;
+            if (!extractedData.address && gJson.address) extractedData.address = gJson.address;
+            if (!extractedData.deliveryDate && gJson.deliveryDate) extractedData.deliveryDate = gJson.deliveryDate;
 
-            let headerRowIdx = -1;
-            let qtyCol = -1;
-            let nameCol = -1;
-            let unitCol = -1;
-            let obsCol = -1;
-
-            for (let R = range.s.r; R <= range.e.r; R++) {
-              const rowCells: any[] = [];
-              for (let C = range.s.c; C <= range.e.c; C++) {
-                const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
-                const cell = worksheet[cellRef];
-                rowCells.push(cell ? cell.v : '');
-              }
-
-              if (headerRowIdx === -1) {
-                const isHeader = rowCells.some(c => {
-                  const s = String(c || '').toLowerCase().trim();
-                  return s === 'plu' || s === 'prodcuto' || s === 'producto';
-                });
-                if (isHeader) {
-                  headerRowIdx = R;
-                  rowCells.forEach((c, cIdx) => {
-                    const s = String(c || '').toLowerCase().trim();
-                    if (s === 'ca' || s === 'can' || s === 'cant' || s.includes('cantid') || s === 'qty') qtyCol = cIdx;
-                    else if (s.includes('prod') || s.includes('descrip')) nameCol = cIdx;
-                    else if (s === 'ubm' || s.includes('unidad') || s === 'und') unitCol = cIdx;
-                    else if (s.includes('observ') || s.includes('nota')) obsCol = cIdx;
-                  });
-                }
-              } else if (qtyCol !== -1 && nameCol !== -1) {
-                const rawQty = rowCells[qtyCol];
-                if (rawQty !== undefined && rawQty !== null && String(rawQty).trim() !== '') {
-                  const num = parseFloat(String(rawQty).replace(',', '.'));
-                  if (!isNaN(num) && num > 0) {
-                    const nameVal = String(rowCells[nameCol] || '').trim();
-                    const unitVal = unitCol !== -1 ? String(rowCells[unitCol] || '').trim() : 'Kg';
-                    const obsVal = obsCol !== -1 ? String(rowCells[obsCol] || '').trim() : '';
-                    if (nameVal) {
-                      extractedData.items.push({
-                        name: nameVal,
-                        quantity: num,
-                        unit: unitVal,
-                        observations: obsVal
-                      });
-                    }
-                  }
-                }
-              }
-            }
-            parsedSuccessfully = extractedData.items.length > 0;
+            gJson.items.forEach((it: any) => {
+              extractedData.items.push({
+                ...it,
+                source_attachment_name: att.name,
+                purchase_order: gJson.purchaseOrder || undefined,
+                attachment_index: attIdx
+              });
+            });
+            parsedSuccessfully = true;
           }
         }
       } catch (attErr) {
-        console.warn("[reparse-draft] Error procesando archivo adjunto, intentando fallback de texto:", attErr);
+        console.warn(`[reparse-draft] Error procesando adjunto ${att.name}:`, attErr);
       }
     }
 
@@ -240,7 +317,10 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
         observations: it.observations || '',
         searchQuery: itName,
         skuQuery: bestMatch ? bestMatch.id : '',
-        isConfirmed: !!bestMatch
+        isConfirmed: !!bestMatch,
+        source_attachment_name: (it as any).source_attachment_name,
+        purchase_order: (it as any).purchase_order,
+        attachment_index: (it as any).attachment_index
       };
     });
 
@@ -249,11 +329,10 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     if (extractedData.nit) metadata.nit = extractedData.nit;
     if (extractedData.address) metadata.address = extractedData.address;
     if (extractedData.deliveryDate) metadata.deliveryDate = extractedData.deliveryDate;
-    if (metadata.attachments && metadata.attachments[0]) {
-      metadata.attachments[0].items = cleanItems;
-      metadata.attachments[0].clientInDocument = metadata.clientInDocument;
-      metadata.attachments[0].nit = metadata.nit;
-      metadata.attachments[0].address = metadata.address;
+    if (metadata.attachments && Array.isArray(metadata.attachments)) {
+      metadata.attachments.forEach((att: any, attIdx: number) => {
+        att.items = cleanItems.filter(ci => ci.attachment_index === attIdx || ci.source_attachment_name === att.name);
+      });
     }
 
     const finalExtracted = [metadata, ...cleanItems];
