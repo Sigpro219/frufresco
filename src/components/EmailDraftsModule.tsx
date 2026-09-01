@@ -6078,9 +6078,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{ color: isClientInactive ? '#D97706' : (matchedProfile ? '#16A34A' : '#D97706'), display: 'flex', alignItems: 'center' }}>
                   {isClientInactive ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#FEF3C7', border: '1px solid #FCD34D' }} title="Sede Inactiva">
-                      <Lock size={16} strokeWidth={2.5} color="#D97706" />
-                    </div>
+                    <ShieldAlert size={22} strokeWidth={2} color="#D97706" />
                   ) : matchedProfile ? (
                     <CheckCircle2 size={24} strokeWidth={2} />
                   ) : (
@@ -6113,16 +6111,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}
                     title="Clic para cambiar o buscar cliente"
                   >
-                    {isClientInactive ? (
-                      <Lock size={15} color="#D97706" />
-                    ) : (
-                      <Building2 size={16} color={matchedProfile ? '#059669' : '#D97706'} />
-                    )}
+                    <Building2 size={16} color={isClientInactive ? '#D97706' : (matchedProfile ? '#059669' : '#D97706')} />
                     <span style={{ maxWidth: '480px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {isClientInactive ? (
-                        <>🔒 <strong>Inactiva:</strong> {matchedProfile?.company_name || matchedProfile?.contact_name}</>
+                        <>
+                          <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', padding: '1px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 800, marginRight: '6px' }}>INACTIVA</span>
+                          {matchedProfile?.company_name || matchedProfile?.contact_name}
+                        </>
                       ) : matchedProfile ? (
-                        <>{matchedProfile.company_name || matchedProfile.contact_name} {isClientUnlocked && <span style={{ fontSize: '0.7rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: '4px', marginLeft: '4px' }}>🔓 Desbloqueada</span>}</>
+                        <>{matchedProfile.company_name || matchedProfile.contact_name} {isClientUnlocked && <span style={{ fontSize: '0.7rem', backgroundColor: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: '4px', marginLeft: '4px', fontWeight: 800 }}>Desbloqueada</span>}</>
                       ) : (
                         selectedDraft.client_detected_name ? `Asignar: ${selectedDraft.client_detected_name}` : 'Seleccionar Cliente'
                       )}
@@ -6154,7 +6151,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       }}
                       title="Desbloquear sede inactiva para este pedido"
                     >
-                      <Unlock size={13} /> Desbloquear
+                      Desbloquear
                     </button>
                   )}
 
@@ -6244,7 +6241,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                                   <div style={{ fontWeight: isFocused ? 800 : 700, color: isFocused ? '#1E3A8A' : '#0F172A', fontSize: '0.86rem' }}>
-                                    {p.is_active === false && <span style={{ marginRight: '6px' }}>🔒</span>}
                                     {p.company_name || p.contact_name}
                                   </div>
                                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -10729,7 +10725,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '1.2rem' }}>
                 <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Lock size={22} color="#D97706" />
+                  <ShieldAlert size={22} color="#D97706" />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em' }}>
@@ -10742,7 +10738,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
 
               <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '12px', padding: '12px 14px', marginBottom: '1.5rem', fontSize: '0.82rem', color: '#92400E', lineHeight: '1.45' }}>
-                💡 <strong>¿Cómo deseas proceder con este pedido?</strong><br />
+                <strong>¿Cómo deseas proceder con este pedido?</strong><br />
                 Puedes autorizar el procesamiento de este pedido puntual sin alterar el catálogo, o reactivar la sede de forma permanente.
               </div>
 
@@ -10815,7 +10811,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     gap: '8px'
                   }}
                 >
-                  <Unlock size={16} color="#D97706" />
+                  <Check size={16} color="#0D7A57" />
                   Autorizar Solo para Este Pedido
                 </button>
 
