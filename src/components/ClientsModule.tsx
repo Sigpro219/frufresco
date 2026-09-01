@@ -5957,16 +5957,26 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             <>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        const isVerified = (formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev');
+                                    onClick={async () => {
+                                        const isVerified = Boolean((formData as any).is_verified_dev || (formData as any).tags?.includes('verified_dev'));
                                         const nextVal = !isVerified;
                                         const currentTags: string[] = (formData as any).tags || [];
                                         const updatedTags = nextVal 
                                             ? Array.from(new Set([...currentTags, 'verified_dev']))
                                             : currentTags.filter(t => t !== 'verified_dev');
                                         setFormData((prev: any) => ({ ...prev, is_verified_dev: nextVal, tags: updatedTags }));
-                                        if (editData?.id && handleUpdateDevVerified) {
-                                            handleUpdateDevVerified(editData.id, nextVal);
+                                        if (editData?.id) {
+                                            if (onUpdateDevVerified) {
+                                                onUpdateDevVerified(editData.id, nextVal);
+                                            } else {
+                                                const { error } = await supabase
+                                                    .from('profiles')
+                                                    .update({ is_verified_dev: nextVal, tags: updatedTags })
+                                                    .eq('id', editData.id);
+                                                if (error && error.message?.includes('column "is_verified_dev" does not exist')) {
+                                                    await supabase.from('profiles').update({ tags: updatedTags }).eq('id', editData.id);
+                                                }
+                                            }
                                         }
                                     }}
                                     style={{
