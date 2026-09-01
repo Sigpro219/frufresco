@@ -910,9 +910,7 @@ export default function CostMatrixPage() {
             const currentManual = manualOverrides[p.id]?.manual_cost || 0;
             const lifecycle = getProductCostLifecycle(p.id);
             return {
-                'ID': p.id,
                 'ID_CONTABLE': p.accounting_id || '',
-                'SKU': p.sku || '',
                 'PRODUCTO': p.name,
                 'CATEGORIA': CATEGORY_MAP[p.category] || p.category,
                 'UNIDAD': p.unit_of_measure,
@@ -941,9 +939,7 @@ export default function CostMatrixPage() {
             const currentManual = manualOverrides[p.id]?.manual_cost || 0;
             const lifecycle = getProductCostLifecycle(p.id);
             return {
-                'ID': p.id,
                 'ID_CONTABLE': p.accounting_id || '',
-                'SKU': p.sku || '',
                 'PRODUCTO': p.name,
                 'CATEGORIA': CATEGORY_MAP[p.category] || p.category,
                 'UNIDAD': p.unit_of_measure,
@@ -981,28 +977,61 @@ export default function CostMatrixPage() {
 
             let updatedCount = 0;
             const updatesToPerform: any[] = [];
+            const nowIso = new Date().toISOString();
 
             for (const row of jsonData) {
-                const id = row['ID'] || row['id'] || row['Id'];
-                const sku = row['SKU'] || row['sku'];
-                const newCostRaw = row['NUEVO_COSTO'] || row['nuevo_costo'] || row['NUEVO COSTO'] || row['Costo'];
+                // Normalize and clean all keys of the row (removing $, spaces, accents)
+                const normalizedRow: Record<string, any> = {};
+                for (const [k, v] of Object.entries(row)) {
+                    const cleanKey = k.trim().toUpperCase().replace(/[$]/g, '').replace(/\s+/g, '_');
+                    normalizedRow[cleanKey] = v;
+                }
+
+                // Identifiers lookup
+                const accIdVal = normalizedRow['ID_CONTABLE'] || normalizedRow['IDCONTABLE'] || normalizedRow['IDPRODUCTO'] || normalizedRow['ID_PRODUCTO'] || normalizedRow['ACCOUNTING_ID'] || normalizedRow['CODIGO'] || normalizedRow['CÓDIGO'];
+                const idVal = normalizedRow['ID'];
+                const skuVal = normalizedRow['SKU'];
+                const nameVal = normalizedRow['PRODUCTO'] || normalizedRow['NOMBRE'] || normalizedRow['DESCRIPCION'] || normalizedRow['DESCRIPCIÓN'];
+
+                // Cost lookup
+                const newCostRaw = normalizedRow['NUEVO_COSTO'] || normalizedRow['NUEVO_PRECIO'] || normalizedRow['COSTO'] || normalizedRow['PRECIO'] || normalizedRow['VALOR'];
 
                 if (newCostRaw === undefined || newCostRaw === null || newCostRaw === '') continue;
 
                 const newCost = parseFloat(String(newCostRaw).replace(/[^0-9.]/g, ''));
                 if (isNaN(newCost) || newCost <= 0) continue;
 
-                let targetProductId = id;
-                if (!targetProductId && sku) {
-                    const match = products.find(p => p.sku === String(sku).trim());
-                    if (match) targetProductId = match.id;
+                let matchedProduct: Product | undefined = undefined;
+
+                // 1. Prioritize match by accounting_id (ID_CONTABLE)
+                if (accIdVal !== undefined && accIdVal !== null && String(accIdVal).trim() !== '') {
+                    const num = Number(String(accIdVal).trim());
+                    if (!isNaN(num) && num > 0) {
+                        matchedProduct = products.find(p => p.accounting_id && Number(p.accounting_id) === num);
+                    }
                 }
 
-                if (targetProductId) {
+                // 2. Match by UUID ID
+                if (!matchedProduct && idVal) {
+                    matchedProduct = products.find(p => p.id === String(idVal).trim());
+                }
+
+                // 3. Match by SKU
+                if (!matchedProduct && skuVal) {
+                    matchedProduct = products.find(p => p.sku && p.sku.toLowerCase().trim() === String(skuVal).toLowerCase().trim());
+                }
+
+                // 4. Match by exact Product Name as fallback
+                if (!matchedProduct && nameVal) {
+                    const cleanName = String(nameVal).toLowerCase().trim();
+                    matchedProduct = products.find(p => p.name && p.name.toLowerCase().trim() === cleanName);
+                }
+
+                if (matchedProduct) {
                     updatesToPerform.push({
-                        product_id: targetProductId,
+                        product_id: matchedProduct.id,
                         manual_cost: newCost,
-                        updated_at: new Date().toISOString(),
+                        updated_at: nowIso,
                         updated_by: 'EXCEL-IMPORT',
                         is_active: true
                     });
@@ -1010,7 +1039,7 @@ export default function CostMatrixPage() {
             }
 
             if (updatesToPerform.length === 0) {
-                throw new Error('No se encontraron filas válidas con ID/SKU y la columna NUEVO_COSTO diligenciada.');
+                throw new Error('No se encontraron filas válidas con ID_CONTABLE/SKU/ID y la columna de costo diligenciada.');
             }
 
             for (let i = 0; i < updatesToPerform.length; i += 50) {
@@ -1020,7 +1049,7 @@ export default function CostMatrixPage() {
                 updatedCount += batch.length;
             }
 
-            setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos correctamente.`);
+            setImportSuccess(`¡Carga exitosa! Se actualizaron ${updatedCount} productos correctamente con fecha de hoy.`);
             await fetchData();
 
             setTimeout(() => {
@@ -1999,7 +2028,7 @@ export default function CostMatrixPage() {
                         </div>
 
                         <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.84rem', color: THEME.colors.textSecondary, lineHeight: '1.45' }}>
-                            Sube el archivo Excel con las columnas <strong>ID</strong> o <strong>SKU</strong> y <strong>NUEVO_COSTO</strong> diligenciadas.
+                            Sube el archivo Excel con las columnas <strong>ID_CONTABLE</strong> (o ID/SKU) y <strong>NUEVO_COSTO</strong> (o COSTO) diligenciadas.
                         </p>
 
                         <form onSubmit={handleImportSubmit}>
