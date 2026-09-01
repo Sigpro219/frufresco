@@ -2111,6 +2111,29 @@ export default function OrderLoadingPage() {
                                 Hoy
                             </button>
                             <button 
+                                onClick={() => {
+                                    const d = new Date();
+                                    d.setDate(d.getDate() + 1);
+                                    const tomorrowStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+                                    setSelectedDate(tomorrowStr);
+                                }}
+                                style={{
+                                    height: '40px',
+                                    padding: '0 10px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #E5E7EB',
+                                    backgroundColor: '#F8FAFC',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    color: '#0D7A57',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                                title="Ver pedidos programados para entrega mañana"
+                            >
+                                Mañana
+                            </button>
+                            <button 
                                 onClick={() => setSelectedDate('all')}
                                 style={{
                                     height: '40px',
