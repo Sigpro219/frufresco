@@ -730,6 +730,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedExcelSheetIndex, setSelectedExcelSheetIndex] = useState<number>(0);
   const [excelFilterOnlyWithQty, setExcelFilterOnlyWithQty] = useState<boolean>(false);
   const [excelSearchTerm, setExcelSearchTerm] = useState<string>('');
+  const [excelZoomLevel, setExcelZoomLevel] = useState<number>(100);
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [isReparsingDraft, setIsReparsingDraft] = useState(false);
 
