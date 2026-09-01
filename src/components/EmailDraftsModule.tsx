@@ -6167,7 +6167,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
 
                 {/* GPS Status Badge */}
-                {draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? (
+                {draftCoordinates ? (
                   <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '4px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <MapPin size={12} color="#15803D" /> GPS OK
                   </span>
