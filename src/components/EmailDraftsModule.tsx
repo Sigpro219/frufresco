@@ -730,9 +730,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedExcelSheetIndex, setSelectedExcelSheetIndex] = useState<number>(0);
   const [excelFilterOnlyWithQty, setExcelFilterOnlyWithQty] = useState<boolean>(false);
   const [excelSearchTerm, setExcelSearchTerm] = useState<string>('');
-  const [excelZoomLevel, setExcelZoomLevel] = useState<number>(100);
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [isReparsingDraft, setIsReparsingDraft] = useState(false);
+
+  const [aiHealth, setAiHealth] = useState<{ ok: boolean; status: string; message?: string; code?: string } | null>(null);
+  const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
+
+  const checkAiHealth = async () => {
+    try {
+      const res = await fetch('/api/ai/health');
+      const data = await res.json();
+      if (!data.ok) {
+        setAiHealth(data);
+      } else {
+        setAiHealth(null);
+      }
+    } catch (e) {
+      // Non-blocking
+    }
+  };
+
+  useEffect(() => {
+    checkAiHealth();
+    const interval = setInterval(checkAiHealth, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isAttachmentZoomed, setIsAttachmentZoomed] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
@@ -5078,6 +5100,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           Actualizar Bandeja <span style={{ opacity: 0.4, fontSize: '0.75rem', marginLeft: '0.3rem' }}>(Alt+A)</span>
         </button>
       </div>
+
+      {/* AI Health Alert Banner */}
+      {aiHealth && !aiBannerDismissed && (
+        <div style={{
+          backgroundColor: '#FFFBEB',
+          border: '1px solid #FCD34D',
+          borderRadius: '12px',
+          padding: '12px 18px',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '14px',
+          boxShadow: '0 2px 6px rgba(245, 158, 11, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <AlertTriangle size={18} color="#D97706" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#92400E' }}>
+                Aviso de Motor IA: {aiHealth.message || 'Interrupción temporal en la extracción automática.'}
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
+                ⚡ <strong>La operación manual continúa 100% activa</strong> (puedes procesar borradores, seleccionar productos y gestionar pedidos sin interrupciones). Por favor notifica a administración.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={checkAiHealth}
+              style={{
+                padding: '5px 12px',
+                borderRadius: '6px',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #FCD34D',
+                color: '#92400E',
+                fontSize: '0.75rem',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              Re-verificar
+            </button>
+            <button
+              type="button"
+              onClick={() => setAiBannerDismissed(true)}
+              style={{ background: 'none', border: 'none', color: '#92400E', cursor: 'pointer', padding: '4px' }}
+              title="Cerrar aviso"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', minHeight: '42px' }}>

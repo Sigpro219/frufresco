@@ -238,6 +238,29 @@ export default function OrderLoadingPage() {
     const [filterClientType, setFilterClientType] = useState('');
     const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
 
+    const [aiHealth, setAiHealth] = useState<{ ok: boolean; status: string; message?: string; code?: string } | null>(null);
+    const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
+
+    const checkAiHealth = async () => {
+        try {
+            const res = await fetch('/api/ai/health');
+            const data = await res.json();
+            if (!data.ok) {
+                setAiHealth(data);
+            } else {
+                setAiHealth(null);
+            }
+        } catch (e) {
+            // Non-blocking
+        }
+    };
+
+    useEffect(() => {
+        checkAiHealth();
+        const interval = setInterval(checkAiHealth, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     const clearAllFilters = () => {
         setFilterStatus('');
         setFilterGps('');
@@ -1977,6 +2000,62 @@ export default function OrderLoadingPage() {
                     <KPICard title="Efectividad" value={`${formatNumber(approvalRate, 0)}%`} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#0891B2" subtitle="Tasa de aprobación" />
                     <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertTriangle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Info incompleta" />
                 </div>
+
+                {/* AI HEALTH ALERT BANNER (NON-INTRUSIVE) */}
+                {aiHealth && !aiBannerDismissed && (
+                    <div style={{
+                        backgroundColor: '#FFFBEB',
+                        border: '1px solid #FCD34D',
+                        borderRadius: '12px',
+                        padding: '12px 18px',
+                        marginBottom: '1.2rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '14px',
+                        boxShadow: '0 2px 6px rgba(245, 158, 11, 0.08)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <AlertTriangle size={18} color="#D97706" />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: '800', color: '#92400E' }}>
+                                    Aviso de Motor IA: {aiHealth.message || 'Interrupción temporal en la extracción automática.'}
+                                </div>
+                                <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: '500' }}>
+                                    ⚡ <strong>La operación manual continúa 100% activa</strong> (puedes digitar pedidos, seleccionar clientes y adjuntar archivos normalmente). Por favor notifica a administración.
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                            <button
+                                type="button"
+                                onClick={checkAiHealth}
+                                style={{
+                                    padding: '5px 12px',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#FFFFFF',
+                                    border: '1px solid #FCD34D',
+                                    color: '#92400E',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Re-verificar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAiBannerDismissed(true)}
+                                style={{ background: 'none', border: 'none', color: '#92400E', cursor: 'pointer', padding: '4px' }}
+                                title="Cerrar aviso"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* TABS FOR ORDERS VS EMAILS */}
                 <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.2rem', borderBottom: '1px solid #E5E7EB', paddingBottom: '2px' }}>
