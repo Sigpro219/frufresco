@@ -632,6 +632,114 @@ function CreateOrderContent() {
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
 
+    // Staging Pareto Dropdown States
+    const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
+    const [focusedDropdownItemIndex, setFocusedDropdownItemIndex] = useState(0);
+    const [activeRowSearchQuery, setActiveRowSearchQuery] = useState<string | null>(null);
+    const searchQueryCacheRef = useRef<Map<string, any[]>>(new Map());
+    const stagedProductInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    const getScoredProductsForQuery = (query: string) => {
+        let raw = (query || '').trim();
+        let extractedId = '';
+        const idMatch = raw.match(/\(([^)]+)\)$/);
+        if (idMatch) {
+            extractedId = idMatch[1].trim().toLowerCase();
+        }
+        const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+        const cacheKey = `${cleanQuery}_${extractedId}_${products.length}_${clientExceptions.length}`;
+        if (searchQueryCacheRef.current.has(cacheKey)) {
+            return searchQueryCacheRef.current.get(cacheKey)!;
+        }
+
+        if (!cleanQuery && !extractedId) {
+            const defaultResults = [...products].sort((a, b) => {
+                const freqA = clientFrequentProductMap[a.id]?.count || 0;
+                const freqB = clientFrequentProductMap[b.id]?.count || 0;
+                if (freqB !== freqA) return freqB - freqA;
+                return (a.name || '').localeCompare(b.name || '');
+            }).slice(0, 12);
+            searchQueryCacheRef.current.set(cacheKey, defaultResults);
+            return defaultResults;
+        }
+
+        const matched = products.filter(p => {
+            const normName = (p.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const normSku = (p.sku || '').toLowerCase();
+            const normAcc = (getAccountingIdDisplay(p) || '').toLowerCase();
+            const exc = clientExceptions.find(e => e.product_id === p.id);
+            const normNickname = exc?.nickname ? exc.nickname.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+
+            if (extractedId && (normAcc === extractedId || normSku === extractedId)) {
+                return true;
+            }
+
+            if (!cleanQuery) return false;
+
+            return normName.includes(cleanQuery) ||
+                   normSku.includes(cleanQuery) ||
+                   normAcc.includes(cleanQuery) ||
+                   normNickname.includes(cleanQuery);
+        });
+
+        if (matched.length === 0) {
+            return [];
+        }
+
+        const finalResults = matched.sort((a, b) => {
+            const excA = clientExceptions.find(e => e.product_id === a.id);
+            const excB = clientExceptions.find(e => e.product_id === b.id);
+            const freqA = clientFrequentProductMap[a.id];
+            const freqB = clientFrequentProductMap[b.id];
+
+            let scoreA = 0;
+            let scoreB = 0;
+
+            const normNameA = (a.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const normNameB = (b.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+            const wordsA = normNameA.split(/\s+/).filter(Boolean);
+            const wordsB = normNameB.split(/\s+/).filter(Boolean);
+            const queryWords = cleanQuery.split(/\s+/).filter(Boolean);
+
+            if (queryWords.length > 0) {
+                const hasAllWordsA = queryWords.every(qw => wordsA.includes(qw));
+                const hasAllWordsB = queryWords.every(qw => wordsB.includes(qw));
+                if (hasAllWordsA) scoreA += 10000;
+                if (hasAllWordsB) scoreB += 10000;
+
+                if (wordsA[0] === queryWords[0]) scoreA += 5000;
+                if (wordsB[0] === queryWords[0]) scoreB += 5000;
+            }
+
+            if (extractedId) {
+                if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 8000;
+                if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 8000;
+            }
+
+            if (cleanQuery && normNameA === cleanQuery) scoreA += 3000;
+            if (cleanQuery && normNameB === cleanQuery) scoreB += 3000;
+
+            if (cleanQuery && normNameA.startsWith(cleanQuery)) scoreA += 1000;
+            if (cleanQuery && normNameB.startsWith(cleanQuery)) scoreB += 1000;
+
+            if (excA) scoreA += 500;
+            if (excB) scoreB += 500;
+
+            if (freqA) scoreA += Math.min(freqA.count * 20, 300) + Math.min(freqA.totalQty, 100);
+            if (freqB) scoreB += Math.min(freqB.count * 20, 300) + Math.min(freqB.totalQty, 100);
+
+            if (scoreB !== scoreA) {
+                return scoreB - scoreA;
+            }
+            return normNameA.localeCompare(normNameB);
+        }).slice(0, 12);
+
+        searchQueryCacheRef.current.set(cacheKey, finalResults);
+        return finalResults;
+    };
+
     useEffect(() => {
         if (focusedClientIndexB2C >= 0) {
             const el = document.getElementById(`b2c-client-item-${focusedClientIndexB2C}`);
@@ -3834,13 +3942,6 @@ function CreateOrderContent() {
                         {/* --- MESA DE TRABAJO (STAGING AREA) --- */}
                         {originSource === 'file_upload' && (
                             <div style={{ marginBottom: '2.5rem' }}>
-                                {/* Global Datalist for SKUs to improve performance */}
-                                <datalist id="all-products-list">
-                                    {products.map(p => (
-                                        <option key={p.id} value={`${p.name} (${getAccountingIdDisplay(p)})`} />
-                                    ))}
-                                </datalist>
-
                                 {!isStaging ? (
                                 <div 
                                     style={{ 
@@ -4128,17 +4229,24 @@ function CreateOrderContent() {
                                                     {stagedItems.map((item, idx) => {
                                                         const isConfidenceHigh = item.confidence === 'HIGH' || (item.confidenceScore && item.confidenceScore >= 90);
                                                         const isConfidenceMed = item.confidence === 'MEDIUM' || (item.confidenceScore && item.confidenceScore >= 70 && item.confidenceScore < 90);
+                                                        const isActiveRow = activeDropdownRowIndex === idx;
 
                                                         return (
                                                             <tr 
                                                                 key={item.id} 
                                                                 id={`staged-row-${idx}`}
                                                                 style={{ 
-                                                                    borderBottom: '1px solid #F8FAFC',
-                                                                    backgroundColor: item.isConfirmed 
-                                                                        ? '#F0FDF4' 
-                                                                        : (item.suggestedProduct ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED'),
-                                                                    transition: 'background-color 0.2s'
+                                                                    borderBottom: '1px solid #F1F5F9',
+                                                                    backgroundColor: isActiveRow 
+                                                                        ? '#FFFFFF' 
+                                                                        : (item.isConfirmed ? '#F0FDF4' : (item.suggestedProduct ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED')),
+                                                                    transform: isActiveRow ? 'scale(1.01)' : 'scale(1)',
+                                                                    transformOrigin: 'left center',
+                                                                    boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.18), 0 2px 6px rgba(0, 0, 0, 0.04)' : 'none',
+                                                                    borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent',
+                                                                    zIndex: isActiveRow ? 20 : 1,
+                                                                    position: 'relative',
+                                                                    transition: 'all 0.16s cubic-bezier(0.16, 1, 0.3, 1)'
                                                                 }}
                                                             >
                                                                 <td style={{ padding: '0.8rem 0.5rem', textAlign: 'center', width: '35px' }}>
@@ -4156,47 +4264,123 @@ function CreateOrderContent() {
                                                                     />
                                                                 </td>
                                                                 <td style={{ padding: '0.8rem 1.25rem', width: '32%' }}>
-                                                                    <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
+                                                                    <div 
+                                                                        onClick={() => item.suggestedProduct && openModalForStagedItem(
+                                                                            item.id, 
+                                                                            item.suggestedProduct, 
+                                                                            item.quantity, 
+                                                                            idx, 
+                                                                            item.selected_options, 
+                                                                            item.originalQty, 
+                                                                            item.originalUnit, 
+                                                                            item.conversion_factor
+                                                                        )}
+                                                                        style={{ 
+                                                                            fontSize: isActiveRow ? '0.92rem' : '0.88rem', 
+                                                                            fontWeight: isActiveRow ? '800' : '700', 
+                                                                            color: isActiveRow ? '#0F172A' : '#1E293B',
+                                                                            cursor: item.suggestedProduct ? 'pointer' : 'default',
+                                                                            transition: 'all 0.15s ease'
+                                                                        }}
+                                                                        title={item.suggestedProduct ? 'Clic para personalizar variantes y reglas' : undefined}
+                                                                    >
+                                                                        {item.originalName}
+                                                                    </div>
                                                                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                                         <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 4px rgba(245, 158, 11, 0.06)', padding: '2px 7px', borderRadius: '6px', fontWeight: '900' }}>
                                                                             {formatDetectedUnit(item.originalQtyInFile || item.quantity, item.originalUnit)}
                                                                         </span>
                                                                         {/* SEMÁFORO DE CONFIANZA */}
-                                                                        {isConfidenceHigh && (
-                                                                            <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                                <CheckCircle2 size={11} color="#15803D" /> {item.confidenceScore ? `${item.confidenceScore}%` : '100%'}
+                                                                        {item.suggestedProduct ? (
+                                                                            <span 
+                                                                                onClick={() => openModalForStagedItem(
+                                                                                    item.id, 
+                                                                                    item.suggestedProduct, 
+                                                                                    item.quantity, 
+                                                                                    idx, 
+                                                                                    item.selected_options, 
+                                                                                    item.originalQty, 
+                                                                                    item.originalUnit, 
+                                                                                    item.conversion_factor
+                                                                                )}
+                                                                                style={{ 
+                                                                                    backgroundColor: item.isConfirmed ? '#DCFCE7' : '#F0FDF4', 
+                                                                                    color: '#15803D', 
+                                                                                    border: '1px solid #86EFAC', 
+                                                                                    padding: '1px 6px', 
+                                                                                    borderRadius: '6px', 
+                                                                                    fontSize: '0.68rem', 
+                                                                                    fontWeight: '800', 
+                                                                                    display: 'inline-flex', 
+                                                                                    alignItems: 'center', 
+                                                                                    gap: '3px',
+                                                                                    cursor: 'pointer'
+                                                                                }}
+                                                                                title="Personalizar variantes / equivalencias"
+                                                                            >
+                                                                                <CheckCircle2 size={11} color="#15803D" /> {item.isConfirmed ? 'Confirmado' : `${item.confidenceScore ? `${item.confidenceScore}%` : '100%'}`}
+                                                                                {clientFrequentProductIds.includes(item.suggestedProduct.id) && <span style={{ marginLeft: '2px', color: '#D97706' }}>⭐ Habitual</span>}
                                                                             </span>
-                                                                        )}
-                                                                        {isConfidenceMed && (
-                                                                            <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                                <AlertTriangle size={11} color="#B45309" /> Sugerido ({item.confidenceScore || 75}%)
-                                                                            </span>
-                                                                        )}
-                                                                        {(!item.suggestedProduct || item.confidence === 'LOW') && (
+                                                                        ) : (
                                                                             <span style={{ backgroundColor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                                 <AlertCircle size={11} color="#B91C1C" /> Sin Match
                                                                             </span>
                                                                         )}
+                                                                        {item.variant_label && (
+                                                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800' }}>
+                                                                                {item.variant_label}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </td>
-                                                                <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '45%' }}>
+                                                                <td style={{ padding: '0.45rem 0.85rem', position: 'relative', width: '45%' }}>
                                                                     <input 
+                                                                        ref={el => { stagedProductInputRefs.current[idx] = el; }}
                                                                         type="text"
-                                                                        placeholder="Buscar ID..."
-                                                                        defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${getAccountingIdDisplay(item.suggestedProduct)})` : ''}
-                                                                        list="all-products-list"
+                                                                        placeholder="Buscar ID o producto..."
+                                                                        autoComplete="off"
+                                                                        autoCorrect="off"
+                                                                        spellCheck={false}
+                                                                        data-lpignore="true"
+                                                                        value={activeDropdownRowIndex === idx && activeRowSearchQuery !== null 
+                                                                            ? activeRowSearchQuery 
+                                                                            : (item.searchQuery !== undefined ? item.searchQuery : (item.suggestedProduct ? `${item.suggestedProduct.name} (${getAccountingIdDisplay(item.suggestedProduct)})` : ''))}
                                                                         onFocus={(e) => {
                                                                             e.target.select();
+                                                                            setActiveDropdownRowIndex(idx);
+                                                                            setFocusedDropdownItemIndex(0);
+                                                                            setActiveRowSearchQuery(null);
                                                                             scrollToStagedRow(idx);
+                                                                        }}
+                                                                        onBlur={(e) => {
+                                                                            const val = e.target.value;
+                                                                            const exactProduct = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
+                                                                            if (exactProduct) {
+                                                                                updateStagedItem(item.id, 'product', exactProduct);
+                                                                                updateStagedItem(item.id, 'searchQuery', `${exactProduct.name} (${getAccountingIdDisplay(exactProduct)})`);
+                                                                            }
+                                                                            setActiveRowSearchQuery(null);
+                                                                            setTimeout(() => {
+                                                                                setActiveDropdownRowIndex(prev => prev === idx ? null : prev);
+                                                                            }, 250);
                                                                         }}
                                                                         className="sku-search-input"
                                                                         id={`sku-input-${idx}`}
                                                                         onKeyDown={(e) => {
+                                                                            const currentQuery = activeDropdownRowIndex === idx && activeRowSearchQuery !== null 
+                                                                                ? activeRowSearchQuery 
+                                                                                : (item.searchQuery !== undefined ? item.searchQuery : (item.suggestedProduct ? item.suggestedProduct.name : ''));
+                                                                            const scoredList = getScoredProductsForQuery(currentQuery);
+
                                                                             if (e.key === 'Tab') {
                                                                                 const val = e.currentTarget.value;
-                                                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
+                                                                                const p = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || item.suggestedProduct;
                                                                                 if (p) {
                                                                                     e.preventDefault(); 
+                                                                                    updateStagedItem(item.id, 'product', p);
+                                                                                    updateStagedItem(item.id, 'searchQuery', `${p.name} (${getAccountingIdDisplay(p)})`);
+                                                                                    setActiveRowSearchQuery(null);
+                                                                                    setActiveDropdownRowIndex(null);
                                                                                     openModalForStagedItem(
                                                                                         item.id, 
                                                                                         p, 
@@ -4210,16 +4394,19 @@ function CreateOrderContent() {
                                                                                 }
                                                                             } else if (e.key === 'Enter') {
                                                                                 e.preventDefault();
-                                                                                const val = e.currentTarget.value;
-                                                                                const p = products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val);
-                                                                                if (p) {
-                                                                                    updateStagedItem(item.id, 'product', p);
+                                                                                const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || item.suggestedProduct;
+                                                                                if (selectedProd) {
+                                                                                    updateStagedItem(item.id, 'product', selectedProd);
+                                                                                    updateStagedItem(item.id, 'searchQuery', `${selectedProd.name} (${getAccountingIdDisplay(selectedProd)})`);
                                                                                 }
                                                                                 updateStagedItem(item.id, 'isConfirmed', true);
+                                                                                setActiveRowSearchQuery(null);
+                                                                                setActiveDropdownRowIndex(null);
+
                                                                                 const nextIdx = idx + 1;
                                                                                 const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                                                                 if (nextInput) {
-                                                                                    nextInput.focus();
+                                                                                    nextInput.focus({ preventScroll: true });
                                                                                     nextInput.select();
                                                                                     scrollToStagedRow(nextIdx);
                                                                                 } else {
@@ -4231,45 +4418,208 @@ function CreateOrderContent() {
                                                                                 }
                                                                             } else if (e.key === 'ArrowDown') {
                                                                                 e.preventDefault();
-                                                                                const nextIdx = idx + 1;
-                                                                                const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
-                                                                                if (nextInput) {
-                                                                                    nextInput.focus();
-                                                                                    nextInput.select();
-                                                                                    scrollToStagedRow(nextIdx);
+                                                                                if (activeDropdownRowIndex === idx && scoredList.length > 0) {
+                                                                                    setFocusedDropdownItemIndex(prev => Math.min(prev + 1, scoredList.length - 1));
+                                                                                } else {
+                                                                                    const nextIdx = idx + 1;
+                                                                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                    if (nextInput) {
+                                                                                        nextInput.focus({ preventScroll: true });
+                                                                                        nextInput.select();
+                                                                                        scrollToStagedRow(nextIdx);
+                                                                                    }
                                                                                 }
                                                                             } else if (e.key === 'ArrowUp') {
                                                                                 e.preventDefault();
-                                                                                const prevIdx = idx - 1;
-                                                                                if (prevIdx >= 0) {
-                                                                                    const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
-                                                                                    if (prevInput) {
-                                                                                        prevInput.focus();
-                                                                                        prevInput.select();
-                                                                                        scrollToStagedRow(prevIdx);
+                                                                                if (activeDropdownRowIndex === idx && focusedDropdownItemIndex > 0) {
+                                                                                    setFocusedDropdownItemIndex(prev => Math.max(prev - 1, 0));
+                                                                                } else {
+                                                                                    const prevIdx = idx - 1;
+                                                                                    if (prevIdx >= 0) {
+                                                                                        const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
+                                                                                        if (prevInput) {
+                                                                                            prevInput.focus({ preventScroll: true });
+                                                                                            prevInput.select();
+                                                                                            scrollToStagedRow(prevIdx);
+                                                                                        }
                                                                                     }
                                                                                 }
+                                                                            } else if (e.key === 'Escape') {
+                                                                                setActiveRowSearchQuery(null);
+                                                                                setActiveDropdownRowIndex(null);
                                                                             }
                                                                         }}
                                                                         onChange={(e) => {
                                                                             const val = e.target.value;
-                                                                            const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                                            if (p) {
-                                                                                updateStagedItem(item.id, 'product', p);
-                                                                            }
+                                                                            setActiveDropdownRowIndex(idx);
+                                                                            setFocusedDropdownItemIndex(0);
+                                                                            setActiveRowSearchQuery(val);
                                                                         }}
                                                                         style={{ 
                                                                             width: '100%', 
-                                                                            padding: '9px 12px', 
-                                                                            borderRadius: '10px', 
-                                                                            border: item.suggestedProduct ? (isConfidenceHigh ? '2px solid #E2E8F0' : '2px solid #FCD34D') : '2px solid #F97316',
-                                                                            fontSize: '0.92rem',
-                                                                            fontWeight: '700',
+                                                                            padding: isActiveRow ? '8px 12px' : '7px 10px', 
+                                                                            borderRadius: '9px', 
+                                                                            border: isActiveRow 
+                                                                                ? '2px solid #2563EB' 
+                                                                                : (item.suggestedProduct ? (isConfidenceHigh ? '1.5px solid #E2E8F0' : '1.5px solid #FCD34D') : '1.5px solid #F97316'),
+                                                                            fontSize: isActiveRow ? '0.92rem' : '0.86rem',
+                                                                            fontWeight: '800',
                                                                             backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
                                                                             outline: 'none',
-                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                            boxShadow: isActiveRow ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
+                                                                            transition: 'all 0.15s ease'
                                                                         }}
                                                                     />
+
+                                                                    {/* Custom Pareto Floating Dropdown */}
+                                                                    {activeDropdownRowIndex === idx && (() => {
+                                                                        const currentQuery = (activeDropdownRowIndex === idx && activeRowSearchQuery !== null)
+                                                                            ? activeRowSearchQuery 
+                                                                            : (item.searchQuery !== undefined ? item.searchQuery : (item.suggestedProduct ? item.suggestedProduct.name : ''));
+                                                                        const scoredList = getScoredProductsForQuery(currentQuery);
+
+                                                                        if (scoredList.length === 0) return null;
+
+                                                                        return (
+                                                                            <div 
+                                                                                id={`dropdown-container-${idx}`}
+                                                                                style={{
+                                                                                    position: 'absolute',
+                                                                                    top: '100%',
+                                                                                    marginTop: '4px',
+                                                                                    right: 0,
+                                                                                    minWidth: '500px',
+                                                                                    maxWidth: '580px',
+                                                                                    zIndex: 9999,
+                                                                                    backgroundColor: 'white',
+                                                                                    borderRadius: '14px',
+                                                                                    boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0,0,0,0.08)',
+                                                                                    border: '1px solid #CBD5E1',
+                                                                                    maxHeight: '300px',
+                                                                                    overflowY: 'auto'
+                                                                                }}
+                                                                            >
+                                                                                {scoredList.map((p, pIdx) => {
+                                                                                    const exc = clientExceptions.find(e => e.product_id === p.id);
+                                                                                    const freq = clientFrequentProductMap[p.id];
+                                                                                    const isClientHabitual = Boolean(exc || freq);
+                                                                                    const isFocused = pIdx === focusedDropdownItemIndex;
+                                                                                    const isScarcityLocked = Boolean(scarcityLockedMap[p.id]);
+                                                                                    const resolvedPrice = (contractPrices[p.id] !== undefined && contractPrices[p.id] !== null && contractPrices[p.id] > 0)
+                                                                                        ? contractPrices[p.id]
+                                                                                        : (p.base_price || 0);
+
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={p.id}
+                                                                                            id={`dropdown-item-${idx}-${pIdx}`}
+                                                                                            onMouseDown={(e) => {
+                                                                                                e.preventDefault();
+                                                                                                if (isScarcityLocked) {
+                                                                                                    showToast(`🚫 "${p.name}" no se puede agregar: Insumo bloqueado por escasez.`, 'error');
+                                                                                                    return;
+                                                                                                }
+                                                                                                updateStagedItem(item.id, 'product', p);
+                                                                                                updateStagedItem(item.id, 'searchQuery', `${p.name} (${getAccountingIdDisplay(p)})`);
+                                                                                                updateStagedItem(item.id, 'isConfirmed', true);
+                                                                                                setActiveRowSearchQuery(null);
+                                                                                                setActiveDropdownRowIndex(null);
+
+                                                                                                const nextIdx = idx + 1;
+                                                                                                const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                                if (nextInput) {
+                                                                                                    nextInput.focus({ preventScroll: true });
+                                                                                                    nextInput.select();
+                                                                                                    scrollToStagedRow(nextIdx);
+                                                                                                }
+                                                                                            }}
+                                                                                            onMouseEnter={() => setFocusedDropdownItemIndex(pIdx)}
+                                                                                            style={{
+                                                                                                padding: '0.85rem 1.15rem',
+                                                                                                cursor: isScarcityLocked ? 'not-allowed' : 'pointer',
+                                                                                                borderBottom: '1px solid #F1F5F9',
+                                                                                                borderLeft: isFocused ? '5px solid #2563EB' : '5px solid transparent',
+                                                                                                display: 'flex',
+                                                                                                justifyContent: 'space-between',
+                                                                                                alignItems: 'center',
+                                                                                                backgroundColor: isScarcityLocked
+                                                                                                    ? (isFocused ? '#FEE2E2' : '#FEF2F2')
+                                                                                                    : (isFocused ? '#DBEAFE' : (isClientHabitual ? '#F0FDF4' : 'white')),
+                                                                                                transition: 'all 0.12s ease-in-out'
+                                                                                            }}
+                                                                                        >
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                                                <span style={{ 
+                                                                                                    fontWeight: isFocused ? '900' : '700', 
+                                                                                                    color: isScarcityLocked ? '#991B1B' : (isFocused ? '#1E3A8A' : '#111827'),
+                                                                                                    fontSize: '0.90rem'
+                                                                                                }}>
+                                                                                                    {p.name} <span style={{ fontSize: '0.82em', color: isFocused ? '#2563EB' : '#6B7280', fontWeight: '600' }}>(ID Contable: {getAccountingIdDisplay(p)})</span>
+                                                                                                </span>
+                                                                                                {isClientHabitual && (
+                                                                                                    <span style={{ 
+                                                                                                        fontSize: '0.68rem', 
+                                                                                                        backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
+                                                                                                        color: '#15803D', 
+                                                                                                        padding: '2px 8px', 
+                                                                                                        borderRadius: '999px', 
+                                                                                                        fontWeight: '800', 
+                                                                                                        display: 'inline-flex', 
+                                                                                                        alignItems: 'center', 
+                                                                                                        gap: '3px',
+                                                                                                        border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                                                                                    }}>
+                                                                                                        ⭐ Habitual {exc?.nickname && exc.nickname.trim().toLowerCase() !== p.name.trim().toLowerCase() ? `(Alias: ${exc.nickname})` : ''}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {exc?.preferred_options && typeof exc.preferred_options === 'object' && Object.keys(exc.preferred_options).length > 0 && (
+                                                                                                    <span style={{ 
+                                                                                                        fontSize: '0.66rem', 
+                                                                                                        backgroundColor: isFocused ? '#BBF7D0' : '#DCFCE7', 
+                                                                                                        color: '#15803D', 
+                                                                                                        padding: '2px 6px', 
+                                                                                                        borderRadius: '6px', 
+                                                                                                        fontWeight: '800', 
+                                                                                                        display: 'inline-flex', 
+                                                                                                        alignItems: 'center', 
+                                                                                                        gap: '3px',
+                                                                                                        border: isFocused ? '1.5px solid #22C55E' : '1px solid #86EFAC'
+                                                                                                    }}>
+                                                                                                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }} /> {Object.values(exc.preferred_options).join(' • ')}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {isScarcityLocked && (
+                                                                                                    <span style={{ fontSize: '0.66rem', backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 7px', borderRadius: '4px', border: '1px solid #FCA5A5', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                                        <PackageX size={11} /> AGOTADO POR ESCASEZ
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <span style={{ fontSize: '0.84rem', fontWeight: isFocused ? '800' : '700', color: isFocused ? '#1E40AF' : '#4B5563', flexShrink: 0, marginLeft: '12px' }}>
+                                                                                                {formatMoney(resolvedPrice)}/{p.unit_of_measure}
+                                                                                                {p.options_config?.length > 0 && (
+                                                                                                    <span style={{ 
+                                                                                                        marginLeft: '6px', 
+                                                                                                        fontSize: '0.72em', 
+                                                                                                        backgroundColor: isFocused ? '#FEF08A' : '#FEF3C7', 
+                                                                                                        color: '#92400E', 
+                                                                                                        padding: '2px 6px', 
+                                                                                                        borderRadius: '6px', 
+                                                                                                        border: isFocused ? '1px solid #EAB308' : '1px solid #FDE68A', 
+                                                                                                        fontWeight: '800',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        gap: '3px'
+                                                                                                    }}>
+                                                                                                        <Settings size={10} /> Opciones
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                 </td>
                                                                 <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '23%' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
