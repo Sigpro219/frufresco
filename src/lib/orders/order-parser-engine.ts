@@ -115,9 +115,24 @@ export function resolveClientProfile(
     if (matched) return matched;
   }
 
-  // Capa 3: Coincidencia por Razón Social / Nombre Comercial
+  // Capa 3: Coincidencia por Razón Social / Nombre Comercial / Sede Específica
   const cleanName = sanitizeDocText(clientInfo.name || '');
+  const cleanAddress = sanitizeDocText(clientInfo.address || '');
   if (cleanName && cleanName.length >= 3) {
+    // Si contiene sede específica (ej: "Colegio Norte", "Ceic Norte", "El Cubo", "Peñalisa")
+    const matchedSede = profiles.find(p => {
+      const compName = sanitizeDocText(p.company_name || '');
+      const pAddress = sanitizeDocText(p.address || '');
+      // Match si la dirección del perfil coincide con la dirección del documento
+      if (cleanAddress && pAddress && (pAddress.includes(cleanAddress) || cleanAddress.includes(pAddress.replace(/[^a-z0-9]/g, '')))) {
+        return true;
+      }
+      // Match si el nombre contiene la sede (ej. "Norte", "Ceic", "Cubo")
+      const nameWords = cleanName.split(/\s+/).filter(w => w.length > 3 && !['caja', 'compensacion', 'familiar', 'colsubsidio', 'sas', 'ltda'].includes(w));
+      return nameWords.length > 0 && nameWords.some(w => compName.includes(w));
+    });
+    if (matchedSede) return matchedSede;
+
     const matched = profiles.find(p => {
       const compName = sanitizeDocText(p.company_name || '');
       const contactName = sanitizeDocText(p.contact_name || '');
@@ -127,7 +142,7 @@ export function resolveClientProfile(
     if (matched) return matched;
   }
 
-  // Capa 4: Coincidencia por Texto de Firma o Cuerpo del Correo
+  // Capa 4: Coincidencia por Texto de Firma, Dirección o Cuerpo del Correo
   const sigText = sanitizeDocText(clientInfo.signatureText || '');
   if (sigText && sigText.length >= 5) {
     const matched = profiles.find(p => {
@@ -135,6 +150,15 @@ export function resolveClientProfile(
       return compName && compName.length >= 4 && sigText.includes(compName);
     });
     if (matched) return matched;
+  }
+
+  // Capa 5: Coincidencia por Dirección de Entrega en el Documento
+  if (cleanAddress && cleanAddress.length >= 5) {
+    const matchedByAddress = profiles.find(p => {
+      const pAddress = sanitizeDocText(p.address || '');
+      return pAddress && pAddress.length >= 5 && (pAddress.includes(cleanAddress) || cleanAddress.includes(pAddress));
+    });
+    if (matchedByAddress) return matchedByAddress;
   }
 
   return null;

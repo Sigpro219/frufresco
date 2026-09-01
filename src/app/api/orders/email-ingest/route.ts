@@ -140,14 +140,13 @@ export async function POST(req: Request) {
           }
           senderEmail = senderEmail.trim().toLowerCase();
 
-          // Cuentas corporativas conocidas de FruFresco y del administrador
-          const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com', 'ship@info.vercel.com', 'noreply@supabase.com'];
-          const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co') || senderEmail.includes('vercel') || senderEmail.includes('supabase');
+          let isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co') || senderEmail.includes('vercel') || senderEmail.includes('supabase');
 
           // If sender is corporate/internal (or forwarded email), override senderEmail with extracted original email if available
           if (isCorporateSender && forwardedOriginalEmail && !corporateEmails.includes(forwardedOriginalEmail)) {
             console.log(`[Email Inbound] Correo reenviado detectado. Reemplazando remitente corporativo (${senderEmail}) con cliente original: ${forwardedOriginalEmail}`);
             senderEmail = forwardedOriginalEmail;
+            isCorporateSender = false;
           }
 
           // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
@@ -241,13 +240,12 @@ export async function POST(req: Request) {
 
           const isCorporateRecipient = corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co');
 
-          if (isCorporateSender && toField) {
-            // Si el emisor es corporativo (frufrescodigital@gmail.com), se trata de un correo saliente
-            // (ej. enviado con CCO a la plataforma). En este caso, el cliente es el destinatario (recipientEmail).
+          if (isCorporateSender && toField && !forwardedOriginalEmail && attachments.length === 0) {
+            // Si el emisor es corporativo (frufrescodigital@gmail.com) sin adjuntos ni reenvío, se trata de un correo saliente
             
             // Si el destinatario también es corporativo, se aborta para evitar bucles.
             if (isCorporateRecipient) {
-              console.log(`[Email Inbound] Ignorando correo corporativo interno de loop. De: ${senderEmail} Para: ${recipientEmail}`);
+              console.log(`[Email Inbound] Ignorando correo corporativo interno de loop sin adjuntos. De: ${senderEmail} Para: ${recipientEmail}`);
               if (mailId) {
                 await supabaseAdmin.from('mail').update({ status: 'ignored' }).eq('id', mailId);
               }
@@ -257,9 +255,8 @@ export async function POST(req: Request) {
             console.log(`[Email Inbound] Correo saliente detectado (CCO/BCC) desde emisor corporativo (${senderEmail}). Asociando al destinatario (cliente): ${recipientEmail}`);
             senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente y responderle
           } else {
-            // Si el emisor NO es corporativo (ej: higuera200@gmail.com), el cliente es el senderEmail.
-            // El correo fue enviado TO a nuestra cuenta corporativa (recipientEmail).
-            console.log(`[Email Inbound] Correo entrante recibido de cliente: ${senderEmail} hacia corporativo: ${recipientEmail} con asunto: ${subject}`);
+            // Si el emisor NO es corporativo (ej: cliente externo) o es un correo con adjuntos/reenviado
+            console.log(`[Email Inbound] Correo entrante procesable recibido de: ${senderEmail} hacia corporativo: ${recipientEmail} con asunto: ${subject} (Adjuntos: ${attachments.length})`);
           }
 
     // 1. Declare client profile reference and pre-fetch active products for SKU matching
