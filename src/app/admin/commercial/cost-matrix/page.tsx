@@ -176,7 +176,7 @@ function Sparkline({ data, productId }: { data: Purchase[], productId?: string }
 
     if (data.length === 1) {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }} title={`Única compra registrada: $${formatNumber(Math.round(data[0].normalized_price))}`}>
                 <div style={{ width: '28px', height: '2px', backgroundColor: '#CBD5E1', borderRadius: '1px' }} />
                 <span style={{ 
                     fontSize: '0.68rem', 
@@ -196,17 +196,30 @@ function Sparkline({ data, productId }: { data: Purchase[], productId?: string }
         );
     }
 
-    // Cronológico (del más antiguo al más reciente)
-    const prices = data.map(d => d.normalized_price).reverse();
+    // Ordenar estrictamente de forma cronológica (del más antiguo al más reciente)
+    const chronologicalPurchases = [...data].sort((a, b) => {
+        const timeA = safeGetValidDate(a.created_at)?.getTime() || 0;
+        const timeB = safeGetValidDate(b.created_at)?.getTime() || 0;
+        return timeA - timeB;
+    });
+
+    const prices = chronologicalPurchases.map(d => d.normalized_price);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    const range = max - min || 1;
+    const range = max - min;
 
-    // Puntos normalizados con margen superior e inferior
+    // ViewBox de alta precisión 80x28 (1 unidad = 1 px)
+    const W = 80;
+    const H = 28;
+    const padX = 8;
+    const padY = 5;
+    const usableW = W - padX * 2;
+    const usableH = H - padY * 2;
+
     const points = prices.map((p, i) => {
-        const x = (i / (prices.length - 1)) * 88 + 6;
-        const y = 80 - ((p - min) / range) * 60;
-        return { x, y };
+        const x = padX + (i / (prices.length - 1)) * usableW;
+        const y = range === 0 ? H / 2 : (H - padY) - ((p - min) / range) * usableH;
+        return { x, y, price: p, date: chronologicalPurchases[i].created_at };
     });
 
     const trend = (prices[prices.length - 1] - prices[0]) / (prices[0] || 1);
@@ -215,61 +228,66 @@ function Sparkline({ data, productId }: { data: Purchase[], productId?: string }
     const isDown = trend < -0.005;
     const isNeutral = !isUp && !isDown;
 
-    const themeColor = isUp ? '#DC2626' : isDown ? THEME.colors.primary : THEME.colors.textSecondary;
-    const bgColor = isUp ? '#FEF2F2' : isDown ? '#ECFDF5' : '#F1F5F9';
-    const borderColor = isUp ? '#FECACA' : isDown ? '#A7F3D0' : '#E2E8F0';
+    const themeColor = isUp ? '#DC2626' : isDown ? '#15803D' : '#64748B';
+    const bgColor = isUp ? '#FEF2F2' : isDown ? '#DCFCE7' : '#F1F5F9';
+    const borderColor = isUp ? '#FECACA' : isDown ? '#86EFAC' : '#E2E8F0';
     const gradId = `spark-grad-${productId ? productId.replace(/[^a-zA-Z0-9]/g, '') : Math.random().toString(36).substring(2, 7)}`;
 
-    // Curva Bezier suave (Cubic Spline)
-    let pathD = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
-    for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i === 0 ? i : i - 1];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2] || p2;
-
-        const cp1x = p1.x + (p2.x - p0.x) / 6;
-        const cp1y = p1.y + (p2.y - p0.y) / 6;
-
-        const cp2x = p2.x - (p3.x - p1.x) / 6;
-        const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-        pathD += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.x.toFixed(1)}`;
-    }
-
+    // Trayectoria poligonal nítida
+    const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ');
     const lastPoint = points[points.length - 1];
     const firstPoint = points[0];
-    const areaD = `${pathD} L ${lastPoint.x.toFixed(1)},100 L ${firstPoint.x.toFixed(1)},100 Z`;
+    const areaD = `${pathD} L ${lastPoint.x.toFixed(1)},${H} L ${firstPoint.x.toFixed(1)},${H} Z`;
+
+    const tooltipText = `Historial de compras (${prices.length} eventos):\n` +
+        chronologicalPurchases.map(p => `• ${safeFormatDate(p.created_at, 'dd MMM yyyy')}: $${formatNumber(Math.round(p.normalized_price))}`).join('\n') +
+        `\nTendencia: ${isUp ? '+' : isDown ? '-' : ''}${trendPercent.toFixed(1)}%`;
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center', padding: '0 0.1rem' }}>
-            {/* SVG Waveform con Área Sombreada y Nodo Pulsante */}
-            <div style={{ width: '64px', height: '26px', position: 'relative' }}>
-                <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center', padding: '0 0.1rem' }} title={tooltipText}>
+            {/* SVG Waveform de alta fidelidad con marcadores visibles */}
+            <div style={{ width: '80px', height: '28px', position: 'relative', flexShrink: 0 }}>
+                <svg width="80" height="28" viewBox="0 0 80 28" style={{ overflow: 'visible', display: 'block' }}>
                     <defs>
                         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={themeColor} stopOpacity="0.25" />
+                            <stop offset="0%" stopColor={themeColor} stopOpacity="0.22" />
                             <stop offset="100%" stopColor={themeColor} stopOpacity="0.0" />
                         </linearGradient>
                     </defs>
                     
-                    {/* Relleno translúcido */}
+                    {/* Línea guía central sutil */}
+                    <line x1={padX} y1={H / 2} x2={W - padX} y2={H / 2} stroke="#E2E8F0" strokeWidth="1" strokeDasharray="2,2" />
+
+                    {/* Relleno degradado bajo la curva */}
                     <path d={areaD} fill={`url(#${gradId})`} />
                     
-                    {/* Línea curva suave */}
+                    {/* Línea de tendencia continua y nítida */}
                     <path
                         d={pathD}
                         fill="none"
                         stroke={themeColor}
-                        strokeWidth="6"
+                        strokeWidth="2.2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                     />
 
-                    {/* Nodo focal de la última compra */}
-                    <circle cx={lastPoint.x} cy={lastPoint.y} r="7" fill={themeColor} opacity="0.25" />
-                    <circle cx={lastPoint.x} cy={lastPoint.y} r="4" fill={themeColor} />
-                    <circle cx={lastPoint.x} cy={lastPoint.y} r="1.8" fill="white" />
+                    {/* Marcadores de compras históricas intermedias */}
+                    {points.slice(0, points.length - 1).map((pt, idx) => (
+                        <circle
+                            key={idx}
+                            cx={pt.x}
+                            cy={pt.y}
+                            r="2.5"
+                            fill={themeColor}
+                            stroke="#FFFFFF"
+                            strokeWidth="1"
+                        />
+                    ))}
+
+                    {/* Nodo destacado de la última compra (Compra actual) */}
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="5.5" fill={themeColor} opacity="0.2" />
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="3.5" fill={themeColor} stroke="#FFFFFF" strokeWidth="1.2" />
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="1.3" fill="#FFFFFF" />
                 </svg>
             </div>
 
@@ -285,11 +303,12 @@ function Sparkline({ data, productId }: { data: Purchase[], productId?: string }
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '3px',
-                minWidth: '56px',
+                minWidth: '58px',
                 justifyContent: 'center',
                 boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                 lineHeight: 1.2,
-                fontFamily: 'monospace'
+                fontFamily: 'monospace',
+                flexShrink: 0
             }}>
                 {isUp && <TrendingUp size={11} strokeWidth={3} />}
                 {isDown && <TrendingDown size={11} strokeWidth={3} />}
