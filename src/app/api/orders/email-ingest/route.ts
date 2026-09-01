@@ -24,6 +24,33 @@ async function fetchGemini(apiKey: string, prompt: string, base64Image?: string,
   }
 }
 
+export function safeExtractJson(rawText: string): any {
+  if (!rawText) return null;
+  let clean = rawText.trim();
+  const match = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (match && match[1]) {
+    try {
+      return JSON.parse(match[1].trim());
+    } catch (e) {
+      // Fallback
+    }
+  }
+  const firstBrace = clean.indexOf('{');
+  const lastBrace = clean.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(clean.slice(firstBrace, lastBrace + 1).trim());
+    } catch (e) {
+      // Fallback
+    }
+  }
+  try {
+    return JSON.parse(clean.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim());
+  } catch (e) {
+    return null;
+  }
+}
+
 export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -788,8 +815,7 @@ export async function POST(req: Request) {
         if (!attIsExcel) {
           try {
             let text = await fetchGemini(apiKey, genericPrompt, base64Data, mimeType);
-            text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-            attExtractedData = JSON.parse(text);
+            attExtractedData = safeExtractJson(text) || { items: [] };
             if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
                 attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
@@ -834,8 +860,7 @@ export async function POST(req: Request) {
           `;
           try {
             let text = await fetchGemini(apiKey, excelPrompt);
-            text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-            attExtractedData = JSON.parse(text);
+            attExtractedData = safeExtractJson(text) || { items: [] };
             const filterExcelItems = (items: any[], clientName: string) => {
               if (!items || items.length === 0) return [];
               const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -1003,20 +1028,7 @@ export async function POST(req: Request) {
         let text = await fetchGemini(apiKey, prompt);
         console.log('[Email Inbound] Raw Gemini plain text:', text);
         
-        // Extraer bloque de código JSON si existe
-        const jsonMatch = text.match(/```(?:json)?([\s\S]*?)```/);
-        if (jsonMatch) {
-          text = jsonMatch[1];
-        }
-        text = text.trim();
-        
-        // Eliminar posibles caracteres basura comunes al inicio/final
-        if (text.startsWith('```json')) text = text.substring(7);
-        if (text.startsWith('```')) text = text.substring(3);
-        if (text.endsWith('```')) text = text.substring(0, text.length - 3);
-        text = text.trim();
- 
-        extractedData = JSON.parse(text);
+        extractedData = safeExtractJson(text) || { items: [] };
         if (extractedData.items && !Array.isArray(extractedData.items)) {
           if (typeof extractedData.items === 'object') {
             extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));

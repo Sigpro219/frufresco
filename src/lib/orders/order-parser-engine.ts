@@ -75,9 +75,34 @@ export async function fetchGeminiExtraction(
     throw lastError || new Error('No se pudo establecer comunicación con la API de Gemini.');
   }
 
-  // Sanitizar el bloque JSON de la respuesta
-  const cleanJson = resultText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-  const parsedJson = JSON.parse(cleanJson);
+  // Sanitizar el bloque JSON de la respuesta de forma ultra-robusta
+  let parsedJson: any = null;
+  const match = resultText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (match && match[1]) {
+    try {
+      parsedJson = JSON.parse(match[1].trim());
+    } catch (e) {
+      // Fallback below
+    }
+  }
+
+  if (!parsedJson) {
+    const firstBrace = resultText.indexOf('{');
+    const lastBrace = resultText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        parsedJson = JSON.parse(resultText.slice(firstBrace, lastBrace + 1).trim());
+      } catch (e) {
+        // Fallback below
+      }
+    }
+  }
+
+  if (!parsedJson) {
+    const cleanJson = resultText.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+    parsedJson = JSON.parse(cleanJson);
+  }
+
   parsedJson._modelUsed = successfulModel;
   return parsedJson;
 }
