@@ -1,11 +1,49 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { ShoppingBag, TrendingUp, AlertCircle, CheckCircle2, Receipt, Calendar, FileText, ChevronRight, Download, CreditCard, RefreshCw, Search, Plus, Trash2, Edit2, User, Users, Printer } from 'lucide-react';
+import { 
+    ShoppingBag, 
+    TrendingUp, 
+    AlertCircle, 
+    CheckCircle2, 
+    Receipt, 
+    Calendar, 
+    FileText, 
+    ChevronRight, 
+    Download, 
+    CreditCard, 
+    RefreshCw, 
+    Search, 
+    Plus, 
+    Trash2, 
+    Edit2, 
+    User, 
+    Users, 
+    Printer,
+    Sun,
+    Moon,
+    Wallet,
+    Settings,
+    Lock,
+    FileSignature,
+    AlertTriangle,
+    FileCheck,
+    ArrowLeft,
+    Clock,
+    Sparkles,
+    DollarSign,
+    Layers,
+    Building2,
+    HelpCircle,
+    ShieldCheck,
+    X,
+    Filter
+} from 'lucide-react';
 
 interface BillingCut {
     id: string;
@@ -768,16 +806,18 @@ export default function BillingDashboard() {
 
     if (!hasInvoicingAccess && !hasPortfolioAccess && !hasConfigAccess) {
         return (
-            <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ backgroundColor: 'white', padding: '3rem', borderRadius: '24px', maxWidth: '500px', width: '100%', textAlign: 'center', border: '1px solid #E5E7EB', boxShadow: THEME.shadow.md }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#111827', marginBottom: '1rem' }}>Acceso Restringido</h2>
-                    <p style={{ color: '#6B7280', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '2rem' }}>
+            <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ backgroundColor: 'white', padding: '3.5rem 2.5rem', borderRadius: '24px', maxWidth: '480px', width: '100%', textAlign: 'center', border: '1px solid #E2E8F0', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05)' }}>
+                    <div style={{ width: '64px', height: '64px', borderRadius: '18px', backgroundColor: '#FEE2E2', color: '#DC2626', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem' }}>
+                        <Lock size={32} />
+                    </div>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A', marginBottom: '0.75rem' }}>Acceso Restringido</h2>
+                    <p style={{ color: '#64748B', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.75rem' }}>
                         No tienes permisos suficientes para ingresar a este módulo. Solicita acceso al administrador a través del Command Center.
                     </p>
                     <button 
                         onClick={() => window.history.back()}
-                        style={{ padding: '10px 20px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+                        style={{ padding: '0.75rem 1.5rem', backgroundColor: '#0D7A57', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)' }}
                     >
                         Volver
                     </button>
@@ -787,61 +827,152 @@ export default function BillingDashboard() {
     }
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, padding: '2rem 1.5rem', fontFamily: THEME.typography.fontFamilyMain }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', padding: '2rem 1.5rem 4rem 1.5rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+            <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
                 
-                {/* Header */}
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                {/* BACK LINK & HEADER */}
+                <header style={{ marginBottom: '1.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Receipt color={THEME.colors.primary} size={30} /> Facturación y Cartera
+                        <Link 
+                            href="/admin/commercial" 
+                            style={{ 
+                                textDecoration: 'none', 
+                                color: '#64748B', 
+                                fontWeight: '700', 
+                                fontSize: '0.85rem', 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '6px',
+                                marginBottom: '0.6rem',
+                                transition: 'color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#0D7A57'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#64748B'}
+                        >
+                            <ArrowLeft size={16} /> Volver al Dashboard Comercial
+                        </Link>
+                        
+                        <h1 style={{ fontSize: '2.1rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Receipt style={{ color: '#0D7A57' }} size={32} /> Facturación y Cartera
                         </h1>
-                        <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>
+                        <p style={{ color: '#64748B', fontSize: '0.95rem', marginTop: '0.35rem', marginBottom: 0 }}>
                             Gestión integral de cortes diarios, emisión de facturas y control de cartera de clientes.
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.8rem' }}>
+                    
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <button
                             onClick={() => handleCreateCut('AM')}
                             disabled={isProcessing}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: THEME.radius.lg, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: THEME.shadow.sm }}
+                            style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                backgroundColor: '#0D7A57', 
+                                color: 'white', 
+                                border: 'none', 
+                                padding: '0.75rem 1.3rem', 
+                                borderRadius: '12px', 
+                                fontWeight: '800', 
+                                fontSize: '0.86rem', 
+                                cursor: 'pointer', 
+                                boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#065F46'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0D7A57'}
                         >
-                            ☀️ Generar Corte AM
+                            <Sun size={17} strokeWidth={2.5} /> Generar Corte AM
                         </button>
                         <button
                             onClick={() => handleCreateCut('PM')}
                             disabled={isProcessing}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.primaryHover, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: THEME.radius.lg, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: THEME.shadow.sm }}
+                            style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                backgroundColor: '#064E3B', 
+                                color: 'white', 
+                                border: 'none', 
+                                padding: '0.75rem 1.3rem', 
+                                borderRadius: '12px', 
+                                fontWeight: '800', 
+                                fontSize: '0.86rem', 
+                                cursor: 'pointer', 
+                                boxShadow: '0 4px 12px rgba(6, 78, 59, 0.25)',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#022C22'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#064E3B'}
                         >
-                            🌙 Generar Corte PM
+                            <Moon size={17} strokeWidth={2.5} /> Generar Corte PM
                         </button>
                     </div>
                 </header>
 
                 {/* Submodule Main Tabs */}
-                <div style={{ display: 'flex', gap: '1rem', borderBottom: `1px solid ${THEME.colors.border}`, marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #E2E8F0', marginBottom: '1.75rem' }}>
                     {hasInvoicingAccess && (
                         <button
                             onClick={() => setActiveTab('invoicing')}
-                            style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'invoicing' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'invoicing' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                            style={{ 
+                                padding: '0.85rem 1.25rem', 
+                                border: 'none', 
+                                background: 'none', 
+                                fontWeight: '800', 
+                                fontSize: '0.92rem', 
+                                cursor: 'pointer', 
+                                borderBottom: activeTab === 'invoicing' ? '3px solid #0D7A57' : '3px solid transparent', 
+                                color: activeTab === 'invoicing' ? '#0D7A57' : '#64748B', 
+                                transition: 'all 0.15s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}
                         >
-                            📝 Submódulo Facturación
+                            <Receipt size={17} /> Submódulo Facturación
                         </button>
                     )}
                     {hasPortfolioAccess && (
                         <button
                             onClick={() => setActiveTab('portfolio')}
-                            style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'portfolio' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'portfolio' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                            style={{ 
+                                padding: '0.85rem 1.25rem', 
+                                border: 'none', 
+                                background: 'none', 
+                                fontWeight: '800', 
+                                fontSize: '0.92rem', 
+                                cursor: 'pointer', 
+                                borderBottom: activeTab === 'portfolio' ? '3px solid #0D7A57' : '3px solid transparent', 
+                                color: activeTab === 'portfolio' ? '#0D7A57' : '#64748B', 
+                                transition: 'all 0.15s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}
                         >
-                            💰 Submódulo Cartera
+                            <Wallet size={17} /> Submódulo Cartera
                         </button>
                     )}
                     {hasConfigAccess && (
                         <button
                             onClick={() => setActiveTab('configuration')}
-                            style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'configuration' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'configuration' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                            style={{ 
+                                padding: '0.85rem 1.25rem', 
+                                border: 'none', 
+                                background: 'none', 
+                                fontWeight: '800', 
+                                fontSize: '0.92rem', 
+                                cursor: 'pointer', 
+                                borderBottom: activeTab === 'configuration' ? '3px solid #0D7A57' : '3px solid transparent', 
+                                color: activeTab === 'configuration' ? '#0D7A57' : '#64748B', 
+                                transition: 'all 0.15s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}
                         >
-                            ⚙️ Configuración
+                            <Settings size={17} /> Configuración
                         </button>
                     )}
                 </div>
@@ -850,62 +981,99 @@ export default function BillingDashboard() {
                 {activeTab === 'invoicing' && (
                     <div>
                         {/* Sub-tabs cuts / returns */}
-                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
                             <button
                                 onClick={() => setSubTab('cuts')}
-                                style={{ backgroundColor: subTab === 'cuts' ? THEME.colors.primaryLight : 'transparent', color: subTab === 'cuts' ? THEME.colors.primary : THEME.colors.textSecondary, padding: '0.4rem 1rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                style={{ 
+                                    backgroundColor: subTab === 'cuts' ? 'white' : 'transparent', 
+                                    color: subTab === 'cuts' ? '#0F172A' : '#64748B', 
+                                    padding: '0.55rem 1.1rem', 
+                                    borderRadius: '9px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.82rem', 
+                                    cursor: 'pointer',
+                                    boxShadow: subTab === 'cuts' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
                             >
-                                Cortes Generales ({cuts.length})
+                                <Layers size={14} style={{ color: subTab === 'cuts' ? '#0D7A57' : '#64748B' }} /> Cortes Generales ({cuts.length})
                             </button>
                             <button
                                 onClick={() => setSubTab('returns')}
-                                style={{ backgroundColor: subTab === 'returns' ? THEME.colors.primaryLight : 'transparent', color: subTab === 'returns' ? THEME.colors.primary : THEME.colors.textSecondary, padding: '0.4rem 1rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                                style={{ 
+                                    backgroundColor: subTab === 'returns' ? 'white' : 'transparent', 
+                                    color: subTab === 'returns' ? '#0F172A' : '#64748B', 
+                                    padding: '0.55rem 1.1rem', 
+                                    borderRadius: '9px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.82rem', 
+                                    cursor: 'pointer',
+                                    boxShadow: subTab === 'returns' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
                             >
-                                Devoluciones Pendientes ({returns.length})
+                                <AlertCircle size={14} style={{ color: subTab === 'returns' ? '#DC2626' : '#64748B' }} /> Devoluciones Pendientes ({returns.length})
                             </button>
                         </div>
 
                         {subTab === 'cuts' && (
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.md }}>
+                            <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)' }}>
                                 <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                         <thead>
-                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                <th style={thStyle}># Corte</th>
-                                                <th style={thStyle}>Fecha y Franja</th>
-                                                <th style={thStyle}>Pedidos</th>
-                                                <th style={thStyle}>Total Bruto</th>
-                                                <th style={thStyle}>Estado</th>
-                                                <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
+                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}># Corte</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha y Franja</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pedidos</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Bruto</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estado</th>
+                                                <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {loading ? (
-                                                <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando cortes...</td></tr>
+                                                <tr><td colSpan={6} style={{ padding: '3.5rem', textAlign: 'center', color: '#94A3B8', fontWeight: '600' }}>Cargando cortes...</td></tr>
                                             ) : cuts.length === 0 ? (
-                                                <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay cortes generados aún.</td></tr>
+                                                <tr>
+                                                    <td colSpan={6} style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+                                                        <div style={{ maxWidth: '460px', margin: '0 auto' }}>
+                                                            <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#EAEFEA', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', marginBottom: '1rem' }}>
+                                                                <Layers size={28} />
+                                                            </div>
+                                                            <h3 style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginBottom: '0.3rem' }}>No hay cortes generados aún</h3>
+                                                            <p style={{ color: '#64748B', fontSize: '0.85rem', margin: 0 }}>Genera un corte diario AM o PM para agrupar pedidos y facturar.</p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
                                             ) : cuts.map((cut) => {
-                                                const openCut = cut.status === 'open';
                                                 return (
-                                                    <tr key={cut.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s' }}>
-                                                        <td style={tdStyle}><span style={{ fontWeight: '800' }}>{cut.cut_number.toString().padStart(4, '0')}</span></td>
-                                                        <td style={tdStyle}>
-                                                            <div style={{ fontWeight: '700' }}>{new Date(cut.scheduled_date).toLocaleDateString()}</div>
-                                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Franja: {cut.cut_slot}</div>
+                                                    <tr key={cut.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                        <td style={{ padding: '1rem 1.25rem' }}><span style={{ fontWeight: '800', color: '#0F172A' }}>#{cut.cut_number.toString().padStart(4, '0')}</span></td>
+                                                        <td style={{ padding: '1rem 1.25rem' }}>
+                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>{new Date(cut.scheduled_date).toLocaleDateString()}</div>
+                                                            <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>Franja: {cut.cut_slot}</div>
                                                         </td>
-                                                        <td style={tdStyle}>{cut.total_orders} pedidos</td>
-                                                        <td style={{ ...tdStyle, fontWeight: '750' }}>{formatMoney(cut.total_amount)}</td>
-                                                        <td style={tdStyle}>
-                                                            <span style={{ backgroundColor: cut.status === 'exported' ? '#DCFCE7' : '#FEF3C7', color: cut.status === 'exported' ? '#166534' : '#92400E', padding: '0.2rem 0.6rem', borderRadius: THEME.radius.md, fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                        <td style={{ padding: '1rem 1.25rem', fontWeight: '600', color: '#334155' }}>{cut.total_orders} pedidos</td>
+                                                        <td style={{ padding: '1rem 1.25rem', fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(cut.total_amount)}</td>
+                                                        <td style={{ padding: '1rem 1.25rem' }}>
+                                                            <span style={{ backgroundColor: cut.status === 'exported' ? '#ECFDF5' : '#FEF3C7', color: cut.status === 'exported' ? '#065F46' : '#92400E', border: `1px solid ${cut.status === 'exported' ? '#A7F3D0' : '#FDE68A'}`, padding: '0.25rem 0.6rem', borderRadius: '99px', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase' }}>
                                                                 {cut.status}
                                                             </span>
                                                         </td>
-                                                        <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                        <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
                                                             <button 
                                                                 onClick={() => exportToWorldOffice(cut.id)}
-                                                                style={{ backgroundColor: THEME.colors.background, color: THEME.colors.textMain, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', marginRight: '0.4rem' }}
+                                                                style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '0.5rem 0.9rem', borderRadius: '10px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.78rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                                                             >
-                                                                <Download size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} /> WO CSV
+                                                                <Download size={13} /> WO CSV
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -918,38 +1086,40 @@ export default function BillingDashboard() {
                         )}
 
                         {subTab === 'returns' && (
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, padding: '1.5rem', boxShadow: THEME.shadow.md }}>
+                            <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0', padding: '1.5rem', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.2rem' }}>
                                     {returns.length === 0 ? (
-                                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>
-                                            <CheckCircle2 color={THEME.colors.primary} size={40} style={{ marginBottom: '0.5rem' }} />
-                                            <h3 style={{ fontWeight: '700', margin: 0 }}>No hay devoluciones pendientes</h3>
-                                            <p style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}>Todas las novedades de transportadores al día.</p>
+                                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem 2rem' }}>
+                                            <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#ECFDF5', color: '#0D7A57', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                                                <CheckCircle2 size={28} />
+                                            </div>
+                                            <h3 style={{ fontWeight: '900', color: '#0F172A', margin: '0 0 0.3rem 0', fontSize: '1.15rem' }}>No hay devoluciones pendientes</h3>
+                                            <p style={{ fontSize: '0.85rem', color: '#64748B', margin: 0 }}>Todas las novedades de transportadores se encuentran al día.</p>
                                         </div>
                                     ) : returns.map((ret) => (
-                                        <div key={ret.id} style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.lg, padding: '1rem', backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                        <div key={ret.id} style={{ border: '1px solid #E2E8F0', borderRadius: '14px', padding: '1.1rem', backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: '0.8rem', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                 <div>
-                                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary }}>Pedido #{getFriendlyOrderId({ created_at: ret.orders.created_at, sequence_id: ret.orders.sequence_id })}</div>
-                                                    <h4 style={{ margin: '0.1rem 0', fontWeight: '750', fontSize: '0.95rem' }}>{ret.products.name}</h4>
+                                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Pedido #{getFriendlyOrderId({ created_at: ret.orders.created_at, sequence_id: ret.orders.sequence_id })}</div>
+                                                    <h4 style={{ margin: '0.2rem 0', fontWeight: '800', fontSize: '0.95rem', color: '#0F172A' }}>{ret.products.name}</h4>
                                                 </div>
-                                                <span style={{ backgroundColor: '#FEF2F2', color: '#991B1B', padding: '0.1rem 0.4rem', borderRadius: THEME.radius.sm, fontSize: '0.7rem', fontWeight: '800' }}>
+                                                <span style={{ backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', padding: '0.15rem 0.5rem', borderRadius: '99px', fontSize: '0.7rem', fontWeight: '800' }}>
                                                     -{ret.quantity_returned} Uds
                                                 </span>
                                             </div>
-                                            <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary, fontStyle: 'italic' }}>
+                                            <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B', fontStyle: 'italic', backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '8px' }}>
                                                 &quot;{ret.reason || 'Sin observación'}&quot;
                                             </p>
-                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: 'auto' }}>
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
                                                 <button
                                                     onClick={() => handleProcessReturn(ret, 'rejected')}
-                                                    style={{ flex: 1, padding: '0.4rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                    style={{ flex: 1, padding: '0.5rem', borderRadius: '10px', border: '1px solid #CBD5E1', background: 'white', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', color: '#64748B' }}
                                                 >
                                                     Rechazar
                                                 </button>
                                                 <button
                                                     onClick={() => handleProcessReturn(ret, 'approved')}
-                                                    style={{ flex: 2, padding: '0.4rem', borderRadius: THEME.radius.md, border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                    style={{ flex: 2, padding: '0.5rem', borderRadius: '10px', border: 'none', background: '#0D7A57', color: 'white', fontWeight: '800', fontSize: '0.75rem', cursor: 'pointer', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)' }}
                                                 >
                                                     Aprobar Ajuste
                                                 </button>
@@ -962,106 +1132,241 @@ export default function BillingDashboard() {
                     </div>
                 )}
 
+                {/* PORTFOLIO SUBMODULE */}
                 {activeTab === 'portfolio' && (
                     <div>
                         {/* Sub-tab selection bar */}
-                        <div style={{ display: 'flex', gap: '0.5rem', borderBottom: `1px solid ${THEME.colors.border}`, marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
                             <button
                                 onClick={() => setPortfolioSubTab('invoices')}
-                                style={{ padding: '0.6rem 1.2rem', border: 'none', background: 'none', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', borderBottom: portfolioSubTab === 'invoices' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: portfolioSubTab === 'invoices' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                                style={{ 
+                                    padding: '0.6rem 1.25rem', 
+                                    border: 'none', 
+                                    backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.85rem', 
+                                    cursor: 'pointer', 
+                                    borderRadius: '9px',
+                                    color: portfolioSubTab === 'invoices' ? '#0F172A' : '#64748B', 
+                                    boxShadow: portfolioSubTab === 'invoices' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
                             >
-                                Cuentas por Cobrar
+                                <FileText size={15} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Cuentas por Cobrar
                             </button>
                             <button
                                 onClick={() => setPortfolioSubTab('dossiers')}
-                                style={{ padding: '0.6rem 1.2rem', border: 'none', background: 'none', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', borderBottom: portfolioSubTab === 'dossiers' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: portfolioSubTab === 'dossiers' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                                style={{ 
+                                    padding: '0.6rem 1.25rem', 
+                                    border: 'none', 
+                                    backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.85rem', 
+                                    cursor: 'pointer', 
+                                    borderRadius: '9px',
+                                    color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
+                                    boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                    transition: 'all 0.15s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
                             >
-                                Solicitudes de Crédito y Pagarés
+                                <FileSignature size={15} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Solicitudes de Crédito y Pagarés
                             </button>
                         </div>
 
                         {portfolioSubTab === 'invoices' ? (
                             <>
                                 {/* Ageing Portfolio Widgets */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-                                    <div style={kpiCardStyle}>
-                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>SALDOS AL DÍA</div>
-                                        <div style={{ fontSize: '1.3rem', fontWeight: '850', color: THEME.colors.primary, marginTop: '0.4rem' }}>{formatMoney(aging.alDia)}</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
+                                    {/* SALDOS AL DÍA */}
+                                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '1.25rem 1.4rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ width: '46px', height: '46px', borderRadius: '14px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', flexShrink: 0 }}>
+                                            <CheckCircle2 size={24} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Saldos al Día</div>
+                                            <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#0D7A57', lineHeight: '1.2', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(aging.alDia)}</div>
+                                            <div style={{ fontSize: '0.74rem', color: '#065F46', fontWeight: '600' }}>Dentro del plazo acordado</div>
+                                        </div>
                                     </div>
-                                    <div style={kpiCardStyle}>
-                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VENCIDO 1 - 15 DÍAS</div>
-                                        <div style={{ fontSize: '1.3rem', fontWeight: '850', color: '#D97706', marginTop: '0.4rem' }}>{formatMoney(aging.vencido1_15)}</div>
+
+                                    {/* VENCIDO 1 - 15 DÍAS */}
+                                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '1.25rem 1.4rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ width: '46px', height: '46px', borderRadius: '14px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706', flexShrink: 0 }}>
+                                            <Clock size={24} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vencido 1 - 15 Días</div>
+                                            <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#D97706', lineHeight: '1.2', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(aging.vencido1_15)}</div>
+                                            <div style={{ fontSize: '0.74rem', color: '#92400E', fontWeight: '600' }}>Mora temprana preventiva</div>
+                                        </div>
                                     </div>
-                                    <div style={kpiCardStyle}>
-                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VENCIDO 16 - 30 DÍAS</div>
-                                        <div style={{ fontSize: '1.3rem', fontWeight: '850', color: '#EA580C', marginTop: '0.4rem' }}>{formatMoney(aging.vencido16_30)}</div>
+
+                                    {/* VENCIDO 16 - 30 DÍAS */}
+                                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '1.25rem 1.4rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ width: '46px', height: '46px', borderRadius: '14px', backgroundColor: '#FFEDD5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EA580C', flexShrink: 0 }}>
+                                            <AlertTriangle size={24} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vencido 16 - 30 Días</div>
+                                            <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#EA580C', lineHeight: '1.2', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(aging.vencido16_30)}</div>
+                                            <div style={{ fontSize: '0.74rem', color: '#9A3412', fontWeight: '600' }}>Gestión pre-cobro</div>
+                                        </div>
                                     </div>
-                                    <div style={kpiCardStyle}>
-                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VENCIDO +30 DÍAS</div>
-                                        <div style={{ fontSize: '1.3rem', fontWeight: '850', color: '#DC2626', marginTop: '0.4rem' }}>{formatMoney(aging.vencido30Mas)}</div>
+
+                                    {/* VENCIDO +30 DÍAS */}
+                                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '1.25rem 1.4rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ width: '46px', height: '46px', borderRadius: '14px', backgroundColor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626', flexShrink: 0 }}>
+                                            <AlertCircle size={24} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vencido +30 Días</div>
+                                            <div style={{ fontSize: '1.45rem', fontWeight: '900', color: '#DC2626', lineHeight: '1.2', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(aging.vencido30Mas)}</div>
+                                            <div style={{ fontSize: '0.74rem', color: '#991B1B', fontWeight: '600' }}>Mora crítica / Bloqueo</div>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Invoices Accounts Receivable list */}
-                                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.md }}>
+                                <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)' }}>
+                                    <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <h2 style={{ fontSize: '1.15rem', fontWeight: '900', margin: 0, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <FileText size={18} style={{ color: '#0D7A57' }} /> Facturas y Cuentas por Cobrar
+                                            </h2>
+                                            <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: '500' }}>
+                                                Detalle de facturación electrónica emitida y estado de pagos de clientes
+                                            </p>
+                                        </div>
+                                        <button 
+                                            onClick={fetchData} 
+                                            title="Refrescar lista"
+                                            style={{ 
+                                                background: '#F8FAFC', 
+                                                border: '1px solid #E2E8F0', 
+                                                color: '#475569', 
+                                                cursor: 'pointer',
+                                                padding: '6px 12px',
+                                                borderRadius: '8px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700'
+                                            }}
+                                        >
+                                            <RefreshCw size={13} /> Refrescar
+                                        </button>
+                                    </div>
+
                                     <div style={{ overflowX: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    <th style={thStyle}>Prefijo FE</th>
-                                                    <th style={thStyle}>Cliente</th>
-                                                    <th style={thStyle}>Vencimiento</th>
-                                                    <th style={thStyle}>Base Imponible</th>
-                                                    <th style={thStyle}>IVA</th>
-                                                    <th style={thStyle}>Total Neto</th>
-                                                    <th style={thStyle}>Estado Cartera</th>
-                                                    <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
+                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prefijo FE</th>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cliente</th>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vencimiento</th>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Base Imponible</th>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>IVA</th>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Neto</th>
+                                                    <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estado Cartera</th>
+                                                    <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {invoices.length === 0 ? (
-                                                    <tr><td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay facturas registradas en el sistema.</td></tr>
+                                                    <tr>
+                                                        <td colSpan={8} style={{ padding: '4.5rem 2rem', textAlign: 'center' }}>
+                                                            <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+                                                                <div style={{ 
+                                                                    width: '60px', 
+                                                                    height: '60px', 
+                                                                    borderRadius: '18px', 
+                                                                    backgroundColor: '#EAEFEA', 
+                                                                    display: 'inline-flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center', 
+                                                                    color: '#0D7A57',
+                                                                    marginBottom: '1rem' 
+                                                                }}>
+                                                                    <FileCheck size={30} />
+                                                                </div>
+                                                                <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A', marginBottom: '0.35rem' }}>
+                                                                    No hay facturas registradas en el sistema
+                                                                </h3>
+                                                                <p style={{ color: '#64748B', fontSize: '0.85rem', lineHeight: '1.5', margin: '0 0 1.25rem 0' }}>
+                                                                    Todas las cuentas se encuentran al día o aún no se han liquidado cortes para emitir facturación electrónica a clientes institucionales.
+                                                                </p>
+                                                                <span style={{ padding: '4px 12px', borderRadius: '99px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', fontSize: '0.75rem', fontWeight: '800', color: '#065F46', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <CheckCircle2 size={13} /> Cartera 100% al día
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
                                                 ) : invoices.map((inv) => {
                                                     const isOverdue = inv.payment_status === 'pending' && new Date(inv.due_date) < new Date();
                                                     const statusLabel = inv.payment_status === 'paid' ? 'Pagada' : isOverdue ? 'Vencida' : 'Pendiente';
                                                     const overdueDays = Math.ceil((new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24));
 
                                                     return (
-                                                        <tr key={inv.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s' }}>
-                                                            <td style={tdStyle}><span style={{ fontWeight: '800' }}>{inv.invoice_number}</span></td>
-                                                            <td style={tdStyle}>
-                                                                <div style={{ fontWeight: '700' }}>{inv.orders?.profiles?.company_name || 'Consumidor Final'}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>NIT: {inv.orders?.profiles?.nit || 'N/A'}</div>
+                                                        <tr key={inv.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                            <td style={{ padding: '1rem 1.25rem' }}><span style={{ fontWeight: '800', color: '#0F172A' }}>{inv.invoice_number}</span></td>
+                                                            <td style={{ padding: '1rem 1.25rem' }}>
+                                                                <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem' }}>{inv.orders?.profiles?.company_name || 'Consumidor Final'}</div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748B' }}>NIT: {inv.orders?.profiles?.nit || 'N/A'}</div>
                                                             </td>
-                                                            <td style={tdStyle}>
-                                                                <div style={{ fontWeight: '700' }}>{new Date(inv.due_date).toLocaleDateString()}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Plazo: {inv.orders?.profiles?.payment_days || 0} días</div>
+                                                            <td style={{ padding: '1rem 1.25rem' }}>
+                                                                <div style={{ fontWeight: '700', color: '#0F172A', fontSize: '0.85rem' }}>{new Date(inv.due_date).toLocaleDateString()}</div>
+                                                                <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Plazo: {inv.orders?.profiles?.payment_days || 0} días</div>
                                                             </td>
-                                                            <td style={tdStyle}>{formatMoney(inv.total_base)}</td>
-                                                            <td style={tdStyle}>{formatMoney(inv.total_tax)}</td>
-                                                            <td style={{ ...tdStyle, fontWeight: '750' }}>{formatMoney(inv.total_final)}</td>
-                                                            <td style={tdStyle}>
+                                                            <td style={{ padding: '1rem 1.25rem', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>{formatMoney(inv.total_base)}</td>
+                                                            <td style={{ padding: '1rem 1.25rem', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>{formatMoney(inv.total_tax)}</td>
+                                                            <td style={{ padding: '1rem 1.25rem', fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.92rem' }}>{formatMoney(inv.total_final)}</td>
+                                                            <td style={{ padding: '1rem 1.25rem' }}>
                                                                 <span style={{ 
-                                                                    backgroundColor: inv.payment_status === 'paid' ? '#DCFCE7' : isOverdue ? '#FEE2E2' : '#FEF3C7', 
-                                                                    color: inv.payment_status === 'paid' ? '#166534' : isOverdue ? '#991B1B' : '#92400E', 
-                                                                    padding: '0.2rem 0.6rem', 
-                                                                    borderRadius: THEME.radius.md, 
-                                                                    fontSize: '0.75rem', 
-                                                                    fontWeight: '800' 
+                                                                    backgroundColor: inv.payment_status === 'paid' ? '#ECFDF5' : isOverdue ? '#FEE2E2' : '#FEF3C7', 
+                                                                    color: inv.payment_status === 'paid' ? '#065F46' : isOverdue ? '#991B1B' : '#92400E', 
+                                                                    border: `1px solid ${inv.payment_status === 'paid' ? '#A7F3D0' : isOverdue ? '#FECACA' : '#FDE68A'}`,
+                                                                    padding: '0.25rem 0.65rem', 
+                                                                    borderRadius: '99px', 
+                                                                    fontSize: '0.72rem', 
+                                                                    fontWeight: '800',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
                                                                 }}>
+                                                                    {inv.payment_status === 'paid' ? <CheckCircle2 size={12} /> : isOverdue ? <AlertCircle size={12} /> : <Clock size={12} />}
                                                                     {statusLabel} {isOverdue && `(Hace ${overdueDays}d)`}
                                                                 </span>
                                                             </td>
-                                                            <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                            <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
                                                                 {inv.payment_status !== 'paid' && (
                                                                     <button
                                                                         onClick={() => {
                                                                             setSelectedInvoice(inv);
                                                                             setIsPaymentModalOpen(true);
                                                                         }}
-                                                                        style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                                        style={{ 
+                                                                            backgroundColor: '#0D7A57', 
+                                                                            color: 'white', 
+                                                                            padding: '0.5rem 0.9rem', 
+                                                                            borderRadius: '10px', 
+                                                                            border: 'none', 
+                                                                            fontWeight: '800', 
+                                                                            fontSize: '0.78rem', 
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '5px',
+                                                                            boxShadow: '0 2px 8px rgba(13, 122, 87, 0.2)'
+                                                                        }}
                                                                     >
-                                                                        <CreditCard size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} /> Registrar Pago
+                                                                        <CreditCard size={14} /> Registrar Pago
                                                                     </button>
                                                                 )}
                                                             </td>
@@ -1075,25 +1380,32 @@ export default function BillingDashboard() {
                             </>
                         ) : (
                             /* Dossiers Sub-tab View */
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, padding: '1.5rem', boxShadow: THEME.shadow.md }}>
+                            <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0', padding: '1.5rem', boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                                    <h3 style={{ fontSize: '1rem', fontWeight: '850', margin: 0 }}>Fichas de Conocimiento y Pagarés de Clientes B2B</h3>
-                                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                    <div>
+                                        <h3 style={{ fontSize: '1.15rem', fontWeight: '900', margin: 0, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <FileSignature size={18} style={{ color: '#0D7A57' }} /> Fichas de Conocimiento y Pagarés B2B
+                                        </h3>
+                                        <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: '500' }}>
+                                            Gestión de límites de crédito, cupos solicitados y pagarés en blanco
+                                        </p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                         <button
                                             onClick={handleCreateNewDossier}
-                                            style={{ backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: THEME.radius.md, fontWeight: '750', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                            style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.65rem 1.2rem', borderRadius: '12px', fontWeight: '800', fontSize: '0.82rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)' }}
                                         >
-                                            <Plus size={15} /> Crear Nuevo Expediente
+                                            <Plus size={16} strokeWidth={2.5} /> Crear Nuevo Expediente
                                         </button>
                                         <a
                                             href="/admin/commercial/billing/print-credit/blank"
                                             target="_blank"
                                             rel="noreferrer"
-                                            style={{ backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, padding: '0.6rem 1.2rem', borderRadius: THEME.radius.md, fontWeight: '750', fontSize: '0.8rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.2s' }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                            style={{ backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', color: '#334155', padding: '0.65rem 1.1rem', borderRadius: '12px', fontWeight: '700', fontSize: '0.82rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s' }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                         >
-                                            🖨️ Imprimir Vacío
+                                            <Printer size={15} /> Imprimir Vacío
                                         </a>
                                         <div style={{ position: 'relative', width: '250px' }}>
                                             <input
@@ -1101,23 +1413,23 @@ export default function BillingDashboard() {
                                                 placeholder="Buscar cliente por nombre o NIT..."
                                                 value={dossiersSearchTerm}
                                                 onChange={(e) => setDossiersSearchTerm(e.target.value)}
-                                                style={{ ...inputStyle, paddingLeft: '2.2rem' }}
+                                                style={{ ...inputStyle, paddingLeft: '2.2rem', borderRadius: '10px' }}
                                             />
-                                            <Search size={15} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                            <Search size={15} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                         <thead>
-                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                <th style={thStyle}>Cliente / Razón Social</th>
-                                                <th style={thStyle}>NIT</th>
-                                                <th style={thStyle}>Límite de Crédito Actual</th>
-                                                <th style={thStyle}>Estado Ficha</th>
-                                                <th style={thStyle}>Cupo Solicitado</th>
-                                                <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
+                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cliente / Razón Social</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>NIT</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Límite de Crédito</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estado Ficha</th>
+                                                <th style={{ padding: '1rem 1.25rem', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cupo Solicitado</th>
+                                                <th style={{ padding: '1rem 1.25rem', textAlign: 'right', fontSize: '0.72rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1128,7 +1440,7 @@ export default function BillingDashboard() {
                                                         c.nit?.includes(search));
                                             }).length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>
+                                                    <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#94A3B8' }}>
                                                         No se encontraron clientes B2B registrados.
                                                     </td>
                                                 </tr>
@@ -1141,43 +1453,44 @@ export default function BillingDashboard() {
                                                 const dossier = dossiersDataMap[client.id];
                                                 const hasDossier = !!dossier;
                                                 const isApproved = dossier?.credito_aprobado;
-                                                const statusColor = hasDossier ? (isApproved ? '#DCFCE7' : '#FEF3C7') : '#F1F5F9';
-                                                const statusTextColor = hasDossier ? (isApproved ? '#166534' : '#92400E') : '#64748B';
+                                                const statusColor = hasDossier ? (isApproved ? '#ECFDF5' : '#FEF3C7') : '#F1F5F9';
+                                                const statusTextColor = hasDossier ? (isApproved ? '#065F46' : '#92400E') : '#64748B';
+                                                const statusBorder = hasDossier ? (isApproved ? '#A7F3D0' : '#FDE68A') : '#E2E8F0';
                                                 const statusText = hasDossier ? (isApproved ? 'Aprobado' : 'Pendiente') : 'Sin Crear';
 
                                                 return (
-                                                    <tr key={client.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s' }}>
-                                                        <td style={tdStyle}>
-                                                            <div style={{ fontWeight: '750' }}>{client.company_name || client.razon_social}</div>
-                                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>{client.contact_name || 'Sin contacto'}</div>
+                                                    <tr key={client.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                        <td style={{ padding: '1rem 1.25rem' }}>
+                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.9rem' }}>{client.company_name || client.razon_social}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{client.contact_name || 'Sin contacto'}</div>
                                                         </td>
-                                                        <td style={tdStyle}>{client.nit || 'N/A'}</td>
-                                                        <td style={tdStyle}>{formatMoney(client.credit_limit || 0)}</td>
-                                                        <td style={tdStyle}>
-                                                            <span style={{ backgroundColor: statusColor, color: statusTextColor, padding: '0.25rem 0.6rem', borderRadius: THEME.radius.md, fontSize: '0.75rem', fontWeight: '800' }}>
+                                                        <td style={{ padding: '1rem 1.25rem', color: '#334155', fontWeight: '600' }}>{client.nit || 'N/A'}</td>
+                                                        <td style={{ padding: '1rem 1.25rem', fontVariantNumeric: 'tabular-nums', fontWeight: '800', color: '#0D7A57' }}>{formatMoney(client.credit_limit || 0)}</td>
+                                                        <td style={{ padding: '1rem 1.25rem' }}>
+                                                            <span style={{ backgroundColor: statusColor, color: statusTextColor, border: `1px solid ${statusBorder}`, padding: '0.25rem 0.65rem', borderRadius: '99px', fontSize: '0.72rem', fontWeight: '800' }}>
                                                                 {statusText}
                                                             </span>
                                                         </td>
-                                                        <td style={tdStyle}>
+                                                        <td style={{ padding: '1rem 1.25rem', fontVariantNumeric: 'tabular-nums', fontWeight: '700', color: '#334155' }}>
                                                             {hasDossier ? formatMoney(dossier.cupo_solicitado) : 'N/A'}
                                                         </td>
-                                                        <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                        <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
                                                             <button
                                                                 onClick={() => handleOpenDossierModal(client)}
-                                                                style={{ backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', marginRight: '0.5rem', transition: 'all 0.2s' }}
+                                                                style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', padding: '0.45rem 0.85rem', borderRadius: '10px', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', marginRight: '0.5rem', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#334155' }}
                                                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
                                                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                                             >
-                                                                📝 Diligenciar / Editar
+                                                                <Edit2 size={13} /> Diligenciar / Editar
                                                             </button>
                                                             {hasDossier && (
                                                                 <a
                                                                     href={`/admin/commercial/billing/print-credit/${client.id}`}
                                                                     target="_blank"
                                                                     rel="noreferrer"
-                                                                    style={{ display: 'inline-block', backgroundColor: THEME.colors.primary, color: 'white', padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, fontWeight: '750', fontSize: '0.75rem', textDecoration: 'none', transition: 'all 0.2s' }}
+                                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#0D7A57', color: 'white', padding: '0.45rem 0.85rem', borderRadius: '10px', fontWeight: '800', fontSize: '0.75rem', textDecoration: 'none', transition: 'all 0.15s', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)' }}
                                                                 >
-                                                                    🖨️ Imprimir
+                                                                    <Printer size={13} /> Imprimir
                                                                 </a>
                                                             )}
                                                         </td>
@@ -1290,9 +1603,9 @@ export default function BillingDashboard() {
                                 </div>
                                 <button 
                                     onClick={() => setIsDossierModalOpen(false)}
-                                    style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: THEME.colors.textSecondary }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px', borderRadius: '6px' }}
                                 >
-                                    ✕
+                                    <X size={20} />
                                 </button>
                             </div>
 
