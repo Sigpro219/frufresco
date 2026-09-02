@@ -2616,24 +2616,49 @@ export default function ClientsModule() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 {viewMode === 'grid' ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                        {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).map(client => (
-                                            <ClientCard 
-                                                key={client.id} 
-                                                type="b2b" 
-                                                data={client} 
-                                                pricingModels={pricingModels} 
-                                                onUpdatePricingModel={handleUpdatePricingModel}
-                                                onUpdateDevVerified={handleUpdateDevVerified}
-                                                onViewDetails={() => handleViewDetails(client)}
-                                                onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                agreementStatus={getAgreementStatus(client.id, client.parent_id)}
-                                                isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
-                                                branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
-                                            />
-                                        ))}
+                                        {(() => {
+                                            const filtered = filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']);
+                                            if (filtered.length === 0) {
+                                                return (
+                                                    <div style={{ gridColumn: '1 / -1', padding: '3rem 1rem', textAlign: 'center', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                                        <Filter size={32} style={{ color: '#CBD5E1' }} />
+                                                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: THEME.colors.textMain }}>No se encontraron clientes B2B</h4>
+                                                        <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary }}>Intenta cambiar los filtros seleccionados o buscar con otros términos.</p>
+                                                        <button
+                                                            onClick={() => {
+                                                                setFilterStructureHeader('all');
+                                                                setFilterLocationHeader('all');
+                                                                setFilterStatusHeader('all');
+                                                                setFilterAgreementGpsHeader('all');
+                                                                setFilterDevHeader('all');
+                                                                setSearchTerm('');
+                                                            }}
+                                                            style={{ marginTop: '8px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '6px 14px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                        >
+                                                            Limpiar filtros
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
+                                            return filtered.map(client => (
+                                                <ClientCard 
+                                                    key={client.id} 
+                                                    type="b2b" 
+                                                    data={client} 
+                                                    pricingModels={pricingModels} 
+                                                    onUpdatePricingModel={handleUpdatePricingModel}
+                                                    onUpdateDevVerified={handleUpdateDevVerified}
+                                                    onViewDetails={() => handleViewDetails(client)}
+                                                    onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
+                                                    agreementStatus={getAgreementStatus(client.id, client.parent_id)}
+                                                    isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
+                                                    branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
+                                                />
+                                            ));
+                                        })()}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -2664,7 +2689,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2b_structure' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '240px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '240px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterStructureHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStructureHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStructureHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos ({clientsB2B.length})
                                                                 </div>
@@ -2705,7 +2730,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2b_location' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterLocationHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
                                                                 </div>
@@ -2746,7 +2771,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2b_status' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
                                                                 </div>
@@ -2783,7 +2808,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2b_agreement' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '190px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '190px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterAgreementGpsHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterAgreementGpsHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterAgreementGpsHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos
                                                                 </div>
@@ -2837,7 +2862,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2b_dev' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos
                                                                 </div>
@@ -2855,19 +2880,49 @@ export default function ClientsModule() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).map(client => (
-                                                    <ClientListRow 
-                                                        key={client.id} 
-                                                        client={client} 
-                                                        pricingModels={pricingModels}
-                                                        onUpdateDevVerified={handleUpdateDevVerified}
-                                                        onViewDetails={() => handleViewDetails(client)}
-                                                        onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                        agreementStatus={getAgreementStatus(client.id, client.parent_id)}
-                                                        isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
-                                                        branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
-                                                    />
-                                                ))}
+                                                {(() => {
+                                                    const filtered = filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']);
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <tr>
+                                                                <td colSpan={7} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                                        <Filter size={28} style={{ color: '#CBD5E1' }} />
+                                                                        <span style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>No se encontraron clientes B2B</span>
+                                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary }}>No hay coincidencias con los filtros aplicados en esta tabla.</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setFilterStructureHeader('all');
+                                                                                setFilterLocationHeader('all');
+                                                                                setFilterStatusHeader('all');
+                                                                                setFilterAgreementGpsHeader('all');
+                                                                                setFilterDevHeader('all');
+                                                                                setSearchTerm('');
+                                                                            }}
+                                                                            style={{ marginTop: '8px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '5px 14px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                                        >
+                                                                            Limpiar filtros
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    }
+                                                    return filtered.map(client => (
+                                                        <ClientListRow 
+                                                            key={client.id} 
+                                                            client={client} 
+                                                            pricingModels={pricingModels}
+                                                            onUpdateDevVerified={handleUpdateDevVerified}
+                                                            onViewDetails={() => handleViewDetails(client)}
+                                                            onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
+                                                            agreementStatus={getAgreementStatus(client.id, client.parent_id)}
+                                                            isInheritedAgreement={isAgreementInherited(client.id, client.parent_id)}
+                                                            branchCount={clientsB2B.filter(c => c.parent_id === client.id).length}
+                                                        />
+                                                    ));
+                                                })()}
                                             </tbody>
                                         </table>
                                     </div>
@@ -2880,20 +2935,42 @@ export default function ClientsModule() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 {viewMode === 'grid' ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                        {filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).map((client, idx) => (
-                                            <ClientCard 
-                                                key={client.id || idx} 
-                                                type="b2c" 
-                                                data={client} 
-                                                onUpdateDevVerified={handleUpdateDevVerified}
-                                                onViewDetails={() => handleViewDetails(client)}
-                                                onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                            />
-                                        ))}
-                                        {clientsB2C.length === 0 && <EmptyState text="No hay clientes hogar registrados aún." />}
+                                        {(() => {
+                                            const filtered = filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']);
+                                            if (filtered.length === 0) {
+                                                return (
+                                                    <div style={{ gridColumn: '1 / -1', padding: '3rem 1rem', textAlign: 'center', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                                        <Filter size={32} style={{ color: '#CBD5E1' }} />
+                                                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: THEME.colors.textMain }}>No se encontraron clientes hogar</h4>
+                                                        <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary }}>Intenta cambiar los filtros seleccionados o buscar con otros términos.</p>
+                                                        <button
+                                                            onClick={() => {
+                                                                setFilterLocationHeader('all');
+                                                                setFilterStatusHeader('all');
+                                                                setFilterDevHeader('all');
+                                                                setSearchTerm('');
+                                                            }}
+                                                            style={{ marginTop: '8px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '6px 14px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                        >
+                                                            Limpiar filtros
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
+                                            return filtered.map((client, idx) => (
+                                                <ClientCard 
+                                                    key={client.id || idx} 
+                                                    type="b2c" 
+                                                    data={client} 
+                                                    onUpdateDevVerified={handleUpdateDevVerified}
+                                                    onViewDetails={() => handleViewDetails(client)}
+                                                    onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
+                                                />
+                                            ));
+                                        })()}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -2923,7 +3000,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2c_location' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterLocationHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
                                                                 </div>
@@ -2961,7 +3038,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2c_status' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
                                                                 </div>
@@ -2998,7 +3075,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'b2c_dev' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos
                                                                 </div>
@@ -3016,15 +3093,43 @@ export default function ClientsModule() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).map(client => (
-                                                    <ClientListRow 
-                                                        key={client.id} 
-                                                        client={client} 
-                                                        onUpdateDevVerified={handleUpdateDevVerified}
-                                                        onViewDetails={() => handleViewDetails(client)}
-                                                        onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
-                                                    />
-                                                ))}
+                                                {(() => {
+                                                    const filtered = filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']);
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <tr>
+                                                                <td colSpan={6} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                                        <Filter size={28} style={{ color: '#CBD5E1' }} />
+                                                                        <span style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>No se encontraron clientes hogar</span>
+                                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary }}>No hay coincidencias con los filtros aplicados en esta tabla.</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setFilterLocationHeader('all');
+                                                                                setFilterStatusHeader('all');
+                                                                                setFilterDevHeader('all');
+                                                                                setSearchTerm('');
+                                                                            }}
+                                                                            style={{ marginTop: '8px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '5px 14px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                                        >
+                                                                            Limpiar filtros
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    }
+                                                    return filtered.map(client => (
+                                                        <ClientListRow 
+                                                            key={client.id} 
+                                                            client={client} 
+                                                            onUpdateDevVerified={handleUpdateDevVerified}
+                                                            onViewDetails={() => handleViewDetails(client)}
+                                                            onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
+                                                        />
+                                                    ));
+                                                })()}
                                             </tbody>
                                         </table>
                                     </div>
@@ -3037,21 +3142,42 @@ export default function ClientsModule() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 {viewMode === 'grid' ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                        {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).map(lead => (
-                                            <ClientCard 
-                                                key={lead.id} 
-                                                type="lead" 
-                                                data={lead} 
-                                                onUpdateStatus={handleUpdateLeadStatus} 
-                                                onViewDetails={() => handleViewDetails(lead as unknown as Profile)}
-                                                onRegisterContact={() => handleUpdateLeadContact(lead.id)}
-                                                onScheduleTask={(date) => handleScheduleLeadTask(lead.id, date)}
-                                            />
-                                        ))}
-                                        {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
+                                        {(() => {
+                                            const filtered = filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']);
+                                            if (filtered.length === 0) {
+                                                return (
+                                                    <div style={{ gridColumn: '1 / -1', padding: '3rem 1rem', textAlign: 'center', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                                        <Filter size={32} style={{ color: '#CBD5E1' }} />
+                                                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: THEME.colors.textMain }}>No se encontraron prospectos</h4>
+                                                        <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary }}>Intenta cambiar los filtros seleccionados o buscar con otros términos.</p>
+                                                        <button
+                                                            onClick={() => {
+                                                                setFilterLocationHeader('all');
+                                                                setFilterStatusHeader('all');
+                                                                setSearchTerm('');
+                                                            }}
+                                                            style={{ marginTop: '8px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '6px 14px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                        >
+                                                            Limpiar filtros
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
+                                            return filtered.map(lead => (
+                                                <ClientCard 
+                                                    key={lead.id} 
+                                                    type="lead" 
+                                                    data={lead} 
+                                                    onUpdateStatus={handleUpdateLeadStatus} 
+                                                    onViewDetails={() => handleViewDetails(lead as unknown as Profile)}
+                                                    onRegisterContact={() => handleUpdateLeadContact(lead.id)}
+                                                    onScheduleTask={(date) => handleScheduleLeadTask(lead.id, date)}
+                                                />
+                                            ));
+                                        })()}
                                     </div>
                                 ) : (
-                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, overflowX: 'auto', minHeight: '380px', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -3081,7 +3207,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'lead_location' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', maxHeight: '280px', overflowY: 'auto', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterLocationHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterLocationHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterLocationHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
                                                                 </div>
@@ -3119,7 +3245,7 @@ export default function ClientsModule() {
                                                             </button>
                                                         </div>
                                                         {openHeaderDropdown === 'lead_status' && (
-                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                            <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 9999, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '160px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
                                                                 <div onClick={() => { setFilterStatusHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterStatusHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterStatusHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
                                                                     <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
                                                                 </div>
@@ -3144,14 +3270,41 @@ export default function ClientsModule() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).map(lead => (
-                                                    <ClientListRow 
-                                                        key={lead.id} 
-                                                        client={lead as any} 
-                                                        onViewDetails={() => handleViewDetails(lead as any)}
-                                                        onRegisterContact={() => handleUpdateLeadContact(lead.id)}
-                                                    />
-                                                ))}
+                                                {(() => {
+                                                    const filtered = filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']);
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <tr>
+                                                                <td colSpan={6} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                                        <Filter size={28} style={{ color: '#CBD5E1' }} />
+                                                                        <span style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>No se encontraron prospectos</span>
+                                                                        <span style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary }}>No hay coincidencias con los filtros aplicados en esta tabla.</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setFilterLocationHeader('all');
+                                                                                setFilterStatusHeader('all');
+                                                                                setSearchTerm('');
+                                                                            }}
+                                                                            style={{ marginTop: '8px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '5px 14px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, cursor: 'pointer' }}
+                                                                        >
+                                                                            Limpiar filtros
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    }
+                                                    return filtered.map(lead => (
+                                                        <ClientListRow 
+                                                            key={lead.id} 
+                                                            client={lead as any} 
+                                                            onViewDetails={() => handleViewDetails(lead as any)}
+                                                            onRegisterContact={() => handleUpdateLeadContact(lead.id)}
+                                                        />
+                                                    ));
+                                                })()}
                                             </tbody>
                                         </table>
                                     </div>
