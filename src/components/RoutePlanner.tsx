@@ -23,7 +23,9 @@ import {
     Package,
     Zap,
     Bot,
-    ShoppingBag
+    ShoppingBag,
+    CheckCircle2,
+    Coins
 } from 'lucide-react';
 
 interface Order {
@@ -183,13 +185,19 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     if (nameMatch) name = nameMatch[1];
                 }
 
-                // Extraer solo la restricción o comentario omitiendo corchetes de pago y datos básicos de hogar
+                // Extraer solo la restricción o instrucción logística real, omitiendo volcados de email y logs
                 let notes = o.admin_notes || '';
                 if (notes) {
                     notes = notes.replace(/\[PAGO:.*?\]/gi, '')
                                  .replace(/\[ORIGIN:.*?\]/gi, '')
                                  .replace(/\[CLIENTE HOGAR.*?\]/gi, '')
                                  .replace(/CLIENTE HOGAR.*?(\||\n|$)/gi, '')
+                                 .replace(/\[PEDIDO CORREO\][\s\S]*$/gi, '')
+                                 .replace(/Asunto:[\s\S]*$/gi, '')
+                                 .replace(/De:[\s\S]*$/gi, '')
+                                 .replace(/Enviado el:[\s\S]*$/gi, '')
+                                 .replace(/Estimados señores[\s\S]*$/gi, '')
+                                 .replace(/Pago en línea verificado.*?(\.|\n|$)/gi, '')
                                  .replace(/Nombre:.*?(\||\n|$)/gi, '')
                                  .replace(/Tel:.*?(\||\n|$)/gi, '')
                                  .replace(/ID:[a-f0-9-]{36}/gi, '') // Removes UUIDs
@@ -197,6 +205,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                  .replace(/\|/g, '') // Remove remaining separators
                                  .trim();
                 }
+
+
 
                 const resolvedIsB2B = !!o.is_b2b || (o.type?.toLowerCase().includes('b2b') ?? false) || o.profiles?.role === 'b2b_client' || o.profiles?.role === 'b2b';
 
@@ -735,7 +745,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     return (
         <>
-            <div style={{ display: 'grid', gridTemplateColumns: '650px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '580px 1fr', gap: '1.25rem', height: 'calc(100vh - 180px)', minHeight: '520px', overflow: 'hidden' }}>
             {/* Orders Sidebar */}
             <div 
                 onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}
@@ -744,10 +754,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 style={{ 
                     backgroundColor: dragOverSidebar ? '#F5F3FF' : 'white', 
                     borderRadius: '16px', 
-                    border: dragOverSidebar ? '2px dashed #6366F1' : '1px solid #E5E7EB', 
+                    border: dragOverSidebar ? '2px dashed #0D7A57' : '1px solid #E2E8F0', 
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                     display: 'flex', 
                     flexDirection: 'column', 
                     overflow: 'hidden',
+                    height: '100%',
                     minHeight: 0,
                     transition: 'all 0.2s'
                 }}
@@ -800,14 +812,14 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         </span>
                     </div>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0', scrollbarWidth: 'thin' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem' }}>
-                        <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F3F4F6', color: '#6B7280', fontWeight: '800', textAlign: 'left', zIndex: 10 }}>
+                        <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', color: '#475569', fontWeight: '800', textAlign: 'left', zIndex: 10, borderBottom: '1px solid #E2E8F0' }}>
                             <tr>
-                                <th style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #E5E7EB', width: '20px' }}>TIPO</th>
+                                <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', width: '20px' }}>TIPO</th>
                                 <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB' }}>CLIENTE</th>
                                 <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB', textAlign: 'right' }}>CANT.</th>
-                                <th style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>RESTRICCIONES</th>
+                                <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>CONDICIÓN</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -836,7 +848,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#CCFBF1' : '#F9FAFB'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#F0FDFA' : 'white'}
                                     >
-                                        <td style={{ padding: '0.6rem 1rem' }}>
+                                        <td style={{ padding: '0.6rem 0.8rem' }}>
                                             <div style={{ 
                                                 width: '24px', height: '24px', borderRadius: '6px', 
                                                 backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', 
@@ -847,7 +859,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 {order.is_b2b ? 'B2B' : 'B2C'}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.6rem 0.5rem', maxWidth: '200px' }}>
+                                        <td style={{ padding: '0.6rem 0.5rem', maxWidth: '190px' }}>
                                             <div style={{ fontWeight: '900', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {order.customer_name}
                                             </div>
@@ -866,66 +878,60 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 <Package size={10} /> {order.crates} und
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.6rem 1rem', textAlign: 'left', maxWidth: '150px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: order.novedad ? '4px' : '0' }}>
-                                                <div style={{ 
-                                                    fontSize: '0.55rem', 
-                                                    fontWeight: '800', 
-                                                    padding: '0.15rem 0.4rem', 
-                                                    borderRadius: '4px', 
-                                                    display: 'inline-block',
-                                                    backgroundColor: order.slot_type === 'manual' ? '#FFE4E6' : 
-                                                                     order.slot_type === 'profile' ? '#E0F2FE' : 
-                                                                     order.slot_type === 'b2c_slot' ? '#FEF3C7' : '#F3F4F6',
-                                                    color: order.slot_type === 'manual' ? '#9F1239' : 
-                                                           order.slot_type === 'profile' ? '#0369A1' : 
-                                                           order.slot_type === 'b2c_slot' ? '#92400E' : '#4B5563',
-                                                    border: `1px solid ${
-                                                        order.slot_type === 'manual' ? '#FDA4AF' : 
-                                                        order.slot_type === 'profile' ? '#BAE6FD' : 
-                                                        order.slot_type === 'b2c_slot' ? '#FDE68A' : '#E5E7EB'
-                                                    }`
-                                                }}>
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={10} strokeWidth={1.5} /> {order.display_slot}</span> {order.slot_type === 'manual' ? ' (Manual)' : order.slot_type === 'profile' ? ' (Ficha)' : ''}
-                                                </div>
-                                                {order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
-                                                    <div style={{
-                                                        fontSize: '0.58rem',
-                                                        fontWeight: '800',
-                                                        color: '#B45309',
-                                                        backgroundColor: '#FFFBEB',
-                                                        border: '1px solid #FDE68A',
-                                                        padding: '1px 6px',
-                                                        borderRadius: '4px',
+                                        <td style={{ padding: '0.6rem 0.8rem', textAlign: 'left', maxWidth: '160px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                    <div style={{ 
+                                                        fontSize: '0.58rem', 
+                                                        fontWeight: '800', 
+                                                        padding: '0.12rem 0.38rem', 
+                                                        borderRadius: '4px', 
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '3px',
-                                                        whiteSpace: 'nowrap',
-                                                        marginTop: '3px'
+                                                        backgroundColor: order.slot_type === 'manual' ? '#EFF6FF' : 
+                                                                         order.slot_type === 'profile' ? '#F0FDF4' : '#F8FAFC',
+                                                        color: order.slot_type === 'manual' ? '#1D4ED8' : 
+                                                               order.slot_type === 'profile' ? '#15803D' : '#475569',
+                                                        border: `1px solid ${
+                                                            order.slot_type === 'manual' ? '#BFDBFE' : 
+                                                            order.slot_type === 'profile' ? '#BBF7D0' : '#E2E8F0'
+                                                        }`
                                                     }}>
-                                                        <Banknote size={10} strokeWidth={1.5} /> Cobrar en puerta
+                                                        <Clock size={9} strokeWidth={2} /> {order.display_slot}
+                                                    </div>
+                                                    {order.is_b2b ? (
+                                                        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF', border: '1px solid #DBEAFE', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <FileText size={8} strokeWidth={2} /> Acuerdo
+                                                        </span>
+                                                    ) : order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' ? (
+                                                        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <Coins size={8} strokeWidth={2} /> Por Cobrar
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <CheckCircle2 size={8} strokeWidth={2} /> Pagado
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {order.novedad && (
+                                                    <div style={{ 
+                                                        fontSize: '0.55rem', 
+                                                        color: '#475569', 
+                                                        backgroundColor: '#F8FAFC', 
+                                                        padding: '0.15rem 0.35rem', 
+                                                        borderRadius: '4px', 
+                                                        fontWeight: '700', 
+                                                        border: '1px solid #E2E8F0',
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        maxWidth: '150px'
+                                                    }} title={order.novedad}>
+                                                        📝 {order.novedad}
                                                     </div>
                                                 )}
                                             </div>
-                                            {order.novedad && (
-                                                <div style={{ 
-                                                    fontSize: '0.55rem', 
-                                                    color: '#B45309', 
-                                                    backgroundColor: '#FFFBEB', 
-                                                    padding: '0.3rem', 
-                                                    borderRadius: '4px', 
-                                                    fontWeight: '700', 
-                                                    display: '-webkit-box', 
-                                                    WebkitLineClamp: 2, 
-                                                    WebkitBoxOrient: 'vertical', 
-                                                    overflow: 'hidden', 
-                                                    border: '1px solid #FDE68A', 
-                                                    lineHeight: '1.2',
-                                                    marginTop: '4px'
-                                                }} title={order.novedad}>
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={10} strokeWidth={1.5} /> {order.novedad}</span>
-                                                </div>
-                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -933,10 +939,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         </tbody>
                     </table>
                 </div>
+
             </div>
 
             {/* Planning Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', position: 'relative', minHeight: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#374151' }}>FLOTA Y RUTAS</h3>
@@ -1260,11 +1267,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 <div style={{ 
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-                    gap: '1.2rem', 
+                    gap: '1rem', 
                     flex: 1, 
                     overflowY: 'auto',
-                    paddingRight: '0.5rem',
-                    alignContent: 'start'
+                    paddingRight: '0.35rem',
+                    alignContent: 'start',
+                    scrollbarWidth: 'thin'
                 }}>
                     {[...vehicles]
                         .sort((a, b) => {

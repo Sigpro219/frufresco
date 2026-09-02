@@ -370,16 +370,20 @@ export default function TransportControlTower() {
 
                 {/* ── SEGMENTED NAVIGATION CONTROL BAR ── */}
                 <div style={{ 
+                    position: 'sticky',
+                    top: '80px',
+                    zIndex: 30,
                     backgroundColor: THEME.colors.surface, 
                     padding: '0.35rem 0.6rem', 
                     borderRadius: THEME.radius.lg, 
-                    boxShadow: THEME.shadow.sm, 
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)', 
                     border: `1px solid ${THEME.colors.border}`,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     marginBottom: '0.85rem',
-                    gap: '0.75rem'
+                    gap: '0.75rem',
+                    backdropFilter: 'blur(8px)'
                 }}>
                     <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
                         {[
@@ -627,9 +631,9 @@ export default function TransportControlTower() {
                                                 const nextClient = (nextStop as any)?.order?.profiles?.company_name || (nextStop as any)?.order?.customer_name || 'En camino a entrega';
                                                 const nextAddress = (nextStop as any)?.order?.shipping_address || '';
 
-                                                const totalKilos = activeRoute?.total_kilos || (v.capacity_kg ? Math.round(v.capacity_kg * 0.65) : 0);
+                                                const totalKilos = activeRoute ? (activeRoute.total_kilos || 0) : 0;
                                                 const capacityKg = v.capacity_kg || 3500;
-                                                const loadPercent = Math.min(100, Math.round((totalKilos / capacityKg) * 100));
+                                                const loadPercent = capacityKg > 0 ? Math.min(100, Math.round((totalKilos / capacityKg) * 100)) : 0;
                                                 const cleanPhone = driver?.phone ? driver.phone.replace(/\D/g, '') : '';
                                                 const waUrl = cleanPhone ? `https://wa.me/57${cleanPhone}?text=${encodeURIComponent(`Hola ${driver?.contact_name || ''}, mensaje desde Torre de Control FruFresco (Vehículo ${v.plate}):`)}` : null;
 
@@ -744,16 +748,8 @@ export default function TransportControlTower() {
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-
-                                                                        {cleanPhone && (
-                                                                            <a 
-                                                                                href={`tel:${driver.phone}`} 
-                                                                                style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '800', textDecoration: 'none', backgroundColor: THEME.colors.primaryLight, padding: '3px 7px', borderRadius: '6px' }}
-                                                                            >
-                                                                                <Phone size={10} /> Llamar
-                                                                            </a>
-                                                                        )}
                                                                     </div>
+
 
                                                                     {/* Cargo & Capacity Metrics */}
                                                                     <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0.5rem 0.65rem', marginBottom: '0.6rem', border: `1px solid ${THEME.colors.border}` }}>
