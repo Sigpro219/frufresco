@@ -2261,7 +2261,7 @@ export default function PricingSettingsPage() {
                                     ) : (
                                         <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <div>
-                                                <h1 style={{ ...THEME.typography.h1, color: THEME.colors.textMain, margin: 0 }}>{selectedTemplate.name}</h1>
+                                                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', fontFamily: THEME.typography.fontFamilyMain, color: THEME.colors.textMain, margin: 0 }}>{selectedTemplate.name}</h1>
                                                 {selectedTemplate.description && (
                                                     <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{selectedTemplate.description}</p>
                                                 )}

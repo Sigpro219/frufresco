@@ -171,6 +171,17 @@ interface Order {
     is_b2b: boolean;
 }
 
+function splitContactName(fullName: string): { firstName: string; lastName: string } {
+    const clean = (fullName || '').trim();
+    if (!clean) return { firstName: '', lastName: '' };
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+    if (parts.length === 2) return { firstName: parts[0], lastName: parts[1] };
+    if (parts.length === 3) return { firstName: `${parts[0]} ${parts[1]}`, lastName: parts[2] };
+    // 4 o más palabras: las dos primeras como nombres, el resto como apellidos
+    return { firstName: `${parts[0]} ${parts[1]}`, lastName: parts.slice(2).join(' ') };
+}
+
 export default function ClientsModule() {
     const { profile } = useAuth();
     const [roles, setRoles] = useState<any[]>([]);
@@ -1050,6 +1061,8 @@ export default function ClientsModule() {
                 NIT_CEDULA: c.nit || '',
                 Nombre_Comercial: c.company_name || c.contact_name || '',
                 Razon_Social: c.razon_social || c.company_name || '',
+                Nombres_Contacto: splitContactName(c.contact_name || '').firstName,
+                Apellidos_Contacto: splitContactName(c.contact_name || '').lastName,
                 Nombre_Contacto: c.contact_name || '',
                 Telefono: c.phone || c.contact_phone || '',
                 Email: c.email || '',
@@ -1123,7 +1136,9 @@ export default function ClientsModule() {
             ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa o Cédula de Ciudadanía."],
             ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del negocio."],
             ["Razon_Social", "SÍ (Institucionales)", "Institucional", "Razón social legal para facturación electrónica."],
-            ["Nombre_Contacto", "SÍ", "Todos", "Persona encargada de recibir o coordinar."],
+            ["Nombres_Contacto", "SÍ", "Todos", "Nombre(s) de la persona encargada de compras/recepción."],
+            ["Apellidos_Contacto", "SÍ", "Todos", "Apellido(s) de la persona encargada de compras/recepción."],
+            ["Nombre_Contacto", "NO", "Todos", "Nombre completo de referencia (opcional si se especifican Nombres y Apellidos)."],
             ["Telefono", "SÍ", "Todos", "Teléfono celular principal."],
             ["Email", "SÍ", "Todos", "Correo electrónico de contacto y recepción."],
             ["Direccion", "SÍ", "Todos", "Dirección de entrega."],
@@ -1189,7 +1204,7 @@ export default function ClientsModule() {
 
     const downloadClientsTemplate = () => {
         const headers = [
-            "ID_INTERNO", "Estado", "Revisado_Dev", "Tags", "Permite_Fuera_Convenio", "Override_Matriz_Convenio", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "ID_INTERNO", "Estado", "Revisado_Dev", "Tags", "Permite_Fuera_Convenio", "Override_Matriz_Convenio", "Jerarquia_Visual", "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombres_Contacto", "Apellidos_Contacto", "Nombre_Contacto", "Telefono", 
             "Email", "Email_Notificacion_2", "Email_Notificacion_3", "Direccion", "Complemento_Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", "Modelo_Precios_Nombre",
             "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
             "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
@@ -1202,7 +1217,7 @@ export default function ClientsModule() {
         ];
 
         const sample1 = [
-            "", "ACTIVO", "SI", "vip,corporativo", "SI", "NO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "", "ACTIVO", "SI", "vip,corporativo", "SI", "NO", "🏢 CASA MATRIZ", "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos", "Mendoza", "Carlos Mendoza", "3159998877", 
             "carlos@elgourmet.com", "facturacion2@elgourmet.com", "", "Calle 100 # 15-30", "Oficina 502", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "Lista Base",
             "SI", "", "", "", "", 
             5000000, "15 Días", "SI", "NO", "NO", 
@@ -1215,7 +1230,7 @@ export default function ClientsModule() {
         ];
 
         const sample2 = [
-            "", "ACTIVO", "NO", "", "SI", "NO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "", "ACTIVO", "NO", "", "SI", "NO", "  ↳ SUCURSAL", "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana", "Restrepo", "Diana Restrepo", "3204445566", 
             "unicentro@elgourmet.com", "", "", "Avenida Carrera 15 # 124-30", "Local 12 - Zona Comercial", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", "HEREDADO_MATRIZ",
             "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
             0, "Contado", "SI", "NO", "NO", 
@@ -1228,7 +1243,7 @@ export default function ClientsModule() {
         ];
 
         const sample3 = [
-            "", "ACTIVO", "SI", "hogar,nuevo", "SI", "NO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "", "ACTIVO", "SI", "hogar,nuevo", "SI", "NO", "HOGAR", "1020304050", "Familia Rincón", "", "Marcela", "Rincón", "Marcela Rincón", "3115556677", 
             "marcela.rincon@gmail.com", "", "", "Carrera 7 # 150-10", "Apto 402 - Torre B", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", "",
             "NO", "", "", "", "", 
             0, "Contado", "NO", "NO", "NO", 
@@ -1328,6 +1343,13 @@ export default function ClientsModule() {
                     const modelName = (row.Modelo_Precios_Nombre || row.Modelo_Precios || '').toString().trim().toLowerCase();
                     const matchedModel = pricingModels.find(m => m.name.toLowerCase() === modelName);
 
+                    const rawFullName = (row.Nombre_Contacto || row.Nombre_Contacto_Completo || '').toString().trim();
+                    const rawFirst = (row.Nombres_Contacto || row.Nombre_Contacto_Nombres || row.Nombre || '').toString().trim();
+                    const rawLast = (row.Apellidos_Contacto || row.Nombre_Contacto_Apellidos || row.Apellido || '').toString().trim();
+                    const resolvedContactName = (rawFirst || rawLast) 
+                        ? `${rawFirst} ${rawLast}`.trim() 
+                        : (rawFullName || (row.Nombre_Comercial || '').toString().trim());
+
                     return {
                         id: matchedId,
                         is_active: is_active,
@@ -1340,7 +1362,7 @@ export default function ClientsModule() {
                         nit: (row.NIT_CEDULA || '').toString().trim(),
                         company_name: (row.Nombre_Comercial || '').toString().trim(),
                         razon_social: (row.Razon_Social || row.Nombre_Comercial || '').toString().trim(),
-                        contact_name: (row.Nombre_Contacto || row.Nombre_Comercial || '').toString().trim(),
+                        contact_name: resolvedContactName,
                         phone: (row.Telefono || '').toString().trim(),
                         contact_phone: (row.Telefono || '').toString().trim(),
                         email: (row.Email || '').toString().trim(),
@@ -5217,6 +5239,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
     const isB2B = role === 'b2b_client';
+
+    const initialContact = splitContactName(editData?.contact_name || '');
+    const [contactFirstName, setContactFirstName] = useState(initialContact.firstName);
+    const [contactLastName, setContactLastName] = useState(initialContact.lastName);
+
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
         razon_social: editData?.razon_social || '',
@@ -5320,7 +5347,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         if (editData?.id) {
             fetchExceptionCount();
         }
-    }, [editData?.id]);
+        const split = splitContactName(editData?.contact_name || '');
+        setContactFirstName(split.firstName);
+        setContactLastName(split.lastName);
+    }, [editData?.id, editData?.contact_name]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
     // Beneficiarios de Regalo (B2C Hogar)
@@ -5812,9 +5842,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 ...coreData 
             } = formData;
             
+            const finalContactName = `${contactFirstName.trim()} ${contactLastName.trim()}`.trim() || formData.contact_name;
             const updatedLogistics = { ...(formData.logistics_data || {}), beneficiaries: beneficiariesList };
             const payload: any = {
                 ...coreData,
+                contact_name: finalContactName,
                 contact_phone: formData.phone,
                 latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
                 longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null,
@@ -6370,7 +6402,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             title="Permite o restringe que la casa matriz y sus sucursales compren productos fuera de su convenio comercial"
                                         >
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formData.allow_off_agreement_purchases !== false ? THEME.colors.primary : '#94A3B8' }}></div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: formData.allow_off_agreement_purchases !== false ? THEME.colors.primaryDark : '#475569', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: formData.allow_off_agreement_purchases !== false ? '#065F46' : '#475569', fontFamily: THEME.typography.fontFamilySecondary }}>
                                                 PERMITE COMPRAS FUERA DE CONVENIO
                                             </span>
                                         </div>
@@ -6434,7 +6466,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         }}
                                                     >
                                                         <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
-                                                        <span style={{ fontSize: '0.72rem', fontWeight: isActive ? '800' : '600', color: isActive ? THEME.colors.primaryDark : THEME.colors.textMain, lineHeight: '1.1' }}>
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: isActive ? '800' : '600', color: isActive ? '#065F46' : THEME.colors.textMain, lineHeight: '1.1' }}>
                                                             {opt.label}
                                                         </span>
                                                     </div>
@@ -7436,10 +7468,46 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                     <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>CONTACTO OPERATIVO (ÁREA DE COMPRAS)</h4>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem' }}>
-                                    <FormField label="Responsable Directo" value={formData.contact_name} onChange={(v) => setFormData({...formData, contact_name: v})} required readOnly={isReadOnly} />
-                                    <FormField label="WhatsApp" value={formData.phone} onChange={(v) => setFormData({...formData, phone: v})} required readOnly={isReadOnly} />
-                                    <FormField label="Email Contacto" value={formData.contact_email} onChange={(v) => setFormData({...formData, contact_email: v})} readOnly={isReadOnly} />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem' }}>
+                                    <FormField 
+                                        label="Nombre(s) del Contacto" 
+                                        placeholder="Ej: Carlos Andrés"
+                                        value={contactFirstName} 
+                                        onChange={(v) => {
+                                            setContactFirstName(v);
+                                            const combined = `${v.trim()} ${contactLastName.trim()}`.trim();
+                                            setFormData(prev => ({ ...prev, contact_name: combined }));
+                                        }} 
+                                        required 
+                                        readOnly={isReadOnly} 
+                                    />
+                                    <FormField 
+                                        label="Apellido(s) del Contacto" 
+                                        placeholder="Ej: Gómez Rodríguez"
+                                        value={contactLastName} 
+                                        onChange={(v) => {
+                                            setContactLastName(v);
+                                            const combined = `${contactFirstName.trim()} ${v.trim()}`.trim();
+                                            setFormData(prev => ({ ...prev, contact_name: combined }));
+                                        }} 
+                                        required 
+                                        readOnly={isReadOnly} 
+                                    />
+                                    <FormField 
+                                        label="WhatsApp" 
+                                        placeholder="Ej: 321 459 7664"
+                                        value={formData.phone} 
+                                        onChange={(v) => setFormData(prev => ({ ...prev, phone: v }))} 
+                                        required 
+                                        readOnly={isReadOnly} 
+                                    />
+                                    <FormField 
+                                        label="Email Contacto" 
+                                        placeholder="compras@cliente.com"
+                                        value={formData.contact_email} 
+                                        onChange={(v) => setFormData(prev => ({ ...prev, contact_email: v }))} 
+                                        readOnly={isReadOnly} 
+                                    />
                                 </div>
                             </section>
                         )}
@@ -7661,7 +7729,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                 onClick={() => {
                                                                     if (isReadOnly) return;
                                                                     if (isSundayBlocked) {
-                                                                        return window.showToast?.('🔒 Entregas en domingo desactivadas globalmente en Configuración General (/admin/settings)', 'warning');
+                                                                        return window.showToast?.('🔒 Entregas en domingo desactivadas globalmente en Configuración General (/admin/settings)', 'info');
                                                                     }
                                                                     const newDays = isActive ? days.filter((d: number) => d !== idx + 1) : [...days, idx + 1];
                                                                     setFormData({ ...formData, logistics_data: { 

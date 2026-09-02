@@ -8,6 +8,14 @@ import {
     Calendar, 
     Clock, 
     AlertCircle, 
+    AlertTriangle,
+    CheckCircle2,
+    ArrowRight,
+    ArrowLeft,
+    ChevronUp,
+    ChevronDown,
+    ChevronsUpDown,
+    Filter,
     Eye, 
     RefreshCw, 
     Check, 
@@ -70,6 +78,9 @@ export default function CommercialAgreementsModule() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'warning' | 'expired'>('all');
+    const [sortColumn, setSortColumn] = useState<'quote_number' | 'client_name' | 'model' | 'valid_until' | 'duration' | 'status' | 'margin'>('valid_until');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+    const [modelFilter, setModelFilter] = useState<string>('all');
     
     // Details Drawer State
     const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
@@ -85,6 +96,7 @@ export default function CommercialAgreementsModule() {
 
     // Create Modal State
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
     const [b2bClients, setB2bClients] = useState<any[]>([]);
     const [selectedClientId, setSelectedClientId] = useState('');
     const [clientSearchQuery, setClientSearchQuery] = useState('');
@@ -94,9 +106,28 @@ export default function CommercialAgreementsModule() {
     const [durationValue, setDurationValue] = useState<number>(2);
     const [durationUnit, setDurationUnit] = useState<string>('weeks');
     const [uploadedItems, setUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
+    const [excelPreviewData, setExcelPreviewData] = useState<{
+        items: Array<{
+            accounting_id: string;
+            product_name: string;
+            unit_price: number;
+            matched_product: any | null;
+            cost_basis: number;
+            margin_percent: number;
+            iva_rate: number;
+        }>;
+        matchedCount: number;
+        unmatchedCount: number;
+        avgMargin: number;
+        totalSubtotal: number;
+    } | null>(null);
+    const [excelPreviewSearch, setExcelPreviewSearch] = useState('');
+    const [excelPreviewFilter, setExcelPreviewFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
     const [parsedFile, setParsedFile] = useState<File | null>(null);
     const [parsing, setParsing] = useState(false);
     const [savingAgreement, setSavingAgreement] = useState(false);
+    const [isKpiCollapsed, setIsKpiCollapsed] = useState(false);
+    const [isMainKpiCollapsed, setIsMainKpiCollapsed] = useState(false);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -105,11 +136,29 @@ export default function CommercialAgreementsModule() {
     const [editDurationValue, setEditDurationValue] = useState<number>(2);
     const [editDurationUnit, setEditDurationUnit] = useState<string>('weeks');
     const [editUploadedItems, setEditUploadedItems] = useState<{ accounting_id: string; unit_price: number; product_name?: string }[]>([]);
+    const [editExcelPreviewData, setEditExcelPreviewData] = useState<{
+        items: Array<{
+            accounting_id: string;
+            product_name: string;
+            unit_price: number;
+            matched_product?: any;
+            cost_basis?: number;
+            margin_percent?: number;
+            iva_rate?: number;
+        }>;
+        matchedCount: number;
+        unmatchedCount: number;
+        avgMargin: number;
+        totalSubtotal: number;
+    } | null>(null);
+    const [editExcelPreviewSearch, setEditExcelPreviewSearch] = useState('');
+    const [editExcelPreviewFilter, setEditExcelPreviewFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
     const [editParsedFile, setEditParsedFile] = useState<File | null>(null);
     const [editParsing, setEditParsing] = useState(false);
     const [editSaving, setEditSaving] = useState(false);
     const [editStep, setEditStep] = useState<number>(1);
     const [editConfirmationChecked, setEditConfirmationChecked] = useState(false);
+    const [isEditKpiCollapsed, setIsEditKpiCollapsed] = useState(false);
 
     // Notification State
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -141,16 +190,107 @@ export default function CommercialAgreementsModule() {
 
     const fetchB2bClients = async () => {
         try {
+            // Fetch all b2b_client profiles to compute branch relations and isolate true Casas Matrices
             const { data, error } = await supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit')
+                .select('id, company_name, contact_name, nit, parent_id, is_corporate_parent, address, phone')
                 .eq('role', 'b2b_client')
                 .order('company_name');
+
             if (error) throw error;
-            setB2bClients(data || []);
+
+            const allProfiles = data || [];
+            
+            // Map branch counts for each parent_id
+            const branchCounts: Record<string, number> = {};
+            allProfiles.forEach(p => {
+                if (p.parent_id) {
+                    branchCounts[p.parent_id] = (branchCounts[p.parent_id] || 0) + 1;
+                }
+            });
+
+            // Filter STRICTLY for legitimate Casas Matrices (must have is_corporate_parent=true and parent_id=null)
+            const verifiedCasasMatrices = allProfiles
+                .filter(p => !p.parent_id && p.is_corporate_parent === true)
+                .map(p => ({
+                    ...p,
+                    branchCount: branchCounts[p.id] || 0
+                }));
+
+            setB2bClients(verifiedCasasMatrices);
         } catch (err: any) {
             console.error('Error fetching B2B clients:', err);
         }
+    };
+
+    const fetchAllProductsMap = async (): Promise<Record<string, any>> => {
+        const productMap: Record<string, any> = {};
+
+        // 1. Fetch official active costs from commercial_cost_matrix
+        const { data: costMatrixData, error: matrixErr } = await supabase
+            .from('commercial_cost_matrix')
+            .select('product_id, manual_cost');
+
+        if (matrixErr) {
+            console.error('Error fetching commercial_cost_matrix:', matrixErr);
+        }
+
+        const costMatrixMap: Record<string, number> = {};
+        (costMatrixData || []).forEach(r => {
+            if (r.manual_cost !== null && r.manual_cost !== undefined) {
+                costMatrixMap[r.product_id] = r.manual_cost;
+            }
+        });
+
+        // 2. Fetch full product catalogue with pagination
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const from = page * pageSize;
+            const to = from + pageSize - 1;
+            const { data, error } = await supabase
+                .from('products')
+                .select('id, name, base_price, accounting_id, iva_rate, unit_of_measure, sku')
+                .range(from, to);
+
+            if (error) {
+                console.error('Error fetching paginated products:', error);
+                throw error;
+            }
+
+            if (data && data.length > 0) {
+                data.forEach(p => {
+                    // Use official Costo Base FruFresco from commercial_cost_matrix if defined
+                    const officialCost = costMatrixMap[p.id] ?? p.base_price ?? 0;
+                    p.base_price = officialCost;
+                    p.cost_basis = officialCost;
+
+                    if (p.accounting_id !== null && p.accounting_id !== undefined) {
+                        const rawId = String(p.accounting_id).trim();
+                        productMap[rawId] = p;
+                        const numId = parseInt(rawId, 10);
+                        if (!isNaN(numId)) {
+                            productMap[String(numId)] = p;
+                        }
+                    }
+                    if (p.sku) {
+                        productMap[p.sku.trim()] = p;
+                    }
+                });
+
+                if (data.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        return productMap;
     };
 
     useEffect(() => {
@@ -161,10 +301,14 @@ export default function CommercialAgreementsModule() {
     const handleOpenCreateModal = () => {
         setSelectedClientId('');
         setClientSearchQuery('');
+        setCreateStep(1);
         setStartDate(new Date().toISOString().split('T')[0]);
         setDurationValue(2);
         setDurationUnit('weeks');
         setUploadedItems([]);
+        setExcelPreviewData(null);
+        setExcelPreviewSearch('');
+        setExcelPreviewFilter('all');
         setParsedFile(null);
         setFocusedOptionIndex(0);
         setIsCreateModalOpen(true);
@@ -227,7 +371,7 @@ export default function CommercialAgreementsModule() {
         setParsing(true);
         
         const reader = new FileReader();
-        reader.onload = (evt) => {
+        reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
@@ -249,8 +393,6 @@ export default function CommercialAgreementsModule() {
                 }
                 
                 const parsedItems: any[] = [];
-                let rowCount = 0;
-                
                 rawRows.forEach((row) => {
                     const idVal = String(row[idCol] || '').trim();
                     const priceVal = parseFloat(String(row[priceCol] || '').replace(/[^0-9.-]/g, ''));
@@ -262,21 +404,73 @@ export default function CommercialAgreementsModule() {
                             unit_price: priceVal,
                             product_name: nameVal
                         });
-                        rowCount++;
                     }
                 });
                 
                 if (parsedItems.length === 0) {
                     throw new Error('No se encontraron filas válidas con Código y Precio');
                 }
-                
+
+                // Query full database catalogue with pagination to pre-validate matches and margins in real time
+                const productMap = await fetchAllProductsMap();
+
+                let matchCount = 0;
+                let unmatchedCount = 0;
+                let totalMarginSum = 0;
+                let totalSubtotal = 0;
+
+                const enrichedItems = parsedItems.map(item => {
+                    const matched = productMap[String(item.accounting_id).trim()];
+                    if (matched) {
+                        matchCount++;
+                        const costBasis = matched.base_price || 0;
+                        const margin = item.unit_price > 0 
+                            ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 
+                            : 0;
+                        totalMarginSum += margin;
+                        totalSubtotal += item.unit_price;
+
+                        return {
+                            accounting_id: item.accounting_id,
+                            product_name: item.product_name || matched.name,
+                            unit_price: item.unit_price,
+                            matched_product: matched,
+                            cost_basis: costBasis,
+                            margin_percent: margin,
+                            iva_rate: matched.iva_rate || 0
+                        };
+                    } else {
+                        unmatchedCount++;
+                        return {
+                            accounting_id: item.accounting_id,
+                            product_name: item.product_name || 'No identificado',
+                            unit_price: item.unit_price,
+                            matched_product: null,
+                            cost_basis: 0,
+                            margin_percent: 0,
+                            iva_rate: 0
+                        };
+                    }
+                });
+
+                const avgMargin = matchCount > 0 ? totalMarginSum / matchCount : 0;
+
                 setUploadedItems(parsedItems);
-                showToast(`Se cargaron ${rowCount} productos válidos desde el Excel`, 'success');
+                setExcelPreviewData({
+                    items: enrichedItems,
+                    matchedCount: matchCount,
+                    unmatchedCount: unmatchedCount,
+                    avgMargin: Math.round(avgMargin * 10) / 10,
+                    totalSubtotal
+                });
+
+                showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
             } catch (err: any) {
                 console.error(err);
                 showToast('Error al leer Excel: ' + err.message, 'error');
                 setParsedFile(null);
                 setUploadedItems([]);
+                setExcelPreviewData(null);
             } finally {
                 setParsing(false);
             }
@@ -311,18 +505,9 @@ export default function CommercialAgreementsModule() {
                 expiry.setFullYear(expiry.getFullYear() + durationValue);
             }
             const calculatedValidUntil = expiry.toISOString();
-                  const { data: dbProducts, error: dbProdErr } = await supabase
-                .from('products')
-                .select('id, name, base_price, accounting_id, iva_rate');
-                
-            if (dbProdErr) throw dbProdErr;
             
-            const productMap: Record<string, any> = {};
-            dbProducts.forEach(p => {
-                if (p.accounting_id !== null && p.accounting_id !== undefined) {
-                    productMap[String(p.accounting_id)] = p;
-                }
-            });
+            // Query full database catalogue with pagination
+            const productMap = await fetchAllProductsMap();
             
             const { data: existing, error: existErr } = await supabase
                 .from('quotes')
@@ -469,6 +654,9 @@ export default function CommercialAgreementsModule() {
         setEditDurationUnit(unit);
         setEditParsedFile(null);
         setEditUploadedItems([]);
+        setEditExcelPreviewData(null);
+        setEditExcelPreviewSearch('');
+        setEditExcelPreviewFilter('all');
         setEditStep(1);
         setEditConfirmationChecked(false);
         setIsEditModalOpen(true);
@@ -482,7 +670,7 @@ export default function CommercialAgreementsModule() {
         setEditParsing(true);
         
         const reader = new FileReader();
-        reader.onload = (evt) => {
+        reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
@@ -524,14 +712,65 @@ export default function CommercialAgreementsModule() {
                 if (parsedItems.length === 0) {
                     throw new Error('No se encontraron filas válidas con Código y Precio');
                 }
-                
+
+                // Real-time matching against full paginated products catalogue
+                const productMap = await fetchAllProductsMap();
+
+                let matchCount = 0;
+                let unmatchedCount = 0;
+                let totalMarginSum = 0;
+                let totalSubtotal = 0;
+
+                const enrichedItems = parsedItems.map(item => {
+                    const matched = productMap[String(item.accounting_id).trim()];
+                    if (matched) {
+                        matchCount++;
+                        const costBasis = matched.base_price || 0;
+                        const marginPercent = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
+                        totalMarginSum += marginPercent;
+                        totalSubtotal += item.unit_price;
+
+                        return {
+                            accounting_id: item.accounting_id,
+                            product_name: item.product_name || matched.name,
+                            unit_price: item.unit_price,
+                            matched_product: matched,
+                            cost_basis: costBasis,
+                            margin_percent: marginPercent,
+                            iva_rate: matched.iva_rate || 0
+                        };
+                    } else {
+                        unmatchedCount++;
+                        return {
+                            accounting_id: item.accounting_id,
+                            product_name: item.product_name || 'No identificado',
+                            unit_price: item.unit_price,
+                            matched_product: null,
+                            cost_basis: 0,
+                            margin_percent: 0,
+                            iva_rate: 0
+                        };
+                    }
+                });
+
+                const avgMargin = matchCount > 0 ? totalMarginSum / matchCount : 0;
+
                 setEditUploadedItems(parsedItems);
-                showToast(`Se cargaron ${rowCount} productos válidos desde el Excel`, 'success');
+                setEditExcelPreviewData({
+                    items: enrichedItems,
+                    matchedCount: matchCount,
+                    unmatchedCount: unmatchedCount,
+                    avgMargin: Math.round(avgMargin * 10) / 10,
+                    totalSubtotal
+                });
+
+                showToast(`Excel procesado: ${matchCount} reconocidos, ${unmatchedCount} no reconocidos`, matchCount > 0 ? 'success' : 'error');
             } catch (err: any) {
                 console.error(err);
                 showToast('Error al leer Excel: ' + err.message, 'error');
                 setEditParsedFile(null);
                 setEditUploadedItems([]);
+                setEditExcelPreviewData(null);
             } finally {
                 setEditParsing(false);
             }
@@ -569,18 +808,8 @@ export default function CommercialAgreementsModule() {
             
             // 2. If new excel file uploaded, replace items
             if (editUploadedItems.length > 0) {
-                const { data: dbProducts, error: dbProdErr } = await supabase
-                    .from('products')
-                    .select('id, name, base_price, accounting_id, iva_rate');
-                    
-                if (dbProdErr) throw dbProdErr;
-                
-                const productMap: Record<string, any> = {};
-                dbProducts.forEach(p => {
-                    if (p.accounting_id !== null && p.accounting_id !== undefined) {
-                        productMap[String(p.accounting_id)] = p;
-                    }
-                });
+                // Query full database catalogue with pagination
+                const productMap = await fetchAllProductsMap();
                 
                 // Delete old items for this specific active agreement being updated
                 const { error: deleteErr } = await supabase
@@ -750,40 +979,83 @@ export default function CommercialAgreementsModule() {
     };
 
     const filteredB2bClients = b2bClients.filter(c => {
-        if (!clientSearchQuery) return true;
-        const query = clientSearchQuery.toLowerCase();
+        // Strictly only Casas Matrices (no branches / parent_id is null)
+        if (c.parent_id) return false;
+
+        if (!clientSearchQuery.trim()) return true;
+        const query = clientSearchQuery.toLowerCase().trim();
         
-        // Direct match
         const matchesName = c.company_name?.toLowerCase().includes(query);
-        const matchesNit = String(c.nit || '').includes(query);
-        if (matchesName || matchesNit) return true;
-        
-        // If this client is a branch (has parent_id), check if the parent matches
-        if (c.parent_id) {
-            const parent = b2bClients.find(p => p.id === c.parent_id);
-            if (parent) {
-                const parentMatchesName = parent.company_name?.toLowerCase().includes(query);
-                const parentMatchesNit = String(parent.nit || '').includes(query);
-                if (parentMatchesName || parentMatchesNit) return true;
-            }
+        const matchesContact = c.contact_name?.toLowerCase().includes(query);
+        const matchesNit = String(c.nit || '').toLowerCase().includes(query);
+        return Boolean(matchesName || matchesContact || matchesNit);
+    });
+
+    const toggleSort = (col: typeof sortColumn) => {
+        if (sortColumn === col) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(col);
+            setSortDirection('desc');
         }
-        
-        return false;
-    });
+    };
 
-    // Filter logic
-    const filteredAgreements = agreements.filter(agreement => {
-        const matchSearch = agreement.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            agreement.profiles?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            String(agreement.quote_number).includes(searchTerm);
-        
-        if (!matchSearch) return false;
+    // Filter and Sort logic
+    const filteredAgreements = agreements
+        .filter(agreement => {
+            const matchSearch = agreement.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                agreement.profiles?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                String(agreement.quote_number).includes(searchTerm);
+            
+            if (!matchSearch) return false;
 
-        if (statusFilter === 'all') return true;
-        
-        const statusInfo = getAgreementStatus(agreement.valid_until);
-        return statusInfo.type === statusFilter;
-    });
+            if (statusFilter !== 'all') {
+                const statusInfo = getAgreementStatus(agreement.valid_until);
+                if (statusInfo.type !== statusFilter) return false;
+            }
+
+            if (modelFilter !== 'all') {
+                const modelName = agreement.model_snapshot_name || 'Personalizado';
+                if (modelName !== modelFilter) return false;
+            }
+
+            return true;
+        })
+        .sort((a, b) => {
+            let valA: any = 0;
+            let valB: any = 0;
+
+            if (sortColumn === 'quote_number') {
+                valA = a.quote_number || 0;
+                valB = b.quote_number || 0;
+            } else if (sortColumn === 'client_name') {
+                valA = (a.profiles?.company_name || a.client_name || '').toLowerCase();
+                valB = (b.profiles?.company_name || b.client_name || '').toLowerCase();
+            } else if (sortColumn === 'model') {
+                valA = (a.model_snapshot_name || 'Personalizado').toLowerCase();
+                valB = (b.model_snapshot_name || 'Personalizado').toLowerCase();
+            } else if (sortColumn === 'valid_until') {
+                valA = new Date(a.valid_until || 0).getTime();
+                valB = new Date(b.valid_until || 0).getTime();
+            } else if (sortColumn === 'duration') {
+                valA = new Date(a.valid_until || 0).getTime() - new Date(a.start_date || a.created_at).getTime();
+                valB = new Date(b.valid_until || 0).getTime() - new Date(b.start_date || b.created_at).getTime();
+            } else if (sortColumn === 'status') {
+                valA = getAgreementStatus(a.valid_until).label;
+                valB = getAgreementStatus(b.valid_until).label;
+            } else if (sortColumn === 'margin') {
+                const itemsA = (a as any).items || (a as any).quote_items || [];
+                const marginA = itemsA.length > 0 ? itemsA.reduce((s: number, i: any) => s + (i.margin_percent || 0), 0) / itemsA.length : 0;
+                const itemsB = (b as any).items || (b as any).quote_items || [];
+                const marginB = itemsB.length > 0 ? itemsB.reduce((s: number, i: any) => s + (i.margin_percent || 0), 0) / itemsB.length : 0;
+                valA = marginA;
+                valB = marginB;
+            }
+
+            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
 
     const activeCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'active').length;
     const warningCount = agreements.filter(a => getAgreementStatus(a.valid_until).type === 'warning').length;
@@ -793,134 +1065,98 @@ export default function CommercialAgreementsModule() {
     const averageMargin = agreementItems.length > 0 ? totalMargin / agreementItems.length : 0;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontFamily: THEME.typography.fontFamilySecondary }}>
             
-            {/* STAT CARDS */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-                <LocalKPICard 
-                    title="Acuerdos Vigentes" 
-                    value={activeCount} 
-                    icon={<FileText size={18} strokeWidth={1.5} />} 
-                    color="#EAEFEA" 
-                    textColor="#0D7A57" 
-                    subtitle="Contratos con precios congelados" 
-                />
-                <LocalKPICard 
-                    title="Próximos a Vencer" 
-                    value={warningCount} 
-                    icon={<Clock size={18} strokeWidth={1.5} />} 
-                    color="#FFF9E6" 
-                    textColor="#D97706" 
-                    subtitle="Expira en menos de 15 días" 
-                />
-                <LocalKPICard 
-                    title="Acuerdos Vencidos" 
-                    value={expiredCount} 
-                    icon={<AlertCircle size={18} strokeWidth={1.5} />} 
-                    color="#FEE2E2" 
-                    textColor="#EF4444" 
-                    subtitle="Precios inactivos" 
-                />
-            </div>
-
-            {/* CONTROLS */}
-            <div style={{ 
-                backgroundColor: THEME.colors.surface, 
-                borderRadius: THEME.radius.lg, 
-                padding: '1.25rem', 
-                border: `1px solid ${THEME.colors.border}`, 
-                boxShadow: THEME.shadow.sm,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '1.5rem',
-                flexWrap: 'wrap'
-            }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
-                    <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por cliente o código de acuerdo..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '0.65rem 0.65rem 0.65rem 2.5rem',
-                            borderRadius: THEME.radius.md,
-                            border: `1px solid ${THEME.colors.border}`,
-                            fontSize: '0.85rem',
-                            outline: 'none',
-                            fontFamily: THEME.typography.fontFamilySecondary
-                        }}
-                    />
-                </div>
-
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {(['all', 'active', 'warning', 'expired'] as const).map(f => {
-                        const isActive = statusFilter === f;
-                        return (
-                            <button
-                                key={f}
-                                onClick={() => setStatusFilter(f)}
-                                style={{
-                                    padding: '0.45rem 1.1rem',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    background: isActive ? THEME.colors.primary : 'transparent',
-                                    color: isActive ? 'white' : '#4E6157',
-                                    fontWeight: isActive ? '700' : '500',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    fontSize: '0.8rem',
-                                    boxShadow: isActive ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!isActive) {
-                                        e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
-                                        e.currentTarget.style.color = THEME.colors.textMain;
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isActive) {
-                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                        e.currentTarget.style.color = '#4E6157';
-                                    }
-                                }}
-                            >
-                                {f === 'all' && 'Todos'}
-                                {f === 'active' && 'Vigentes'}
-                                {f === 'warning' && 'Por Vencer'}
-                                {f === 'expired' && 'Vencidos'}
-                            </button>
-                        );
-                    })}
+            {/* STAT CARDS SECTION (Collapsible) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Métricas de Acuerdos y Contratos
+                    </span>
                     <button
-                        onClick={handleOpenCreateModal}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                        type="button"
+                        onClick={() => setIsMainKpiCollapsed(!isMainKpiCollapsed)}
                         style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '0.45rem 1.1rem',
-                            borderRadius: '8px',
-                            backgroundColor: THEME.colors.primary,
-                            color: 'white',
-                            border: 'none',
-                            fontSize: '0.8rem',
+                            backgroundColor: isMainKpiCollapsed ? '#E0F2FE' : '#F1F5F9',
+                            border: `1px solid ${isMainKpiCollapsed ? '#BAE6FD' : '#CBD5E1'}`,
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            color: isMainKpiCollapsed ? '#0369A1' : '#475569',
+                            fontSize: '0.74rem',
                             fontWeight: 'bold',
                             cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            marginLeft: '8px',
-                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)'
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.15s ease'
                         }}
                     >
-                        <Plus size={14} /> Nuevo Acuerdo
+                        {isMainKpiCollapsed ? (
+                            <><ChevronDown size={14} /> Mostrar Tarjetas de Métricas</>
+                        ) : (
+                            <><ChevronUp size={14} /> Colapsar Tarjetas para más espacio</>
+                        )}
                     </button>
                 </div>
+
+                {!isMainKpiCollapsed ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                        <LocalKPICard 
+                            title="Acuerdos Vigentes" 
+                            value={activeCount} 
+                            icon={<FileText size={18} strokeWidth={1.5} />} 
+                            color="#EAEFEA" 
+                            textColor="#0D7A57" 
+                            subtitle="Contratos con precios congelados" 
+                        />
+                        <LocalKPICard 
+                            title="Próximos a Vencer" 
+                            value={warningCount} 
+                            icon={<Clock size={18} strokeWidth={1.5} />} 
+                            color="#FFF9E6" 
+                            textColor="#D97706" 
+                            subtitle="Expira en menos de 15 días" 
+                        />
+                        <LocalKPICard 
+                            title="Acuerdos Vencidos" 
+                            value={expiredCount} 
+                            icon={<AlertCircle size={18} strokeWidth={1.5} />} 
+                            color="#FEE2E2" 
+                            textColor="#EF4444" 
+                            subtitle="Precios inactivos" 
+                        />
+                    </div>
+                ) : (
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        padding: '8px 16px', 
+                        backgroundColor: '#FFFFFF', 
+                        borderRadius: '8px', 
+                        border: '1px solid #E2E8F0',
+                        fontSize: '0.8rem',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                            <span style={{ color: '#0D7A57', fontWeight: 'bold' }}>
+                                🟢 <strong>{activeCount}</strong> Acuerdos Vigentes
+                            </span>
+                            <span style={{ color: '#D97706', fontWeight: 'bold' }}>
+                                🟡 <strong>{warningCount}</strong> Próximos a Vencer
+                            </span>
+                            <span style={{ color: expiredCount > 0 ? '#EF4444' : '#64748B', fontWeight: 'bold' }}>
+                                🔴 <strong>{expiredCount}</strong> Vencidos
+                            </span>
+                        </div>
+                        <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                            Vista compacta activada
+                        </span>
+                    </div>
+                )}
             </div>
 
-            {/* AGREEMENTS TABLE */}
+            {/* UNIFIED CONTAINER: CONTROLS & AGREEMENTS TABLE */}
             <div style={{ 
                 backgroundColor: THEME.colors.surface, 
                 borderRadius: THEME.radius.lg, 
@@ -928,6 +1164,101 @@ export default function CommercialAgreementsModule() {
                 boxShadow: THEME.shadow.sm, 
                 overflow: 'hidden' 
             }}>
+                {/* TOP TOOLBAR CONTROLS */}
+                <div style={{ 
+                    padding: '1.1rem 1.25rem', 
+                    borderBottom: `1px solid ${THEME.colors.border}`, 
+                    backgroundColor: '#FFFFFF',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '1.25rem',
+                    flexWrap: 'wrap'
+                }}>
+                    <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
+                        <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por cliente o código de acuerdo..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '0.65rem 0.65rem 0.65rem 2.5rem',
+                                borderRadius: THEME.radius.md,
+                                border: `1px solid ${THEME.colors.border}`,
+                                fontSize: '0.85rem',
+                                outline: 'none',
+                                fontFamily: THEME.typography.fontFamilySecondary
+                            }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {(['all', 'active', 'warning', 'expired'] as const).map(f => {
+                            const isActive = statusFilter === f;
+                            return (
+                                <button
+                                    key={f}
+                                    onClick={() => setStatusFilter(f)}
+                                    style={{
+                                        padding: '0.45rem 1.1rem',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: isActive ? THEME.colors.primary : 'transparent',
+                                        color: isActive ? 'white' : '#4E6157',
+                                        fontWeight: isActive ? '700' : '500',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        fontSize: '0.8rem',
+                                        boxShadow: isActive ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isActive) {
+                                            e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                            e.currentTarget.style.color = THEME.colors.textMain;
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isActive) {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.color = '#4E6157';
+                                        }
+                                    }}
+                                >
+                                    {f === 'all' && 'Todos'}
+                                    {f === 'active' && 'Vigentes'}
+                                    {f === 'warning' && 'Por Vencer'}
+                                    {f === 'expired' && 'Vencidos'}
+                                </button>
+                            );
+                        })}
+                        <button
+                            onClick={handleOpenCreateModal}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '0.45rem 1.1rem',
+                                borderRadius: '8px',
+                                backgroundColor: THEME.colors.primary,
+                                color: 'white',
+                                border: 'none',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                marginLeft: '8px',
+                                boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)'
+                            }}
+                        >
+                            <Plus size={14} /> Nuevo Acuerdo
+                        </button>
+                    </div>
+                </div>
+
                 {loading ? (
                     <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: 'bold' }}>Cargando acuerdos comerciales...</div>
                 ) : filteredAgreements.length === 0 ? (
@@ -941,19 +1272,126 @@ export default function CommercialAgreementsModule() {
                         </div>
                     </div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Código</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Cliente B2B</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Modelo de Precios</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Vigencia</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Duración</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader }}>Estado</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'center' }}>Margen Promedio</th>
-                                <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'right' }}>Acciones</th>
-                            </tr>
-                        </thead>
+                    <div style={{ 
+                        maxHeight: isMainKpiCollapsed ? 'calc(100vh - 160px)' : 'calc(100vh - 280px)', 
+                        minHeight: '380px',
+                        overflowY: 'auto', 
+                        overflowX: 'auto', 
+                        width: '100%', 
+                        position: 'relative',
+                        transition: 'max-height 0.25s ease'
+                    }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                            <thead style={{ position: 'sticky', top: 0, zIndex: 15 }}>
+                                <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                    {/* CÓDIGO */}
+                                    <th 
+                                        onClick={() => toggleSort('quote_number')}
+                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Código</span>
+                                            {sortColumn === 'quote_number' ? (
+                                                sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
+                                            ) : (
+                                                <ChevronsUpDown size={12} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+
+                                    {/* CLIENTE B2B */}
+                                    <th 
+                                        onClick={() => toggleSort('client_name')}
+                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Cliente B2B</span>
+                                            {sortColumn === 'client_name' ? (
+                                                sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
+                                            ) : (
+                                                <ChevronsUpDown size={12} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+
+                                    {/* VIGENCIA */}
+                                    <th 
+                                        onClick={() => toggleSort('valid_until')}
+                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Vigencia</span>
+                                            {sortColumn === 'valid_until' ? (
+                                                sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
+                                            ) : (
+                                                <ChevronsUpDown size={12} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+
+                                    {/* DURACIÓN */}
+                                    <th 
+                                        onClick={() => toggleSort('duration')}
+                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Duración</span>
+                                            {sortColumn === 'duration' ? (
+                                                sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
+                                            ) : (
+                                                <ChevronsUpDown size={12} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+
+                                    {/* ESTADO */}
+                                    <th 
+                                        onClick={() => toggleSort('status')}
+                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>Estado</span>
+                                            {sortColumn === 'status' ? (
+                                                sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
+                                            ) : (
+                                                <ChevronsUpDown size={12} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+
+                                    {/* MARGEN PROMEDIO */}
+                                    <th 
+                                        onClick={() => toggleSort('margin')}
+                                        style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                            <span>Margen Promedio</span>
+                                            {sortColumn === 'margin' ? (
+                                                sortDirection === 'asc' ? <ChevronUp size={14} color={THEME.colors.primary} /> : <ChevronDown size={14} color={THEME.colors.primary} />
+                                            ) : (
+                                                <ChevronsUpDown size={12} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+
+                                    {/* ACCIONES */}
+                                    <th style={{ padding: '0.75rem 1.25rem', ...THEME.typography.tableHeader, textAlign: 'right', backgroundColor: '#F8FAFC', borderBottom: `1.5px solid ${THEME.colors.border}` }}>
+                                        Acciones
+                                    </th>
+                                </tr>
+                            </thead>
                         <tbody>
                             {filteredAgreements.map(agreement => {
                                 const status = getAgreementStatus(agreement.valid_until);
@@ -964,7 +1402,7 @@ export default function CommercialAgreementsModule() {
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        <td style={{ padding: '0.65rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <span style={{ 
                                                 fontFamily: 'monospace', 
                                                 fontSize: '0.75rem', 
@@ -978,7 +1416,7 @@ export default function CommercialAgreementsModule() {
                                                 {formatAgreementNumber(agreement.quote_number, agreement.created_at)}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <Building2 size={16} color="#94A3B8" />
                                                 <div>
@@ -993,10 +1431,7 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textSecondary }}>
-                                            {agreement.model_snapshot_name || 'Personalizado'}
-                                        </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                 <div style={{ fontSize: '0.8rem', color: THEME.colors.textMain }}>
                                                     <span style={{ color: '#94A3B8', fontSize: '0.7rem', marginRight: '4px' }}>INICIA:</span>
@@ -1008,7 +1443,7 @@ export default function CommercialAgreementsModule() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
                                             <span style={{ 
                                                 fontSize: '0.75rem', 
                                                 backgroundColor: '#F3F4F6', 
@@ -1020,7 +1455,7 @@ export default function CommercialAgreementsModule() {
                                                 {getDurationText(agreement.start_date, agreement.valid_until)}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                        <td style={{ padding: '0.75rem 1.25rem' }}>
                                             <span style={{ 
                                                 backgroundColor: status.bgColor, 
                                                 color: status.color, 
@@ -1033,92 +1468,134 @@ export default function CommercialAgreementsModule() {
                                                 {status.label}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'center' }}>
+                                        
+                                        {/* CLEAN MARGEN PROMEDIO */}
+                                        <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center' }}>
                                             {(() => {
                                                 const rowItems = (agreement as any).items || (agreement as any).quote_items || [];
                                                 const totalRowMargin = rowItems.reduce((sum: number, item: any) => sum + (item.margin_percent || 0), 0);
                                                 const rowAvgMargin = rowItems.length > 0 ? totalRowMargin / rowItems.length : 0;
                                                 return (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
                                                         <span style={{ 
-                                                            color: rowAvgMargin >= 50 ? '#059669' : rowAvgMargin >= 20 ? '#D97706' : '#DC2626', 
-                                                            fontWeight: 'bold',
-                                                            fontSize: '0.85rem'
+                                                            padding: '3px 8px',
+                                                            borderRadius: '6px',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.82rem',
+                                                            backgroundColor: rowAvgMargin >= 50 ? '#ECFDF5' : rowAvgMargin >= 20 ? '#FFFBEB' : '#FEF2F2',
+                                                            color: rowAvgMargin >= 50 ? '#059669' : rowAvgMargin >= 20 ? '#D97706' : '#DC2626',
+                                                            border: `1px solid ${rowAvgMargin >= 50 ? '#A7F3D0' : rowAvgMargin >= 20 ? '#FDE68A' : '#FECACA'}`
                                                         }}>
                                                             {(Math.round(rowAvgMargin * 10) / 10).toFixed(1)}%
                                                         </span>
-                                                        <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
-                                                            ({rowItems.length} prod / {!(agreement as any).items ? (!(agreement as any).quote_items ? 'BOTH NULL' : 'Q_ITEMS OK') : 'ITEMS OK'})
+                                                        <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500' }}>
+                                                            {rowItems.length} {rowItems.length === 1 ? 'prod' : 'productos'}
                                                         </span>
                                                     </div>
                                                 );
                                             })()}
                                         </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
-                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+
+                                        {/* ORGANIZED ACCIONES - CLEAN GROUPED ACTIONS */}
+                                        <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
                                                 <button
                                                     onClick={() => handleViewPrices(agreement)}
+                                                    title="Ver lista completa de precios acordados"
                                                     style={{
-                                                        padding: '0.35rem 0.75rem',
-                                                        border: '1px solid #D1D5DB',
-                                                        borderRadius: THEME.radius.sm,
-                                                        background: 'white',
+                                                        padding: '0.45rem 0.9rem',
+                                                        border: `1px solid #BBF7D0`,
+                                                        borderRadius: '8px',
+                                                        backgroundColor: '#F0FDF4',
+                                                        color: '#0D7A57',
                                                         cursor: 'pointer',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 600,
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: 'bold',
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '4px',
-                                                        color: '#64748B'
+                                                        gap: '6px',
+                                                        transition: 'all 0.15s',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.backgroundColor = '#DCFCE7';
+                                                        e.currentTarget.style.borderColor = '#86EFAC';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.backgroundColor = '#F0FDF4';
+                                                        e.currentTarget.style.borderColor = '#BBF7D0';
                                                     }}
                                                 >
-                                                    <Eye size={12} strokeWidth={1.5} /> Precios
+                                                    <Eye size={14} strokeWidth={2} /> Precios
                                                 </button>
                                                 
-                                                <button
-                                                    onClick={() => handleOpenEdit(agreement)}
-                                                    style={{
-                                                        padding: '0.35rem 0.75rem',
-                                                        border: '1px solid #D1D5DB',
-                                                        borderRadius: THEME.radius.sm,
-                                                        background: 'white',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 600,
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        color: '#64748B'
-                                                    }}
-                                                >
-                                                    <Edit3 size={12} strokeWidth={1.5} /> Modificar
-                                                </button>
-                                                
-                                                <button
-                                                    onClick={() => handleOpenRenew(agreement)}
-                                                    style={{
-                                                        padding: '0.35rem 0.75rem',
-                                                        border: '1px solid #D1D5DB',
-                                                        borderRadius: THEME.radius.sm,
-                                                        background: 'white',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 600,
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        color: '#64748B'
-                                                    }}
-                                                >
-                                                    <Clock size={12} strokeWidth={1.5} /> Renovar
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F8FAFC', padding: '3px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                    <button
+                                                        onClick={() => handleOpenEdit(agreement)}
+                                                        title="Modificar acuerdo comercial"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: 'transparent',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#64748B',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'white';
+                                                            e.currentTarget.style.color = '#1E293B';
+                                                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                                            e.currentTarget.style.color = '#64748B';
+                                                            e.currentTarget.style.boxShadow = 'none';
+                                                        }}
+                                                    >
+                                                        <Edit3 size={14} strokeWidth={1.8} />
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={() => handleOpenRenew(agreement)}
+                                                        title="Renovar vigencia del acuerdo"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: 'transparent',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#64748B',
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'white';
+                                                            e.currentTarget.style.color = '#D97706';
+                                                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                                            e.currentTarget.style.color = '#64748B';
+                                                            e.currentTarget.style.boxShadow = 'none';
+                                                        }}
+                                                    >
+                                                        <Clock size={14} strokeWidth={1.8} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
                 )}
             </div>
 
@@ -1421,400 +1898,34 @@ export default function CommercialAgreementsModule() {
                 </div>
             )}
 
-            {/* CREATE AGREEMENT MODAL */}
+            {/* CREATE AGREEMENT MODAL - WIDE 3-STEP SEQUENTIAL WIZARD */}
             {isCreateModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)', padding: '1rem' }}>
                     <form 
                         onSubmit={handleCreateAgreementSubmit}
                         style={{ 
                             backgroundColor: 'white', 
                             borderRadius: THEME.radius.lg, 
                             width: '95%', 
-                            maxWidth: '540px', 
-                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', 
+                            maxWidth: '900px', 
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', 
                             overflow: 'hidden',
                             display: 'flex',
                             flexDirection: 'column',
-                            maxHeight: '90vh'
+                            maxHeight: '92vh'
                         }}
                     >
                         {/* Modal Header */}
-                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <FileText size={18} style={{ color: THEME.colors.primary }} />
-                                <h3 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain }}>Crear Acuerdo Comercial</h3>
-                            </div>
-                            <button 
-                                type="button" 
-                                onClick={() => {
-                                    setIsCreateModalOpen(false);
-                                    setSelectedClientId('');
-                                    setParsedFile(null);
-                                    setUploadedItems([]);
-                                }} 
-                                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
-                            
-                            {/* EXPLANATORY COMPONENT WITH HELP ICON */}
-                            <div style={{ 
-                                backgroundColor: '#EFF6FF', 
-                                border: '1px solid #BFDBFE', 
-                                padding: '1rem', 
-                                borderRadius: '12px', 
-                                display: 'flex', 
-                                gap: '10px', 
-                                alignItems: 'flex-start' 
-                            }}>
-                                <HelpCircle size={20} style={{ color: '#2563EB', flexShrink: 0, marginTop: '2px' }} />
+                        <div style={{ padding: '1.25rem 2rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAF9' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                    <FileText size={20} />
+                                </div>
                                 <div>
-                                    <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 'bold', color: '#1E40AF' }}>
-                                        ¿Cómo funciona la Carga Masiva de Precios?
-                                    </h4>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#1E3A8A', lineHeight: '1.4' }}>
-                                        Puedes descargar la plantilla pre-rellenada con todos tus productos activos y colocar el precio en la columna vacía, o subir tu propio Excel personalizado. El sistema identificará de forma inteligente las columnas buscando:
-                                    </p>
-                                    <ul style={{ margin: '6px 0 0 0', paddingLeft: '1.2rem', fontSize: '0.75rem', color: '#1E3A8A', lineHeight: '1.4' }}>
-                                        <li><strong>Identificador de Producto:</strong> Cabeceras como <em>idProducto, accounting_id, código, cod. contable, id</em>.</li>
-                                        <li><strong>Precio Acordado:</strong> Cabeceras como <em>precio, precio acordado, price, precio neto</em>.</li>
-                                    </ul>
+                                    <h3 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain, fontSize: '1.15rem' }}>Crear Acuerdo Comercial Institucional</h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Parametrización secuencial con validación de catálogo y márgenes en tiempo real</p>
                                 </div>
                             </div>
-
-                            {/* Client Searchable Dropdown */}
-                            <div style={{ position: 'relative' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>Cliente Institucional B2B:</label>
-                                
-                                <div 
-                                    onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px 12px',
-                                        borderRadius: THEME.radius.md || '8px',
-                                        border: `1px solid ${THEME.colors.border || '#CBD5E1'}`,
-                                        backgroundColor: '#FFFFFF',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        fontSize: '0.85rem',
-                                        fontWeight: 'bold',
-                                        color: selectedClientId ? '#1E293B' : '#94A3B8',
-                                        minHeight: '40px'
-                                    }}
-                                >
-                                    <span>
-                                        {selectedClientId 
-                                            ? `${b2bClients.find(c => c.id === selectedClientId)?.company_name} ${b2bClients.find(c => c.id === selectedClientId)?.nit ? `(NIT: ${b2bClients.find(c => c.id === selectedClientId)?.nit})` : ''}`
-                                            : '-- Selecciona un Cliente B2B --'}
-                                    </span>
-                                    <ChevronRight size={16} style={{ transform: isClientDropdownOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', color: '#64748B' }} />
-                                </div>
-
-                                {/* Hidden input for HTML5 required validation */}
-                                <input 
-                                    type="text" 
-                                    required 
-                                    value={selectedClientId} 
-                                    readOnly 
-                                    style={{ position: 'absolute', opacity: 0, width: '100%', height: '1px', bottom: 0, pointerEvents: 'none' }} 
-                                />
-
-                                {isClientDropdownOpen && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        left: 0,
-                                        right: 0,
-                                        backgroundColor: '#FFFFFF',
-                                        borderRadius: '8px',
-                                        border: '1px solid #CBD5E1',
-                                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                                        zIndex: 2200,
-                                        marginTop: '4px',
-                                        padding: '8px',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '6px'
-                                    }}>
-                                        {/* Search input inside dropdown panel */}
-                                        <div style={{ position: 'relative' }}>
-                                            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                            <input 
-                                                type="text"
-                                                autoFocus
-                                                placeholder="Buscar por nombre, NIT o matriz..."
-                                                value={clientSearchQuery}
-                                                onChange={(e) => {
-                                                    setClientSearchQuery(e.target.value);
-                                                    setFocusedOptionIndex(0);
-                                                }}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'ArrowDown') {
-                                                        e.preventDefault();
-                                                        setFocusedOptionIndex(prev => 
-                                                            filteredB2bClients.length > 0 
-                                                                ? (prev + 1) % filteredB2bClients.length 
-                                                                : 0
-                                                        );
-                                                    } else if (e.key === 'ArrowUp') {
-                                                        e.preventDefault();
-                                                        setFocusedOptionIndex(prev => 
-                                                            filteredB2bClients.length > 0 
-                                                                ? (prev - 1 + filteredB2bClients.length) % filteredB2bClients.length 
-                                                                : 0
-                                                        );
-                                                    } else if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        if (filteredB2bClients[focusedOptionIndex]) {
-                                                            setSelectedClientId(filteredB2bClients[focusedOptionIndex].id);
-                                                            setClientSearchQuery('');
-                                                            setIsClientDropdownOpen(false);
-                                                            setFocusedOptionIndex(0);
-                                                        }
-                                                    } else if (e.key === 'Escape') {
-                                                        setIsClientDropdownOpen(false);
-                                                    }
-                                                }}
-                                                onClick={(e) => e.stopPropagation()} // Prevent closing dropdown on click
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '8px 8px 8px 30px',
-                                                    borderRadius: '6px',
-                                                    border: '1px solid #E2E8F0',
-                                                    fontSize: '0.8rem',
-                                                    outline: 'none'
-                                                }}
-                                            />
-                                        </div>
-
-                                        {/* Client options list */}
-                                        <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            {filteredB2bClients.length === 0 ? (
-                                                <div style={{ padding: '12px', fontSize: '0.8rem', color: '#64748B', textAlign: 'center' }}>
-                                                    No se encontraron clientes
-                                                </div>
-                                            ) : (
-                                                filteredB2bClients.map((c, index) => {
-                                                    const isSelected = selectedClientId === c.id;
-                                                    const isFocused = focusedOptionIndex === index;
-                                                    return (
-                                                        <div
-                                                            key={c.id}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedClientId(c.id);
-                                                                setClientSearchQuery('');
-                                                                setIsClientDropdownOpen(false);
-                                                                setFocusedOptionIndex(0);
-                                                            }}
-                                                            style={{
-                                                                padding: '8px 10px',
-                                                                borderRadius: '6px',
-                                                                cursor: 'pointer',
-                                                                backgroundColor: isSelected ? '#F0FDF4' : isFocused ? '#F1F5F9' : 'transparent',
-                                                                display: 'flex',
-                                                                justifyContent: 'space-between',
-                                                                alignItems: 'center',
-                                                                transition: 'background-color 0.15s'
-                                                            }}
-                                                            onMouseEnter={(e) => {
-                                                                setFocusedOptionIndex(index);
-                                                                e.currentTarget.style.backgroundColor = isSelected ? '#DCFCE7' : '#F1F5F9';
-                                                            }}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#F0FDF4' : 'transparent'}
-                                                        >
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                                                                <span style={{ fontSize: '0.85rem', fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#0D7A57' : '#1E293B' }}>
-                                                                    {c.company_name}
-                                                                </span>
-                                                                {c.nit && (
-                                                                    <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
-                                                                        NIT: {c.nit}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: '4px' }}>
-                                                                {c.is_corporate_parent && (
-                                                                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
-                                                                        Matriz
-                                                                    </span>
-                                                                )}
-                                                                {c.parent_id && (
-                                                                    <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#E0F2FE', color: '#0369A1', fontWeight: 'bold' }}>
-                                                                        Sucursal
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Dates section */}
-                            <div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>Fecha de Inicio:</label>
-                                        <input 
-                                            type="date" 
-                                            required
-                                            value={startDate} 
-                                            onChange={(e) => setStartDate(e.target.value)}
-                                            style={{ 
-                                                width: '100%', 
-                                                padding: '10px', 
-                                                borderRadius: THEME.radius.md, 
-                                                border: `1px solid ${THEME.colors.border}`,
-                                                fontSize: '0.85rem'
-                                            }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>Duración:</label>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <input 
-                                                type="number"
-                                                min="1"
-                                                required
-                                                value={durationValue}
-                                                onChange={(e) => setDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
-                                                style={{ 
-                                                    width: '80px', 
-                                                    padding: '10px', 
-                                                    borderRadius: THEME.radius.md, 
-                                                    border: `1px solid ${THEME.colors.border}`,
-                                                    fontSize: '0.85rem',
-                                                    textAlign: 'center'
-                                                }}
-                                            />
-                                            <select
-                                                value={durationUnit}
-                                                onChange={(e) => setDurationUnit(e.target.value)}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '10px',
-                                                    borderRadius: THEME.radius.md,
-                                                    border: `1px solid ${THEME.colors.border}`,
-                                                    fontSize: '0.85rem'
-                                                }}
-                                            >
-                                                <option value="days">Días</option>
-                                                <option value="weeks">Semanas</option>
-                                                <option value="months">Meses</option>
-                                                <option value="years">Años</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                {(() => {
-                                    const expiry = new Date(startDate + 'T12:00:00');
-                                    if (durationUnit === 'days') {
-                                        expiry.setDate(expiry.getDate() + durationValue);
-                                    } else if (durationUnit === 'weeks') {
-                                        expiry.setDate(expiry.getDate() + durationValue * 7);
-                                    } else if (durationUnit === 'months') {
-                                        expiry.setMonth(expiry.getMonth() + durationValue);
-                                    } else if (durationUnit === 'years') {
-                                        expiry.setFullYear(expiry.getFullYear() + durationValue);
-                                    }
-                                    const formattedExpiry = expiry.toLocaleDateString('es-ES', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric'
-                                    });
-                                    return (
-                                        <div style={{ 
-                                            marginTop: '10px', 
-                                            fontSize: '0.8rem', 
-                                            color: THEME.colors.textSecondary,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px'
-                                        }}>
-                                            <span>📅 El acuerdo vencerá el:</span>
-                                            <strong style={{ color: THEME.colors.primary }}>{formattedExpiry}</strong>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-
-                            {/* Excel section */}
-                            <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '1.25rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Lista de Precios (Excel):</span>
-                                    <button
-                                        type="button"
-                                        onClick={downloadTemplate}
-                                        style={{
-                                            background: 'none',
-                                            border: 'none',
-                                            color: THEME.colors.primary,
-                                            fontSize: '0.75rem',
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}
-                                    >
-                                        <Download size={14} /> Descargar Plantilla
-                                    </button>
-                                </div>
-
-                                {/* Drag-drop or File Input */}
-                                <div style={{
-                                    border: `2px dashed ${parsedFile ? THEME.colors.primary : '#CBD5E1'}`,
-                                    backgroundColor: parsedFile ? '#F0FDF4' : '#F8FAFC',
-                                    borderRadius: '12px',
-                                    padding: '1.5rem',
-                                    textAlign: 'center',
-                                    cursor: 'pointer',
-                                    position: 'relative',
-                                    transition: 'all 0.2s'
-                                }}>
-                                    <input 
-                                        type="file" 
-                                        accept=".xlsx, .xls"
-                                        onChange={handleFileUpload}
-                                        style={{
-                                            position: 'absolute',
-                                            inset: 0,
-                                            opacity: 0,
-                                            cursor: 'pointer'
-                                        }}
-                                    />
-                                    <UploadCloud size={32} style={{ color: parsedFile ? THEME.colors.primary : '#94A3B8', margin: '0 auto 8px auto' }} />
-                                    {parsedFile ? (
-                                        <div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: THEME.colors.textMain }}>{parsedFile.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
-                                                {uploadedItems.length} productos detectados listos para cargar
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Selecciona o arrastra tu archivo Excel</div>
-                                            <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
-                                                Formatos soportados: .xlsx, .xls
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div style={{ padding: '1.25rem 1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '10px', backgroundColor: '#F9FAFB' }}>
                             <button 
                                 type="button" 
                                 onClick={() => {
@@ -1822,205 +1933,1181 @@ export default function CommercialAgreementsModule() {
                                     setSelectedClientId('');
                                     setParsedFile(null);
                                     setUploadedItems([]);
+                                    setExcelPreviewData(null);
+                                    setCreateStep(1);
                                 }} 
-                                style={{ 
-                                    flex: 1, 
-                                    padding: '10px', 
-                                    borderRadius: THEME.radius.md, 
-                                    border: `1px solid ${THEME.colors.borderActive}`, 
-                                    backgroundColor: 'white', 
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer' 
-                                }}
-                            >
-                                Cancelar
-                            </button>
-                            <button 
-                                type="submit" 
-                                disabled={savingAgreement || parsing || uploadedItems.length === 0}
-                                style={{ 
-                                    flex: 2, 
-                                    padding: '10px', 
-                                    borderRadius: THEME.radius.md, 
-                                    border: 'none', 
-                                    backgroundColor: (uploadedItems.length === 0 || savingAgreement) ? '#CBD5E1' : THEME.colors.primary, 
-                                    color: 'white', 
-                                    fontWeight: 'bold',
-                                    cursor: (uploadedItems.length === 0 || savingAgreement) ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {savingAgreement ? 'Guardando...' : 'Crear Acuerdo'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            {/* EDIT AGREEMENT MODAL */}
-            {isEditModalOpen && editingAgreement && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-                    <div style={{ 
-                        backgroundColor: 'white', 
-                        borderRadius: THEME.radius.lg, 
-                        width: '95%', 
-                        maxWidth: '540px', 
-                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', 
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        maxHeight: '90vh'
-                    }}>
-                        {/* Modal Header */}
-                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain }}>
-                                {editStep === 1 && `Modificar Acuerdo ${formatAgreementNumber(editingAgreement.quote_number, editingAgreement.created_at)}`}
-                                {editStep === 2 && '⚠️ Confirmación de Modificación (Paso 1/2)'}
-                                {editStep === 3 && '🛑 Confirmación de Seguridad (Paso 2/2)'}
-                            </h3>
-                            <button 
-                                type="button"
-                                onClick={() => setIsEditModalOpen(false)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary }}
+                                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#64748B' }}
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {editStep === 1 && (
-                            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                {/* Client Info Block */}
-                                <div style={{ backgroundColor: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                    <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase', marginBottom: '4px' }}>Cliente B2B Asociado:</span>
-                                    <strong style={{ display: 'block', fontSize: '0.95rem', color: THEME.colors.textMain }}>
-                                        {editingAgreement.profiles?.company_name || editingAgreement.client_name}
-                                    </strong>
-                                    {editingAgreement.profiles?.nit && (
-                                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
-                                            NIT: {editingAgreement.profiles.nit}
-                                        </span>
-                                    )}
-                                </div>
+                        {/* Stepper Navigation Bar */}
+                        <div style={{ display: 'flex', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: '#FFFFFF' }}>
+                            {[
+                                { step: 1, label: '1. Cliente Institucional', desc: 'Selección y verificación' },
+                                { step: 2, label: '2. Vigencia & Duración', desc: 'Plazo y vencimiento' },
+                                { step: 3, label: '3. Carga de Precios', desc: 'Excel y pre-validación' }
+                            ].map(s => {
+                                const isActive = createStep === s.step;
+                                const isPassed = createStep > s.step;
+                                const canClick = s.step < createStep || (s.step === 2 && !!selectedClientId) || (s.step === 3 && !!selectedClientId);
 
-                                {/* Start Date & Duration */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Fecha de Inicio:</label>
-                                        <input 
-                                            type="date" 
-                                            required
-                                            value={editStartDate} 
-                                            onChange={(e) => setEditStartDate(e.target.value)}
-                                            style={{ 
-                                                width: '100%', 
-                                                padding: '10px', 
-                                                borderRadius: '8px', 
-                                                border: `1px solid #CBD5E1`,
-                                                fontSize: '0.85rem'
-                                            }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>Duración:</label>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <input 
-                                                type="number"
-                                                min="1"
-                                                required
-                                                value={editDurationValue}
-                                                onChange={(e) => setEditDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
-                                                style={{ 
-                                                    width: '80px', 
-                                                    padding: '10px', 
-                                                    borderRadius: '8px', 
-                                                    border: `1px solid #CBD5E1`,
-                                                    fontSize: '0.85rem',
-                                                    textAlign: 'center'
-                                                }}
-                                            />
-                                            <select
-                                                value={editDurationUnit}
-                                                onChange={(e) => setEditDurationUnit(e.target.value)}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '10px',
-                                                    borderRadius: '8px',
-                                                    border: `1px solid #CBD5E1`,
-                                                    fontSize: '0.85rem'
-                                                }}
-                                            >
-                                                <option value="days">Días</option>
-                                                <option value="weeks">Semanas</option>
-                                                <option value="months">Meses</option>
-                                                <option value="years">Años</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Dynamic Expiration Preview */}
-                                {(() => {
-                                    const expiry = new Date(editStartDate + 'T12:00:00');
-                                    if (editDurationUnit === 'days') {
-                                        expiry.setDate(expiry.getDate() + editDurationValue);
-                                    } else if (editDurationUnit === 'weeks') {
-                                        expiry.setDate(expiry.getDate() + editDurationValue * 7);
-                                    } else if (editDurationUnit === 'months') {
-                                        expiry.setMonth(expiry.getMonth() + editDurationValue);
-                                    } else if (editDurationUnit === 'years') {
-                                        expiry.setFullYear(expiry.getFullYear() + editDurationValue);
-                                    }
-                                    const formattedExpiry = expiry.toLocaleDateString('es-ES', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric'
-                                    });
-                                    return (
-                                        <div style={{ 
-                                            fontSize: '0.8rem', 
-                                            color: '#64748B',
+                                return (
+                                    <div 
+                                        key={s.step}
+                                        onClick={() => {
+                                            if (canClick) setCreateStep(s.step as 1 | 2 | 3);
+                                        }}
+                                        style={{
+                                            flex: 1,
+                                            padding: '0.9rem 1.25rem',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '6px',
-                                            backgroundColor: '#F0FDF4',
-                                            padding: '10px 14px',
-                                            borderRadius: '8px',
-                                            border: '1px solid #DCFCE7'
+                                            gap: '12px',
+                                            borderBottom: isActive ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                            backgroundColor: isActive ? '#F0FDF4' : 'transparent',
+                                            cursor: canClick ? 'pointer' : 'not-allowed',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '28px',
+                                            height: '28px',
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 'bold',
+                                            backgroundColor: isPassed ? THEME.colors.primary : isActive ? THEME.colors.primary : '#E2E8F0',
+                                            color: (isPassed || isActive) ? 'white' : '#64748B'
                                         }}>
-                                            <span>📅 Nueva fecha de vencimiento:</span>
-                                            <strong style={{ color: '#0D7A57' }}>{formattedExpiry}</strong>
+                                            {isPassed ? <Check size={14} strokeWidth={3} /> : s.step}
                                         </div>
-                                    );
-                                })()}
+                                        <div style={{ textAlign: 'left' }}>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: isActive ? '700' : '600', color: isActive ? THEME.colors.primary : THEME.colors.textMain }}>
+                                                {s.label}
+                                            </div>
+                                            <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>
+                                                {s.desc}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
 
-                                {/* Excel File Upload (Optional) */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' }}>Actualizar Precios (Opcional):</span>
+                        {/* Modal Body */}
+                        <div style={{ padding: '1.75rem 2rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
+                            
+                            {/* ================= STEP 1: CLIENT SELECTION (CASAS MATRICES ONLY) ================= */}
+                            {createStep === 1 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                                        <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', color: THEME.colors.textMain, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Building2 size={18} color="#0D7A57" /> Paso 1: Selecciona la Casa Matriz B2B
+                                        </h4>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>
+                                            Los acuerdos comerciales institucionales se definen a nivel de <strong>Casa Matriz</strong> y sus precios congelados aplican a todas sus sucursales.
+                                        </p>
+                                    </div>
+
+                                    {/* If NO client selected yet: show search bar and immediate live list */}
+                                    {!selectedClientId ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>
+                                                Buscar Casa Matriz por Nombre o NIT:
+                                            </label>
+                                            
+                                            <div style={{ position: 'relative' }}>
+                                                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                                <input 
+                                                    type="text"
+                                                    autoFocus
+                                                    placeholder="Escribe para buscar... ej: Aldimark, ECCI, Lao Kao, Colsubsidio..."
+                                                    value={clientSearchQuery}
+                                                    onChange={(e) => setClientSearchQuery(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '12px 38px 12px 42px',
+                                                        borderRadius: '10px',
+                                                        border: `1.5px solid ${clientSearchQuery ? THEME.colors.primary : '#CBD5E1'}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: '600',
+                                                        color: THEME.colors.textMain,
+                                                        outline: 'none',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                                    }}
+                                                />
+                                                {clientSearchQuery && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setClientSearchQuery('')}
+                                                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Live List of Casas Matrices */}
+                                            <div style={{
+                                                maxHeight: '280px',
+                                                overflowY: 'auto',
+                                                border: '1.5px solid #E2E8F0',
+                                                borderRadius: '10px',
+                                                backgroundColor: '#FFFFFF',
+                                                display: 'flex',
+                                                flexDirection: 'column'
+                                            }}>
+                                                {filteredB2bClients.length === 0 ? (
+                                                    <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#64748B' }}>
+                                                        <Building2 size={32} style={{ margin: '0 auto 8px auto', color: '#CBD5E1' }} />
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#475569' }}>
+                                                            No se encontraron Casas Matrices con "{clientSearchQuery}"
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '4px' }}>
+                                                            Solo se muestran Casas Matrices principales (las sucursales heredan el acuerdo de su matriz).
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    filteredB2bClients.map((c) => (
+                                                        <div
+                                                            key={c.id}
+                                                            onClick={() => {
+                                                                setSelectedClientId(c.id);
+                                                                setClientSearchQuery('');
+                                                            }}
+                                                            style={{
+                                                                padding: '12px 16px',
+                                                                borderBottom: '1px solid #F1F5F9',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                transition: 'all 0.15s ease'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F0FDF4'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369A1', flexShrink: 0 }}>
+                                                                    <Building2 size={18} />
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1E293B' }}>
+                                                                        {c.company_name}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                                                                        {c.nit && <span>NIT: <strong>{c.nit}</strong></span>}
+                                                                        {c.contact_name && c.contact_name !== c.company_name && <span>• Contacto: {c.contact_name}</span>}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0369A1', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
+                                                                </span>
+                                                                <ChevronRight size={16} color="#94A3B8" />
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Selected Casa Matriz Card */
+                                        (() => {
+                                            const selectedClient = b2bClients.find(c => c.id === selectedClientId);
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                                    <div style={{
+                                                        backgroundColor: '#F0FDF4',
+                                                        border: '2px solid #0D7A57',
+                                                        borderRadius: '12px',
+                                                        padding: '1.25rem 1.5rem',
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        gap: '1rem',
+                                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.08)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                                            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A57', flexShrink: 0 }}>
+                                                                <Building2 size={24} strokeWidth={2.2} />
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span style={{ fontSize: '0.7rem', color: '#15803D', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <Check size={13} strokeWidth={2.5} /> Casa Matriz Verificada
+                                                                    </span>
+                                                                    {selectedClient?.branchCount !== undefined && selectedClient.branchCount > 0 && (
+                                                                        <span style={{ fontSize: '0.65rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                                                                            {selectedClient.branchCount} {selectedClient.branchCount === 1 ? 'sucursal vinculada' : 'sucursales vinculadas'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#064E3B', marginTop: '2px' }}>
+                                                                    {selectedClient?.company_name || 'Cliente B2B'}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
+                                                                    {selectedClient?.nit ? `NIT: ${selectedClient.nit}` : ''} {selectedClient?.phone ? `• Tel: ${selectedClient.phone}` : ''}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedClientId('');
+                                                                setClientSearchQuery('');
+                                                            }}
+                                                            style={{
+                                                                padding: '8px 14px',
+                                                                borderRadius: '8px',
+                                                                border: '1.5px solid #CBD5E1',
+                                                                backgroundColor: '#FFFFFF',
+                                                                color: '#475569',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px'
+                                                            }}
+                                                        >
+                                                            <RefreshCw size={13} /> Cambiar de Cliente
+                                                        </button>
+                                                    </div>
+
+                                                    {/* ACTIVE AGREEMENT STATUS OR SUCCESS CONFIRMATION */}
+                                                    {(() => {
+                                                        const activeAgreement = agreements.find(a => 
+                                                            a.client_id === selectedClientId && 
+                                                            getAgreementStatus(a.valid_until).label === 'Vigente'
+                                                        );
+
+                                                        if (activeAgreement) {
+                                                            const itemsCount = (activeAgreement as any).items?.length || (activeAgreement as any).quote_items?.length || 0;
+                                                            
+                                                            // Format start date with created_at fallback
+                                                            const rawStartDate = activeAgreement.start_date || activeAgreement.created_at;
+                                                            const startDateFormatted = rawStartDate 
+                                                                ? new Date(rawStartDate.includes('T') ? rawStartDate : rawStartDate + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                : 'Inicial';
+
+                                                            // Format expiration date
+                                                            const validUntilFormatted = activeAgreement.valid_until 
+                                                                ? new Date(activeAgreement.valid_until.includes('T') ? activeAgreement.valid_until : activeAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                : 'Indefinida (Sin fecha límite)';
+
+                                                            return (
+                                                                <div style={{ 
+                                                                    backgroundColor: '#FFFBEB', 
+                                                                    border: '1.5px solid #FCD34D', 
+                                                                    borderRadius: '12px', 
+                                                                    padding: '1.25rem', 
+                                                                    display: 'flex', 
+                                                                    gap: '14px', 
+                                                                    alignItems: 'flex-start',
+                                                                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)'
+                                                                }}>
+                                                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                        <AlertTriangle size={22} color="#D97706" />
+                                                                    </div>
+                                                                    <div style={{ flex: 1 }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                            <strong style={{ color: '#92400E', fontSize: '0.95rem' }}>
+                                                                                Advertencia: Esta Casa Matriz ya tiene un Acuerdo Comercial Vigente
+                                                                            </strong>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', color: '#B45309', fontWeight: 'bold', border: '1px solid #FDE68A' }}>
+                                                                                {formatAgreementNumber(activeAgreement.quote_number, activeAgreement.created_at)}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p style={{ margin: '6px 0 0', color: '#78350F', fontSize: '0.82rem', lineHeight: '1.4' }}>
+                                                                            Actualmente tiene tarifas congeladas válidas desde el <strong>{startDateFormatted}</strong> hasta el <strong>{validUntilFormatted}</strong> ({itemsCount} productos registrados).
+                                                                        </p>
+                                                                        <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: '6px', fontSize: '0.75rem', color: '#92400E', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                            <Info size={14} style={{ flexShrink: 0 }} />
+                                                                            <span>Si continúas creando este nuevo acuerdo, el anterior pasará automáticamente a estado <strong>Vencido / Sustituido</strong>.</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        } else {
+                                                            return (
+                                                                <div style={{ 
+                                                                    backgroundColor: '#F0FDF4', 
+                                                                    border: '1px solid #BBF7D0', 
+                                                                    borderRadius: '10px', 
+                                                                    padding: '0.9rem 1.25rem', 
+                                                                    display: 'flex', 
+                                                                    gap: '10px', 
+                                                                    alignItems: 'center' 
+                                                                }}>
+                                                                    <CheckCircle2 size={18} color="#16A34A" />
+                                                                    <span style={{ fontSize: '0.82rem', color: '#166534', fontWeight: '600' }}>
+                                                                        Casa Matriz verificada sin acuerdos comerciales vigentes previos. Lista para configurar vigencia y precios.
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                    })()}
+                                                </div>
+                                            );
+                                        })()
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ================= STEP 2: DATES & DURATION ================= */}
+                            {createStep === 2 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Cliente Seleccionado:</span>
+                                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                                {b2bClients.find(c => c.id === selectedClientId)?.company_name}
+                                            </div>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setCreateStep(1)}
+                                            style={{ background: 'none', border: '1px solid #CBD5E1', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', cursor: 'pointer' }}
+                                        >
+                                            Cambiar Cliente
+                                        </button>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1.5rem', marginTop: '4px' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>
+                                                Fecha de Inicio del Acuerdo:
+                                            </label>
+                                            <input 
+                                                type="date" 
+                                                required
+                                                value={startDate} 
+                                                onChange={(e) => setStartDate(e.target.value)}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '12px', 
+                                                    borderRadius: '10px', 
+                                                    border: `1.5px solid ${THEME.colors.border}`,
+                                                    fontSize: '0.9rem',
+                                                    fontWeight: 'bold',
+                                                    color: THEME.colors.textMain
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase' }}>
+                                                Duración de Tarifas Congeladas:
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <input 
+                                                    type="number"
+                                                    min="1"
+                                                    required
+                                                    value={durationValue}
+                                                    onChange={(e) => setDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    style={{ 
+                                                        width: '100px', 
+                                                        padding: '12px', 
+                                                        borderRadius: '10px', 
+                                                        border: `1.5px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.95rem',
+                                                        fontWeight: 'bold',
+                                                        textAlign: 'center',
+                                                        color: THEME.colors.textMain
+                                                    }}
+                                                />
+                                                <select
+                                                    value={durationUnit}
+                                                    onChange={(e) => setDurationUnit(e.target.value)}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '12px',
+                                                        borderRadius: '10px',
+                                                        border: `1.5px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 'bold',
+                                                        color: THEME.colors.textMain,
+                                                        backgroundColor: 'white'
+                                                    }}
+                                                >
+                                                    <option value="days">Días</option>
+                                                    <option value="weeks">Semanas</option>
+                                                    <option value="months">Meses</option>
+                                                    <option value="years">Años</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {(() => {
+                                        const expiry = new Date(startDate + 'T12:00:00');
+                                        if (durationUnit === 'days') {
+                                            expiry.setDate(expiry.getDate() + durationValue);
+                                        } else if (durationUnit === 'weeks') {
+                                            expiry.setDate(expiry.getDate() + durationValue * 7);
+                                        } else if (durationUnit === 'months') {
+                                            expiry.setMonth(expiry.getMonth() + durationValue);
+                                        } else if (durationUnit === 'years') {
+                                            expiry.setFullYear(expiry.getFullYear() + durationValue);
+                                        }
+                                        const formattedExpiry = expiry.toLocaleDateString('es-CO', {
+                                            weekday: 'long',
+                                            day: 'numeric',
+                                            month: 'long',
+                                            year: 'numeric'
+                                        });
+                                        return (
+                                            <div style={{ 
+                                                marginTop: '6px', 
+                                                padding: '14px 18px', 
+                                                backgroundColor: '#EFF6FF', 
+                                                border: '1.5px solid #BFDBFE', 
+                                                borderRadius: '10px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px'
+                                            }}>
+                                                <Calendar size={22} color="#2563EB" />
+                                                <div>
+                                                    <span style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Vigencia Calculada:</span>
+                                                    <strong style={{ color: '#1E3A8A', fontSize: '0.95rem', textTransform: 'capitalize' }}>
+                                                        Vence el {formattedExpiry}
+                                                    </strong>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+
+                            {/* ================= STEP 3: EXCEL UPLOAD & LIVE PRE-VALIDATION ================= */}
+                            {createStep === 3 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    {/* Action bar and instructions */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                        <div>
+                                            <h4 style={{ margin: '0 0 2px', fontSize: '0.9rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                Paso 3: Carga Masiva de Precios por Accounting ID
+                                            </h4>
+                                            <p style={{ margin: 0, fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                                El sistema cruzará automáticamente los códigos contables con el catálogo y calculará los márgenes brutos.
+                                            </p>
+                                        </div>
                                         <button
                                             type="button"
                                             onClick={downloadTemplate}
                                             style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                color: '#0D7A57',
-                                                fontSize: '0.75rem',
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '8px',
+                                                border: `1.5px solid ${THEME.colors.primary}`,
+                                                backgroundColor: THEME.colors.primaryLight,
+                                                color: THEME.colors.primary,
+                                                fontSize: '0.8rem',
                                                 fontWeight: 'bold',
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '4px'
+                                                gap: '6px'
                                             }}
                                         >
-                                            <Download size={12} /> Descargar Planilla Vacía
+                                            <Download size={14} /> Descargar Plantilla Oficial (.xlsx)
                                         </button>
                                     </div>
-                                    
-                                    <p style={{ margin: '0 0 10px 0', fontSize: '0.75rem', color: '#64748B', lineHeight: '1.4' }}>
-                                        Sube un nuevo Excel si deseas reemplazar la lista de precios congelados actual. Si lo dejas vacío, se mantendrán los mismos precios que tiene el acuerdo actualmente.
+
+                                    {/* Drag-drop or File Input */}
+                                    <div style={{
+                                        border: `2px dashed ${parsedFile ? THEME.colors.primary : '#CBD5E1'}`,
+                                        backgroundColor: parsedFile ? '#F0FDF4' : '#F8FAFC',
+                                        borderRadius: '12px',
+                                        padding: parsedFile ? '1rem 1.5rem' : '1.75rem',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        transition: 'all 0.2s'
+                                    }}>
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx, .xls"
+                                            onChange={handleFileUpload}
+                                            style={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                opacity: 0,
+                                                cursor: 'pointer'
+                                            }}
+                                        />
+                                        <UploadCloud size={parsedFile ? 26 : 34} style={{ color: parsedFile ? THEME.colors.primary : '#94A3B8', margin: '0 auto 6px auto' }} />
+                                        {parsedFile ? (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ textAlign: 'left' }}>
+                                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <FileText size={16} color={THEME.colors.primary} /> {parsedFile.name}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
+                                                        Tamaño: {Math.round(parsedFile.size / 1024)} KB — Haz clic o arrastra otro archivo para reemplazarlo
+                                                    </div>
+                                                </div>
+                                                <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '20px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Check size={13} strokeWidth={2.5} /> Archivo Analizado
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                                    Arrastra y suelta tu archivo Excel de Tarifas aquí, o haz clic para examinar
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '4px' }}>
+                                                    Columnas requeridas: <strong>ID Producto (Accounting ID)</strong> y <strong>Precio Acordado</strong>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* PREVIEW & PRE-VALIDATION SECTION */}
+                                    {excelPreviewData && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '4px' }}>
+                                            {/* Header with Collapsible Toggle */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    Resumen de Validación y Tarifas
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsKpiCollapsed(!isKpiCollapsed)}
+                                                    style={{
+                                                        backgroundColor: isKpiCollapsed ? '#E0F2FE' : '#F1F5F9',
+                                                        border: `1px solid ${isKpiCollapsed ? '#BAE6FD' : '#CBD5E1'}`,
+                                                        borderRadius: '6px',
+                                                        padding: '4px 10px',
+                                                        color: isKpiCollapsed ? '#0369A1' : '#475569',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                >
+                                                    {isKpiCollapsed ? (
+                                                        <><ChevronDown size={14} /> Mostrar Métricas Detalladas</>
+                                                    ) : (
+                                                        <><ChevronUp size={14} /> Colapsar para más espacio</>
+                                                    )}
+                                                </button>
+                                            </div>
+
+                                            {/* KPI Section: Full Cards OR Compact Summary Strip */}
+                                            {!isKpiCollapsed ? (
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                                    <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas Excel</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
+                                                            {excelPreviewData.items.length}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ backgroundColor: '#F0FDF4', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>En Catálogo (OK)</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#16A34A', marginTop: '2px' }}>
+                                                            {excelPreviewData.matchedCount}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ backgroundColor: excelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${excelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
+                                                        <span style={{ fontSize: '0.68rem', color: excelPreviewData.unmatchedCount > 0 ? '#991B1B' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Reconocidos</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: excelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', marginTop: '2px' }}>
+                                                            {excelPreviewData.unmatchedCount}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ backgroundColor: '#EFF6FF', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#1E40AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Margen Promedio</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: excelPreviewData.avgMargin >= 50 ? '#059669' : excelPreviewData.avgMargin >= 20 ? '#D97706' : '#DC2626', marginTop: '2px' }}>
+                                                            {excelPreviewData.avgMargin}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'space-between',
+                                                    padding: '8px 14px', 
+                                                    backgroundColor: '#F8FAFC', 
+                                                    borderRadius: '8px', 
+                                                    border: '1px solid #E2E8F0',
+                                                    fontSize: '0.8rem'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                        <span><strong>{excelPreviewData.items.length}</strong> Filas</span>
+                                                        <span style={{ color: '#166534', fontWeight: 'bold' }}>✓ {excelPreviewData.matchedCount} En Catálogo</span>
+                                                        {excelPreviewData.unmatchedCount > 0 ? (
+                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}>⚠️ {excelPreviewData.unmatchedCount} No Reconocidos</span>
+                                                        ) : (
+                                                            <span style={{ color: '#64748B' }}>0 No reconocidos</span>
+                                                        )}
+                                                        <span>Margen Prom.: <strong style={{ color: excelPreviewData.avgMargin >= 50 ? '#059669' : excelPreviewData.avgMargin >= 20 ? '#D97706' : '#DC2626' }}>{excelPreviewData.avgMargin}%</strong></span>
+                                                    </div>
+                                                    <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                        (Vista compacta activada)
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Preview Search & Filter toolbar */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    {(['all', 'matched', 'unmatched'] as const).map(flt => (
+                                                        <button
+                                                            key={flt}
+                                                            type="button"
+                                                            onClick={() => setExcelPreviewFilter(flt)}
+                                                            style={{
+                                                                padding: '4px 10px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                backgroundColor: excelPreviewFilter === flt ? THEME.colors.primary : '#E2E8F0',
+                                                                color: excelPreviewFilter === flt ? 'white' : '#475569'
+                                                            }}
+                                                        >
+                                                            {flt === 'all' && `Todos (${excelPreviewData.items.length})`}
+                                                            {flt === 'matched' && `Reconocidos (${excelPreviewData.matchedCount})`}
+                                                            {flt === 'unmatched' && `No Reconocidos (${excelPreviewData.unmatchedCount})`}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div style={{ position: 'relative', width: '240px' }}>
+                                                    <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Filtrar por código o nombre..."
+                                                        value={excelPreviewSearch}
+                                                        onChange={(e) => setExcelPreviewSearch(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '6px 8px 6px 28px',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #CBD5E1',
+                                                            fontSize: '0.75rem',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Preview Table with Expanded Height and Sticky Headers */}
+                                            <div style={{ 
+                                                maxHeight: isKpiCollapsed ? '460px' : '320px', 
+                                                overflowY: 'auto', 
+                                                border: '1.5px solid #E2E8F0', 
+                                                borderRadius: '8px',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                transition: 'max-height 0.25s ease'
+                                            }}>
+                                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
+                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                                        <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Accounting ID</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Producto en Archivo</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Match en Catálogo</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Costo Base FruFresco</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Precio Acordado</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Margen %</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Estado</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {excelPreviewData.items
+                                                            .filter(item => {
+                                                                if (excelPreviewFilter === 'matched' && !item.matched_product) return false;
+                                                                if (excelPreviewFilter === 'unmatched' && item.matched_product) return false;
+                                                                if (!excelPreviewSearch.trim()) return true;
+                                                                const q = excelPreviewSearch.toLowerCase().trim();
+                                                                return (
+                                                                    item.accounting_id.toLowerCase().includes(q) ||
+                                                                    item.product_name.toLowerCase().includes(q) ||
+                                                                    (item.matched_product?.name || '').toLowerCase().includes(q)
+                                                                );
+                                                            })
+                                                            .map((item, idx) => (
+                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#334155' }}>
+                                                                        {item.accounting_id}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', color: '#1E293B' }}>
+                                                                        {item.product_name}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', fontWeight: item.matched_product ? '600' : 'normal', color: item.matched_product ? THEME.colors.primary : '#EF4444' }}>
+                                                                        {item.matched_product ? item.matched_product.name : '— No encontrado en catálogo —'}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'right', color: '#64748B' }}>
+                                                                        {item.matched_product ? formatMoney(item.cost_basis) : '—'}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'bold', color: THEME.colors.primary }}>
+                                                                        {formatMoney(item.unit_price)}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 'bold', color: item.margin_percent >= 50 ? '#059669' : item.margin_percent >= 20 ? '#D97706' : '#DC2626' }}>
+                                                                        {item.matched_product ? `${item.margin_percent}%` : '—'}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                                                        {item.matched_product ? (
+                                                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#DCFCE7', color: '#15803D', fontWeight: 'bold' }}>
+                                                                                OK
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
+                                                                                Omitir
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer - Step Navigation Buttons */}
+                        <div style={{ padding: '1.25rem 2rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
+                            <div>
+                                {createStep > 1 ? (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setCreateStep((createStep - 1) as 1 | 2)}
+                                        style={{ 
+                                            padding: '10px 18px', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1px solid ${THEME.colors.borderActive}`, 
+                                            backgroundColor: 'white', 
+                                            color: '#334155',
+                                            fontWeight: 'bold',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <ArrowLeft size={16} /> Anterior
+                                    </button>
+                                ) : (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            setIsCreateModalOpen(false);
+                                            setSelectedClientId('');
+                                            setParsedFile(null);
+                                            setUploadedItems([]);
+                                            setExcelPreviewData(null);
+                                        }} 
+                                        style={{ 
+                                            padding: '10px 18px', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1px solid ${THEME.colors.borderActive}`, 
+                                            backgroundColor: 'white', 
+                                            color: '#64748B',
+                                            fontWeight: 'bold',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer' 
+                                        }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                {createStep === 1 && (
+                                    <button 
+                                        type="button"
+                                        disabled={!selectedClientId}
+                                        onClick={() => setCreateStep(2)}
+                                        style={{ 
+                                            padding: '10px 22px', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: 'none', 
+                                            backgroundColor: !selectedClientId ? '#CBD5E1' : THEME.colors.primary, 
+                                            color: 'white', 
+                                            fontWeight: 'bold',
+                                            fontSize: '0.85rem',
+                                            cursor: !selectedClientId ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: !selectedClientId ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                        }}
+                                    >
+                                        Continuar a Vigencia <ArrowRight size={16} />
+                                    </button>
+                                )}
+
+                                {createStep === 2 && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setCreateStep(3)}
+                                        style={{ 
+                                            padding: '10px 22px', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: 'none', 
+                                            backgroundColor: THEME.colors.primary, 
+                                            color: 'white', 
+                                            fontWeight: 'bold',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                        }}
+                                    >
+                                        Continuar a Carga de Precios <ArrowRight size={16} />
+                                    </button>
+                                )}
+
+                                {createStep === 3 && (
+                                    <button 
+                                        type="submit" 
+                                        disabled={savingAgreement || parsing || uploadedItems.length === 0 || (excelPreviewData?.matchedCount === 0)}
+                                        style={{ 
+                                            padding: '10px 24px', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: 'none', 
+                                            backgroundColor: (uploadedItems.length === 0 || savingAgreement || excelPreviewData?.matchedCount === 0) ? '#CBD5E1' : THEME.colors.primary, 
+                                            color: 'white', 
+                                            fontWeight: 'bold',
+                                            fontSize: '0.85rem',
+                                            cursor: (uploadedItems.length === 0 || savingAgreement || excelPreviewData?.matchedCount === 0) ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: (uploadedItems.length === 0 || savingAgreement) ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                        }}
+                                    >
+                                        {savingAgreement ? (
+                                            <>Guardando Acuerdo...</>
+                                        ) : (
+                                            <>
+                                                <Check size={16} strokeWidth={2.5} /> Crear y Activar Acuerdo Comercial
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* EDIT AGREEMENT MODAL (WIDE 3-STEP WIZARD) */}
+            {isEditModalOpen && editingAgreement && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                    <div style={{ 
+                        backgroundColor: 'white', 
+                        borderRadius: '16px', 
+                        width: '95%', 
+                        maxWidth: '900px', 
+                        boxShadow: '0 25px 60px -15px rgba(0,0,0,0.3)', 
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        maxHeight: '92vh',
+                        border: `1px solid ${THEME.colors.border}`
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{ padding: '1.25rem 1.75rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                    <Edit3 size={20} strokeWidth={2.2} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <h3 style={{ margin: 0, fontWeight: '900', color: THEME.colors.textMain, fontSize: '1.15rem' }}>
+                                            Modificar Acuerdo Comercial
+                                        </h3>
+                                        <span style={{ 
+                                            fontFamily: 'monospace', 
+                                            fontSize: '0.75rem', 
+                                            backgroundColor: '#E2E8F0', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '6px', 
+                                            fontWeight: 'bold', 
+                                            color: '#334155' 
+                                        }}>
+                                            {formatAgreementNumber(editingAgreement.quote_number, editingAgreement.created_at)}
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
+                                        Cliente: <strong>{editingAgreement.profiles?.company_name || editingAgreement.client_name}</strong>
                                     </p>
+                                </div>
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => setIsEditModalOpen(false)} 
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', padding: '6px', borderRadius: '50%' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* STEP PROGRESS BAR */}
+                        <div style={{ display: 'flex', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: '#FFFFFF' }}>
+                            {[
+                                { step: 1, title: '1. Vigencia & Fechas', desc: 'Plazos de contrato' },
+                                { step: 2, title: '2. Lista de Precios', desc: 'Catálogo o Excel' },
+                                { step: 3, title: '3. Confirmación', desc: 'Validación de cambios' },
+                            ].map(s => {
+                                const isCurrent = editStep === s.step;
+                                const isDone = editStep > s.step;
+                                return (
+                                    <div 
+                                        key={s.step} 
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: '0.75rem 1.25rem', 
+                                            borderBottom: isCurrent ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                                            backgroundColor: isCurrent ? '#F0FDF4' : 'transparent',
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '10px',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <div style={{ 
+                                            width: '24px', 
+                                            height: '24px', 
+                                            borderRadius: '50%', 
+                                            backgroundColor: isDone ? THEME.colors.primary : isCurrent ? THEME.colors.primaryLight : '#E2E8F0',
+                                            color: isDone ? 'white' : isCurrent ? THEME.colors.primary : '#64748B',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            {isDone ? <Check size={14} strokeWidth={3} /> : s.step}
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: isCurrent ? 'bold' : '600', color: isCurrent ? THEME.colors.primary : THEME.colors.textMain }}>
+                                                {s.title}
+                                            </div>
+                                            <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary }}>
+                                                {s.desc}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* STEP CONTENT CONTAINER */}
+                        <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            
+                            {/* ================= STEP 1: VIGENCIA & DATES ================= */}
+                            {editStep === 1 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    {/* Client details card */}
+                                    <div style={{ 
+                                        backgroundColor: '#F8FAFC', 
+                                        border: '1.5px solid #E2E8F0', 
+                                        borderRadius: '12px', 
+                                        padding: '1.25rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '1rem'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
+                                                <Building2 size={22} />
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Cliente B2B Vinculado:</span>
+                                                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
+                                                    {editingAgreement.profiles?.company_name || editingAgreement.client_name}
+                                                </div>
+                                                {editingAgreement.profiles?.nit && (
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>
+                                                        NIT: {editingAgreement.profiles.nit} {editingAgreement.profiles?.phone ? `• Tel: ${editingAgreement.profiles.phone}` : ''}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0369A1', fontWeight: 'bold' }}>
+                                            Acuerdo Registrado
+                                        </span>
+                                    </div>
+
+                                    {/* Date and Duration Controls */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1.25rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>
+                                                Fecha de Inicio del Acuerdo:
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <Calendar size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                                <input 
+                                                    type="date" 
+                                                    required
+                                                    value={editStartDate} 
+                                                    onChange={(e) => setEditStartDate(e.target.value)}
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        padding: '12px 12px 12px 38px', 
+                                                        borderRadius: '10px', 
+                                                        border: `1.5px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 'bold',
+                                                        color: THEME.colors.textMain,
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>
+                                                Duración de la Vigencia:
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    required
+                                                    value={editDurationValue}
+                                                    onChange={(e) => setEditDurationValue(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    style={{ 
+                                                        width: '90px', 
+                                                        padding: '12px', 
+                                                        borderRadius: '10px', 
+                                                        border: `1.5px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 'bold',
+                                                        color: THEME.colors.textMain,
+                                                        textAlign: 'center',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                                <select
+                                                    value={editDurationUnit}
+                                                    onChange={(e) => setEditDurationUnit(e.target.value)}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '12px',
+                                                        borderRadius: '10px',
+                                                        border: `1.5px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 'bold',
+                                                        color: THEME.colors.textMain,
+                                                        backgroundColor: 'white'
+                                                    }}
+                                                >
+                                                    <option value="days">Días</option>
+                                                    <option value="weeks">Semanas</option>
+                                                    <option value="months">Meses</option>
+                                                    <option value="years">Años</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Dynamic Expiration Card */}
+                                    {(() => {
+                                        const expiry = new Date(editStartDate + 'T12:00:00');
+                                        if (editDurationUnit === 'days') {
+                                            expiry.setDate(expiry.getDate() + editDurationValue);
+                                        } else if (editDurationUnit === 'weeks') {
+                                            expiry.setDate(expiry.getDate() + editDurationValue * 7);
+                                        } else if (editDurationUnit === 'months') {
+                                            expiry.setMonth(expiry.getMonth() + editDurationValue);
+                                        } else if (editDurationUnit === 'years') {
+                                            expiry.setFullYear(expiry.getFullYear() + editDurationValue);
+                                        }
+                                        const formattedExpiry = expiry.toLocaleDateString('es-CO', {
+                                            weekday: 'long',
+                                            day: 'numeric',
+                                            month: 'long',
+                                            year: 'numeric'
+                                        });
+                                        return (
+                                            <div style={{ 
+                                                padding: '14px 18px', 
+                                                backgroundColor: '#EFF6FF', 
+                                                border: '1.5px solid #BFDBFE', 
+                                                borderRadius: '10px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px'
+                                            }}>
+                                                <Calendar size={22} color="#2563EB" />
+                                                <div>
+                                                    <span style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Vigencia Calculada:</span>
+                                                    <strong style={{ color: '#1E3A8A', fontSize: '0.95rem', textTransform: 'capitalize' }}>
+                                                        Vence el {formattedExpiry}
+                                                    </strong>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+
+                            {/* ================= STEP 2: PRICE LIST & EXCEL UPLOAD ================= */}
+                            {editStep === 2 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    {/* Toolbar */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                        <div>
+                                            <h4 style={{ margin: '0 0 2px', fontSize: '0.9rem', color: THEME.colors.textMain, fontWeight: '700' }}>
+                                                Paso 2: Actualización de Precios Acordados (Opcional)
+                                            </h4>
+                                            <p style={{ margin: 0, fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                                Puedes mantener la lista de precios actual o subir un archivo Excel para reemplazarla completamente.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={downloadTemplate}
+                                            style={{
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '8px',
+                                                border: `1.5px solid ${THEME.colors.primary}`,
+                                                backgroundColor: THEME.colors.primaryLight,
+                                                color: THEME.colors.primary,
+                                                fontSize: '0.8rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            <Download size={14} /> Descargar Plantilla Oficial (.xlsx)
+                                        </button>
+                                    </div>
 
                                     {/* Excel Dropzone */}
-                                    <div style={{ position: 'relative' }}>
+                                    <div style={{
+                                        border: `2px dashed ${editParsedFile ? THEME.colors.primary : '#CBD5E1'}`,
+                                        backgroundColor: editParsedFile ? '#F0FDF4' : '#F8FAFC',
+                                        borderRadius: '12px',
+                                        padding: editParsedFile ? '1rem 1.5rem' : '1.75rem',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        transition: 'all 0.2s'
+                                    }}>
                                         <input 
                                             type="file" 
                                             accept=".xlsx, .xls"
@@ -2029,30 +3116,23 @@ export default function CommercialAgreementsModule() {
                                                 position: 'absolute',
                                                 inset: 0,
                                                 opacity: 0,
-                                                cursor: 'pointer',
-                                                zIndex: 10
+                                                cursor: 'pointer'
                                             }}
                                         />
-                                        <div style={{
-                                            border: `2px dashed ${editParsedFile ? '#0D7A57' : '#CBD5E1'}`,
-                                            borderRadius: THEME.radius.md,
-                                            padding: '1.5rem',
-                                            textAlign: 'center',
-                                            backgroundColor: editParsedFile ? '#F0FDF4' : '#F8FAFC',
-                                            transition: 'all 0.2s',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '8px'
-                                        }}>
-                                            <UploadCloud size={32} color={editParsedFile ? '#0D7A57' : '#94A3B8'} />
-                                            {editParsing ? (
-                                                <div style={{ fontSize: '0.85rem', color: '#64748B' }}>Procesando archivo...</div>
-                                            ) : editParsedFile ? (
+                                        <UploadCloud size={editParsedFile ? 26 : 34} style={{ color: editParsedFile ? THEME.colors.primary : '#94A3B8', margin: '0 auto 6px auto' }} />
+                                        {editParsedFile ? (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ textAlign: 'left' }}>
+                                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <FileText size={16} color={THEME.colors.primary} /> {editParsedFile.name}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
+                                                        Tamaño: {Math.round(editParsedFile.size / 1024)} KB — Haz clic o arrastra otro archivo para reemplazarlo
+                                                    </div>
+                                                </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#0D7A57' }}>
-                                                        {editParsedFile.name} ({editUploadedItems.length} productos)
+                                                    <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '20px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <Check size={13} strokeWidth={2.5} /> Archivo Analizado
                                                     </span>
                                                     <button
                                                         type="button"
@@ -2061,192 +3141,474 @@ export default function CommercialAgreementsModule() {
                                                             e.preventDefault();
                                                             setEditParsedFile(null);
                                                             setEditUploadedItems([]);
+                                                            setEditExcelPreviewData(null);
                                                         }}
                                                         style={{
                                                             background: 'none',
                                                             border: 'none',
                                                             color: '#EF4444',
                                                             cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            padding: '2px'
+                                                            padding: '4px'
                                                         }}
                                                     >
-                                                        <Trash2 size={14} />
+                                                        <Trash2 size={16} />
                                                     </button>
                                                 </div>
-                                            ) : (
-                                                <div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: THEME.colors.textMain }}>Selecciona o arrastra tu archivo Excel</div>
-                                                    <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>
-                                                        Dejar en blanco para conservar los precios existentes
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
+                                                    Arrastra y suelta un nuevo archivo Excel aquí para reemplazar tarifas
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '4px' }}>
+                                                    Dejar en blanco para conservar los precios actualmente acordados
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* If NO file uploaded, show info card */}
+                                    {!editExcelPreviewData && (
+                                        <div style={{ 
+                                            padding: '1rem 1.25rem', 
+                                            backgroundColor: '#F0FDF4', 
+                                            border: '1.5px solid #BBF7D0', 
+                                            borderRadius: '10px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px'
+                                        }}>
+                                            <CheckCircle2 size={22} color="#16A34A" />
+                                            <div>
+                                                <strong style={{ color: '#166534', fontSize: '0.85rem', display: 'block' }}>
+                                                    Conservando precios vigentes del acuerdo
+                                                </strong>
+                                                <span style={{ fontSize: '0.75rem', color: '#15803D' }}>
+                                                    No has cargado ningún Excel, por lo que se mantendrán intactos los precios congelados actuales y solo se actualizará la vigencia.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* PREVIEW & PRE-VALIDATION SECTION (When File Uploaded) */}
+                                    {editExcelPreviewData && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '4px' }}>
+                                            {/* Header with Collapsible Toggle */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    Resumen de Validación y Tarifas
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditKpiCollapsed(!isEditKpiCollapsed)}
+                                                    style={{
+                                                        backgroundColor: isEditKpiCollapsed ? '#E0F2FE' : '#F1F5F9',
+                                                        border: `1px solid ${isEditKpiCollapsed ? '#BAE6FD' : '#CBD5E1'}`,
+                                                        borderRadius: '6px',
+                                                        padding: '4px 10px',
+                                                        color: isEditKpiCollapsed ? '#0369A1' : '#475569',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                >
+                                                    {isEditKpiCollapsed ? (
+                                                        <><ChevronDown size={14} /> Mostrar Métricas Detalladas</>
+                                                    ) : (
+                                                        <><ChevronUp size={14} /> Colapsar para más espacio</>
+                                                    )}
+                                                </button>
+                                            </div>
+
+                                            {/* KPI Section: Full Cards OR Compact Summary Strip */}
+                                            {!isEditKpiCollapsed ? (
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                                    <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Filas Excel</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: THEME.colors.textMain, marginTop: '2px' }}>
+                                                            {editExcelPreviewData.items.length}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ backgroundColor: '#F0FDF4', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>En Catálogo (OK)</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#16A34A', marginTop: '2px' }}>
+                                                            {editExcelPreviewData.matchedCount}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ backgroundColor: editExcelPreviewData.unmatchedCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${editExcelPreviewData.unmatchedCount > 0 ? '#FECACA' : '#E2E8F0'}` }}>
+                                                        <span style={{ fontSize: '0.68rem', color: editExcelPreviewData.unmatchedCount > 0 ? '#991B1B' : '#64748B', fontWeight: 'bold', textTransform: 'uppercase' }}>No Reconocidos</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: editExcelPreviewData.unmatchedCount > 0 ? '#DC2626' : '#64748B', marginTop: '2px' }}>
+                                                            {editExcelPreviewData.unmatchedCount}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ backgroundColor: '#EFF6FF', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#1E40AF', fontWeight: 'bold', textTransform: 'uppercase' }}>Margen Promedio</span>
+                                                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: editExcelPreviewData.avgMargin >= 50 ? '#059669' : editExcelPreviewData.avgMargin >= 20 ? '#D97706' : '#DC2626', marginTop: '2px' }}>
+                                                            {editExcelPreviewData.avgMargin}%
+                                                        </div>
                                                     </div>
                                                 </div>
+                                            ) : (
+                                                <div style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'space-between',
+                                                    padding: '8px 14px', 
+                                                    backgroundColor: '#F8FAFC', 
+                                                    borderRadius: '8px', 
+                                                    border: '1px solid #E2E8F0',
+                                                    fontSize: '0.8rem'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                        <span><strong>{editExcelPreviewData.items.length}</strong> Filas</span>
+                                                        <span style={{ color: '#166534', fontWeight: 'bold' }}>✓ {editExcelPreviewData.matchedCount} En Catálogo</span>
+                                                        {editExcelPreviewData.unmatchedCount > 0 ? (
+                                                            <span style={{ color: '#DC2626', fontWeight: 'bold' }}>⚠️ {editExcelPreviewData.unmatchedCount} No Reconocidos</span>
+                                                        ) : (
+                                                            <span style={{ color: '#64748B' }}>0 No reconocidos</span>
+                                                        )}
+                                                        <span>Margen Prom.: <strong style={{ color: editExcelPreviewData.avgMargin >= 50 ? '#059669' : editExcelPreviewData.avgMargin >= 20 ? '#D97706' : '#DC2626' }}>{editExcelPreviewData.avgMargin}%</strong></span>
+                                                    </div>
+                                                    <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                        (Vista compacta activada)
+                                                    </span>
+                                                </div>
                                             )}
+
+                                            {/* Preview Search & Filter toolbar */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', backgroundColor: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    {(['all', 'matched', 'unmatched'] as const).map(flt => (
+                                                        <button
+                                                            key={flt}
+                                                            type="button"
+                                                            onClick={() => setEditExcelPreviewFilter(flt)}
+                                                            style={{
+                                                                padding: '4px 10px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                backgroundColor: editExcelPreviewFilter === flt ? THEME.colors.primary : '#E2E8F0',
+                                                                color: editExcelPreviewFilter === flt ? 'white' : '#475569'
+                                                            }}
+                                                        >
+                                                            {flt === 'all' && `Todos (${editExcelPreviewData.items.length})`}
+                                                            {flt === 'matched' && `Reconocidos (${editExcelPreviewData.matchedCount})`}
+                                                            {flt === 'unmatched' && `No Reconocidos (${editExcelPreviewData.unmatchedCount})`}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div style={{ position: 'relative', width: '240px' }}>
+                                                    <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Filtrar por código o nombre..."
+                                                        value={editExcelPreviewSearch}
+                                                        onChange={(e) => setEditExcelPreviewSearch(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '6px 8px 6px 28px',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #CBD5E1',
+                                                            fontSize: '0.75rem',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Preview Table with Expanded Height and Sticky Headers */}
+                                            <div style={{ 
+                                                maxHeight: isEditKpiCollapsed ? '460px' : '300px', 
+                                                overflowY: 'auto', 
+                                                border: '1.5px solid #E2E8F0', 
+                                                borderRadius: '8px',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                transition: 'max-height 0.25s ease'
+                                            }}>
+                                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.8rem' }}>
+                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                                        <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Accounting ID</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Producto en Archivo</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Match en Catálogo</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Costo Base FruFresco</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Precio Acordado</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Margen %</th>
+                                                            <th style={{ padding: '9px 10px', fontWeight: 'bold', color: '#475569', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '1.5px solid #CBD5E1' }}>Estado</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {editExcelPreviewData.items
+                                                            .filter(item => {
+                                                                if (editExcelPreviewFilter === 'matched' && !item.matched_product) return false;
+                                                                if (editExcelPreviewFilter === 'unmatched' && item.matched_product) return false;
+                                                                if (!editExcelPreviewSearch.trim()) return true;
+                                                                const q = editExcelPreviewSearch.toLowerCase().trim();
+                                                                return (
+                                                                    item.accounting_id.toLowerCase().includes(q) ||
+                                                                    item.product_name.toLowerCase().includes(q) ||
+                                                                    (item.matched_product?.name || '').toLowerCase().includes(q)
+                                                                );
+                                                            })
+                                                            .map((item, idx) => (
+                                                                <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: !item.matched_product ? '#FFF1F2' : idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#334155' }}>
+                                                                        {item.accounting_id}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', color: '#1E293B' }}>
+                                                                        {item.product_name || '---'}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px' }}>
+                                                                        {item.matched_product ? (
+                                                                            <span style={{ color: '#166534', fontWeight: '600' }}>
+                                                                                {item.matched_product.name}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span style={{ color: '#DC2626', fontWeight: 'bold', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                                <AlertCircle size={13} /> No encontrado en Catálogo
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'right', color: '#64748B' }}>
+                                                                        {item.matched_product ? formatMoney(item.cost_basis || 0) : '---'}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'bold', color: '#0F172A' }}>
+                                                                        {formatMoney(item.unit_price)}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                                                        {item.matched_product ? (
+                                                                            <span style={{
+                                                                                fontWeight: 'bold',
+                                                                                color: (item.margin_percent || 0) >= 50 ? '#16A34A' : (item.margin_percent || 0) >= 20 ? '#D97706' : '#DC2626'
+                                                                            }}>
+                                                                                {(item.margin_percent || 0)}%
+                                                                            </span>
+                                                                        ) : '---'}
+                                                                    </td>
+                                                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                                                        {item.matched_product ? (
+                                                                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 'bold' }}>
+                                                                                OK
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
+                                                                                Falta SKU
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ================= STEP 3: SECURITY CONFIRMATION ================= */}
+                            {editStep === 3 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'center', textAlign: 'center', padding: '1rem 0' }}>
+                                    <div style={{ backgroundColor: '#FEF3C7', padding: '16px', borderRadius: '50%', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <AlertTriangle size={44} strokeWidth={2.2} />
+                                    </div>
+                                    
+                                    <div style={{ maxWidth: '600px' }}>
+                                        <h4 style={{ margin: '0 0 6px 0', fontSize: '1.2rem', fontWeight: '900', color: '#92400E' }}>
+                                            Confirmación de Modificación de Acuerdo
+                                        </h4>
+                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#6B7280', lineHeight: '1.5' }}>
+                                            Estás a punto de aplicar modificaciones sobre el acuerdo <strong style={{ color: '#111827' }}>{formatAgreementNumber(editingAgreement.quote_number, editingAgreement.created_at)}</strong> para <strong style={{ color: '#111827' }}>{editingAgreement.profiles?.company_name || editingAgreement.client_name}</strong>.
+                                        </p>
+                                    </div>
+
+                                    {/* Summary of changes */}
+                                    <div style={{ width: '100%', maxWidth: '600px', backgroundColor: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: '12px', padding: '1.25rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                            <span style={{ color: '#64748B' }}>Fecha Inicio:</span>
+                                            <strong>{editStartDate ? new Date(editStartDate + 'T12:00:00').toLocaleDateString('es-CO') : '---'}</strong>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                            <span style={{ color: '#64748B' }}>Duración Contractual:</span>
+                                            <strong>{editDurationValue} {editDurationUnit === 'days' ? 'Días' : editDurationUnit === 'weeks' ? 'Semanas' : editDurationUnit === 'months' ? 'Meses' : 'Años'}</strong>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                            <span style={{ color: '#64748B' }}>Actualización de Precios:</span>
+                                            <strong>
+                                                {editUploadedItems.length > 0 ? (
+                                                    <span style={{ color: THEME.colors.primary }}>Reemplazar con {editUploadedItems.length} productos de Excel</span>
+                                                ) : (
+                                                    <span style={{ color: '#64748B' }}>Conservar precios congelados actuales</span>
+                                                )}
+                                            </strong>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* Modal Footer */}
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                                    {/* Safety Checkbox */}
+                                    <label style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'flex-start', 
+                                        gap: '12px', 
+                                        textAlign: 'left', 
+                                        padding: '14px 18px', 
+                                        backgroundColor: '#FFFBEB', 
+                                        border: '1.5px solid #FCD34D', 
+                                        borderRadius: '10px',
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                        maxWidth: '600px'
+                                    }}>
+                                        <input 
+                                            type="checkbox"
+                                            checked={editConfirmationChecked}
+                                            onChange={(e) => setEditConfirmationChecked(e.target.checked)}
+                                            style={{ marginTop: '3px', width: '18px', height: '18px', cursor: 'pointer', accentColor: '#D97706' }}
+                                        />
+                                        <span style={{ fontSize: '0.8rem', color: '#92400E', lineHeight: '1.4', fontWeight: 'bold' }}>
+                                            Confirmo que he validado la vigencia y las tarifas con el cliente B2B y el área comercial, y autorizo la actualización de este acuerdo en el sistema.
+                                        </span>
+                                    </label>
+                                </div>
+                            )}
+
+                        </div>
+
+                        {/* Modal Footer with Stepper Controls */}
+                        <div style={{ 
+                            padding: '1rem 1.75rem', 
+                            borderTop: `1px solid ${THEME.colors.border}`, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            backgroundColor: '#F8FAFC'
+                        }}>
+                            <div>
+                                {editStep > 1 ? (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setEditStep(editStep - 1)} 
+                                        style={{ 
+                                            padding: '10px 18px', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1px solid ${THEME.colors.borderActive}`, 
+                                            backgroundColor: 'white', 
+                                            color: '#334155',
+                                            fontWeight: 'bold',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <ArrowLeft size={16} /> Anterior
+                                    </button>
+                                ) : (
                                     <button 
                                         type="button" 
                                         onClick={() => setIsEditModalOpen(false)} 
                                         style={{ 
-                                            flex: 1, 
-                                            padding: '10px', 
+                                            padding: '10px 18px', 
                                             borderRadius: THEME.radius.md, 
                                             border: `1px solid ${THEME.colors.borderActive}`, 
                                             backgroundColor: 'white', 
+                                            color: '#64748B',
                                             fontWeight: 'bold',
+                                            fontSize: '0.85rem',
                                             cursor: 'pointer' 
                                         }}
                                     >
                                         Cancelar
                                     </button>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                {editStep === 1 && (
                                     <button 
-                                        type="button" 
+                                        type="button"
                                         onClick={() => setEditStep(2)}
                                         style={{ 
-                                            flex: 2, 
-                                            padding: '10px', 
+                                            padding: '10px 22px', 
                                             borderRadius: THEME.radius.md, 
                                             border: 'none', 
                                             backgroundColor: THEME.colors.primary, 
                                             color: 'white', 
                                             fontWeight: 'bold',
-                                            cursor: 'pointer'
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
                                         }}
                                     >
-                                        Continuar
+                                        Continuar a Precios <ArrowRight size={16} />
                                     </button>
-                                </div>
-                            </div>
-                        )}
+                                )}
 
-                        {editStep === 2 && (
-                            <div style={{ padding: '2rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1.5rem' }}>
-                                <div style={{ backgroundColor: '#FEF3C7', padding: '16px', borderRadius: '50%', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <AlertCircle size={48} />
-                                </div>
-                                <div>
-                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: '900', color: '#92400E' }}>
-                                        ¿Estás seguro de que deseas modificar este acuerdo?
-                                    </h4>
-                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#6B7280', lineHeight: '1.5' }}>
-                                        Estás modificando la vigencia o la lista de precios congelados para el cliente <strong style={{ color: '#111827' }}>{editingAgreement.profiles?.company_name || editingAgreement.client_name}</strong>. Esta modificación entrará en vigor inmediatamente y afectará la facturación de todos sus pedidos pendientes y futuros.
-                                    </p>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                {editStep === 2 && (
                                     <button 
-                                        type="button" 
-                                        onClick={() => setEditStep(1)} 
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: '10px', 
-                                            borderRadius: THEME.radius.md, 
-                                            border: `1px solid ${THEME.colors.borderActive}`, 
-                                            backgroundColor: 'white', 
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer' 
-                                        }}
-                                    >
-                                        Volver a Editar
-                                    </button>
-                                    <button 
-                                        type="button" 
+                                        type="button"
+                                        disabled={editExcelPreviewData !== null && editExcelPreviewData.matchedCount === 0}
                                         onClick={() => setEditStep(3)}
                                         style={{ 
-                                            flex: 1, 
-                                            padding: '10px', 
+                                            padding: '10px 22px', 
                                             borderRadius: THEME.radius.md, 
                                             border: 'none', 
-                                            backgroundColor: '#D97706', 
+                                            backgroundColor: (editExcelPreviewData !== null && editExcelPreviewData.matchedCount === 0) ? '#CBD5E1' : THEME.colors.primary, 
                                             color: 'white', 
                                             fontWeight: 'bold',
-                                            cursor: 'pointer'
+                                            fontSize: '0.85rem',
+                                            cursor: (editExcelPreviewData !== null && editExcelPreviewData.matchedCount === 0) ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.25)'
                                         }}
                                     >
-                                        Confirmar y Continuar
+                                        Continuar a Confirmación <ArrowRight size={16} />
                                     </button>
-                                </div>
-                            </div>
-                        )}
+                                )}
 
-                        {editStep === 3 && (
-                            <div style={{ padding: '2rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1.5rem' }}>
-                                <div style={{ backgroundColor: '#FEE2E2', padding: '16px', borderRadius: '50%', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <AlertCircle size={48} />
-                                </div>
-                                <div>
-                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: '900', color: '#991B1B' }}>
-                                        Confirmación de Seguridad Obligatoria
-                                    </h4>
-                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#6B7280', lineHeight: '1.5' }}>
-                                        Para prevenir errores comerciales accidentales en la base de datos de precios, por favor lee y marca la casilla de consentimiento de seguridad.
-                                    </p>
-                                </div>
-
-                                <label style={{ 
-                                    display: 'flex', 
-                                    alignItems: 'flex-start', 
-                                    gap: '10px', 
-                                    textAlign: 'left', 
-                                    padding: '12px', 
-                                    backgroundColor: '#FFF5F5', 
-                                    border: '1px solid #FEE2E2', 
-                                    borderRadius: '8px',
-                                    cursor: 'pointer',
-                                    width: '100%'
-                                }}>
-                                    <input 
-                                        type="checkbox"
-                                        checked={editConfirmationChecked}
-                                        onChange={(e) => setEditConfirmationChecked(e.target.checked)}
-                                        style={{ marginTop: '3px', width: '16px', height: '16px', cursor: 'pointer' }}
-                                    />
-                                    <span style={{ fontSize: '0.8rem', color: '#991B1B', lineHeight: '1.4', fontWeight: 'bold' }}>
-                                        Confirmo que he validado los nuevos precios y vigencia con el área comercial y el cliente B2B, y asumo la responsabilidad técnica de esta modificación.
-                                    </span>
-                                </label>
-
-                                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setEditStep(2)} 
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: '10px', 
-                                            borderRadius: THEME.radius.md, 
-                                            border: `1px solid ${THEME.colors.borderActive}`, 
-                                            backgroundColor: 'white', 
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer' 
-                                        }}
-                                    >
-                                        Volver
-                                    </button>
+                                {editStep === 3 && (
                                     <button 
                                         type="button" 
                                         disabled={!editConfirmationChecked || editSaving}
                                         onClick={handleEditSubmit}
                                         style={{ 
-                                            flex: 2, 
-                                            padding: '10px', 
+                                            padding: '10px 24px', 
                                             borderRadius: THEME.radius.md, 
                                             border: 'none', 
-                                            backgroundColor: (!editConfirmationChecked || editSaving) ? '#CBD5E1' : '#DC2626', 
+                                            backgroundColor: (!editConfirmationChecked || editSaving) ? '#CBD5E1' : THEME.colors.primary, 
                                             color: 'white', 
                                             fontWeight: 'bold',
-                                            cursor: (!editConfirmationChecked || editSaving) ? 'not-allowed' : 'pointer'
+                                            fontSize: '0.85rem',
+                                            cursor: (!editConfirmationChecked || editSaving) ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: (!editConfirmationChecked || editSaving) ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
                                         }}
                                     >
-                                        {editSaving ? 'Guardando...' : 'Aplicar Modificaciones'}
+                                        {editSaving ? (
+                                            <>Guardando Cambios...</>
+                                        ) : (
+                                            <>
+                                                <Check size={16} strokeWidth={2.5} /> Aplicar Modificaciones
+                                            </>
+                                        )}
                                     </button>
-                                </div>
+                                )}
                             </div>
-                        )}
+                        </div>
                     </div>
                 </div>
             )}

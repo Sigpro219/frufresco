@@ -81,7 +81,7 @@ export default function ProvidersPage() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [uploading, setUploading] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | 'products' | 'general'>('all');
+    const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | 'products' | 'general' | 'inactive'>('all');
 
     // Excel & Bulk Upload States
     const [showExportMenu, setShowExportMenu] = useState(false);
@@ -1066,12 +1066,12 @@ export default function ProvidersPage() {
                                 setEditingId(null);
                                 setNewProvider({
                                     name: '', tax_id: '', document_type: 'NIT', category: 'GENERAL',
-                                    type: 'contado', product: '', contact_name: '', phone: '',
-                                    email: '', city: '', world_office_id: '', payment_terms_days: 0,
+                                    type: 'contado', product: '', delivery_time: '', contact_name: '', contact_position: '', phone: '',
+                                    email: '', website: '', city: '', world_office_id: '', payment_terms_days: 0,
                                     address: '', bank_name: '', bank_account_number: '',
                                     bank_account_type: 'Ahorros', billing_type: 'soporte',
                                     payment_condition: '', observations: '', rut_url: '',
-                                    additional_docs_url: '', warehouse_location: '', puesto: '',
+                                    additional_docs_url: '', quality_certifications_url: '', bank_certificate_url: '', warehouse_location: '', puesto: '',
                                     is_active: true, is_archived: false
                                 });
                                 setShowCreateModal(true);
@@ -1789,9 +1789,12 @@ export default function ProvidersPage() {
                                                         category: selectedProvider.category || 'GENERAL',
                                                         type: selectedProvider.type || 'contado',
                                                         product: selectedProvider.product || '',
+                                                        delivery_time: selectedProvider.delivery_time || '',
                                                         contact_name: selectedProvider.contact_name || '',
+                                                        contact_position: selectedProvider.contact_position || '',
                                                         phone: selectedProvider.phone || selectedProvider.contact_phone || '',
                                                         email: selectedProvider.email || '',
+                                                        website: selectedProvider.website || '',
                                                         city: selectedProvider.city || '',
                                                         world_office_id: selectedProvider.world_office_id || '',
                                                         payment_terms_days: selectedProvider.payment_terms_days || 0,
@@ -1804,6 +1807,8 @@ export default function ProvidersPage() {
                                                         observations: selectedProvider.observations || selectedProvider.notes || '',
                                                         rut_url: selectedProvider.rut_url || '',
                                                         additional_docs_url: selectedProvider.additional_docs_url || '',
+                                                        quality_certifications_url: selectedProvider.quality_certifications_url || '',
+                                                        bank_certificate_url: selectedProvider.bank_certificate_url || '',
                                                         warehouse_location: selectedProvider.warehouse_location !== null && selectedProvider.warehouse_location !== undefined ? selectedProvider.warehouse_location.toString() : '',
                                                         puesto: selectedProvider.puesto || '',
                                                         is_active: selectedProvider.is_active ?? true,
