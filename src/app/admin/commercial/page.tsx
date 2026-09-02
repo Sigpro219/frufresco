@@ -29,8 +29,13 @@ interface TrendItem {
 }
 
 interface ModelItem {
+    id?: string;
     name: string;
     count: number;
+    totalAmount: number;
+    avgTicket: number;
+    color: string;
+    description?: string;
 }
 
 interface DashboardStats {
@@ -48,6 +53,7 @@ interface DashboardStats {
 export default function CommercialDashboard() {
     const [activeMainTab, setActiveMainTab] = useState('dashboard');
     const [trendView, setTrendView] = useState<'alzas' | 'bajas'>('alzas');
+    const [modelMetricView, setModelMetricView] = useState<'value' | 'count'>('value');
     const [stats, setStats] = useState<DashboardStats>({
         topTrends: [],
         topModels: [],
@@ -81,46 +87,63 @@ export default function CommercialDashboard() {
                 .select('*', { count: 'exact', head: true })
                 .gte('created_at', thirtyDaysAgo.toISOString());
 
-            // 2. Models Pareto (Top used current pricing models)
+            // 2. Models Pareto (Top used current pricing models + financial metrics)
             const { data: currentPricingModels } = await supabase
                 .from('pricing_models')
-                .select('id, name');
+                .select('id, name, description, color_tag');
 
             const { data: quotesData } = await supabase
                 .from('quotes')
-                .select('model_id, model_snapshot_name');
+                .select('id, model_id, model_snapshot_name, total_amount, subtotal_amount, status');
 
-            const modelCounts: Record<string, number> = {};
+            const getColorForModel = (name: string, tag?: string | null) => {
+                const n = name.toLowerCase();
+                if (tag === 'verde' || n.includes('grande')) return '#10B981';
+                if (tag === 'amarillo' || n.includes('mediano')) return '#F59E0B';
+                if (tag === 'rojo' || n.includes('pequeño') || n.includes('pequeno')) return '#F97316';
+                if (n.includes('hogar') || n.includes('b2c')) return '#3B82F6';
+                return '#64748B';
+            };
+
+            const modelMap: Record<string, ModelItem> = {};
             currentPricingModels?.forEach(m => {
-                modelCounts[m.name] = 0;
+                modelMap[m.name] = {
+                    id: m.id,
+                    name: m.name,
+                    description: m.description,
+                    count: 0,
+                    totalAmount: 0,
+                    avgTicket: 0,
+                    color: getColorForModel(m.name, m.color_tag)
+                };
             });
 
-            quotesData?.forEach((q: { model_id?: string | null; model_snapshot_name?: string | null }) => {
-                // Try direct match by model_id
+            quotesData?.forEach((q: { id: string; model_id?: string | null; model_snapshot_name?: string | null; total_amount?: number | null; subtotal_amount?: number | null }) => {
+                const amount = Number(q.total_amount || q.subtotal_amount || 0);
+                let targetName: string | null = null;
+
                 const matchedById = currentPricingModels?.find(m => m.id === q.model_id);
                 if (matchedById) {
-                    modelCounts[matchedById.name] = (modelCounts[matchedById.name] || 0) + 1;
-                    return;
+                    targetName = matchedById.name;
+                } else {
+                    const rawName = (q.model_snapshot_name || '').toLowerCase();
+                    if (rawName.includes('pequeño') || rawName.includes('pequeno')) targetName = 'Pequeño';
+                    else if (rawName.includes('mediano')) targetName = 'Mediano';
+                    else if (rawName.includes('grande')) targetName = 'Grande';
+                    else if (rawName.includes('hogar') || rawName.includes('b2c')) targetName = 'Clientes Hogar';
+                    else if (rawName.includes('institucional') || rawName.includes('general')) targetName = 'General Institucional';
                 }
 
-                // Normalization against current active models
-                const rawName = (q.model_snapshot_name || '').toLowerCase();
-                if (rawName.includes('pequeño') || rawName.includes('pequeno')) {
-                    modelCounts['Pequeño'] = (modelCounts['Pequeño'] || 0) + 1;
-                } else if (rawName.includes('mediano')) {
-                    modelCounts['Mediano'] = (modelCounts['Mediano'] || 0) + 1;
-                } else if (rawName.includes('grande')) {
-                    modelCounts['Grande'] = (modelCounts['Grande'] || 0) + 1;
-                } else if (rawName.includes('hogar') || rawName.includes('b2c')) {
-                    modelCounts['Clientes Hogar'] = (modelCounts['Clientes Hogar'] || 0) + 1;
-                } else if (rawName.includes('institucional') || rawName.includes('general')) {
-                    modelCounts['General Institucional'] = (modelCounts['General Institucional'] || 0) + 1;
+                if (targetName && modelMap[targetName]) {
+                    modelMap[targetName].count += 1;
+                    modelMap[targetName].totalAmount += amount;
                 }
             });
 
-            const sortedModels = Object.entries(modelCounts)
-                .map(([name, count]) => ({ name, count }))
-                .sort((a, b) => b.count - a.count);
+            const sortedModels: ModelItem[] = Object.values(modelMap).map(m => ({
+                ...m,
+                avgTicket: m.count > 0 ? Math.round(m.totalAmount / m.count) : 0
+            })).sort((a, b) => b.totalAmount - a.totalAmount || b.count - a.count);
 
             // 3. Price Trends (purchases)
             const { data: products } = await supabase
@@ -437,31 +460,145 @@ export default function CommercialDashboard() {
                         </div>
                     </div>
 
-                    {/* Models Pareto Card */}
-                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, padding: '1.5rem', boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}` }}>
-                        <h3 style={{ margin: '0 0 1rem 0', fontWeight: '600', color: THEME.colors.textMain, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <BarChart2 size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                            <span>Mix de Modelos</span>
-                        </h3>
-                        {stats.loading ? (
-                            <div style={{ color: THEME.colors.textSecondary }}>...</div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                                {stats.topModels.slice(0, 5).map((m: ModelItem, i: number) => {
-                                    const total = stats.topModels.reduce((acc: number, curr: ModelItem) => acc + curr.count, 0);
-                                    const percent = total > 0 ? (m.count / total) * 100 : 0;
-                                    return (
-                                        <div key={i}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.75rem' }}>
-                                                <span style={{ fontWeight: '600', color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70%' }}>{m.name}</span>
-                                                <span style={{ color: THEME.colors.textSecondary, fontWeight: '600' }}>{m.count}</span>
+                    {/* Models Pareto Card (High Impact Strategic Insight) */}
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, padding: '1.25rem 1.5rem', boxShadow: THEME.shadow.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                            {/* Header with Title & Metric Toggle */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.05rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <BarChart2 size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} />
+                                    <span>Mix de Modelos</span>
+                                </h3>
+                                <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '2px' }}>
+                                    <button 
+                                        onClick={() => setModelMetricView('value')}
+                                        style={{
+                                            padding: '4px 8px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: '700',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            backgroundColor: modelMetricView === 'value' ? '#FFFFFF' : 'transparent',
+                                            color: modelMetricView === 'value' ? THEME.colors.primary : '#64748B',
+                                            boxShadow: modelMetricView === 'value' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        $ Valor
+                                    </button>
+                                    <button 
+                                        onClick={() => setModelMetricView('count')}
+                                        style={{
+                                            padding: '4px 8px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: '700',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            backgroundColor: modelMetricView === 'count' ? '#FFFFFF' : 'transparent',
+                                            color: modelMetricView === 'count' ? THEME.colors.primary : '#64748B',
+                                            boxShadow: modelMetricView === 'count' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        # Cant.
+                                    </button>
+                                </div>
+                            </div>
+
+                            {stats.loading ? (
+                                <div style={{ color: THEME.colors.textSecondary, padding: '1rem 0', fontSize: '0.85rem' }}>Cargando métricas...</div>
+                            ) : (
+                                <div>
+                                    {/* 100% Multi-Segment Proportional Distribution Bar */}
+                                    {(() => {
+                                        const totalValue = stats.topModels.reduce((acc, curr) => acc + curr.totalAmount, 0);
+                                        const totalCount = stats.topModels.reduce((acc, curr) => acc + curr.count, 0);
+                                        const totalBasis = modelMetricView === 'value' ? totalValue : totalCount;
+
+                                        return (
+                                            <div style={{ marginBottom: '0.85rem' }}>
+                                                <div style={{ height: '7px', width: '100%', backgroundColor: '#E2E8F0', borderRadius: '4px', display: 'flex', overflow: 'hidden' }}>
+                                                    {stats.topModels.map((m, idx) => {
+                                                        const val = modelMetricView === 'value' ? m.totalAmount : m.count;
+                                                        const pct = totalBasis > 0 ? (val / totalBasis) * 100 : 0;
+                                                        if (pct <= 0) return null;
+                                                        return (
+                                                            <div 
+                                                                key={idx} 
+                                                                title={`${m.name}: ${modelMetricView === 'value' ? formatMoney(m.totalAmount) : m.count} (${pct.toFixed(1)}%)`}
+                                                                style={{ width: `${pct}%`, height: '100%', backgroundColor: m.color, transition: 'width 0.4s ease' }} 
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                            <div style={{ height: '6px', backgroundColor: THEME.colors.background, borderRadius: '3px', overflow: 'hidden' }}>
-                                                <div style={{ width: `${percent}%`, height: '100%', backgroundColor: i === 0 ? THEME.colors.primary : THEME.colors.borderActive, borderRadius: '3px' }}></div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })()}
+
+                                    {/* Model Breakdown Rows */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                        {stats.topModels.map((m: ModelItem, i: number) => {
+                                            const totalValue = stats.topModels.reduce((acc, curr) => acc + curr.totalAmount, 0);
+                                            const totalCount = stats.topModels.reduce((acc, curr) => acc + curr.count, 0);
+                                            const totalBasis = modelMetricView === 'value' ? totalValue : totalCount;
+                                            const currVal = modelMetricView === 'value' ? m.totalAmount : m.count;
+                                            const percent = totalBasis > 0 ? (currVal / totalBasis) * 100 : 0;
+
+                                            return (
+                                                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', maxWidth: '55%' }}>
+                                                            <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: m.color, flexShrink: 0 }} />
+                                                            <span style={{ fontWeight: '700', color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {m.name}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            {modelMetricView === 'value' ? (
+                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
+                                                                    {formatMoney(m.totalAmount)}
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
+                                                                    {m.count} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '500' }}>ctz</span>
+                                                                </span>
+                                                            )}
+                                                            <span style={{ fontSize: '0.68rem', fontWeight: '700', color: percent > 0 ? m.color : '#94A3B8', minWidth: '32px', textAlign: 'right' }}>
+                                                                {percent.toFixed(0)}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ height: '4px', backgroundColor: '#F1F5F9', borderRadius: '2px', overflow: 'hidden' }}>
+                                                        <div style={{ width: `${percent}%`, height: '100%', backgroundColor: m.color, borderRadius: '2px', transition: 'width 0.4s ease' }} />
+                                                    </div>
+                                                    {modelMetricView === 'value' && m.count > 0 && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#64748B', paddingLeft: '13px' }}>
+                                                            <span>{m.count} cotizaciones</span>
+                                                            <span>Ticket prom: {formatMoney(m.avgTicket)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Bottom Insight Callout */}
+                        {!stats.loading && stats.topModels.length > 0 && (
+                            <div style={{ marginTop: '0.85rem', paddingTop: '0.65rem', borderTop: '1px dashed #E2E8F0', fontSize: '0.68rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', lineHeight: '1.25' }}>
+                                <Sparkles size={13} style={{ color: '#D97706', flexShrink: 0 }} />
+                                <span>
+                                    {(() => {
+                                        const topModelByValue = [...stats.topModels].sort((a, b) => b.totalAmount - a.totalAmount)[0];
+                                        const totalVal = stats.topModels.reduce((acc, curr) => acc + curr.totalAmount, 0);
+                                        const pctVal = totalVal > 0 ? ((topModelByValue.totalAmount / totalVal) * 100).toFixed(0) : '0';
+                                        return `El modelo ${topModelByValue.name} lidera con el ${pctVal}% del valor total cotizado (${formatMoney(topModelByValue.totalAmount)}).`;
+                                    })()}
+                                </span>
                             </div>
                         )}
                     </div>
