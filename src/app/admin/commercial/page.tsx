@@ -98,11 +98,12 @@ export default function CommercialDashboard() {
 
             const getColorForModel = (name: string, tag?: string | null) => {
                 const n = name.toLowerCase();
-                if (tag === 'verde' || n.includes('grande')) return '#10B981';
-                if (tag === 'amarillo' || n.includes('mediano')) return '#F59E0B';
-                if (tag === 'rojo' || n.includes('pequeño') || n.includes('pequeno')) return '#F97316';
-                if (n.includes('hogar') || n.includes('b2c')) return '#3B82F6';
-                return '#64748B';
+                // FruFresco Brand Manual Palette
+                if (tag === 'verde' || n.includes('grande')) return '#0D7A57'; // Verde Bosque FruFresco Oficial
+                if (tag === 'amarillo' || n.includes('mediano')) return '#D97706'; // Ámbar Dorado Orgánico
+                if (tag === 'rojo' || n.includes('pequeño') || n.includes('pequeno')) return '#EA580C'; // Terracota Mandarina Cítrico
+                if (n.includes('hogar') || n.includes('b2c')) return '#2563EB'; // Azul Arándano Fresco
+                return '#64748B'; // Gris Pizarra Institucional
             };
 
             const modelMap: Record<string, ModelItem> = {};
@@ -469,20 +470,20 @@ export default function CommercialDashboard() {
                                     <BarChart2 size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} />
                                     <span>Mix de Modelos</span>
                                 </h3>
-                                <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '2px' }}>
+                                <div style={{ display: 'flex', backgroundColor: THEME.colors.primaryLight || '#EAEFEA', borderRadius: '8px', padding: '2px' }}>
                                     <button 
                                         onClick={() => setModelMetricView('value')}
                                         style={{
-                                            padding: '4px 8px',
+                                            padding: '4px 9px',
                                             fontSize: '0.7rem',
                                             fontWeight: '700',
                                             border: 'none',
                                             borderRadius: '6px',
                                             cursor: 'pointer',
                                             backgroundColor: modelMetricView === 'value' ? '#FFFFFF' : 'transparent',
-                                            color: modelMetricView === 'value' ? THEME.colors.primary : '#64748B',
-                                            boxShadow: modelMetricView === 'value' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                                            transition: 'all 0.15s ease'
+                                            color: modelMetricView === 'value' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                            boxShadow: modelMetricView === 'value' ? '0 1px 3px rgba(13,122,87,0.12)' : 'none',
+                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                                         }}
                                     >
                                         $ Valor
@@ -490,16 +491,16 @@ export default function CommercialDashboard() {
                                     <button 
                                         onClick={() => setModelMetricView('count')}
                                         style={{
-                                            padding: '4px 8px',
+                                            padding: '4px 9px',
                                             fontSize: '0.7rem',
                                             fontWeight: '700',
                                             border: 'none',
                                             borderRadius: '6px',
                                             cursor: 'pointer',
                                             backgroundColor: modelMetricView === 'count' ? '#FFFFFF' : 'transparent',
-                                            color: modelMetricView === 'count' ? THEME.colors.primary : '#64748B',
-                                            boxShadow: modelMetricView === 'count' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                                            transition: 'all 0.15s ease'
+                                            color: modelMetricView === 'count' ? THEME.colors.primary : THEME.colors.textSecondary,
+                                            boxShadow: modelMetricView === 'count' ? '0 1px 3px rgba(13,122,87,0.12)' : 'none',
+                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                                         }}
                                     >
                                         # Cant.
@@ -519,7 +520,7 @@ export default function CommercialDashboard() {
 
                                         return (
                                             <div style={{ marginBottom: '0.85rem' }}>
-                                                <div style={{ height: '7px', width: '100%', backgroundColor: '#E2E8F0', borderRadius: '4px', display: 'flex', overflow: 'hidden' }}>
+                                                <div style={{ height: '7px', width: '100%', backgroundColor: THEME.colors.primaryLight || '#EAEFEA', borderRadius: '4px', display: 'flex', overflow: 'hidden' }}>
                                                     {stats.topModels.map((m, idx) => {
                                                         const val = modelMetricView === 'value' ? m.totalAmount : m.count;
                                                         const pct = totalBasis > 0 ? (val / totalBasis) * 100 : 0;
@@ -528,7 +529,7 @@ export default function CommercialDashboard() {
                                                             <div 
                                                                 key={idx} 
                                                                 title={`${m.name}: ${modelMetricView === 'value' ? formatMoney(m.totalAmount) : m.count} (${pct.toFixed(1)}%)`}
-                                                                style={{ width: `${pct}%`, height: '100%', backgroundColor: m.color, transition: 'width 0.4s ease' }} 
+                                                                style={{ width: `${pct}%`, height: '100%', backgroundColor: m.color, transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} 
                                                             />
                                                         );
                                                     })}
@@ -549,32 +550,32 @@ export default function CommercialDashboard() {
                                             return (
                                                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', maxWidth: '55%' }}>
-                                                            <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: m.color, flexShrink: 0 }} />
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', maxWidth: '55%' }}>
+                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: m.color, flexShrink: 0, boxShadow: `0 0 0 2px ${m.color}20` }} />
                                                             <span style={{ fontWeight: '700', color: THEME.colors.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                 {m.name}
                                                             </span>
                                                         </div>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                             {modelMetricView === 'value' ? (
-                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
+                                                                <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>
                                                                     {formatMoney(m.totalAmount)}
                                                                 </span>
                                                             ) : (
-                                                                <span style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
-                                                                    {m.count} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '500' }}>ctz</span>
+                                                                <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>
+                                                                    {m.count} <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>ctz</span>
                                                                 </span>
                                                             )}
-                                                            <span style={{ fontSize: '0.68rem', fontWeight: '700', color: percent > 0 ? m.color : '#94A3B8', minWidth: '32px', textAlign: 'right' }}>
+                                                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: percent > 0 ? m.color : THEME.colors.textSecondary, minWidth: '32px', textAlign: 'right' }}>
                                                                 {percent.toFixed(0)}%
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    <div style={{ height: '4px', backgroundColor: '#F1F5F9', borderRadius: '2px', overflow: 'hidden' }}>
-                                                        <div style={{ width: `${percent}%`, height: '100%', backgroundColor: m.color, borderRadius: '2px', transition: 'width 0.4s ease' }} />
+                                                    <div style={{ height: '5px', backgroundColor: THEME.colors.background || '#F4F7F6', borderRadius: '3px', overflow: 'hidden' }}>
+                                                        <div style={{ width: `${percent}%`, height: '100%', backgroundColor: m.color, borderRadius: '3px', transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} />
                                                     </div>
                                                     {modelMetricView === 'value' && m.count > 0 && (
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#64748B', paddingLeft: '13px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: THEME.colors.textSecondary, paddingLeft: '15px' }}>
                                                             <span>{m.count} cotizaciones</span>
                                                             <span>Ticket prom: {formatMoney(m.avgTicket)}</span>
                                                         </div>
@@ -589,8 +590,8 @@ export default function CommercialDashboard() {
 
                         {/* Bottom Insight Callout */}
                         {!stats.loading && stats.topModels.length > 0 && (
-                            <div style={{ marginTop: '0.85rem', paddingTop: '0.65rem', borderTop: '1px dashed #E2E8F0', fontSize: '0.68rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', lineHeight: '1.25' }}>
-                                <Sparkles size={13} style={{ color: '#D97706', flexShrink: 0 }} />
+                            <div style={{ marginTop: '0.85rem', padding: '0.6rem 0.8rem', backgroundColor: '#F4F9F6', borderRadius: THEME.radius.md, border: '1px solid #E0EFE7', fontSize: '0.7rem', color: '#1A4D38', display: 'flex', alignItems: 'center', gap: '7px', lineHeight: '1.3' }}>
+                                <Sparkles size={14} style={{ color: THEME.colors.primary, flexShrink: 0 }} />
                                 <span>
                                     {(() => {
                                         const topModelByValue = [...stats.topModels].sort((a, b) => b.totalAmount - a.totalAmount)[0];
