@@ -32,10 +32,14 @@ import {
     Sliders,
     Plus,
     Save,
-    Box,
     Layers,
     Building2,
-    CornerDownRight
+    CornerDownRight,
+    MessageCircle,
+    Phone,
+    Navigation,
+    ExternalLink,
+    Clock
 } from 'lucide-react';
 import ControlTowerKPIs from '@/components/ControlTowerKPIs';
 
@@ -104,6 +108,8 @@ export default function TransportControlTower() {
 
     const [fleetData, setFleetData] = useState<any[]>([]);
     const [driversData, setDriversData] = useState<any[]>([]);
+    const [hoveredVehicleId, setHoveredVehicleId] = useState<string | null>(null);
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
     const fetchTransportData = useCallback(async (signal?: AbortSignal) => {
         try {
@@ -157,7 +163,7 @@ export default function TransportControlTower() {
             // Fetch collaborators separately to avoid relationship errors
             const { data: dData } = await supabase
                 .from('collaborators')
-                .select('id, contact_name');
+                .select('id, contact_name, phone, specialty');
 
             const formatted: ActiveRoute[] = routes?.map(r => {
                 const driver = dData?.find(d => d.id === r.driver_id);
@@ -598,49 +604,263 @@ export default function TransportControlTower() {
                                                 </div>
                                             </AdvancedMarker>
 
-                                            {/* Fleet Vehicles on Live Map */}
+                                            {/* Fleet Vehicles on Live Map with Rich Operational Tooltips */}
                                             {fleetData.map((v: any, i: number) => {
                                                 const driver = driversData.find((d: any) => d.id === v.driver_id);
                                                 const initials = getInitials(driver?.contact_name || '');
+                                                const activeRoute = activeRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
                                                 
                                                 const pos = v.last_latitude && v.last_longitude 
                                                     ? { lat: v.last_latitude, lng: v.last_longitude }
                                                     : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
 
-                                                const isAvailable = v.status === 'available';
+                                                const isAvailable = v.status === 'available' || (!activeRoute && v.status !== 'maintenance');
+                                                const isInRoute = activeRoute && (activeRoute.status === 'in_transit' || activeRoute.status === 'loading');
+                                                const isHovered = hoveredVehicleId === v.id;
+                                                const isSelected = selectedVehicleId === v.id;
+                                                const isPopoverOpen = isHovered || isSelected;
+
+                                                const doneStops = activeRoute ? activeRoute.route_stops.filter((s: any) => s.status === 'delivered' || s.status === 'failed').length : 0;
+                                                const totalStops = activeRoute ? activeRoute.route_stops.length : 0;
+                                                const routeProgress = totalStops > 0 ? Math.round((doneStops / totalStops) * 100) : 0;
+                                                const nextStop = activeRoute?.route_stops.find((s: any) => s.status === 'pending');
+                                                const nextClient = (nextStop as any)?.order?.profiles?.company_name || (nextStop as any)?.order?.customer_name || 'En camino a entrega';
+                                                const nextAddress = (nextStop as any)?.order?.shipping_address || '';
+
+                                                const totalKilos = activeRoute?.total_kilos || (v.capacity_kg ? Math.round(v.capacity_kg * 0.65) : 0);
+                                                const capacityKg = v.capacity_kg || 3500;
+                                                const loadPercent = Math.min(100, Math.round((totalKilos / capacityKg) * 100));
+                                                const cleanPhone = driver?.phone ? driver.phone.replace(/\D/g, '') : '';
+                                                const waUrl = cleanPhone ? `https://wa.me/57${cleanPhone}?text=${encodeURIComponent(`Hola ${driver?.contact_name || ''}, mensaje desde Torre de Control FruFresco (Vehículo ${v.plate}):`)}` : null;
 
                                                 return (
                                                     <AdvancedMarker key={v.id} position={pos}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <div 
+                                                            style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                                                            onMouseEnter={() => setHoveredVehicleId(v.id)}
+                                                            onMouseLeave={() => setHoveredVehicleId(null)}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedVehicleId(prev => prev === v.id ? null : v.id);
+                                                            }}
+                                                        >
+                                                            {/* VEHICLE PIN AVATAR */}
                                                             <div style={{ 
-                                                                width: '32px', 
-                                                                height: '32px', 
-                                                                borderRadius: '8px', 
-                                                                background: isAvailable ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)' : 'linear-gradient(135deg, #2563EB 0%, #38BDF8 100%)', 
+                                                                width: isPopoverOpen ? '38px' : '32px', 
+                                                                height: isPopoverOpen ? '38px' : '32px', 
+                                                                borderRadius: '10px', 
+                                                                background: isInRoute 
+                                                                    ? 'linear-gradient(135deg, #0284C7 0%, #0D7A57 100%)' 
+                                                                    : isAvailable 
+                                                                        ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)' 
+                                                                        : 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', 
                                                                 display: 'flex', 
                                                                 alignItems: 'center', 
                                                                 justifyContent: 'center', 
                                                                 color: 'white', 
                                                                 fontWeight: '900', 
-                                                                fontSize: '0.75rem',
-                                                                boxShadow: '0 4px 10px rgba(0,0,0,0.18)',
-                                                                border: '2px solid white'
+                                                                fontSize: isPopoverOpen ? '0.85rem' : '0.75rem',
+                                                                boxShadow: isPopoverOpen ? '0 8px 18px rgba(13, 122, 87, 0.4)' : '0 4px 10px rgba(0,0,0,0.18)',
+                                                                border: isPopoverOpen ? '3px solid white' : '2px solid white',
+                                                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                transform: isPopoverOpen ? 'scale(1.1)' : 'scale(1)'
                                                             }}>
                                                                 {initials || <Truck size={14} />}
                                                             </div>
+
+                                                            {/* VEHICLE PLATE BADGE */}
                                                             <div style={{ 
-                                                                backgroundColor: 'white', 
-                                                                color: THEME.colors.textMain, 
+                                                                backgroundColor: isPopoverOpen ? THEME.colors.primary : 'white', 
+                                                                color: isPopoverOpen ? 'white' : THEME.colors.textMain, 
                                                                 padding: '1px 6px', 
                                                                 borderRadius: '4px', 
-                                                                fontSize: '0.52rem', 
+                                                                fontSize: '0.55rem', 
                                                                 fontWeight: '900', 
                                                                 marginTop: '2px',
-                                                                border: `1px solid ${THEME.colors.border}`,
-                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
+                                                                border: `1px solid ${isPopoverOpen ? THEME.colors.primary : THEME.colors.border}`,
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                                                                transition: 'all 0.15s ease'
                                                             }}>
                                                                 {v.plate}
                                                             </div>
+
+                                                            {/* ── RICH OPERATIONAL TOOLTIP / POPOVER ── */}
+                                                            {isPopoverOpen && (
+                                                                <div 
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    style={{
+                                                                        position: 'absolute',
+                                                                        bottom: '100%',
+                                                                        left: '50%',
+                                                                        transform: 'translateX(-50%) translateY(-10px)',
+                                                                        width: '300px',
+                                                                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                                                        backdropFilter: 'blur(12px)',
+                                                                        borderRadius: THEME.radius.lg,
+                                                                        boxShadow: '0 16px 36px -4px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(13, 122, 87, 0.12)',
+                                                                        border: `1px solid ${isInRoute ? '#BAE6FD' : isAvailable ? '#A7F3D0' : '#FED7AA'}`,
+                                                                        padding: '0.85rem',
+                                                                        zIndex: 99999,
+                                                                        pointerEvents: 'auto',
+                                                                        cursor: 'default',
+                                                                        textAlign: 'left'
+                                                                    }}
+                                                                >
+                                                                    {/* Popover Header */}
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', paddingBottom: '0.45rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                            <span style={{ fontSize: '0.95rem', fontWeight: '900', color: THEME.colors.textMain }}>
+                                                                                {v.plate}
+                                                                            </span>
+                                                                            <span style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                {v.vehicle_type || 'Furgón'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span style={{
+                                                                            fontSize: '0.62rem',
+                                                                            fontWeight: '900',
+                                                                            padding: '2px 7px',
+                                                                            borderRadius: '6px',
+                                                                            backgroundColor: isInRoute ? '#EFF6FF' : isAvailable ? '#ECFDF5' : '#FEF3C7',
+                                                                            color: isInRoute ? '#1D4ED8' : isAvailable ? '#065F46' : '#B45309',
+                                                                            border: isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A'
+                                                                        }}>
+                                                                            {isInRoute ? '🟢 EN RUTA' : isAvailable ? '📦 EN PATIO' : '⚠️ EN TALLER'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Driver & Contact Block */}
+                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                            <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.72rem' }}>
+                                                                                {initials || <Users size={12} />}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div style={{ fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.textMain, lineHeight: 1.1 }}>
+                                                                                    {driver?.contact_name || 'Sin Conductor Asignado'}
+                                                                                </div>
+                                                                                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                                                                    {driver?.specialty || 'Conductor Logística'}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {cleanPhone && (
+                                                                            <a 
+                                                                                href={`tel:${driver.phone}`} 
+                                                                                style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '800', textDecoration: 'none', backgroundColor: THEME.colors.primaryLight, padding: '3px 7px', borderRadius: '6px' }}
+                                                                            >
+                                                                                <Phone size={10} /> Llamar
+                                                                            </a>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Cargo & Capacity Metrics */}
+                                                                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0.5rem 0.65rem', marginBottom: '0.6rem', border: `1px solid ${THEME.colors.border}` }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, marginBottom: '3px' }}>
+                                                                            <span>Carga a Bordo</span>
+                                                                            <span style={{ color: THEME.colors.textMain }}>{formatNumber(totalKilos)} / {formatNumber(capacityKg)} kg ({loadPercent}%)</span>
+                                                                        </div>
+                                                                        <div style={{ height: '5px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                                            <div style={{ width: `${loadPercent}%`, height: '100%', background: 'linear-gradient(90deg, #0D7A57 0%, #10B981 100%)', borderRadius: '3px' }}></div>
+                                                                        </div>
+
+                                                                        {isInRoute && (
+                                                                            <div style={{ marginTop: '0.5rem', paddingTop: '0.45rem', borderTop: '1px dashed #E2E8F0' }}>
+                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, marginBottom: '3px' }}>
+                                                                                    <span>Avance de Entregas</span>
+                                                                                    <span style={{ color: '#0284C7' }}>{doneStops}/{totalStops} paradas ({routeProgress}%)</span>
+                                                                                </div>
+                                                                                <div style={{ height: '5px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                                                    <div style={{ width: `${routeProgress}%`, height: '100%', background: 'linear-gradient(90deg, #0284C7 0%, #38BDF8 100%)', borderRadius: '3px' }}></div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Next Active Stop (If In Route) */}
+                                                                    {isInRoute && nextStop && (
+                                                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '0.7rem', color: THEME.colors.textMain, backgroundColor: '#F0F9FF', padding: '0.45rem 0.6rem', borderRadius: '6px', marginBottom: '0.65rem', border: '1px solid #BAE6FD' }}>
+                                                                            <Navigation size={12} color="#0284C7" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                                                            <div style={{ minWidth: 0 }}>
+                                                                                <div style={{ fontWeight: '800', color: '#0369A1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                    Próx: {nextClient}
+                                                                                </div>
+                                                                                {nextAddress && (
+                                                                                    <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                        {nextAddress}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Quick Operational Actions Bar */}
+                                                                    <div style={{ display: 'flex', gap: '6px', marginTop: '0.2rem' }}>
+                                                                        {waUrl ? (
+                                                                            <a 
+                                                                                href={waUrl} 
+                                                                                target="_blank" 
+                                                                                rel="noreferrer"
+                                                                                style={{ 
+                                                                                    flex: 1, 
+                                                                                    padding: '0.4rem', 
+                                                                                    borderRadius: '6px', 
+                                                                                    backgroundColor: '#0D7A57', 
+                                                                                    color: 'white', 
+                                                                                    fontSize: '0.7rem', 
+                                                                                    fontWeight: '800', 
+                                                                                    textDecoration: 'none', 
+                                                                                    display: 'flex', 
+                                                                                    alignItems: 'center', 
+                                                                                    justifyContent: 'center', 
+                                                                                    gap: '4px',
+                                                                                    boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)'
+                                                                                }}
+                                                                            >
+                                                                                <MessageCircle size={12} /> WhatsApp
+                                                                            </a>
+                                                                        ) : (
+                                                                            <button 
+                                                                                onClick={() => setActiveTab('drivers_panel')}
+                                                                                style={{ 
+                                                                                    flex: 1, 
+                                                                                    padding: '0.4rem', 
+                                                                                    borderRadius: '6px', 
+                                                                                    backgroundColor: THEME.colors.background, 
+                                                                                    color: THEME.colors.textSecondary, 
+                                                                                    border: `1px solid ${THEME.colors.border}`, 
+                                                                                    fontSize: '0.68rem', 
+                                                                                    fontWeight: '800', 
+                                                                                    cursor: 'pointer' 
+                                                                                }}
+                                                                            >
+                                                                                Asignar Conductor
+                                                                            </button>
+                                                                        )}
+
+                                                                        {activeRoute && (
+                                                                            <button 
+                                                                                onClick={() => {
+                                                                                    setSelectedVehicleId(null);
+                                                                                }}
+                                                                                style={{ 
+                                                                                    padding: '0.4rem 0.6rem', 
+                                                                                    borderRadius: '6px', 
+                                                                                    backgroundColor: 'white', 
+                                                                                    color: THEME.colors.textMain, 
+                                                                                    border: `1px solid ${THEME.colors.borderActive}`, 
+                                                                                    fontSize: '0.7rem', 
+                                                                                    fontWeight: '800', 
+                                                                                    cursor: 'pointer' 
+                                                                                }}
+                                                                            >
+                                                                                Cerrar
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </AdvancedMarker>
                                                 );
