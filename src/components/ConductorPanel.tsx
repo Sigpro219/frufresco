@@ -15,6 +15,7 @@ import {
     X, 
     User
 } from 'lucide-react';
+import { THEME } from '@/lib/adminTheme';
 
 interface Conductor {
     id: string;
@@ -300,46 +301,46 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
     const availVehicles = availableVehicles.length;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             {/* CABECERA ULTRA-COMPACTA 50/50: KPIs | BUSCADOR */}
             <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: '1fr 1fr', 
-                gap: '1.5rem', 
+                gap: '1.25rem', 
                 alignItems: 'center',
                 backgroundColor: 'white',
-                padding: '0.8rem 1.5rem',
-                borderRadius: '24px',
-                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                border: '1px solid #E2E8F0'
+                padding: '0.75rem 1.25rem',
+                borderRadius: THEME.radius.lg,
+                boxShadow: THEME.shadow.sm,
+                border: `1px solid ${THEME.colors.border}`
             }}>
                 {/* Lado Izquierdo: 4 KPIs (50% del ancho) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', alignItems: 'center' }}>
                     {/* Stat 1 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid #F1F5F9' }}>
-                        <Users size={16} color="#64748B" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: `1px solid ${THEME.colors.border}` }}>
+                        <Users size={16} color={THEME.colors.textSecondary} />
                         <div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Total</div>
-                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#111827' }}>{totalConductors}</div>
+                            <div style={{ fontSize: '0.55rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Total</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: THEME.colors.textMain }}>{totalConductors}</div>
                         </div>
                     </div>
 
                     {/* Stat 2 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid #F1F5F9' }}>
-                        <Zap size={16} color="#059669" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: `1px solid ${THEME.colors.border}` }}>
+                        <Zap size={16} color={THEME.colors.primary} />
                         <div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Activos</div>
-                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#111827' }}>{activeConductors}</div>
+                            <div style={{ fontSize: '0.55rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Activos</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: THEME.colors.primary }}>{activeConductors}</div>
                         </div>
                     </div>
 
                     {/* Stat 3 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid #F1F5F9' }}>
-                        <Truck size={16} color="#0D9488" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: `1px solid ${THEME.colors.border}` }}>
+                        <Truck size={16} color="#059669" />
                         <div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Asignados</div>
-                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#0F766E' }}>{withVehicle}</div>
+                            <div style={{ fontSize: '0.55rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Asignados</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#065F46' }}>{withVehicle}</div>
                         </div>
                     </div>
 
@@ -347,8 +348,8 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Key size={16} color="#D97706" />
                         <div>
-                            <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Célibes</div>
-                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#D97706' }}>{availVehicles}</div>
+                            <div style={{ fontSize: '0.55rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>Célibes</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#D97706' }}>{availVehicles}</div>
                         </div>
                     </div>
                 </div>
@@ -361,52 +362,52 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         style={{ 
-                            width: '100%', padding: '0.6rem 1rem 0.6rem 2.8rem', borderRadius: '15px', 
-                            border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none', 
-                            backgroundColor: '#F8FAFC', fontWeight: '600', color: '#1E293B',
-                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                            width: '100%', padding: '0.55rem 1rem 0.55rem 2.5rem', borderRadius: '10px', 
+                            border: `1px solid ${THEME.colors.borderActive}`, fontSize: '0.85rem', outline: 'none', 
+                            backgroundColor: '#F8FAFC', fontWeight: '600', color: THEME.colors.textMain,
+                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)', boxSizing: 'border-box'
                         }}
                     />
-                    <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                    <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', color: '#94A3B8', fontWeight: '800' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                    <div style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '800' }}>
                         {filtered.length} RESULTADOS
                     </div>
                 </div>
             </div>
 
             {/* LIST TABLE */}
-            <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E5E7EB', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.03)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.sm }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
                     <thead>
-                        <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #F3F4F6', textAlign: 'left' }}>
-                            <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>PERFIL</th>
-                            <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>CONTACTO</th>
-                            <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESPECIALIDAD</th>
-                            <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>VEHÍCULO</th>
-                            <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESTADO</th>
-                            {!readOnly && <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem', textAlign: 'center' }}>GESTIÓN</th>}
+                        <tr style={{ backgroundColor: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>
+                            <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.68rem', textTransform: 'uppercase' }}>PERFIL</th>
+                            <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.68rem', textTransform: 'uppercase' }}>CONTACTO</th>
+                            <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.68rem', textTransform: 'uppercase' }}>ESPECIALIDAD</th>
+                            <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.68rem', textTransform: 'uppercase' }}>VEHÍCULO</th>
+                            <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.68rem', textTransform: 'uppercase' }}>ESTADO</th>
+                            {!readOnly && <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.68rem', textAlign: 'center', textTransform: 'uppercase' }}>GESTIÓN</th>}
                         </tr>
                     </thead>
                     <tbody>
                         {filtered.map(c => (
-                            <tr key={c.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                <td style={{ padding: '1.2rem' }}>
+                            <tr key={c.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s ease' }}>
+                                <td style={{ padding: '0.75rem 1rem' }}>
                                     <div 
                                         onClick={() => {
                                             setSelectedDriver(c);
                                             fetchDriverKpis(c);
                                         }}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
                                     >
-                                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900', fontSize: '0.8rem' }}>
+                                        <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900', fontSize: '0.78rem', boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)' }}>
                                             {getInitials(c.contact_name)}
                                         </div>
-                                        <div style={{ fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.84rem' }}>
                                             {c.contact_name}
                                             {c.is_temporary && (
                                                 <span style={{ 
-                                                    fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', 
-                                                    padding: '2px 6px', borderRadius: '4px', border: '1px solid #FECACA'
+                                                    fontSize: '0.55rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#B91C1C', 
+                                                    padding: '2px 5px', borderRadius: '4px', border: '1px solid #FECACA'
                                                 }}>
                                                     TEMPORAL
                                                 </span>
@@ -414,42 +415,42 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                                         </div>
                                     </div>
                                 </td>
-                                <td style={{ padding: '1.2rem' }}>
-                                    <div style={{ fontWeight: '600', color: '#475569' }}>{c.phone || 'S/N'}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{c.email || 'Sin correo'}</div>
+                                <td style={{ padding: '0.75rem 1rem' }}>
+                                    <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.8rem' }}>{c.phone || 'S/N'}</div>
+                                    <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary }}>{c.email || 'Sin correo'}</div>
                                 </td>
-                                <td style={{ padding: '1.2rem' }}>
-                                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#F3F4F6', color: '#4B5563' }}>
+                                <td style={{ padding: '0.75rem 1rem' }}>
+                                    <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '800', backgroundColor: THEME.colors.background, color: THEME.colors.textSecondary, border: `1px solid ${THEME.colors.border}` }}>
                                         {c.specialty?.toUpperCase() || 'CONDUCTOR'}
                                     </span>
                                 </td>
-                                <td style={{ padding: '1.2rem' }}>
+                                <td style={{ padding: '0.75rem 1rem' }}>
                                     {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? (
-                                        <div style={{ fontWeight: '800', color: '#0891B2', backgroundColor: '#ECFEFF', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #BFEAF2', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                            <Truck size={14} /> {c.fleet_vehicles[0].plate}
+                                        <div style={{ fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.3rem 0.65rem', borderRadius: '6px', border: '1px solid #D1E0D9', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem' }}>
+                                            <Truck size={13} strokeWidth={2} /> {c.fleet_vehicles[0].plate}
                                         </div>
                                     ) : (
-                                        <div style={{ fontWeight: '700', color: '#D97706', backgroundColor: '#FFFBEB', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px dashed #FEF3C7', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                            <AlertTriangle size={14} /> Sin Vehículo
+                                        <div style={{ fontWeight: '700', color: '#D97706', backgroundColor: '#FFFBEB', padding: '0.3rem 0.65rem', borderRadius: '6px', border: '1px dashed #FEF3C7', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                            <AlertTriangle size={13} /> Sin Vehículo
                                         </div>
                                     )}
                                 </td>
-                                <td style={{ padding: '1.2rem' }}>
-                                    <span style={{ padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: c.is_active ? '#ECFDF5' : '#FEF2F2', color: c.is_active ? '#065F46' : '#991B1B' }}>
+                                <td style={{ padding: '0.75rem 1rem' }}>
+                                    <span style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', fontSize: '0.68rem', fontWeight: '800', backgroundColor: c.is_active ? '#ECFDF5' : '#FEF2F2', color: c.is_active ? '#065F46' : '#991B1B', border: c.is_active ? '1px solid #A7F3D0' : '1px solid #FECACA' }}>
                                         {c.is_active ? 'ACTIVO' : 'INACTIVO'}
                                     </span>
                                 </td>
                                 {!readOnly && (
-                                    <td style={{ padding: '1.2rem' }}>
+                                    <td style={{ padding: '0.75rem 1rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                                             {assigningId === c.id ? (
                                                 <select 
                                                     autoFocus
                                                     onChange={(e) => handleAssign(c.id, e.target.value)}
                                                     onBlur={() => setAssigningId(null)}
-                                                    style={{ padding: '0.4rem', borderRadius: '8px', border: '2px solid #0891B2', fontWeight: '900', fontSize: '0.8rem' }}
+                                                    style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: `2px solid ${THEME.colors.primary}`, fontWeight: '800', fontSize: '0.76rem', color: THEME.colors.textMain, outline: 'none' }}
                                                 >
-                                                    <option value="">Seleccionar...</option>
+                                                    <option value="">Seleccionar vehículo...</option>
                                                     <option value="none">Desvincular</option>
                                                     {availableVehicles.map(v => (
                                                         <option key={v.id} value={v.id}>{v.plate}</option>
@@ -458,9 +459,18 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
                                             ) : (
                                                 <button 
                                                     onClick={() => setAssigningId(c.id)}
-                                                    style={{ padding: '0.4rem 1rem', borderRadius: '8px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                    style={{ 
+                                                        padding: '0.35rem 0.8rem', borderRadius: '6px', border: 'none', 
+                                                        backgroundColor: THEME.colors.primary, color: 'white', 
+                                                        fontWeight: '800', fontSize: '0.68rem', cursor: 'pointer', 
+                                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                        boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)',
+                                                        transition: 'background-color 0.15s ease'
+                                                    }}
+                                                    onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                                    onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                                 >
-                                                    {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? <><RefreshCw size={12} /> CAMBIAR</> : <><Plus size={12} /> ASIGNAR</>}
+                                                    {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? <><RefreshCw size={11} strokeWidth={2} /> CAMBIAR</> : <><Plus size={11} strokeWidth={2} /> ASIGNAR</>}
                                                 </button>
                                             )}
                                         </div>
@@ -474,40 +484,40 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
 
             {/* PERFORMANCE MODAL */}
             {selectedDriver && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-                    <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '800px', borderRadius: '32px', overflow: 'hidden', position: 'relative', animation: 'slideUp 0.3s ease-out' }}>
-                        <button onClick={() => setSelectedDriver(null)} style={{ position: 'absolute', right: '2rem', top: '2rem', background: '#F1F5F9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <X size={20} />
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(26, 35, 30, 0.7)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '750px', borderRadius: THEME.radius.xl, overflow: 'hidden', position: 'relative', animation: 'slideUp 0.25s ease-out', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
+                        <button onClick={() => setSelectedDriver(null)} style={{ position: 'absolute', right: '1.25rem', top: '1.25rem', background: THEME.colors.background, border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary }}>
+                            <X size={18} />
                         </button>
-                        <div style={{ padding: '3rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                                <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900', fontSize: '1.8rem' }}>
+                        <div style={{ padding: '2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginBottom: '2rem' }}>
+                                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900', fontSize: '1.5rem', boxShadow: '0 4px 10px rgba(13, 122, 87, 0.25)' }}>
                                     {getInitials(selectedDriver.contact_name)}
                                 </div>
                                 <div>
-                                    <h2 style={{ fontSize: '2rem', fontWeight: '900', margin: 0 }}>{selectedDriver.contact_name}</h2>
-                                    <p style={{ color: '#64748B' }}>{selectedDriver.specialty || 'Conductor Especializado'}</p>
+                                    <h2 style={{ fontSize: '1.5rem', fontWeight: '900', margin: 0, color: THEME.colors.textMain }}>{selectedDriver.contact_name}</h2>
+                                    <p style={{ color: THEME.colors.textSecondary, margin: '2px 0 0', fontSize: '0.85rem' }}>{selectedDriver.specialty || 'Conductor Especializado'} &bull; FruFresco Logística</p>
                                 </div>
                             </div>
 
                             {loadingKpis ? (
-                                <div style={{ padding: '4rem', textAlign: 'center' }}>
+                                <div style={{ padding: '3rem', textAlign: 'center' }}>
                                     <div className="loader"></div>
-                                    <p style={{ marginTop: '1rem', fontWeight: '700', color: '#0891B2' }}>Calculando KPIs...</p>
+                                    <p style={{ marginTop: '1rem', fontWeight: '800', color: THEME.colors.primary, fontSize: '0.85rem' }}>Calculando KPIs de rendimiento...</p>
                                 </div>
                             ) : kpis && (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B' }}>EFECTIVIDAD</div>
-                                        <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#10B981', margin: '0.5rem 0' }}>{Math.round(kpis.successRate)}%</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.85rem' }}>
+                                    <div style={{ backgroundColor: '#F4F9F6', padding: '1.25rem', borderRadius: THEME.radius.lg, border: '1px solid #E0EFE7' }}>
+                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.primary, textTransform: 'uppercase' }}>EFECTIVIDAD DE ENTREGA</div>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#065F46', margin: '0.3rem 0 0' }}>{Math.round(kpis.successRate)}%</div>
                                     </div>
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B' }}>CARGA</div>
-                                        <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#1E293B', margin: '0.5rem 0' }}>{kpis.totalKilos.toLocaleString()} KG</div>
+                                    <div style={{ backgroundColor: '#F4F9F6', padding: '1.25rem', borderRadius: THEME.radius.lg, border: '1px solid #E0EFE7' }}>
+                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>CARGA TRANSPORTADA</div>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: '900', color: THEME.colors.textMain, margin: '0.3rem 0 0' }}>{kpis.totalKilos.toLocaleString()} <span style={{ fontSize: '0.9rem', fontWeight: '700' }}>KG</span></div>
                                     </div>
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B' }}>VIAJES</div>
-                                        <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#0891B2', margin: '0.5rem 0' }}>{kpis.totalRoutes}</div>
+                                    <div style={{ backgroundColor: '#F4F9F6', padding: '1.25rem', borderRadius: THEME.radius.lg, border: '1px solid #E0EFE7' }}>
+                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>RUTAS COMPLETADAS</div>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: '900', color: THEME.colors.primary, margin: '0.3rem 0 0' }}>{kpis.totalRoutes}</div>
                                     </div>
                                 </div>
                             )}
@@ -517,10 +527,9 @@ export default function ConductorPanel({ readOnly = false }: { readOnly?: boolea
             )}
 
             <style jsx>{`
-                @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-                .loader { border: 4px solid #f3f3f3; border-top: 4px solid #0891B2; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+                @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+                .loader { border: 3px solid #EAEFEA; border-top: 3px solid #0D7A57; border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; margin: 0 auto; }
                 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                .driver-name:hover { color: #0891B2 !important; text-decoration: underline; }
             `}</style>
         </div>
     );

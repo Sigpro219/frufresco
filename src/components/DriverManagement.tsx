@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
+import { THEME } from '@/lib/adminTheme';
+
 interface Driver {
     id: string;
     contact_name: string;
@@ -43,7 +45,7 @@ export default function DriverManagement() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
-                <div style={{ textAlign: 'center', color: '#6B7280' }}>
+                <div style={{ textAlign: 'center', color: THEME.colors.textSecondary }}>
                     <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔄</div>
                     <div>Cargando conductores...</div>
                 </div>
@@ -52,29 +54,29 @@ export default function DriverManagement() {
     }
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#111827' }}>
-                    Conductores <span style={{ color: '#0891B2' }}>Activos</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#6B7280', marginLeft: '0.5rem' }}>
+        <div style={{ fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain }}>
+                    Conductores <span style={{ color: THEME.colors.primary }}>Activos</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textSecondary, marginLeft: '0.5rem' }}>
                         ({drivers.filter(d => d.is_active !== false).length})
                     </span>
                 </h2>
                 <button 
                     onClick={loadDrivers}
                     style={{ 
-                        padding: '0.6rem 1.2rem', 
-                        borderRadius: '12px', 
+                        padding: '0.45rem 0.9rem', 
+                        borderRadius: THEME.radius.md, 
                         backgroundColor: 'white', 
-                        border: '1px solid #E5E7EB', 
+                        border: `1px solid ${THEME.colors.border}`, 
                         cursor: 'pointer', 
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
-                        color: '#374151',
+                        fontWeight: '800',
+                        fontSize: '0.78rem',
+                        color: THEME.colors.textMain,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.5rem',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        gap: '0.4rem',
+                        boxShadow: THEME.shadow.sm
                     }}
                 >
                     <span>🔄</span> Actualizar Lista
@@ -82,65 +84,64 @@ export default function DriverManagement() {
             </div>
 
             {drivers.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#F9FAFB', borderRadius: '24px', border: '1px dashed #E5E7EB' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🚛</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>
+                <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#F9FAFB', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.border}` }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🚛</div>
+                    <div style={{ fontSize: '1rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.4rem' }}>
                         No hay conductores registrados.
                     </div>
-                    <div style={{ color: '#6B7280', fontSize: '0.9rem' }}>
+                    <div style={{ color: THEME.colors.textSecondary, fontSize: '0.82rem' }}>
                         Ve a <strong>Talento Humano</strong> y asigna conductores allí.
                     </div>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
                     {drivers.filter(d => d.is_active !== false).map(driver => (
                         <div 
                             key={driver.id} 
                             style={{ 
                                 backgroundColor: 'white', 
-                                borderRadius: '24px', 
-                                padding: '1.5rem', 
-                                border: '1px solid #E5E7EB',
+                                borderRadius: THEME.radius.lg, 
+                                padding: '1.25rem', 
+                                border: `1px solid ${THEME.colors.border}`,
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '1.2rem',
+                                gap: '1rem',
                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: '0 2px 4px -1px rgba(0,0,0,0.02), 0 4px 6px -1px rgba(0,0,0,0.05)'
+                                boxShadow: THEME.shadow.sm
                             }}
                         >
                             <div style={{ 
-                                width: '60px', 
-                                height: '60px', 
-                                borderRadius: '20px', 
-                                background: 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)', 
+                                width: '50px', 
+                                height: '50px', 
+                                borderRadius: '12px', 
+                                background: 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)', 
                                 display: 'flex', 
                                 justifyContent: 'center', 
-                                alignItems: 'center',
-                                color: 'white',
-                                fontWeight: '900',
-                                fontSize: '1.3rem',
-                                letterSpacing: '0.05rem',
-                                boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.2)'
+                                alignItems: 'center', 
+                                color: 'white', 
+                                fontWeight: '900', 
+                                fontSize: '1.1rem',
+                                boxShadow: '0 4px 8px rgba(13, 122, 87, 0.25)'
                             }}>
                                 {getInitials(driver.contact_name)}
                             </div>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: '900', color: '#111827', fontSize: '1.1rem', letterSpacing: '-0.02rem' }}>
+                                <div style={{ fontWeight: '900', color: THEME.colors.textMain, fontSize: '0.95rem' }}>
                                     {driver.contact_name || 'Sin nombre'}
                                 </div>
-                                <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: '600', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <div style={{ fontSize: '0.78rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                     <span>📞</span> {driver.phone || 'N/A'}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <span style={{ 
-                                    backgroundColor: '#DCFCE7', 
-                                    color: '#166534', 
-                                    padding: '0.4rem 0.8rem', 
-                                    borderRadius: '12px', 
+                                    backgroundColor: '#ECFDF5', 
+                                    color: '#065F46', 
+                                    border: '1px solid #A7F3D0',
+                                    padding: '0.25rem 0.6rem', 
+                                    borderRadius: '8px', 
                                     fontSize: '0.65rem', 
-                                    fontWeight: '900',
-                                    letterSpacing: '0.05rem'
+                                    fontWeight: '800'
                                 }}>
                                     EN LÍNEA
                                 </span>
