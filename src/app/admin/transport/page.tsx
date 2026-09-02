@@ -727,9 +727,27 @@ export default function TransportControlTower() {
                                                                             borderRadius: '6px',
                                                                             backgroundColor: isInRoute ? '#EFF6FF' : isAvailable ? '#ECFDF5' : '#FEF3C7',
                                                                             color: isInRoute ? '#1D4ED8' : isAvailable ? '#065F46' : '#B45309',
-                                                                            border: isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A'
+                                                                            border: isInRoute ? '1px solid #BFDBFE' : isAvailable ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
                                                                         }}>
-                                                                            {isInRoute ? '🟢 EN RUTA' : isAvailable ? '📦 EN PATIO' : '⚠️ EN TALLER'}
+                                                                            {isInRoute ? (
+                                                                                <>
+                                                                                    <Navigation size={10} strokeWidth={2.5} style={{ color: '#1D4ED8' }} />
+                                                                                    <span>EN RUTA</span>
+                                                                                </>
+                                                                            ) : isAvailable ? (
+                                                                                <>
+                                                                                    <Package size={10} strokeWidth={2.5} style={{ color: '#059669' }} />
+                                                                                    <span>EN PATIO</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <AlertTriangle size={10} strokeWidth={2.5} style={{ color: '#D97706' }} />
+                                                                                    <span>EN TALLER</span>
+                                                                                </>
+                                                                            )}
                                                                         </span>
                                                                     </div>
 

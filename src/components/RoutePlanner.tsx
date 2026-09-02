@@ -25,7 +25,10 @@ import {
     Bot,
     ShoppingBag,
     CheckCircle2,
-    Coins
+    Coins,
+    Printer,
+    MessageSquare,
+    Navigation
 } from 'lucide-react';
 
 interface Order {
@@ -198,6 +201,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                  .replace(/Enviado el:[\s\S]*$/gi, '')
                                  .replace(/Estimados señores[\s\S]*$/gi, '')
                                  .replace(/Pago en línea verificado.*?(\.|\n|$)/gi, '')
+                                 .replace(/Pago contra entrega.*?(\.|\n|$)/gi, '')
+                                 .replace(/Pago en efectivo.*?(\.|\n|$)/gi, '')
+                                 .replace(/Contraentrega.*?(\.|\n|$)/gi, '')
+                                 .replace(/Wompi.*?(\.|\n|$)/gi, '')
+                                 .replace(/Aprobado.*?(\.|\n|$)/gi, '')
                                  .replace(/Nombre:.*?(\||\n|$)/gi, '')
                                  .replace(/Tel:.*?(\||\n|$)/gi, '')
                                  .replace(/ID:[a-f0-9-]{36}/gi, '') // Removes UUIDs
@@ -205,6 +213,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                  .replace(/\|/g, '') // Remove remaining separators
                                  .trim();
                 }
+
 
 
 
@@ -926,9 +935,13 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         whiteSpace: 'nowrap',
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
-                                                        maxWidth: '150px'
+                                                        maxWidth: '150px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
                                                     }} title={order.novedad}>
-                                                        📝 {order.novedad}
+                                                        <FileText size={8} strokeWidth={2} style={{ flexShrink: 0, color: '#64748B' }} />
+                                                        <span>{order.novedad}</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -2074,7 +2087,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                💬 Copiar WhatsApp
+                                <MessageSquare size={16} strokeWidth={2} /> Copiar WhatsApp
                             </button>
                             <button
                                 onClick={printManifestViaNewWindow}
@@ -2085,7 +2098,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                🖨️ Imprimir Plan
+                                <Printer size={16} strokeWidth={2} /> Imprimir Plan
                             </button>
                             <button
                                 onClick={() => setConfirmedManifest(null)}
@@ -2176,10 +2189,12 @@ function OptimizingModal() {
                         top: '50%',
                         left: '50%',
                         transform: 'translate(-50%, -50%)',
-                        fontSize: '2rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         animation: 'pulse 1.5s ease-in-out infinite'
                     }}>
-                        🤖
+                        <Bot size={34} style={{ color: '#818CF8' }} />
                     </div>
                 </div>
                 <div>
