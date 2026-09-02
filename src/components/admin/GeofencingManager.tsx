@@ -302,10 +302,10 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             onPathChange={editMode === 'b2b' ? handlePathChange : undefined}
                             editable={editMode === 'b2b'}
                             draggable={editMode === 'b2b'}
-                            fillColor="#7C3AED"
-                            fillOpacity={0.2}
-                            strokeColor="#7C3AED"
-                            strokeWeight={2}
+                            fillColor="#0D7A57"
+                            fillOpacity={0.25}
+                            strokeColor="#0D7A57"
+                            strokeWeight={2.5}
                         />
                     )}
 
@@ -326,7 +326,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 icon={{
                                     path: google.maps.SymbolPath.CIRCLE,
                                     scale: isB2B ? 9 : 7,
-                                    fillColor: isB2B ? '#2563EB' : '#DC2626',
+                                    fillColor: isB2B ? '#0D7A57' : '#DC2626',
                                     fillOpacity: 0.95,
                                     strokeColor: '#FFFFFF',
                                     strokeWeight: 2
@@ -344,8 +344,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 <div style={{ 
                                     fontSize: '0.7rem', 
                                     fontWeight: '900', 
-                                    color: selectedPoint.channel === 'b2b' ? '#1E40AF' : '#991B1B', 
-                                    backgroundColor: selectedPoint.channel === 'b2b' ? '#DBEAFE' : '#FEE2E2',
+                                    color: selectedPoint.channel === 'b2b' ? '#065F46' : '#991B1B', 
+                                    backgroundColor: selectedPoint.channel === 'b2b' ? '#D1FAE5' : '#FEE2E2',
                                     padding: '2px 6px',
                                     borderRadius: '4px',
                                     textTransform: 'uppercase', 
@@ -356,7 +356,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     gap: '4px' 
                                 }}>
                                     <AlertCircle size={11} /> 
-                                    {selectedPoint.channel === 'b2b' ? '🔵 Rechazo B2B HORECA' : '🔴 Rechazo B2C Hogares'}
+                                    {selectedPoint.channel === 'b2b' ? '🟢 Rechazo B2B HORECA' : '🔴 Rechazo B2C Hogares'}
                                 </div>
                                 <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>
                                     {selectedPoint.municipality || 'Fuera de Cobertura'}
@@ -367,7 +367,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                 {selectedPoint.customer_name && (
                                     <div style={{ fontSize: '0.72rem', color: '#1E293B', marginTop: '6px', fontWeight: '700', borderTop: '1px solid #E2E8F0', paddingTop: '4px' }}>
                                         👤 {selectedPoint.customer_name}
-                                        {selectedPoint.customer_phone && <div style={{ color: '#2563EB', fontWeight: '600' }}>📱 WA: {selectedPoint.customer_phone}</div>}
+                                        {selectedPoint.customer_phone && <div style={{ color: '#0D7A57', fontWeight: '600' }}>📱 WA: {selectedPoint.customer_phone}</div>}
                                     </div>
                                 )}
                             </div>
@@ -381,16 +381,16 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         top: '20px', 
                         left: '20px', 
                         zIndex: 1, 
-                        backgroundColor: 'rgba(255,255,255,0.95)', 
+                        backgroundColor: 'rgba(255,255,255,0.96)', 
                         padding: '1.25rem', 
                         borderRadius: THEME.radius.lg, 
                         boxShadow: THEME.shadow.lg, 
-                        backdropFilter: 'blur(4px)', 
+                        backdropFilter: 'blur(6px)', 
                         width: '280px',
                         border: `1px solid ${THEME.colors.border}`
                     }}>
-                        <p style={{ margin: '0 0 4px 0', fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Modo Edición: <span style={{ color: editMode === 'b2c' ? '#EF4444' : '#7C3AED' }}>{editMode === 'b2c' ? 'Hogares (B2C)' : 'HORECA (B2B)'}</span>
+                        <p style={{ margin: '0 0 4px 0', fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Modo Edición: <span style={{ color: editMode === 'b2c' ? '#EF4444' : THEME.colors.primary }}>{editMode === 'b2c' ? 'Hogares (B2C)' : 'HORECA (B2B)'}</span>
                         </p>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>Arrastra los puntos o haz clic en las líneas para ajustar la zona de cobertura.</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -406,7 +406,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     border: 'none', 
-                                    fontWeight: '600', 
+                                    fontWeight: '700', 
                                     cursor: 'pointer', 
                                     opacity: saving ? 0.7 : 1,
                                     fontSize: '0.85rem',
@@ -414,7 +414,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: '6px',
-                                    transition: 'background-color 0.2s'
+                                    transition: 'background-color 0.2s',
+                                    boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
                                 }}
                                 onMouseOver={e => { if (!saving) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
                                 onMouseOut={e => { if (!saving) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
@@ -430,7 +431,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     backgroundColor: THEME.colors.primaryLight, 
                                     color: THEME.colors.primary, 
                                     border: 'none', 
-                                    fontWeight: '600', 
+                                    fontWeight: '700', 
                                     cursor: 'pointer',
                                     fontSize: '0.85rem',
                                     display: 'flex',
@@ -450,7 +451,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                                     backgroundColor: 'white', 
                                     border: `1px solid ${THEME.colors.borderActive}`, 
                                     color: THEME.colors.textSecondary, 
-                                    fontWeight: '600', 
+                                    fontWeight: '700', 
                                     cursor: 'pointer',
                                     fontSize: '0.85rem',
                                     transition: 'all 0.2s'
@@ -465,19 +466,19 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                 )}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <h3 style={{ fontWeight: '800', color: THEME.colors.textMain, margin: 0, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Control de Cobertura</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h3 style={{ fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Control de Cobertura</h3>
                 
                 {/* B2C Coverage Card */}
                 <div style={{ 
-                    padding: '1.25rem', 
+                    padding: '1rem', 
                     borderRadius: THEME.radius.lg, 
                     border: editMode === 'b2c' ? '2px solid #EF4444' : `1px solid ${THEME.colors.border}`, 
                     backgroundColor: THEME.colors.surface,
                     boxShadow: THEME.shadow.sm 
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.88rem', color: THEME.colors.textMain }}>
                             <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
                             <span>B2C (Hogares)</span>
                         </span>
@@ -495,14 +496,14 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             onClick={() => startEditing('b2c')} 
                             style={{ 
                                 width: '100%', 
-                                padding: '0.65rem', 
+                                padding: '0.55rem', 
                                 borderRadius: THEME.radius.sm, 
                                 border: '1px solid #EF4444', 
                                 backgroundColor: 'white', 
                                 color: '#EF4444', 
-                                fontWeight: '600', 
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
+                                fontWeight: '700', 
+                                cursor: 'pointer', 
+                                fontSize: '0.8rem',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -520,15 +521,15 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
 
                 {/* B2B Coverage Card */}
                 <div style={{ 
-                    padding: '1.25rem', 
+                    padding: '1rem', 
                     borderRadius: THEME.radius.lg, 
-                    border: editMode === 'b2b' ? '2px solid #7C3AED' : `1px solid ${THEME.colors.border}`, 
+                    border: editMode === 'b2b' ? `2px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`, 
                     backgroundColor: THEME.colors.surface,
                     boxShadow: THEME.shadow.sm
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#7C3AED' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.88rem', color: THEME.colors.textMain }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
                             <span>B2B (HORECA)</span>
                         </span>
                         <button 
@@ -545,21 +546,21 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                             onClick={() => startEditing('b2b')} 
                             style={{ 
                                 width: '100%', 
-                                padding: '0.65rem', 
+                                padding: '0.55rem', 
                                 borderRadius: THEME.radius.sm, 
-                                border: '1px solid #7C3AED', 
+                                border: `1px solid ${THEME.colors.primary}`, 
                                 backgroundColor: 'white', 
-                                color: '#7C3AED', 
-                                fontWeight: '600', 
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
+                                color: THEME.colors.primary, 
+                                fontWeight: '700', 
+                                cursor: 'pointer', 
+                                fontSize: '0.8rem',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '6px',
                                 transition: 'all 0.2s'
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F5F3FF'; }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
                             onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; }}
                         >
                             <Edit2 size={14} strokeWidth={1.5} />
