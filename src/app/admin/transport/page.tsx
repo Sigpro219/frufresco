@@ -261,10 +261,10 @@ export default function TransportControlTower() {
 
     if (loading) {
         return (
-            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                    <Loader2 size={36} className="animate-spin" style={{ color: '#0EA5E9' }} />
-                    <span style={{ color: '#64748B', fontSize: '0.85rem', fontWeight: '600' }}>Cargando Torre de Control...</span>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '700' }}>Cargando Torre de Control FruFresco...</span>
                 </div>
             </main>
         );
@@ -272,15 +272,15 @@ export default function TransportControlTower() {
 
     if (!canView) {
         return (
-            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
                 <div style={{
                     textAlign: 'center',
                     padding: '3rem',
-                    backgroundColor: 'white',
-                    borderRadius: '16px',
-                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.xl,
+                    boxShadow: THEME.shadow.md,
                     maxWidth: '480px',
-                    border: '1px solid #E2E8F0',
+                    border: `1px solid ${THEME.colors.border}`,
                 }}>
                     <div style={{
                         display: 'inline-flex',
@@ -289,191 +289,325 @@ export default function TransportControlTower() {
                         width: '64px',
                         height: '64px',
                         borderRadius: '50%',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        color: '#EF4444',
+                        backgroundColor: '#FEF2F2',
+                        color: '#DC2626',
                         marginBottom: '1.5rem',
                     }}>
                         <ShieldAlert size={32} />
                     </div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.75rem' }}>
-                        Acceso Denegado
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, marginBottom: '0.75rem', fontFamily: THEME.typography.fontFamilyMain }}>
+                        Acceso Restringido
                     </h1>
-                    <p style={{ color: '#64748B', fontSize: '0.95rem', lineHeight: '1.5' }}>
-                        No tienes los permisos necesarios para visualizar la Torre de Control de Logística. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        No tienes los permisos requeridos para acceder a la Torre de Control de Logística y Transporte de FruFresco.
                     </p>
                 </div>
             </main>
         );
     }
 
+    // Quick Fleet Calculation for Sidebar Intelligence Widget
+    const totalVehicles = fleetData.length;
+    const vehiclesOnRoute = fleetData.filter(v => v.status === 'on_route').length;
+    const vehiclesAvailable = fleetData.filter(v => v.status === 'available').length;
+    const vehiclesMaintenance = fleetData.filter(v => v.status === 'maintenance').length;
+    const avgKilosPerRoute = activeRoutes.length > 0 ? Math.round(stats.totalKilos / activeRoutes.length) : 0;
+
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
-            <div style={{ maxWidth: '100%', margin: '0 auto', padding: '1rem 2rem' }}>
+            <div style={{ maxWidth: '100%', margin: '0 auto', padding: '0.85rem 1.5rem 1.5rem' }}>
                 {!canEdit && (
                     <div style={{
-                        padding: '12px 16px',
-                        borderRadius: '12px',
-                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                        border: '1px solid rgba(245, 158, 11, 0.2)',
-                        color: '#D97706',
-                        fontSize: '0.85rem',
-                        fontWeight: '600',
+                        padding: '10px 14px',
+                        borderRadius: THEME.radius.md,
+                        backgroundColor: '#FFFBEB',
+                        border: '1px solid #FDE68A',
+                        color: '#B45309',
+                        fontSize: '0.82rem',
+                        fontWeight: '700',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        marginBottom: '1rem',
-                        marginTop: '0.5rem'
+                        marginBottom: '0.8rem'
                     }}>
                         <ShieldAlert size={16} />
-                        <span>Modo Vista: No tienes permisos para modificar la operación de transporte.</span>
+                        <span>Modo Auditoría / Solo Lectura: No tienes permisos de edición en la flota de transporte.</span>
                     </div>
                 )}
                 
-                {/* Slim Premium Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.8rem', padding: '0 0.5rem' }}>
+                {/* ── TOP HEADER & INTEGRATED KPIS ── */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0EA5E9', boxShadow: '0 0 10px #0EA5E9' }}></div>
-                            <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>LOGISTICS & SUPPLY CHAIN / TOWER</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: THEME.colors.primary, boxShadow: `0 0 8px ${THEME.colors.primary}80` }}></div>
+                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.primary, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                CADENA DE SUMINISTRO &bull; TORRE DE CONTROL
+                            </span>
+                            <span style={{ fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.primaryLight, padding: '0.15rem 0.45rem', borderRadius: '6px' }}>
+                                Bodega Central Corabastos
+                            </span>
                         </div>
-                        <h1 style={{ fontSize: '1.85rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
-                            Transporte
+                        <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', margin: 0, lineHeight: 1.1 }}>
+                            Transporte &amp; Despachos
                         </h1>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 180px)', gap: '1rem' }}>
-                        <KPICard title="EN TRÁNSITO" value={formatNumber(stats.totalActive)} icon={<Truck size={18} strokeWidth={1.5} />} color="#0EA5E9" subtitle="Rutas activas hoy" />
-                        <KPICard title="ENTREGAS" value={formatNumber(stats.completedToday)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Rutas finalizadas" />
-                        <KPICard title="VOLUMEN" value={`${formatNumber(stats.totalKilos)} kg`} icon={<Scale size={18} strokeWidth={1.5} />} color="#6366F1" subtitle="Carga total gestionada" />
-                        <KPICard title="ALERTAS" value={formatNumber(stats.totalNovedades)} icon={<AlertTriangle size={18} strokeWidth={1.5} />} color="#F43F5E" subtitle="Novedades reportadas" />
+                    {/* 4 Brand Harmonized KPI Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: '0.75rem', flex: '1 1 680px', maxWidth: '850px' }}>
+                        <KPICard title="EN TRÁNSITO" value={formatNumber(stats.totalActive)} icon={<Truck size={17} strokeWidth={2} />} color={THEME.colors.primary} subtitle="Rutas en movimiento hoy" />
+                        <KPICard title="ENTREGAS" value={formatNumber(stats.completedToday)} icon={<CheckCircle2 size={17} strokeWidth={2} />} color="#059669" subtitle="Rutas finalizadas hoy" />
+                        <KPICard title="VOLUMEN TOTAL" value={`${formatNumber(stats.totalKilos)} kg`} icon={<Scale size={17} strokeWidth={2} />} color="#D97706" subtitle="Carga total a bordo" />
+                        <KPICard title="ALERTAS / NOVEDADES" value={formatNumber(stats.totalNovedades)} icon={<AlertTriangle size={17} strokeWidth={2} />} color="#DC2626" subtitle="Incidencias registradas" />
                     </div>
                 </div>
 
-                {/* Integrated Control Bar */}
+                {/* ── SEGMENTED NAVIGATION CONTROL BAR ── */}
                 <div style={{ 
-                    backgroundColor: 'white', 
-                    padding: '0.4rem 1rem', 
-                    borderRadius: '20px', 
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)', 
-                    border: '1px solid #E2E8F0',
+                    backgroundColor: THEME.colors.surface, 
+                    padding: '0.35rem 0.6rem', 
+                    borderRadius: THEME.radius.lg, 
+                    boxShadow: THEME.shadow.sm, 
+                    border: `1px solid ${THEME.colors.border}`,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: '0.8rem'
+                    marginBottom: '0.85rem',
+                    gap: '0.75rem'
                 }}>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
                         {[
-                            { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={1.5} /> },
-                            { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={1.5} /> },
-                            { id: 'fleet', label: 'Flota', icon: <Truck size={14} strokeWidth={1.5} /> },
-                            { id: 'drivers_panel', label: 'Conductores', icon: <Users size={14} strokeWidth={1.5} /> },
-                            { id: 'maintenance', label: 'Mantenimiento', icon: <Wrench size={14} strokeWidth={1.5} /> },
-                            { id: 'kpis', label: 'Insights', icon: <TrendingUp size={14} strokeWidth={1.5} /> },
-                            { id: 'crates', label: 'Canastillas', icon: <Package size={14} strokeWidth={1.5} /> }
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '14px', border: 'none',
-                                    backgroundColor: activeTab === tab.id ? '#0F172A' : 'transparent',
-                                    color: activeTab === tab.id ? 'white' : '#64748B',
-                                    fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
-                                }}
-                            >
-                                <span style={{ display: 'inline-flex', alignItems: 'center' }}>{tab.icon}</span>
-                                {tab.label.toUpperCase()}
-                            </button>
-                        ))}
+                            { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={2} /> },
+                            { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={2} /> },
+                            { id: 'fleet', label: 'Flota', icon: <Truck size={14} strokeWidth={2} /> },
+                            { id: 'drivers_panel', label: 'Conductores', icon: <Users size={14} strokeWidth={2} /> },
+                            { id: 'maintenance', label: 'Mantenimiento', icon: <Wrench size={14} strokeWidth={2} /> },
+                            { id: 'kpis', label: 'Insights & KPIs', icon: <TrendingUp size={14} strokeWidth={2} /> },
+                            { id: 'crates', label: 'Canastillas', icon: <Package size={14} strokeWidth={2} /> }
+                        ].map((tab) => {
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.45rem 0.85rem', borderRadius: '8px', border: 'none',
+                                        backgroundColor: isActive ? THEME.colors.primary : 'transparent',
+                                        color: isActive ? '#FFFFFF' : THEME.colors.textSecondary,
+                                        fontSize: '0.76rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.25)' : 'none',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isActive) {
+                                            e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                            e.currentTarget.style.color = THEME.colors.textMain;
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isActive) {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.color = THEME.colors.textSecondary;
+                                        }
+                                    }}
+                                >
+                                    <span style={{ display: 'inline-flex', alignItems: 'center' }}>{tab.icon}</span>
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     <button 
                         onClick={() => fetchTransportData()}
                         disabled={loading}
                         style={{ 
-                            padding: '6px 16px', borderRadius: '14px', border: '1px solid #E2E8F0', backgroundColor: 'white',
-                            color: '#0F172A', fontWeight: '800', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+                            padding: '0.45rem 0.9rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
+                            color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                            transition: 'all 0.15s', flexShrink: 0
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = THEME.colors.primary;
+                            e.currentTarget.style.color = THEME.colors.primary;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = THEME.colors.border;
+                            e.currentTarget.style.color = THEME.colors.textMain;
                         }}
                     >
-                        {loading ? 'Sincronizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} strokeWidth={1.5} /> ACTUALIZAR</span>}
+                        {loading ? 'Sincronizando...' : <><RefreshCw size={12} strokeWidth={2} /> Actualizar</>}
                     </button>
                 </div>
 
-                {/* Main Content Area */}
-                <div style={{ position: 'relative', height: 'calc(100vh - 110px)' }}>
+                {/* ── MAIN CONTENT AREA ── */}
+                <div style={{ position: 'relative', minHeight: 'calc(100vh - 220px)' }}>
                     {activeTab === 'map' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: 'calc(100vh - 200px)' }}>
-                            {/* Route Feed */}
-                            <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '1.25rem', overflowY: 'auto' }}>
-                                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: '900', color: '#0F172A' }}>ESTADO DE RUTAS</h3>
-                                    <span style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '700' }}>{activeRoutes.length} TOTAL</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '390px 1fr', gap: '1.25rem', height: 'calc(100vh - 210px)' }}>
+                            {/* Route Feed & Operational Intelligence Sidebar */}
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                
+                                {/* 1. Sidebar Header */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: '900', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            Estado de Rutas en Vivo
+                                        </h3>
+                                        <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                            Despachos asignados para hoy
+                                        </span>
+                                    </div>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: '900', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
+                                        {activeRoutes.length} RUTAS
+                                    </span>
+                                </div>
+
+                                {/* 2. Fleet Overview Mini-Bar (Fills empty space with actionable data) */}
+                                <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.65rem 0.8rem', border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>
+                                        Resumen Operativo de Flota
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', textAlign: 'center' }}>
+                                        <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '1rem', fontWeight: '900', color: THEME.colors.primary }}>{vehiclesOnRoute}</div>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Ruta</div>
+                                        </div>
+                                        <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#059669' }}>{vehiclesAvailable}</div>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Patio</div>
+                                        </div>
+                                        <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#D97706' }}>{avgKilosPerRoute}</div>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary }}>kg/Ruta Prom</div>
+                                        </div>
+                                    </div>
                                 </div>
                                 
-                                {activeRoutes.length === 0 && !loading && (
-                                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8' }}>
-                                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={48} strokeWidth={1.5} /></div>
-                                        <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>No hay rutas activas en este momento</div>
+                                {/* 3. Active Routes List or Rich Empty State */}
+                                {activeRoutes.length === 0 && !loading ? (
+                                    <div style={{ textAlign: 'center', padding: '2.5rem 1rem', backgroundColor: '#F9FBFA', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.borderActive}`, margin: 'auto 0' }}>
+                                        <div style={{ color: THEME.colors.primary, marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}>
+                                            <Truck size={42} strokeWidth={1.5} />
+                                        </div>
+                                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.3rem' }}>
+                                            No hay rutas activas en este momento
+                                        </div>
+                                        <p style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, margin: '0 0 1.25rem', lineHeight: 1.4 }}>
+                                            {vehiclesAvailable > 0 
+                                                ? `Tienes ${vehiclesAvailable} vehículo(s) disponible(s) en patio listos para asignar.` 
+                                                : 'La flota se encuentra disponible para programar despachos del día.'}
+                                        </p>
+                                        <button
+                                            onClick={() => setActiveTab('planner')}
+                                            style={{
+                                                backgroundColor: THEME.colors.primary,
+                                                color: 'white',
+                                                padding: '0.55rem 1.1rem',
+                                                borderRadius: '8px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '800',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                            }}
+                                        >
+                                            <Compass size={14} /> Ir a Planeador de Rutas
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                        {activeRoutes.map(route => {
+                                            const done = route.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
+                                            const total = route.route_stops.length;
+                                            const progress = total > 0 ? (done / total) * 100 : 0;
+                                            const isInTransit = route.status === 'in_transit';
+
+                                            return (
+                                                <div key={route.id} style={{ 
+                                                    padding: '0.9rem', borderRadius: THEME.radius.lg, border: '1px solid',
+                                                    borderColor: isInTransit ? THEME.colors.primary : THEME.colors.border,
+                                                    backgroundColor: isInTransit ? '#F4F9F6' : 'white',
+                                                    boxShadow: isInTransit ? '0 2px 8px rgba(13, 122, 87, 0.08)' : THEME.shadow.sm,
+                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{ 
+                                                                width: '32px', height: '32px', borderRadius: '8px', 
+                                                                backgroundColor: isInTransit ? THEME.colors.primaryLight : '#F1F5F9',
+                                                                color: isInTransit ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem'
+                                                            }}>
+                                                                {getInitials(route.driver?.contact_name || route.vehicle_plate)}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ fontWeight: '900', fontSize: '0.92rem', color: THEME.colors.textMain }}>{route.vehicle_plate}</div>
+                                                                <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>
+                                                                    {route.driver?.contact_name ? route.driver.contact_name : `Ruta ID-${route.id.slice(0, 5)}`}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <span style={{ 
+                                                            fontSize: '0.62rem', fontWeight: '800', padding: '3px 7px', borderRadius: '6px',
+                                                            backgroundColor: isInTransit ? '#ECFDF5' : '#F1F5F9', 
+                                                            color: isInTransit ? '#065F46' : THEME.colors.textSecondary,
+                                                            border: isInTransit ? '1px solid #A7F3D0' : '1px solid #E2E8F0'
+                                                        }}>
+                                                            {route.status === 'in_transit' ? 'EN TRÁNSITO' : route.status.toUpperCase()}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Proportional Progress Track */}
+                                                    <div style={{ height: '5px', backgroundColor: '#E5E7EB', borderRadius: '4px', margin: '8px 0 6px', overflow: 'hidden' }}>
+                                                        <div style={{ 
+                                                            width: `${progress}%`, height: '100%', 
+                                                            background: isInTransit ? 'linear-gradient(90deg, #0D7A57 0%, #10B981 100%)' : '#059669', 
+                                                            transition: 'width 0.4s ease' 
+                                                        }}></div>
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', alignItems: 'center' }}>
+                                                        <span style={{ color: THEME.colors.textSecondary, fontWeight: '700' }}>
+                                                            {done}/{total} paradas completadas
+                                                        </span>
+                                                        <span style={{ fontWeight: '900', color: THEME.colors.primary }}>
+                                                            {Math.round(progress)}% &bull; {formatNumber(route.total_kilos || 0)} kg
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    {activeRoutes.map(route => {
-                                        const done = route.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
-                                        const progress = route.route_stops.length > 0 ? (done / route.route_stops.length) * 100 : 0;
-                                        const isInTransit = route.status === 'in_transit';
-
-                                        return (
-                                            <div key={route.id} style={{ 
-                                                padding: '1rem', borderRadius: '16px', border: '1px solid',
-                                                borderColor: isInTransit ? '#0EA5E9' : '#E2E8F0',
-                                                backgroundColor: isInTransit ? '#F0F9FF' : 'white',
-                                                transition: 'all 0.2s'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                    <div>
-                                                        <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0F172A' }}>{route.vehicle_plate}</div>
-                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '700' }}>ID-{route.id.slice(0, 5)}</div>
-                                                    </div>
-                                                    <span style={{ 
-                                                        fontSize: '0.6rem', fontWeight: '900', padding: '4px 8px', borderRadius: '8px',
-                                                        backgroundColor: isInTransit ? '#0EA5E9' : '#F1F5F9', color: isInTransit ? 'white' : '#64748B'
-                                                    }}>{route.status.toUpperCase()}</span>
-                                                </div>
-                                                <div style={{ height: '4px', backgroundColor: '#E2E8F0', borderRadius: '10px', margin: '12px 0 8px 0', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${progress}%`, height: '100%', backgroundColor: isInTransit ? '#0EA5E9' : '#10B981', transition: 'width 0.5s' }}></div>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                                                    <span style={{ color: '#64748B', fontWeight: '700' }}>{done}/{route.route_stops.length} pedidos</span>
-                                                    <span style={{ color: '#0F172A', fontWeight: '900' }}>{Math.round(progress)}%</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
                             </div>
 
-                            {/* Map Container */}
-                            <div style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-                                    {apiKey ? (
+                            {/* Map Container with Floating HUD */}
+                            <div style={{ borderRadius: THEME.radius.xl, overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md, position: 'relative' }}>
+                                {apiKey ? (
+                                    <>
                                         <Map defaultCenter={{ lat: 4.633653, lng: -74.160647 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>
+                                            {/* Bodega Central Marker */}
                                             <AdvancedMarker position={{ lat: 4.633653, lng: -74.160647 }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                    <div style={{ backgroundColor: THEME.colors.textMain, color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900', marginBottom: '4px' }}>BODEGA</div>
-                                                    <Pin background={'#0F172A'} glyphColor={'white'} scale={1.2} />
+                                                    <div style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '0.62rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 2px 6px rgba(13,122,87,0.35)' }}>
+                                                        BODEGA CENTRAL
+                                                    </div>
+                                                    <Pin background={THEME.colors.primary} glyphColor={'white'} scale={1.2} />
                                                 </div>
                                             </AdvancedMarker>
 
-                                            {/* Show ALL fleet vehicles for testing/monitoring */}
+                                            {/* Fleet Vehicles on Live Map */}
                                             {fleetData.map((v: any, i: number) => {
                                                 const driver = driversData.find((d: any) => d.id === v.driver_id);
                                                 const initials = getInitials(driver?.contact_name || '');
                                                 
-                                                // If no position, spread them around the warehouse for visibility
                                                 const pos = v.last_latitude && v.last_longitude 
                                                     ? { lat: v.last_latitude, lng: v.last_longitude }
                                                     : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
+
+                                                const isAvailable = v.status === 'available';
 
                                                 return (
                                                     <AdvancedMarker key={v.id} position={pos}>
@@ -482,28 +616,28 @@ export default function TransportControlTower() {
                                                                 width: '32px', 
                                                                 height: '32px', 
                                                                 borderRadius: '8px', 
-                                                                background: v.status === 'available' ? 'linear-gradient(135deg, #10B981 0%, #34D399 100%)' : 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)', 
+                                                                background: isAvailable ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)' : 'linear-gradient(135deg, #2563EB 0%, #38BDF8 100%)', 
                                                                 display: 'flex', 
                                                                 alignItems: 'center', 
                                                                 justifyContent: 'center', 
                                                                 color: 'white', 
                                                                 fontWeight: '900', 
                                                                 fontSize: '0.75rem',
-                                                                boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                                                                boxShadow: '0 4px 10px rgba(0,0,0,0.18)',
                                                                 border: '2px solid white'
                                                             }}>
-                                                                {initials}
+                                                                {initials || <Truck size={14} />}
                                                             </div>
                                                             <div style={{ 
                                                                 backgroundColor: 'white', 
-                                                                color: '#1E293B', 
+                                                                color: THEME.colors.textMain, 
                                                                 padding: '1px 6px', 
                                                                 borderRadius: '4px', 
-                                                                fontSize: '0.5rem', 
+                                                                fontSize: '0.52rem', 
                                                                 fontWeight: '900', 
                                                                 marginTop: '2px',
-                                                                border: '1px solid #E2E8F0',
-                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                                                border: `1px solid ${THEME.colors.border}`,
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
                                                             }}>
                                                                 {v.plate}
                                                             </div>
@@ -512,10 +646,45 @@ export default function TransportControlTower() {
                                                 );
                                             })}
                                         </Map>
-                                    ) : (
-                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', backgroundColor: '#F1F5F9' }}>
-                                        <div style={{ color: THEME.colors.textSecondary, display: 'flex', justifyContent: 'center' }}><MapPin size={48} strokeWidth={1.5} /></div>
-                                        <div style={{ fontWeight: '800', color: '#64748B' }}>Google Maps no configurado</div>
+
+                                        {/* Floating Map Legend HUD */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: '16px',
+                                            left: '16px',
+                                            backgroundColor: 'rgba(255, 255, 255, 0.94)',
+                                            backdropFilter: 'blur(8px)',
+                                            padding: '8px 14px',
+                                            borderRadius: THEME.radius.md,
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            boxShadow: THEME.shadow.md,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            fontSize: '0.68rem',
+                                            fontWeight: '700',
+                                            color: THEME.colors.textMain
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: THEME.colors.primary }}></div>
+                                                <span>Bodega Central</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#0D7A57' }}></div>
+                                                <span>Flota en Patio ({vehiclesAvailable})</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#2563EB' }}></div>
+                                                <span>En Ruta ({vehiclesOnRoute})</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', backgroundColor: '#F8FAFC' }}>
+                                        <div style={{ color: THEME.colors.textSecondary, display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                                            <MapPin size={48} strokeWidth={1.5} />
+                                        </div>
+                                        <div style={{ fontWeight: '800', color: THEME.colors.textSecondary }}>Google Maps no configurado</div>
                                     </div>
                                 )}
                             </div>
@@ -531,116 +700,140 @@ export default function TransportControlTower() {
                     ) : activeTab === 'maintenance' ? (
                         <MaintenanceManagement readOnly={!canEdit} />
                     ) : (
-                        /* CRATES CONTROL TOWER TAB */
-                        <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '1.5rem', overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                        /* ── CRATES CONTROL TOWER TAB ── */
+                        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.25rem', overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                                 <div>
-                                    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <Package size={22} color="#0D9488" /> Torre de Control de Canastillas de Logística
+                                    <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Package size={20} color={THEME.colors.primary} /> Torre de Control de Canastillas &bull; FruFresco
                                     </h2>
-                                    <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>
-                                        Consolidado maestro de inventario prestado a clientes, rutas en tránsito e historial de movimientos.
+                                    <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                        Inventario maestro en calle, stock en patio y trazabilidad Kardex en tiempo real.
                                     </p>
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                                    <button
-                                        onClick={() => {
-                                            setPatioModalQty(patioStock);
-                                            setPatioModalReason('');
-                                            setIsPatioModalOpen(true);
-                                        }}
-                                        style={{ padding: '0.55rem 1.1rem', borderRadius: '14px', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.78rem', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.12)', transition: 'all 0.2s' }}
-                                    >
-                                        <Sliders size={14} strokeWidth={2} /> Ajustar Inventario Patio / Carga Inicial
-                                    </button>
-                                </div>
+                                <button
+                                    onClick={() => {
+                                        setPatioModalQty(patioStock);
+                                        setPatioModalReason('');
+                                        setIsPatioModalOpen(true);
+                                    }}
+                                    style={{ 
+                                        padding: '0.55rem 1.1rem', borderRadius: '8px', backgroundColor: THEME.colors.primary, color: 'white', 
+                                        fontWeight: '800', fontSize: '0.78rem', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', 
+                                        gap: '6px', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)', transition: 'background-color 0.15s' 
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                >
+                                    <Sliders size={14} strokeWidth={2} /> Ajustar Inventario Patio / Kardex
+                                </button>
                             </div>
 
-                            {/* Dynamic Global KPI Cards */}
+                            {/* Dynamic Global KPI Cards & 100% Proportional Segmented Bar */}
                             {(() => {
                                 const activeCrateProfiles = crateProfiles.filter(p => p.needs_crates || (p.crate_balance || 0) > 0);
                                 const totalInCalle = activeCrateProfiles.reduce((acc, p) => acc + Number(p.crate_balance || 0), 0);
                                 const alertCount = activeCrateProfiles.filter(p => Number(p.crate_balance || 0) > 40).length;
+                                const totalSystemCrates = totalInCalle + patioStock;
+                                const callePct = totalSystemCrates > 0 ? ((totalInCalle / totalSystemCrates) * 100).toFixed(1) : '0';
+                                const patioPct = totalSystemCrates > 0 ? ((patioStock / totalSystemCrates) * 100).toFixed(1) : '0';
 
                                 return (
                                     <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                                            <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '16px', border: '1px solid #A7F3D0' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase' }}>CANASTILLAS EN CALLE</div>
-                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#065F46', marginTop: '2px' }}>{totalInCalle} <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
-                                                <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '2px', fontWeight: '600' }}>Prestadas a clientes institucionales</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.25rem' }}>
+                                            <div style={{ backgroundColor: '#F4F9F6', padding: '1rem', borderRadius: THEME.radius.lg, border: '1px solid #E0EFE7' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.primary, textTransform: 'uppercase' }}>CANASTILLAS EN CALLE</div>
+                                                <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#065F46', marginTop: '2px' }}>{totalInCalle} <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>und ({callePct}%)</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: '600' }}>Prestadas a clientes activos</div>
                                             </div>
 
-                                            <div style={{ backgroundColor: '#EFF6FF', padding: '1rem', borderRadius: '16px', border: '1px solid #BFDBFE' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase' }}>EN TRÁNSITO HOY</div>
-                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E40AF', marginTop: '2px' }}>0 <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
-                                                <div style={{ fontSize: '0.68rem', color: '#1D4ED8', marginTop: '2px', fontWeight: '600' }}>A bordo de camiones en ruta</div>
+                                            <div style={{ backgroundColor: '#F0F9FF', padding: '1rem', borderRadius: THEME.radius.lg, border: '1px solid #BAE6FD' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#0284C7', textTransform: 'uppercase' }}>EN TRÁNSITO HOY</div>
+                                                <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0369A1', marginTop: '2px' }}>0 <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>und</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: '600' }}>A bordo de rutas despachadas</div>
                                             </div>
 
-                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>DISPONIBLES PATIO</div>
-                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: '#1E293B', marginTop: '2px' }}>{patioStock} <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>und</span></div>
-                                                <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px', fontWeight: '600' }}>Físicas listas para alistamiento</div>
+                                            <div style={{ backgroundColor: '#F9FAFB', padding: '1rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>DISPONIBLES EN PATIO</div>
+                                                <div style={{ fontSize: '1.75rem', fontWeight: '900', color: THEME.colors.textMain, marginTop: '2px' }}>{patioStock} <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>und ({patioPct}%)</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: '600' }}>Físicas en Bodega Central</div>
                                             </div>
 
-                                            <div style={{ backgroundColor: alertCount > 0 ? '#FEF2F2' : '#F8FAFC', padding: '1rem', borderRadius: '16px', border: alertCount > 0 ? '1px solid #FCA5A5' : '1px solid #E2E8F0' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: alertCount > 0 ? '#991B1B' : '#64748B', textTransform: 'uppercase' }}>SUCURSALES EN ALERTA</div>
-                                                <div style={{ fontSize: '1.8rem', fontWeight: '950', color: alertCount > 0 ? '#7F1D1D' : '#1E293B', marginTop: '2px' }}>{alertCount} <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>cuentas</span></div>
-                                                <div style={{ fontSize: '0.68rem', color: alertCount > 0 ? '#991B1B' : '#64748B', marginTop: '2px', fontWeight: '600' }}>Superan retención &gt; 40 canastillas</div>
+                                            <div style={{ backgroundColor: alertCount > 0 ? '#FEF2F2' : '#F9FAFB', padding: '1rem', borderRadius: THEME.radius.lg, border: alertCount > 0 ? '1px solid #FCA5A5' : `1px solid ${THEME.colors.border}` }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '800', color: alertCount > 0 ? '#DC2626' : THEME.colors.textSecondary, textTransform: 'uppercase' }}>SUCURSALES EN ALERTA</div>
+                                                <div style={{ fontSize: '1.75rem', fontWeight: '900', color: alertCount > 0 ? '#991B1B' : THEME.colors.textMain, marginTop: '2px' }}>{alertCount} <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>cuentas</span></div>
+                                                <div style={{ fontSize: '0.68rem', color: alertCount > 0 ? '#DC2626' : THEME.colors.textSecondary, marginTop: '2px', fontWeight: '600' }}>Retención &gt; 40 canastillas</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Visual 100% Distribution Bar */}
+                                        <div style={{ backgroundColor: THEME.colors.background, padding: '0.75rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, marginBottom: '1.25rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '6px' }}>
+                                                <span>DISTRIBUCIÓN DEL INVENTARIO TOTAL ({totalSystemCrates} CANASTILLAS)</span>
+                                                <span style={{ color: THEME.colors.primary }}>{callePct}% en Clientes &bull; {patioPct}% en Patio</span>
+                                            </div>
+                                            <div style={{ height: '8px', backgroundColor: '#E5E7EB', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
+                                                <div style={{ width: `${callePct}%`, backgroundColor: THEME.colors.primary, transition: 'width 0.5s' }} title={`En Calle: ${totalInCalle} und`}></div>
+                                                <div style={{ width: `${patioPct}%`, backgroundColor: '#64748B', transition: 'width 0.5s' }} title={`En Patio: ${patioStock} und`}></div>
                                             </div>
                                         </div>
 
                                         {/* Main Matrix Breakdown Table */}
-                                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
-                                            <div style={{ padding: '0.8rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.82rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <Package size={14} color="#0EA5E9" /> Consolidado de Canastillas por Casa Matriz y Sucursales en Vivo
+                                        <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.lg, overflow: 'hidden' }}>
+                                            <div style={{ padding: '0.75rem 1.1rem', backgroundColor: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}`, fontSize: '0.78rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Package size={15} color={THEME.colors.primary} /> Consolidado de Canastillas por Casa Matriz y Sucursales
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                                 <thead>
-                                                    <tr style={{ backgroundColor: '#F8FAFC', color: '#475569', textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.7rem', borderBottom: '1px solid #E2E8F0' }}>
-                                                        <th style={{ padding: '0.75rem 1rem' }}>Cliente / Sucursal</th>
-                                                        <th style={{ padding: '0.75rem 1rem' }}>NIT / Identificación</th>
-                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Préstamo Habilitado</th>
-                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Canastillas Retenidas</th>
-                                                        <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Estado Retención</th>
+                                                    <tr style={{ backgroundColor: THEME.colors.background, color: THEME.colors.textSecondary, textAlign: 'left', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.68rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                        <th style={{ padding: '0.65rem 1rem' }}>Cliente / Sucursal</th>
+                                                        <th style={{ padding: '0.65rem 1rem' }}>NIT / Documento</th>
+                                                        <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Préstamo Autorizado</th>
+                                                        <th style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>Canastillas Retenidas</th>
+                                                        <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Estado</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {activeCrateProfiles.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#64748B', fontWeight: '600' }}>
-                                                                No hay clientes con saldo de canastillas prestadas acumulado en la base de datos
+                                                            <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                                                No hay clientes con saldo de canastillas registradas
                                                             </td>
                                                         </tr>
                                                     ) : (
                                                         activeCrateProfiles.map((p) => {
                                                             const isHighAlert = (p.crate_balance || 0) > 40;
                                                             return (
-                                                                <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                                    <td style={{ padding: '0.75rem 1rem', fontWeight: p.is_corporate_parent ? '900' : '700', color: '#0F172A' }}>
+                                                                <tr key={p.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                                    <td style={{ padding: '0.65rem 1rem', fontWeight: p.is_corporate_parent ? '900' : '700', color: THEME.colors.textMain }}>
                                                                         {p.is_corporate_parent ? (
                                                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                                                                <Building2 size={14} style={{ color: '#0F172A' }} /> {p.company_name || p.contact_name} (CASA MATRIZ)
+                                                                                <Building2 size={14} style={{ color: THEME.colors.primary }} /> {p.company_name || p.contact_name} (MATRIZ)
                                                                             </span>
                                                                         ) : (
-                                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                                                                <CornerDownRight size={14} style={{ color: '#64748B' }} /> {p.company_name || p.contact_name}
+                                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', paddingLeft: '1.2rem' }}>
+                                                                                <CornerDownRight size={13} style={{ color: THEME.colors.textSecondary }} /> {p.company_name || p.contact_name}
                                                                             </span>
                                                                         )}
                                                                     </td>
-                                                                    <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontWeight: '700' }}>{p.identification || 'N/A'}</td>
-                                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                                                                        <span style={{ color: p.needs_crates ? '#10B981' : '#F59E0B', fontWeight: '800' }}>
+                                                                    <td style={{ padding: '0.65rem 1rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>{p.identification || 'N/A'}</td>
+                                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>
+                                                                        <span style={{ color: p.needs_crates ? THEME.colors.primary : '#D97706', fontWeight: '800' }}>
                                                                             {p.needs_crates ? (p.is_corporate_parent ? 'SI (Matriz)' : 'Heredado') : 'No Autorizado'}
                                                                         </span>
                                                                     </td>
-                                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '900', color: isHighAlert ? '#991B1B' : '#0F172A', fontSize: '0.9rem' }}>
+                                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: '900', color: isHighAlert ? '#DC2626' : THEME.colors.textMain, fontSize: '0.88rem' }}>
                                                                         {p.crate_balance || 0} und
                                                                     </td>
-                                                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                                                                        <span style={{ backgroundColor: isHighAlert ? '#FEF3C7' : '#ECFDF5', color: isHighAlert ? '#92400E' : '#065F46', padding: '4px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                            {isHighAlert ? <><AlertTriangle size={12} /> Retención Alta</> : <><CheckCircle2 size={12} /> Normal</>}
+                                                                    <td style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>
+                                                                        <span style={{ 
+                                                                            backgroundColor: isHighAlert ? '#FEF2F2' : '#ECFDF5', 
+                                                                            color: isHighAlert ? '#991B1B' : '#065F46', 
+                                                                            border: isHighAlert ? '1px solid #FECACA' : '1px solid #A7F3D0',
+                                                                            padding: '3px 7px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' 
+                                                                        }}>
+                                                                            {isHighAlert ? <><AlertTriangle size={11} /> Retención Alta</> : <><CheckCircle2 size={11} /> Normal</>}
                                                                         </span>
                                                                     </td>
                                                                 </tr>
@@ -658,63 +851,63 @@ export default function TransportControlTower() {
                 </div>
             </div>
 
-            {/* MODAL: AJUSTE DE INVENTARIO EN PATIO / CARGA INICIAL (ESTILO THEME + LUCIDE ICONS) */}
+            {/* MODAL: AJUSTE DE INVENTARIO EN PATIO / CARGA INICIAL (PALETA FRUFRESCO) */}
             {isPatioModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1.5rem' }}>
-                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, maxWidth: '520px', width: '100%', padding: '1.75rem', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.8rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '10px', fontFamily: THEME.typography.fontFamilyMain }}>
-                                <Sliders size={20} style={{ color: THEME.colors.primary }} /> Ajuste de Inventario de Patio / Carga Inicial
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(26, 35, 30, 0.65)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1.5rem' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, maxWidth: '500px', width: '100%', padding: '1.5rem', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.1rem', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Sliders size={18} style={{ color: THEME.colors.primary }} /> Ajuste de Inventario de Patio / Kardex
                             </h3>
                             <button onClick={() => setIsPatioModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, padding: '4px' }}>
-                                <X size={20} />
+                                <X size={18} />
                             </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             <div>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    Tipo de Operación / Movimiento
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Tipo de Movimiento Kardex
                                 </label>
                                 <select 
                                     value={patioModalType}
                                     onChange={(e) => setPatioModalType(e.target.value as any)}
-                                    style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '700', fontSize: '0.85rem', color: THEME.colors.textMain, backgroundColor: 'white' }}
+                                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '700', fontSize: '0.82rem', color: THEME.colors.textMain, backgroundColor: 'white' }}
                                 >
-                                    <option value="initial">Conteo Físico Inicial / Auditoría de Patio</option>
-                                    <option value="purchase">Compra de Canastillas Nuevas</option>
-                                    <option value="damage">Baja por Daño / Descuadre en Planta</option>
+                                    <option value="initial">Auditoría / Conteo Físico en Patio</option>
+                                    <option value="purchase">Compra de Canastillas Nuevas (+)</option>
+                                    <option value="damage">Baja por Daño / Pérdida en Planta (-)</option>
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    {patioModalType === 'initial' ? 'Inventario Total Actual en Patio (unidades)' : 'Cantidad de Canastillas (+/-)'}
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    {patioModalType === 'initial' ? 'Inventario Total en Patio (unidades)' : 'Cantidad de Canastillas'}
                                 </label>
                                 <input 
                                     type="number"
                                     value={patioModalQty}
                                     onChange={(e) => setPatioModalQty(parseInt(e.target.value) || 0)}
-                                    style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '900', fontSize: '1.2rem', color: THEME.colors.textMain, backgroundColor: 'white' }}
+                                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '900', fontSize: '1.1rem', color: THEME.colors.textMain, backgroundColor: 'white', boxSizing: 'border-box' }}
                                 />
                             </div>
 
                             <div>
-                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    Motivo u Observación Obligatoria (Trazabilidad Kardex)
+                                <label style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Motivo del Ajuste (Trazabilidad Obligatoria)
                                 </label>
                                 <textarea 
                                     placeholder="Ej: Conteo físico semanal en patio realizado por Jefe de Bodega..."
                                     value={patioModalReason}
                                     onChange={(e) => setPatioModalReason(e.target.value)}
-                                    style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', minHeight: '80px', fontSize: '0.85rem', fontFamily: 'inherit', color: THEME.colors.textMain, backgroundColor: 'white' }}
+                                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', minHeight: '75px', fontSize: '0.82rem', fontFamily: 'inherit', color: THEME.colors.textMain, backgroundColor: 'white', boxSizing: 'border-box' }}
                                 />
                             </div>
 
-                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem', paddingTop: '1rem', borderTop: `1px solid ${THEME.colors.border}` }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.3rem', paddingTop: '0.85rem', borderTop: `1px solid ${THEME.colors.border}` }}>
                                 <button
                                     onClick={() => setIsPatioModalOpen(false)}
-                                    style={{ padding: '0.65rem 1.25rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.82rem', cursor: 'pointer' }}
+                                    style={{ padding: '0.55rem 1.1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textSecondary, fontWeight: '800', fontSize: '0.8rem', cursor: 'pointer' }}
                                 >
                                     Cancelar
                                 </button>
@@ -731,12 +924,10 @@ export default function TransportControlTower() {
                                                 ? patioStock + patioModalQty 
                                                 : Math.max(0, patioStock - patioModalQty);
 
-                                            // 1. Update app_settings
                                             await supabase
                                                 .from('app_settings')
                                                 .upsert({ key: 'warehouse_crate_stock', value: String(newStock) }, { onConflict: 'key' });
 
-                                            // 2. Insert into crates_ledger if table exists
                                             await supabase
                                                 .from('crates_ledger')
                                                 .insert([{
@@ -747,17 +938,18 @@ export default function TransportControlTower() {
 
                                             setPatioStock(newStock);
                                             setIsPatioModalOpen(false);
-                                            alert('Inventario de patio actualizado correctamente a ' + newStock + ' und. Registro Kardex guardado.');
+                                            alert('Inventario de patio actualizado correctamente a ' + newStock + ' und.');
                                         } catch (e: any) {
                                             console.error('Error guardando ajuste:', e);
-                                            alert('Stock actualizado localmente a ' + patioModalQty + ' und.');
                                             setPatioStock(patioModalQty);
                                             setIsPatioModalOpen(false);
                                         }
                                     }}
-                                    style={{ padding: '0.65rem 1.4rem', borderRadius: THEME.radius.md, border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: THEME.shadow.md }}
+                                    style={{ padding: '0.55rem 1.25rem', borderRadius: THEME.radius.md, border: 'none', backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '900', fontSize: '0.82rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 >
-                                    <Save size={16} strokeWidth={2} /> Guardar Ajuste en Kardex
+                                    <Save size={15} strokeWidth={2} /> Guardar Ajuste Kardex
                                 </button>
                             </div>
                         </div>
@@ -772,28 +964,30 @@ function KPICard({ title, value, icon, color, subtitle }: any) {
     return (
         <div style={{
             backgroundColor: THEME.colors.surface,
-            padding: '1rem',
+            padding: '0.75rem 0.9rem',
             borderRadius: THEME.radius.lg,
             border: `1px solid ${THEME.colors.border}`,
             boxShadow: THEME.shadow.sm,
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '10px',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
         }} onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = THEME.shadow.lg;
+            e.currentTarget.style.boxShadow = THEME.shadow.md;
+            e.currentTarget.style.borderColor = `${color}40`;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.boxShadow = THEME.shadow.sm;
+            e.currentTarget.style.borderColor = THEME.colors.border;
         }}>
-            <div style={{ backgroundColor: `${color}10`, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, flexShrink: 0 }}>
+            <div style={{ backgroundColor: `${color}14`, width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, flexShrink: 0 }}>
                 {icon}
             </div>
-            <div>
-                <div style={{ fontSize: '0.6rem', fontWeight: '900', color: THEME.colors.textSecondary, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{title}</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: THEME.colors.textMain, lineHeight: 1, margin: '2px 0' }}>{value}</div>
-                <div style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '600' }}>{subtitle}</div>
+            <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, lineHeight: 1.1, margin: '1px 0' }}>{value}</div>
+                <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>
             </div>
         </div>
     );
