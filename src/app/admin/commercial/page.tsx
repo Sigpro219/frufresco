@@ -81,21 +81,46 @@ export default function CommercialDashboard() {
                 .select('*', { count: 'exact', head: true })
                 .gte('created_at', thirtyDaysAgo.toISOString());
 
-            // 2. Models Pareto (Top used models)
+            // 2. Models Pareto (Top used current pricing models)
+            const { data: currentPricingModels } = await supabase
+                .from('pricing_models')
+                .select('id, name');
+
             const { data: quotesData } = await supabase
                 .from('quotes')
-                .select('model_snapshot_name')
-                .not('model_snapshot_name', 'is', null);
+                .select('model_id, model_snapshot_name');
 
             const modelCounts: Record<string, number> = {};
-            quotesData?.forEach((q: { model_snapshot_name: string | null }) => {
-                const name = q.model_snapshot_name || 'Desconocido';
-                modelCounts[name] = (modelCounts[name] || 0) + 1;
+            currentPricingModels?.forEach(m => {
+                modelCounts[m.name] = 0;
             });
+
+            quotesData?.forEach((q: { model_id?: string | null; model_snapshot_name?: string | null }) => {
+                // Try direct match by model_id
+                const matchedById = currentPricingModels?.find(m => m.id === q.model_id);
+                if (matchedById) {
+                    modelCounts[matchedById.name] = (modelCounts[matchedById.name] || 0) + 1;
+                    return;
+                }
+
+                // Normalization against current active models
+                const rawName = (q.model_snapshot_name || '').toLowerCase();
+                if (rawName.includes('pequeño') || rawName.includes('pequeno')) {
+                    modelCounts['Pequeño'] = (modelCounts['Pequeño'] || 0) + 1;
+                } else if (rawName.includes('mediano')) {
+                    modelCounts['Mediano'] = (modelCounts['Mediano'] || 0) + 1;
+                } else if (rawName.includes('grande')) {
+                    modelCounts['Grande'] = (modelCounts['Grande'] || 0) + 1;
+                } else if (rawName.includes('hogar') || rawName.includes('b2c')) {
+                    modelCounts['Clientes Hogar'] = (modelCounts['Clientes Hogar'] || 0) + 1;
+                } else if (rawName.includes('institucional') || rawName.includes('general')) {
+                    modelCounts['General Institucional'] = (modelCounts['General Institucional'] || 0) + 1;
+                }
+            });
+
             const sortedModels = Object.entries(modelCounts)
                 .map(([name, count]) => ({ name, count }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 10);
+                .sort((a, b) => b.count - a.count);
 
             // 3. Price Trends (purchases)
             const { data: products } = await supabase
@@ -136,12 +161,13 @@ export default function CommercialDashboard() {
                     .select('quantity, min_stock_level, product_id');
                 
                 if (stocks) {
-                    inventoryStats.lowStockItems = stocks.filter(s => s.quantity <= (s.min_stock_level || 0)).length;
+                    // Only alert if safety stock is explicitly configured (> 0) and current quantity is <= min_stock_level
+                    inventoryStats.lowStockItems = stocks.filter(s => (s.min_stock_level || 0) > 0 && (s.quantity || 0) <= s.min_stock_level).length;
                     
                     // Simple value calculation
                     inventoryStats.totalValue = stocks.reduce((acc, s) => {
                         const product = products?.find(p => p.id === s.product_id);
-                        return acc + (s.quantity * (product?.base_price || 0));
+                        return acc + (Math.max(0, s.quantity || 0) * (product?.base_price || 0));
                     }, 0);
                 }
 
