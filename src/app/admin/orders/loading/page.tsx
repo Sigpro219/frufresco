@@ -1346,15 +1346,20 @@ export default function OrderLoadingPage() {
     }, [filteredOrders]);
 
     const toggleSelectAll = () => {
-        const completeOrders = filteredOrders.filter(o => o.isComplete);
-        if (selectedOrders.size === completeOrders.length && completeOrders.length > 0) {
+        const launchableOrders = filteredOrders.filter(o => o.isComplete && o.status === 'pending_approval');
+        if (launchableOrders.length === 0) return;
+        if (selectedOrders.size === launchableOrders.length) {
             setSelectedOrders(new Set());
         } else {
-            setSelectedOrders(new Set(completeOrders.map(o => o.id)));
+            setSelectedOrders(new Set(launchableOrders.map(o => o.id)));
         }
     };
 
     const toggleSelectOrder = (id: string) => {
+        const order = orders.find(o => o.id === id);
+        // Prevent selecting orders already processed into logistics
+        if (order && order.status !== 'pending_approval') return;
+        
         const newSet = new Set(selectedOrders);
         if (newSet.has(id)) {
             newSet.delete(id);
@@ -1363,6 +1368,7 @@ export default function OrderLoadingPage() {
         }
         setSelectedOrders(newSet);
     };
+
 
 
     const handleOrderClick = async (order: any) => {
@@ -1995,7 +2001,7 @@ export default function OrderLoadingPage() {
         setShowConfirmModal(true);
     };
 
-    const handleBulkAction = async (targetStatus: string) => {
+    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false) => {
         if (selectedOrders.size === 0) return;
         
         if (targetStatus === 'para_compra') {
@@ -2016,7 +2022,8 @@ export default function OrderLoadingPage() {
             ? `¿Estás seguro de enviar ${selectedOrders.size} pedidos al PROCESO LOGÍSTICO (Compras, Picking y Ruteo)?` 
             : `¿Cambiar estado de ${selectedOrders.size} pedidos a ${targetStatus}?`;
         
-        if (!confirm(confirmMsg)) return;
+        if (!skipNativeConfirm && !confirm(confirmMsg)) return;
+
 
         setUpdateLoading(true);
         try {
@@ -2025,11 +2032,13 @@ export default function OrderLoadingPage() {
                 .update({ status: targetStatus }) 
                 .in('id', Array.from(selectedOrders));
 
-            if (error) throw error;
-
-            alert('✅ Pedidos enviados a Proceso Logístico correctamente');
+            const launchedIds = new Set(selectedOrders);
             setSelectedOrders(new Set());
+            setOrders(prev => prev.map(o => launchedIds.has(o.id) ? { ...o, status: targetStatus } : o));
             setRefreshTrigger(prev => prev + 1); // Trigger refresh
+            alert('✅ Pedidos enviados a Proceso Logístico correctamente');
+
+
         } catch (err: any) {
             console.error('Error in bulk update:', err);
             alert(`❌ Error al actualizar: ${err.message}`);
@@ -2973,13 +2982,25 @@ export default function OrderLoadingPage() {
                                                 )}
                                             </th>
                                             <th style={{ padding: '1rem', width: '5%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
-                                                    onChange={toggleSelectAll}
-                                                    style={{ cursor: 'pointer' }}
-                                                />
+                                                {(() => {
+                                                    const launchableOrders = filteredOrders.filter(o => o.isComplete && o.status === 'pending_approval');
+                                                    const isAllSelected = launchableOrders.length > 0 && selectedOrders.size === launchableOrders.length;
+                                                    return (
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isAllSelected}
+                                                            disabled={launchableOrders.length === 0}
+                                                            onChange={toggleSelectAll}
+                                                            style={{ 
+                                                                cursor: launchableOrders.length > 0 ? 'pointer' : 'not-allowed',
+                                                                opacity: launchableOrders.length > 0 ? 1 : 0.4 
+                                                            }}
+                                                            title={launchableOrders.length > 0 ? `Seleccionar ${launchableOrders.length} pedido(s) pendientes por procesar` : 'No hay pedidos pendientes por procesar'}
+                                                        />
+                                                    );
+                                                })()}
                                             </th>
+
 
 
                                         </tr>
@@ -3128,13 +3149,34 @@ export default function OrderLoadingPage() {
 
 
                                                     <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={selectedOrders.has(order.id)}
-                                                            disabled={!order.isComplete}
-                                                            onChange={(e) => { e.stopPropagation(); toggleSelectOrder(order.id); }}
-                                                        />
+                                                        {order.status === 'pending_approval' ? (
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={selectedOrders.has(order.id)}
+                                                                disabled={!order.isComplete}
+                                                                onChange={(e) => { e.stopPropagation(); toggleSelectOrder(order.id); }}
+                                                                style={{ cursor: order.isComplete ? 'pointer' : 'not-allowed' }}
+                                                            />
+                                                        ) : (
+                                                            <div 
+                                                                title="Pedido bloqueado: ya se encuentra en el flujo de Compras / Logística" 
+                                                                style={{ 
+                                                                    display: 'inline-flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center', 
+                                                                    width: '20px', 
+                                                                    height: '20px', 
+                                                                    borderRadius: '50%',
+                                                                    backgroundColor: '#F1F5F9',
+                                                                    border: '1px solid #CBD5E1',
+                                                                    color: '#94A3B8'
+                                                                }}
+                                                            >
+                                                                <Lock size={11} strokeWidth={2.4} />
+                                                            </div>
+                                                        )}
                                                     </td>
+
                                                 </tr>
                                             );
                                         })}
@@ -3397,7 +3439,7 @@ export default function OrderLoadingPage() {
                                     <button 
                                         onClick={() => {
                                             setShowConfirmModal(false);
-                                            handleBulkAction(targetStatusToConfirm);
+                                            handleBulkAction(targetStatusToConfirm, true);
                                         }}
                                         disabled={updateLoading}
                                         style={{
@@ -5142,18 +5184,34 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
                 <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{formatNumber(order.total_weight_kg, 1)} kg</div>
             </div>
 
-            <div 
-                onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
-                style={{
-                    position: 'absolute', top: '12px', right: '12px',
-                    width: '24px', height: '24px', borderRadius: '50%',
-                    border: '2px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: isSelected ? '#6366F1' : 'white',
-                    color: 'white', fontSize: '0.8rem'
-                }}
-            >
-                {isSelected && '✓'}
-            </div>
+            {order.status === 'pending_approval' ? (
+                <div 
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+                    style={{
+                        position: 'absolute', top: '12px', right: '12px',
+                        width: '24px', height: '24px', borderRadius: '50%',
+                        border: '2px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        backgroundColor: isSelected ? THEME.colors.primary : 'white',
+                        color: 'white', fontSize: '0.8rem', cursor: 'pointer',
+                        boxShadow: isSelected ? '0 2px 5px rgba(13, 122, 87, 0.3)' : 'none'
+                    }}
+                >
+                    {isSelected && '✓'}
+                </div>
+            ) : (
+                <div 
+                    title="Pedido ya procesado en logística (Bloqueado)"
+                    style={{
+                        position: 'absolute', top: '12px', right: '12px',
+                        width: '24px', height: '24px', borderRadius: '50%',
+                        backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#94A3B8'
+                    }}
+                >
+                    <Lock size={12} strokeWidth={2.2} />
+                </div>
+            )}
+
         </div>
     );
 }
