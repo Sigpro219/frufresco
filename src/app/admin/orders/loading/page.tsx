@@ -2619,30 +2619,39 @@ export default function OrderLoadingPage() {
                     {selectedOrders.size > 0 && (
                         <div style={{ 
                             position: 'fixed', 
-                            bottom: '2rem', 
+                            bottom: '2.2rem', 
                             left: '50%', 
                             transform: 'translateX(-50%)', 
                             backgroundColor: '#FFFFFF', 
                             color: '#0F172A', 
-                            padding: '0.6rem 1rem 0.6rem 1.3rem', 
+                            padding: '0.65rem 1.1rem 0.65rem 1.4rem', 
                             borderRadius: '100px', 
-                            border: '1px solid #E2E8F0',
-                            boxShadow: '0 20px 35px -8px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0,0,0,0.04)', 
+                            border: '1px solid #CBD5E1',
+                            boxShadow: '0 20px 40px -8px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.06)', 
                             zIndex: 1000,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '1rem',
+                            gap: '1.2rem',
                             animation: 'slideUp 0.25s ease-out'
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRight: '1px solid #E2E8F0', paddingRight: '1rem' }}>
-                                <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '900', fontSize: '0.85rem', padding: '2px 8px', borderRadius: '100px', border: '1px solid #A7F3D0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRight: '1px solid #E2E8F0', paddingRight: '1.1rem' }}>
+                                <span style={{ 
+                                    backgroundColor: '#ECFDF5', 
+                                    color: '#065F46', 
+                                    fontWeight: '900', 
+                                    fontSize: '0.88rem', 
+                                    padding: '3px 10px', 
+                                    borderRadius: '100px', 
+                                    border: '1.5px solid #10B981',
+                                    boxShadow: '0 1px 3px rgba(16, 185, 129, 0.2)'
+                                }}>
                                     {selectedOrders.size}
                                 </span>
-                                <span style={{ fontWeight: '800', fontSize: '0.82rem', color: '#0F172A' }}>
+                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0F172A' }}>
                                     Seleccionados
                                 </span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <button 
                                     onClick={handleOpenLogisticsLaunch}
                                     disabled={updateLoading}
@@ -2651,15 +2660,15 @@ export default function OrderLoadingPage() {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '100px',
-                                        padding: '0.55rem 1.25rem',
-                                        fontWeight: '800',
-                                        fontSize: '0.82rem',
+                                        padding: '0.65rem 1.4rem',
+                                        fontWeight: '900',
+                                        fontSize: '0.88rem',
                                         cursor: updateLoading ? 'wait' : 'pointer',
-                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.35)',
+                                        boxShadow: '0 4px 14px rgba(13, 122, 87, 0.4)',
                                         opacity: updateLoading ? 0.7 : 1,
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '6px',
+                                        gap: '7px',
                                         transition: 'all 0.15s ease'
                                     }}
                                     onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
@@ -2667,48 +2676,24 @@ export default function OrderLoadingPage() {
                                 >
                                     {updateLoading ? (
                                         <>
-                                            <Loader2 size={15} className="animate-spin" />
+                                            <Loader2 size={16} className="animate-spin" />
                                             <span>Procesando...</span>
                                         </>
                                     ) : (
                                         <>
-                                            <Truck size={15} strokeWidth={2.2} />
+                                            <Truck size={16} strokeWidth={2.4} />
                                             <span>Enviar a Proceso Logístico</span>
                                         </>
                                     )}
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        window.open('/admin/orders/print-labels?ids=' + Array.from(selectedOrders).join(','), '_blank');
-                                    }}
-                                    style={{
-                                        backgroundColor: '#EEF2FF',
-                                        color: '#4338CA',
-                                        border: '1px solid #C7D2FE',
-                                        borderRadius: '100px',
-                                        padding: '0.55rem 1rem',
-                                        fontWeight: '800',
-                                        fontSize: '0.82rem',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E0E7FF'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EEF2FF'}
-                                >
-                                    <Printer size={15} strokeWidth={2} />
-                                    <span>Etiquetas</span>
                                 </button>
                                 <button 
                                     onClick={() => setSelectedOrders(new Set())}
                                     style={{
                                         backgroundColor: '#F8FAFC',
                                         color: '#64748B',
-                                        border: '1px solid #E2E8F0',
+                                        border: '1px solid #CBD5E1',
                                         borderRadius: '100px',
-                                        padding: '0.55rem 0.9rem',
+                                        padding: '0.65rem 1.1rem',
                                         fontWeight: '700',
                                         fontSize: '0.82rem',
                                         cursor: 'pointer',
@@ -2727,6 +2712,7 @@ export default function OrderLoadingPage() {
                                 }
                             `}</style>
                         </div>
+
                     )}
 
 
